@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodegen:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(swift:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Read(//Users/kendall/dev/fitness-planner/**)",
+      "Read(//Users/kendall/dev/grocery-planner/**)"
+    ],
+    "deny": [
+      "Edit(//Users/kendall/dev/fitness-planner/**)",
+      "Edit(//Users/kendall/dev/grocery-planner/**)",
+      "Write(//Users/kendall/dev/fitness-planner/**)",
+      "Write(//Users/kendall/dev/grocery-planner/**)"
+    ]
+  }
+}
