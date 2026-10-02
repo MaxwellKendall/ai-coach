@@ -85,4 +85,24 @@ struct SessionPlanTests {
         plan.set("load_lb", to: 150, block: 0, movement: 0, set: 3, remaining: false)
         #expect(WorkoutDetailView.compact(plan.blocks[0].movements[0]) == "3×5 · 140–150")
     }
+
+    @Test func addAndRemoveSetsAndMoveBlocks() {
+        var plan = SessionPlan(generated)
+        plan.addSet(block: 0)
+        #expect(plan.blocks[0].rounds == 4)
+        #expect(plan.items.filter { $0.exercise == "bench" }.map { $0.targets[0].value } == [1, 3, 1]) // new set is "edited"
+        plan.removeSet(block: 0)
+        plan.removeSet(block: 0)
+        #expect(plan.blocks[0].rounds == 2)
+        #expect(plan.blocks[0].movements[0].sets.first?.isWarmup == true) // warm-up kept
+
+        plan.group(1) // deadlift + db-row: 3 rounds each
+        plan.addSet(block: 1)
+        #expect(plan.blocks[1].movements.map { $0.working.count } == [4, 4])
+
+        plan.move(block: 1, by: -1)
+        #expect(plan.blocks[0].isGroup)
+        plan.move(block: 0, by: -1) // already first: no-op
+        #expect(plan.blocks[0].isGroup)
+    }
 }

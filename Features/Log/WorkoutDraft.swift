@@ -80,9 +80,11 @@ struct WorkoutDraft: Equatable {
 
     /// Rest after a set. Not in fitness-planner's spec; FIT-20 decision: heavy sets (≤ 6 reps) 3:00,
     /// other rep sets 1:30, timed or distance sets 1:00.
-    static func rest(after row: SetRow) -> TimeInterval {
-        guard row.metric == "reps" else { return 60 }
-        return (row.value ?? 0) <= 6 ? 180 : 90
+    static func rest(after row: SetRow) -> TimeInterval { rest(metric: row.metric, value: row.value) }
+
+    static func rest(metric: String, value: Double?) -> TimeInterval {
+        guard metric == "reps" else { return 60 }
+        return (value ?? 0) <= 6 ? 180 : 90
     }
 
     /// No rest between the movements of a superset round (FIT-21); the round's last set gets the usual rest.

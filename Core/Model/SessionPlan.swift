@@ -135,6 +135,34 @@ struct SessionPlan: Equatable, Sendable {
         }
     }
 
+    /// One more set (a round, in a superset): a copy of each movement's last working set.
+    mutating func addSet(block: Int) {
+        for m in blocks[block].movements.indices {
+            guard var set = blocks[block].movements[m].working.last else { continue }
+            set.id = UUID()
+            set.plannedRef = nil
+            set.adjustedReason = "edited"
+            blocks[block].movements[m].sets.append(set)
+        }
+    }
+
+    /// Drops the last working set (or round), keeping at least one.
+    mutating func removeSet(block: Int) {
+        guard blocks[block].rounds > 1 else { return }
+        for m in blocks[block].movements.indices {
+            if let last = blocks[block].movements[m].sets.lastIndex(where: { !$0.isWarmup }),
+               blocks[block].movements[m].working.count == blocks[block].rounds {
+                blocks[block].movements[m].sets.remove(at: last)
+            }
+        }
+    }
+
+    mutating func move(block: Int, by offset: Int) {
+        let target = block + offset
+        guard blocks.indices.contains(target) else { return }
+        blocks.swapAt(block, target)
+    }
+
     /// New exercises start at 3×10 with the session's RPE cap.
     mutating func add(_ exercise: String) {
         let rpe = blocks.lazy.flatMap(\.movements).flatMap(\.sets).compactMap { $0.value("rpe") }.first
