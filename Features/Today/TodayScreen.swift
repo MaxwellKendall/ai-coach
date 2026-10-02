@@ -13,10 +13,13 @@ struct TodayScreen: View {
     @State private var adjusting: Plan?
     @State private var logging: Logging?
     @State private var live: WorkoutDraft?
-    @State private var editing: Session?
+    @State private var details: Rows?
+    @State private var record: Rows?
+    /// Set by Start on the detail sheet; workout mode opens once the sheet is gone.
+    @State private var startAfterDetails: [PlannedActivity]?
 
-    /// A day's planned workout items, presented for editing.
-    struct Session: Identifiable {
+    /// A day's planned workout rows, presented as a sheet.
+    struct Rows: Identifiable {
         let id = UUID()
         let items: [PlannedActivity]
     }
@@ -55,9 +58,9 @@ struct TodayScreen: View {
                     }
                     ForEach(thisWeeksPlan?.warnings ?? [], id: \.self, content: notice)
                     WeekPager(days: week, items: planned.filter { $0.date >= week[0] && $0.date < week[6] + 86_400 },
-                              names: byID.mapValues(\.name), logged: Set(entries.compactMap(\.plannedRef))) { items in
-                        startLogging(items, templates: byID)
-                    } onEdit: { editing = Session(items: $0) }
+                              templates: templates, logged: Set(entries.compactMap(\.plannedRef))) { items in
+                        startLogging(items)
+                    } onDetails: { details = Rows(items: $0) } onRecord: { record = Rows(items: $0) }
                 }
                 .padding(.vertical, 8)
             }
@@ -66,7 +69,17 @@ struct TodayScreen: View {
             .navigationSubtitle(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
             .toolbar { toolbar }
             .sheet(item: $adjusting) { plan in NavigationStack { AdjustSheet(plan: plan) } }
-            .sheet(item: $editing) { session in NavigationStack { WorkoutEditor(items: session.items) } }
+            .sheet(item: $details, onDismiss: {
+                if let items = startAfterDetails { startLogging(items) }
+                startAfterDetails = nil
+            }) { rows in
+                NavigationStack {
+                    WorkoutDetailView(items: rows.items, session: Planner.session(rows.items, templates: templates),
+                                      startTitle: rows.items.first.map { Calendar.current.isDateInToday($0.date) } == true
+                                          ? "Start workout" : "Log workout") { startAfterDetails = $0 }
+                }
+            }
+            .sheet(item: $record) { rows in NavigationStack { SessionRecordView(planned: rows.items) } }
             .fullScreenCover(item: $live) { draft in WorkoutModeView(draft: draft) }
             .sheet(item: $logging) { logging in
                 NavigationStack {
@@ -81,15 +94,11 @@ struct TodayScreen: View {
         }
     }
 
-    private func startLogging(_ items: [PlannedActivity], templates: [UUID: Template]) {
-        guard let first = items.first else { return }
+    private func startLogging(_ items: [PlannedActivity]) {
+        guard let first = items.min(by: { $0.date < $1.date }) else { return }
         if first.kind == .workout {
-            let planned = items.map {
-                WorkoutDraft.Planned(id: $0.id, exercise: $0.templateRef.flatMap { templates[$0]?.slug } ?? "",
-                                     targets: $0.targets, note: $0.note)
-            }
             // Today's session runs in workout mode; another day's is logged at its planned time.
-            let draft = WorkoutDraft(session: first.slot ?? "Workout", planned: planned)
+            let draft = WorkoutDraft(session: first.slot ?? "Workout", plan: Planner.session(items, templates: templates))
             if Calendar.current.isDateInToday(first.date) { live = draft } else { logging = .workout(draft, first.date) }
         } else {
             logging = .item(first)

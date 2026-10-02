@@ -4,20 +4,23 @@ import SwiftUI
 struct WeekPager: View {
     let days: [Date]
     let items: [PlannedActivity]
-    let names: [UUID: String]
+    let templates: [Template]
     let logged: Set<UUID>
     let onLog: ([PlannedActivity]) -> Void
-    let onEdit: ([PlannedActivity]) -> Void
+    let onDetails: ([PlannedActivity]) -> Void
+    let onRecord: ([PlannedActivity]) -> Void
     @State private var day: Int?
 
-    init(days: [Date], items: [PlannedActivity], names: [UUID: String], logged: Set<UUID>,
-         today: Date = .now, onLog: @escaping ([PlannedActivity]) -> Void, onEdit: @escaping ([PlannedActivity]) -> Void) {
+    init(days: [Date], items: [PlannedActivity], templates: [Template], logged: Set<UUID>, today: Date = .now,
+         onLog: @escaping ([PlannedActivity]) -> Void, onDetails: @escaping ([PlannedActivity]) -> Void,
+         onRecord: @escaping ([PlannedActivity]) -> Void) {
         self.days = days
         self.items = items
-        self.names = names
+        self.templates = templates
         self.logged = logged
         self.onLog = onLog
-        self.onEdit = onEdit
+        self.onDetails = onDetails
+        self.onRecord = onRecord
         let calendar = Calendar.current
         _day = State(initialValue: days.firstIndex { calendar.isDate($0, inSameDayAs: today) } ?? 0)
     }
@@ -55,8 +58,8 @@ struct WeekPager: View {
                 LazyHStack(alignment: .top, spacing: 0) {
                     ForEach(days.indices, id: \.self) { index in
                         DayPage(items: items.filter { Calendar.current.isDate($0.date, inSameDayAs: days[index]) },
-                                names: names, logged: logged,
-                                isToday: Calendar.current.isDateInToday(days[index]), onLog: onLog, onEdit: onEdit)
+                                templates: templates, logged: logged, isToday: Calendar.current.isDateInToday(days[index]),
+                                onLog: onLog, onDetails: onDetails, onRecord: onRecord)
                             .padding(.horizontal, 16)
                             .containerRelativeFrame(.horizontal)
                     }
@@ -72,14 +75,16 @@ struct WeekPager: View {
 
 struct DayPage: View {
     let items: [PlannedActivity]
-    let names: [UUID: String]
+    let templates: [Template]
     var logged: Set<UUID> = []
     var isToday = false
     var onLog: ([PlannedActivity]) -> Void = { _ in }
-    var onEdit: ([PlannedActivity]) -> Void = { _ in }
+    var onDetails: ([PlannedActivity]) -> Void = { _ in }
+    var onRecord: ([PlannedActivity]) -> Void = { _ in }
 
     var body: some View {
         let workout = items.filter { $0.kind == .workout }.sorted { $0.date < $1.date }
+        let names = Dictionary(templates.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         VStack(spacing: 8) {
             if items.isEmpty {
                 Text("Nothing planned")
@@ -89,52 +94,7 @@ struct DayPage: View {
                     .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.secondary.opacity(0.4), style: StrokeStyle(dash: [5, 4])))
             }
             if !workout.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text(workout.first?.slot?.uppercased() ?? "WORKOUT")
-                        Spacer()
-                        if let start = workout.first?.date { Text(start.formatted(date: .omitted, time: .shortened)) }
-                        if !isLogged(workout) {
-                            Button("Edit workout", systemImage: "pencil") { onEdit(workout) }
-                                .labelStyle(.iconOnly)
-                                .font(.subheadline.weight(.bold))
-                                .frame(width: 36, height: 28)
-                                .background(Color(.systemBackground).opacity(0.15), in: .capsule)
-                                .contentShape(.rect.inset(by: -8))
-                        }
-                    }
-                    .font(.caption.weight(.semibold))
-                    .opacity(0.8)
-                    ForEach(workout) { item in
-                        HStack(alignment: .firstTextBaseline) {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(item.templateRef.flatMap { names[$0] } ?? "Exercise")
-                                    .fontWeight(item.note == TrainingGenerator.warmupNote ? .regular : .semibold)
-                                if !item.note.isEmpty || item.adjustedReason != nil {
-                                    Text([item.note, item.adjustedReason ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
-                                        .font(.caption).opacity(0.6)
-                                }
-                            }
-                            Spacer()
-                            Text(Self.targets(item.targets)).opacity(0.7)
-                        }
-                    }
-                    if isLogged(workout) {
-                        Label("Logged", systemImage: "checkmark.circle.fill").fontWeight(.semibold).foregroundStyle(.tint)
-                    } else {
-                        Button { onLog(workout) } label: {
-                            // Today's session runs live in workout mode; other days are logged after the fact.
-                            Text(isToday ? "Start workout" : "Log workout").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .background(.tint, in: .rect(cornerRadius: 12))
-                        .foregroundStyle(Color(.label))
-                        .padding(.top, 4)
-                    }
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.primary, in: .rect(cornerRadius: 20))
-                .foregroundStyle(Color(.systemBackground))
+                workoutCard(workout)
             }
             ForEach(items.filter { $0.kind != .workout }.sorted { $0.date < $1.date }) { item in
                 Button { onLog([item]) } label: {
@@ -158,6 +118,72 @@ struct DayPage: View {
     }
 
     private func isLogged(_ workout: [PlannedActivity]) -> Bool { workout.contains { logged.contains($0.id) } }
+
+    /// Prototype artboard 1: the session as one chip per block, then Details and Start.
+    private func workoutCard(_ workout: [PlannedActivity]) -> some View {
+        let session = Planner.session(workout, templates: templates)
+        let titles = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let done = isLogged(workout)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(workout.first?.slot?.uppercased() ?? "WORKOUT")
+                Spacer()
+                if let start = workout.first?.date { Text(start.formatted(date: .omitted, time: .shortened)) }
+            }
+            .font(.caption.weight(.semibold))
+            .opacity(0.7)
+            FlowLayout(spacing: 6) {
+                ForEach(Array(session.blocks.enumerated()), id: \.offset) { index, block in
+                    HStack(spacing: 6) {
+                        Text(SessionPlan.letter(index))
+                            .font(.system(size: 15, weight: .bold)).fontWidth(.condensed)
+                            .foregroundStyle(RootView.accent)
+                        Text(block.movements.map { titles[$0.exercise] ?? $0.exercise }.joined(separator: " + "))
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .background(Color(.systemBackground).opacity(0.12), in: .capsule)
+                }
+            }
+            Text(Self.summary(session))
+                .font(.caption).opacity(0.6)
+            if done {
+                Button { onRecord(workout) } label: {
+                    Label("Done · view session", systemImage: "checkmark.circle.fill")
+                        .fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
+                }
+                .background(Color(.systemBackground).opacity(0.12), in: .rect(cornerRadius: 12))
+                .foregroundStyle(RootView.accent)
+            } else {
+                HStack(spacing: 8) {
+                    Button { onDetails(workout) } label: {
+                        Text("Details").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
+                    }
+                    .background(Color(.systemBackground).opacity(0.12), in: .rect(cornerRadius: 12))
+                    Button { onLog(workout) } label: {
+                        // Today's session runs live in workout mode; other days are logged after the fact.
+                        Text(isToday ? "Start" : "Log workout").fontWeight(.bold).frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
+                    }
+                    .background(RootView.accent, in: .rect(cornerRadius: 12))
+                    .foregroundStyle(Color(.label))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary, in: .rect(cornerRadius: 20))
+        .foregroundStyle(Color(.systemBackground))
+    }
+
+    /// "18 working sets · deload" style one-liner under the chips.
+    nonisolated static func summary(_ session: SessionPlan) -> String {
+        let sets = session.blocks.flatMap(\.movements).reduce(0) { $0 + $1.working.count }
+        let reasons = Set(session.blocks.flatMap(\.movements).flatMap(\.sets).compactMap(\.adjustedReason)).sorted()
+        return (["\(sets) working sets"] + reasons).joined(separator: " · ")
+    }
 
     /// "3×5 @ 155 lb", falling back to each measurement's own display.
     nonisolated static func targets(_ targets: [Measurement]) -> String {

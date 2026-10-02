@@ -142,6 +142,8 @@ struct PlannedWorkout: Equatable, Sendable {
     var targets: [Measurement]
     var note: String?
     var adjustedReason: String?
+    /// Superset or circuit grouping from the editor; the generator doesn't make supersets yet.
+    var group: Int? = nil
 
     func target(_ metric: String) -> Double? { targets.first { $0.metric == metric }?.value }
 }

@@ -32,12 +32,15 @@ final class PlannedActivity {
     /// e.g. "warm-up" or "tempo 3-1-1-1".
     var note: String = ""
     var adjustedReason: String?
+    /// Rows sharing a group are one superset or circuit (FIT-21); nil is a block of its own.
+    var group: Int?
     var plan: Plan?
     var createdAt: Date
     var updatedAt: Date
 
     init(kind: ActivityKind, date: Date, slot: String? = nil, templateRef: UUID? = nil,
-         targets: [Measurement] = [], note: String = "", adjustedReason: String? = nil, now: Date = .now) {
+         targets: [Measurement] = [], note: String = "", adjustedReason: String? = nil, group: Int? = nil,
+         now: Date = .now) {
         self.id = UUID()
         self.kind = kind
         self.date = date
@@ -46,6 +49,7 @@ final class PlannedActivity {
         self.targets = targets
         self.note = note
         self.adjustedReason = adjustedReason
+        self.group = group
         self.createdAt = now
         self.updatedAt = now
     }

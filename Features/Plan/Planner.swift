@@ -46,7 +46,8 @@ enum Planner {
     static func activity(_ workout: PlannedWorkout, order: Int, ids: [String: UUID]) -> PlannedActivity {
         PlannedActivity(kind: .workout, date: workout.date + TimeInterval(order), slot: workout.session,
                         templateRef: ids[workout.exercise],
-                        targets: workout.targets, note: workout.note ?? "", adjustedReason: workout.adjustedReason)
+                        targets: workout.targets, note: workout.note ?? "", adjustedReason: workout.adjustedReason,
+                        group: workout.group)
     }
 
     /// The plan's workouts as the adjust rules see them. Timestamps drop the ordering seconds.
@@ -55,7 +56,8 @@ enum Planner {
         return plan.items.filter { $0.kind == .workout }.sorted { $0.date < $1.date }.map {
             PlannedWorkout(date: Date(timeIntervalSinceReferenceDate: ($0.date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60),
                            session: $0.slot ?? "", exercise: $0.templateRef.flatMap { slugs[$0] } ?? "",
-                           targets: $0.targets, note: $0.note.isEmpty ? nil : $0.note, adjustedReason: $0.adjustedReason)
+                           targets: $0.targets, note: $0.note.isEmpty ? nil : $0.note, adjustedReason: $0.adjustedReason,
+                           group: $0.group)
         }
     }
 
@@ -75,6 +77,45 @@ enum Planner {
         plan.items.append(contentsOf: workouts.enumerated().map { activity($0.element, order: $0.offset, ids: ids) })
         plan.updatedAt = .now
         try context.save()
+    }
+
+    /// A day's workout rows as blocks.
+    static func session(_ items: [PlannedActivity], templates: [Template]) -> SessionPlan {
+        let slugs = Dictionary(templates.map { ($0.id, $0.slug) }, uniquingKeysWith: { first, _ in first })
+        return SessionPlan(items.sorted { $0.date < $1.date }.map {
+            SessionPlan.Item(id: $0.id, exercise: $0.templateRef.flatMap { slugs[$0] } ?? "", targets: $0.targets,
+                             note: $0.note, adjustedReason: $0.adjustedReason, group: $0.group)
+        })
+    }
+
+    /// Writes an edited session back over its rows. Rows keep their ids where they can; split-off and new
+    /// rows are inserted, and rows no longer used are deleted. Second offsets keep the order.
+    @discardableResult
+    static func save(_ session: SessionPlan, over items: [PlannedActivity], templates: [Template],
+                     in context: ModelContext) -> [PlannedActivity] {
+        guard let first = items.min(by: { $0.date < $1.date }) else { return [] }
+        let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
+        let start = Date(timeIntervalSinceReferenceDate: (first.date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
+        var unused = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var written: [PlannedActivity] = []
+        for (order, row) in session.items.enumerated() {
+            let item = row.id.flatMap { unused.removeValue(forKey: $0) } ?? {
+                let item = PlannedActivity(kind: .workout, date: start, slot: first.slot)
+                item.plan = first.plan
+                context.insert(item)
+                return item
+            }()
+            item.date = start + TimeInterval(order)
+            item.templateRef = ids[row.exercise]
+            item.targets = row.targets
+            item.note = row.note
+            item.adjustedReason = row.adjustedReason
+            item.group = row.group
+            item.updatedAt = .now
+            written.append(item)
+        }
+        for item in unused.values { context.delete(item) }
+        return written
     }
 
     static func catalog(_ templates: [Template]) -> [Exercise] {

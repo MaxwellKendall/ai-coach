@@ -5,6 +5,9 @@ struct SetRow: Identifiable, Equatable {
     let id = UUID()
     var exercise: String
     var plannedRef: UUID?
+    /// Index of the block in the session, and the set's round within it.
+    var block = 0
+    var round = 0
     /// "reps", "duration_s" or "distance_m".
     var metric: String
     var value: Double?
@@ -13,6 +16,9 @@ struct SetRow: Identifiable, Equatable {
     var load: Double?
     var rpe: Double?
     var done = false
+    /// What the plan said, so a change can be carried only to sets that were planned the same.
+    var plannedValue: Double?
+    var plannedLoad: Double?
 
     var measurements: [Measurement] {
         var result: [Measurement] = []
@@ -33,39 +39,41 @@ struct WorkoutDraft: Equatable {
     var effort = 7.0
     var energy = 3.0
     var form = 3.0
+    /// Set by workout mode when the session ends.
+    var duration: TimeInterval?
 
-    struct Planned {
-        var id: UUID
-        var exercise: String
-        var targets: [Measurement]
-        var note: String
-    }
-
-    /// One row per planned working set. Warm-ups aren't logged (fitness-planner's logs skip them too),
-    /// and RPE is left for the user since it's what they felt, not the cap.
-    init(session: String, planned: [Planned]) {
+    /// One row per planned working set, block by block. A superset's movements alternate round by round
+    /// (C1, C2, C1, C2…). Warm-ups aren't logged (fitness-planner's logs skip them too), and RPE is left
+    /// for the user since it's what they felt, not the cap.
+    init(session: String, plan: SessionPlan) {
         self.session = session
-        rows = planned.filter { $0.note != TrainingGenerator.warmupNote }.flatMap { item -> [SetRow] in
-            func target(_ metric: String) -> Double? { item.targets.first { $0.metric == metric }?.value }
-            let metric = ["duration_s", "distance_m"].first { target($0) != nil } ?? "reps"
-            let loadMetric = ["load_lb", "load_lb_hand"].first { target($0) != nil }
-            // Each set gets its own row (and id).
-            return (0..<max(1, Int(target("sets") ?? 1))).map { _ in
-                SetRow(exercise: item.exercise, plannedRef: item.id, metric: metric, value: target(metric),
-                       loadMetric: loadMetric, load: loadMetric.flatMap(target))
+        rows = plan.blocks.enumerated().flatMap { index, block in
+            (0..<block.rounds).flatMap { round in
+                block.movements.compactMap { movement -> SetRow? in
+                    let working = movement.working
+                    guard working.indices.contains(round) else { return nil }
+                    let set = working[round]
+                    let metric = ["duration_s", "distance_m"].first { set.value($0) != nil } ?? "reps"
+                    let loadMetric = ["load_lb", "load_lb_hand"].first { set.value($0) != nil }
+                    let value = set.value(metric), load = loadMetric.flatMap(set.value)
+                    return SetRow(exercise: movement.exercise, plannedRef: set.plannedRef, block: index, round: round,
+                                  metric: metric, value: value, loadMetric: loadMetric, load: load,
+                                  plannedValue: value, plannedLoad: load)
+                }
             }
         }
     }
 
-    /// Workout mode's "Done": ticks the set and carries its numbers to the exercise's remaining sets,
-    /// so a load bumped on set 1 doesn't have to be re-entered. Returns the next set still to do, if any.
+    /// Workout mode's "Done": ticks the set and carries its numbers to the exercise's remaining sets that were
+    /// planned the same, so a load bumped on set 1 doesn't have to be re-entered but a planned ramp survives.
+    /// Returns the next set still to do, if any.
     @discardableResult
     mutating func finish(_ index: Int) -> Int? {
         rows[index].done = true
         let row = rows[index]
         for later in rows.indices where later > index && !rows[later].done && rows[later].exercise == row.exercise {
-            rows[later].value = row.value
-            rows[later].load = row.load
+            if rows[later].plannedValue == row.plannedValue { rows[later].value = row.value }
+            if rows[later].plannedLoad == row.plannedLoad { rows[later].load = row.load }
         }
         return rows.indices.first { $0 > index && !rows[$0].done } ?? rows.indices.first { !rows[$0].done }
     }
@@ -77,6 +85,13 @@ struct WorkoutDraft: Equatable {
         return (row.value ?? 0) <= 6 ? 180 : 90
     }
 
+    /// No rest between the movements of a superset round (FIT-21); the round's last set gets the usual rest.
+    func rest(after index: Int) -> TimeInterval {
+        let row = rows[index]
+        if rows.indices.contains(index + 1), rows[index + 1].block == row.block, rows[index + 1].round == row.round { return 0 }
+        return Self.rest(after: row)
+    }
+
     var completion: Double { rows.isEmpty ? 0 : Double(rows.filter(\.done).count) / Double(rows.count) }
 
     /// The session's own entry: ratings and completion. It has no exercise, so set-based rules skip it.
@@ -85,6 +100,7 @@ struct WorkoutDraft: Equatable {
          Measurement(metric: "energy_level", value: energy, unit: "/5"),
          Measurement(metric: "form_quality", value: form, unit: "/5"),
          Measurement(metric: "completion_rate", value: completion, unit: "ratio")]
+            + (duration.map { [Measurement(metric: "duration_s", value: $0.rounded(), unit: "s")] } ?? [])
     }
 }
 
