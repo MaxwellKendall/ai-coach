@@ -30,7 +30,7 @@ struct GoalImporterTests {
 
     @Test(arguments: [
         ("back-squat.1rm_lb", "Back Squat 1RM"), ("pull-up.reps", "Pull Up reps"),
-        ("weight_lb", "Body weight"), ("5k.duration_min", "5k time"), ("custom_thing", "custom_thing"),
+        ("weight_lb", "Body weight"), ("5k.duration_min", "5k time"), ("custom_thing", "Custom thing"),
     ])
     func label(metric: String, label: String) {
         #expect(Goal.label(metric) == label)

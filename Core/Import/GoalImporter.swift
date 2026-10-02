@@ -70,7 +70,9 @@ extension Goal {
         let parts = metric.split(separator: ".").map(String.init)
         let measures = ["1rm_lb": "1RM", "reps": "reps", "duration_min": "time", "weight_lb": "Body weight",
                         "waist_in": "Waist", "protein_g": "Protein", "kcal": "Calories", "sleep_h": "Sleep"]
-        let measure = measures[parts.last ?? ""] ?? (parts.last ?? metric)
+        let last = parts.last ?? metric
+        // Custom goals: "grocery_spend" → "Grocery spend".
+        let measure = measures[last] ?? (last.prefix(1).uppercased() + last.dropFirst()).replacingOccurrences(of: "_", with: " ")
         guard parts.count > 1 else { return measure }
         let subject = parts[0].split(separator: "-").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
         return "\(subject) \(measure)"
