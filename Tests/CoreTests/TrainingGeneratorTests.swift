@@ -105,6 +105,8 @@ struct TrainingGeneratorTests {
                        logged("bench", "push", 6, 1), logged("row", "pull", 6, 1), logged("dl", "hinge", 6, 1),
                        logged("plank", "core", 6, 1)]
         #expect(TrainingGenerator.undertrainedPatterns(history, before: date(6, 22), calendar: calendar) == ["carry"])
+        // A layoff: nothing in 28 days, so nothing is singled out.
+        #expect(TrainingGenerator.undertrainedPatterns(history, before: date(9, 1), calendar: calendar).isEmpty)
     }
 
     @Test func rotationContinuesWithTheStalestSession() {
@@ -150,8 +152,7 @@ struct TrainingGeneratorTests {
         #expect(week.workouts.first?.date == date(7, 20, hour: 7))
         #expect(week.workouts.allSatisfy { $0.target("load_lb") == nil })
         #expect(!week.workouts.contains { $0.note == TrainingGenerator.warmupNote }) // no load, no warm-up
-        // Nothing logged, so every pattern is undertrained and gets 4 sets before fitting.
-        #expect(week.workouts.filter { $0.session == "Session A" }.allSatisfy { $0.target("sets")! >= 3 })
+        #expect(week.workouts.filter { $0.session == "Session A" }.allSatisfy { $0.target("sets") == 3 })
         #expect(week.workouts.first { $0.exercise == "plank" }?.target("duration_s") == 45)
         #expect(week.workouts.first { $0.exercise == "farmer-carry" }?.target("distance_m") == 30)
     }

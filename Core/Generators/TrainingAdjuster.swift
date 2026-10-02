@@ -5,14 +5,14 @@ import Foundation
 enum TrainingAdjuster {
     /// Step 2: swap exercises loading an injured area for an allowed substitute (the card's list first,
     /// then any same-pattern exercise), and cut 25% of sets if more than one pattern is affected.
-    static func injury(_ week: TrainingWeek, areas: Set<String>, settings: TrainingSettings,
+    static func injury(_ week: TrainingWeek, areas: Set<String>, label: String? = nil, settings: TrainingSettings,
                        catalog: [Exercise]) -> TrainingWeek {
         var settings = settings
         settings.injuredAreas.formUnion(areas)
         let bySlug = Dictionary(catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
         let affected = Set(week.workouts.compactMap { bySlug[$0.exercise] }.filter { !$0.muscles.isDisjoint(with: areas) }.map(\.slug))
         let patterns = Set(affected.compactMap { bySlug[$0]?.pattern })
-        let reason = "\(areas.sorted().joined(separator: ", ")) injury"
+        let reason = "\(label ?? areas.sorted().joined(separator: ", ")) injury"
         var result = week
         result.workouts = week.workouts.compactMap { workout in
             var workout = workout

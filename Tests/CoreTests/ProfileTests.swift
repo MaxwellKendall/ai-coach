@@ -42,7 +42,7 @@ struct ProfileTests {
         #expect(settings.trainingDays == [0, 2, 4])
         #expect(settings.workoutTime == 420)
         #expect(settings.equipment == Set(Profile.allEquipment))
-        #expect(settings.injuredAreas == ["lower_back"])
+        #expect(settings.injuredAreas == ["spinal_erectors"])
         #expect(settings.deloadEveryWeeks == nil)
     }
 
@@ -53,5 +53,10 @@ struct ProfileTests {
     @Test func customGoalLabels() {
         #expect(Goal.label("grocery_spend") == "Grocery spend")
         #expect(Goal.label("back-squat.1rm_lb") == "Back Squat 1RM")
+    }
+
+    @Test func bodyAreasBecomeCardMuscles() {
+        #expect(BodyArea.muscles(for: ["Lower back"]) == ["spinal_erectors"])
+        #expect(BodyArea.muscles(for: ["shoulder", "quads"]) == ["anterior_deltoids", "rear_deltoids", "deltoids", "quads"])
     }
 }

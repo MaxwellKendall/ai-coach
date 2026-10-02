@@ -78,11 +78,22 @@ struct DayPage: View {
             }
             if !workout.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(["WORKOUT", workout.first?.slot?.uppercased()].compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption.weight(.semibold)).opacity(0.7)
+                    HStack {
+                        Text(workout.first?.slot?.uppercased() ?? "WORKOUT")
+                        Spacer()
+                        if let start = workout.first?.date { Text(start.formatted(date: .omitted, time: .shortened)) }
+                    }
+                    .font(.caption.weight(.semibold)).opacity(0.7)
                     ForEach(workout) { item in
                         HStack(alignment: .firstTextBaseline) {
-                            Text(item.templateRef.flatMap { names[$0] } ?? "Exercise").fontWeight(.semibold)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.templateRef.flatMap { names[$0] } ?? "Exercise")
+                                    .fontWeight(item.note == TrainingGenerator.warmupNote ? .regular : .semibold)
+                                if !item.note.isEmpty || item.adjustedReason != nil {
+                                    Text([item.note, item.adjustedReason ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                                        .font(.caption).opacity(0.6)
+                                }
+                            }
                             Spacer()
                             Text(Self.targets(item.targets)).opacity(0.7)
                         }
@@ -95,10 +106,12 @@ struct DayPage: View {
             }
             ForEach(items.filter { $0.kind != .workout }.sorted { $0.date < $1.date }) { item in
                 HStack {
-                    Text(item.templateRef.flatMap { names[$0] } ?? item.kind.rawValue.capitalized)
-                        .fontWeight(.semibold).foregroundStyle(Color.accentColor)
+                    Text(item.templateRef.flatMap { names[$0] } ?? item.slot ?? item.kind.rawValue.capitalized)
+                        .fontWeight(.semibold).foregroundStyle(.tint)
                     Spacer()
-                    if let slot = item.slot { Text(slot).foregroundStyle(.secondary) }
+                    Text(([item.date.formatted(date: .omitted, time: .shortened)] + item.targets.map(\.display))
+                        .joined(separator: " · "))
+                        .foregroundStyle(.secondary)
                 }
                 .padding(14)
                 .background(.background, in: .rect(cornerRadius: 16))
@@ -120,6 +133,10 @@ struct DayPage: View {
         if let load = value("load_lb") {
             parts.append("@ \(number(load)) lb")
             rest.removeAll { $0.metric == "load_lb" }
+        }
+        if let rpe = value("rpe") {
+            rest.removeAll { $0.metric == "rpe" }
+            return (parts + rest.map(\.display) + ["RPE \(number(rpe))"]).joined(separator: " ")
         }
         return (parts + rest.map(\.display)).joined(separator: " ")
     }

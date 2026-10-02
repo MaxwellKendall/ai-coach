@@ -3,15 +3,25 @@ import SwiftData
 
 /// Home (FIT-19, prototype C2): swipeable progress charts over a swipeable week.
 struct TodayScreen: View {
+    @Environment(\.modelContext) private var context
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
+    @Query private var plans: [Plan]
+    @Query private var profiles: [Profile]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
     @Query private var templates: [Template]
+    @State private var adjusting: Plan?
+
+    private var week: [Date] {
+        (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.monday(of: .now))! }
+    }
+
+    private var thisWeeksPlan: Plan? { plans.first { $0.weekStart == week[0] } }
 
     var body: some View {
         let byID = Dictionary(templates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let pages = chartPages(byID)
-        let week = (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.monday(of: .now))! }
+        let week = week
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -22,6 +32,7 @@ struct TodayScreen: View {
                     } else {
                         ChartCarousel(pages: pages)
                     }
+                    ForEach(thisWeeksPlan?.warnings ?? [], id: \.self, content: notice)
                     WeekPager(days: week, items: planned.filter { $0.date >= week[0] && $0.date < week[6] + 86_400 },
                               names: byID.mapValues(\.name))
                 }
@@ -30,23 +41,46 @@ struct TodayScreen: View {
             .background(Color(.secondarySystemBackground))
             .navigationTitle("Today")
             .navigationSubtitle(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
-            .toolbar {
-                NavigationLink {
-                    CatalogScreen()
-                } label: {
-                    Label("Catalog", systemImage: "books.vertical")
+            .toolbar { toolbar }
+            .sheet(item: $adjusting) { plan in NavigationStack { AdjustSheet(plan: plan) } }
+            // A new week, or a profile that just finished onboarding, gets a plan.
+            .task(id: profiles.first?.isComplete) { try? Planner.ensureWeek(in: context) }
+        }
+    }
+
+    private func notice(_ text: String) -> some View {
+        Label(text, systemImage: "exclamationmark.triangle.fill")
+            .font(.subheadline)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(.background, in: .rect(cornerRadius: 14))
+            .padding(.horizontal, 16)
+    }
+
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        ToolbarItem {
+            Menu("Plan", systemImage: "ellipsis") {
+                if let plan = thisWeeksPlan {
+                    Button("Adjust this week", systemImage: "slider.horizontal.3") { adjusting = plan }
                 }
+                Button("Regenerate this week", systemImage: "arrow.clockwise") {
+                    try? Planner.generate(weekOf: .now, in: context)
+                }
+                .disabled(profiles.first?.isComplete != true)
+            }
+        }
+        ToolbarItem {
+            NavigationLink {
+                CatalogScreen()
+            } label: {
+                Label("Catalog", systemImage: "books.vertical")
             }
         }
     }
 
     /// One lift page per 1RM goal, then protein and weekly volume, each only when there is data for it.
     private func chartPages(_ templates: [UUID: Template]) -> [ChartPage] {
-        let sets = entries.filter { $0.kind == .workout }.compactMap { entry -> LoggedSet? in
-            guard let template = entry.templateRef.flatMap({ templates[$0] }) else { return nil }
-            return LoggedSet(date: entry.timestamp, exercise: template.slug,
-                             pattern: template.values("movement_pattern").first, measurements: entry.measurements)
-        }
+        let sets = Planner.loggedSets(entries, templates: Array(templates.values))
         let names = Dictionary(templates.values.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
         var pages: [ChartPage] = goals.filter { $0.metric.hasSuffix(".1rm_lb") }.compactMap { goal in
             let slug = String(goal.metric.dropLast(".1rm_lb".count))

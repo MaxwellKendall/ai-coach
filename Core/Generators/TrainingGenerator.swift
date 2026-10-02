@@ -237,9 +237,11 @@ enum TrainingGenerator {
     }
 
     /// review.md step 3: a pattern with no sets in the last 28 days is undertrained, and plan.md step 5 gives it more sets.
+    /// Only while training: after a layoff every pattern is at 0, and adding sets everywhere would be backwards.
     static func undertrainedPatterns(_ history: [LoggedSet], before date: Date, calendar: Calendar = .current) -> Set<String> {
         let dayBefore = calendar.date(byAdding: .day, value: -1, to: date)!
         let trained = Training.setsByPattern(history, endingOn: dayBefore, calendar: calendar)
+        guard !trained.isEmpty else { return [] }
         return Set(["squat", "hinge", "push", "pull", "carry", "core"].filter { (trained[$0] ?? 0) == 0 })
     }
 
@@ -294,11 +296,14 @@ enum TrainingGenerator {
             targets.append(Measurement(metric: "reps", value: main ? settings.style.reps.main : settings.style.reps.accessory,
                                        unit: "reps"))
         }
+        let daysOff = last.first.map { calendar.dateComponents([.day], from: calendar.startOfDay(for: $0.date), to: date).day ?? 0 }
         if let load = lastValue("load_lb") {
             targets.append(Measurement(metric: "load_lb", value: nextLoad(load, lastRPE: lastValue("rpe"), main: main,
-                                                                          tier: tier, deload: deload), unit: "lb"))
+                                                                          tier: tier, deload: deload, daysOff: daysOff),
+                                       unit: "lb"))
         } else if let load = lastValue("load_lb_hand") {
-            targets.append(Measurement(metric: "load_lb_hand", value: deload ? roundTo5(load * deloadLoad) : load,
+            targets.append(Measurement(metric: "load_lb_hand", value: nextLoad(load, lastRPE: nil, main: false, tier: tier,
+                                                                               deload: deload, daysOff: daysOff),
                                        unit: "lb/hand"))
         }
         if !exercise.isTimed, exercise.pattern != "carry" {
@@ -310,8 +315,13 @@ enum TrainingGenerator {
 
     /// Main lifts add 5 lb when the last session was at least 1 RPE under the tier cap; accessories hold.
     /// (fitness-planner has no written progression rule; this is what its plans did.) Deload drops ~13%.
-    static func nextLoad(_ load: Double, lastRPE: Double?, main: Bool, tier: AgeTier, deload: Bool) -> Double {
+    /// After time off nothing is added ("missed week means prove it first"), and after 4+ weeks off loads
+    /// drop 10% to re-establish (plan.md "returning athlete").
+    static func nextLoad(_ load: Double, lastRPE: Double?, main: Bool, tier: AgeTier, deload: Bool,
+                         daysOff: Int? = nil) -> Double {
         if deload { return roundTo5(load * deloadLoad) }
+        if let daysOff, daysOff > 28 { return roundTo5(load * 0.9) }
+        if let daysOff, daysOff > 14 { return load }
         guard main, let rpe = lastRPE, rpe <= tier.topRPE - 1 else { return load }
         return load + 5
     }

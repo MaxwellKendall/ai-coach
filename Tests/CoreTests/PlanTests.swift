@@ -1,0 +1,109 @@
+import Foundation
+import Testing
+import SwiftData
+@testable import AICoach
+
+private var calendar: Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "America/New_York")!
+    return calendar
+}
+
+private func date(_ month: Int, _ day: Int, hour: Int = 0) -> Date {
+    calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour))!
+}
+
+private func sets(_ count: Int, on day: Date) -> [LoggedSet] {
+    (0..<count).map { _ in LoggedSet(date: day, exercise: "x", pattern: "push", measurements: []) }
+}
+
+struct PlanRulesTests {
+    @Test func weeksSinceDeloadCountsFullWeeksBackToALightOne() {
+        // Weeks of Jun 1, 8 (light), 15, 22, 29: 15 sets except the light week.
+        let history = sets(15, on: date(6, 1, hour: 12)) + sets(4, on: date(6, 8, hour: 12))
+            + sets(15, on: date(6, 15, hour: 12)) + sets(15, on: date(6, 22, hour: 12)) + sets(15, on: date(6, 29, hour: 12))
+        #expect(Training.weeksSinceDeload(history, before: date(7, 6), calendar: calendar) == 3)
+        // A missed week counts as rest.
+        #expect(Training.weeksSinceDeload(history, before: date(7, 13), calendar: calendar) == 0)
+        #expect(Training.weeksSinceDeload([], before: date(7, 6), calendar: calendar) == 0)
+    }
+
+    @Test(arguments: [(10, 170.0), (20, 165), (90, 150)])
+    func timeOffHoldsThenDropsLoads(daysOff: Int, expected: Double) {
+        #expect(TrainingGenerator.nextLoad(165, lastRPE: 7, main: true, tier: AgeTier.of(age: 36), deload: false,
+                                           daysOff: daysOff) == expected)
+    }
+
+    @Test func kitchenBlocksFollowTheGroceryRun() {
+        let blocks = KitchenSchedule.week(
+            startingOn: date(7, 20), cookWindows: [CookWindow(day: 5, hours: 2, label: "Bulk cook"),
+                                                   CookWindow(day: 2, hours: 1, label: "Midweek refresh")],
+            groceryDay: 5, calendar: calendar)
+        #expect(blocks.map(\.label) == ["Midweek refresh", "Grocery run", "Bulk cook"])
+        #expect(blocks.map(\.date) == [date(7, 22, hour: 18), date(7, 25, hour: 9), date(7, 25, hour: 13)])
+        #expect(blocks.map(\.kind) == [.cook, .grocery, .cook])
+    }
+}
+
+@MainActor
+struct PlannerTests {
+    /// The context doesn't retain its container, so the test keeps it.
+    private let container = try! AppSchema.container(inMemory: true)
+
+    private func store() throws -> ModelContext {
+        let context = container.mainContext
+        try Seeder.seedIfEmpty(context)
+        return context
+    }
+
+    @Test func noPlanUntilTheProfileIsComplete() throws {
+        let context = try store()
+        context.insert(Profile(age: 0, weightLb: 0))
+        try Planner.ensureWeek(of: date(10, 5), in: context)
+        #expect(try context.fetchCount(FetchDescriptor<Plan>()) == 0)
+    }
+
+    @Test func generatesWorkoutsAndKitchenAndRegeneratesIdempotently() throws {
+        let context = try store()
+        context.insert(Profile(age: 36, weightLb: 200, cookWindows: [CookWindow(day: 5, hours: 2, label: "Bulk cook")],
+                               groceryDay: 5))
+        try Planner.ensureWeek(of: date(10, 7), in: context)
+        let plan = try #require(try Planner.plan(weekOf: date(10, 5), in: context))
+        let workouts = plan.items.filter { $0.kind == .workout }
+        #expect(Set(workouts.map { Calendar.current.component(.weekday, from: $0.date) }) == [2, 4, 6])
+        #expect(workouts.allSatisfy { $0.templateRef != nil })
+        #expect(plan.items.filter { $0.kind != .workout }.map(\.kind).sorted { $0.rawValue < $1.rawValue } == [.cook, .grocery])
+        // Exercises keep the generator's order.
+        #expect(workouts.sorted { $0.date < $1.date }.map(\.date) == workouts.map(\.date).sorted())
+
+        let count = plan.items.count
+        try Planner.generate(weekOf: date(10, 9), in: context)
+        #expect(try context.fetchCount(FetchDescriptor<Plan>()) == 1)
+        #expect(try context.fetchCount(FetchDescriptor<PlannedActivity>()) == count)
+        try Planner.ensureWeek(of: date(10, 5), in: context) // already planned: untouched
+        #expect(try context.fetchCount(FetchDescriptor<PlannedActivity>()) == count)
+    }
+
+    @Test func adjustOnlyTouchesRemainingDaysAndRoundTrips() throws {
+        let context = try store()
+        context.insert(Profile(age: 36, weightLb: 200))
+        let plan = try #require(try Planner.generate(weekOf: date(10, 5), in: context))
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let before = Planner.workouts(plan, templates: templates)
+        #expect(before.allSatisfy { calendar.component(.second, from: $0.date) == 0 && !$0.exercise.isEmpty })
+
+        // Wednesday morning: Monday is past; low energy for Friday.
+        let friday = try #require(before.last?.date)
+        let result = try #require(Planner.adjust(plan, templates: templates, today: date(10, 7, hour: 6)) {
+            TrainingAdjuster.energy($0, on: friday)
+        })
+        #expect(result.past.allSatisfy { calendar.component(.weekday, from: $0.date) == 2 })
+        #expect(result.after.filter { $0.date == friday && $0.note == nil }.allSatisfy { $0.adjustedReason != nil })
+
+        try Planner.apply(result.past + result.after, to: plan, templates: templates, in: context)
+        let after = Planner.workouts(plan, templates: templates)
+        #expect(after.count == before.count)
+        #expect(Array(after.prefix(result.past.count)) == result.past)
+        #expect(try context.fetchCount(FetchDescriptor<PlannedActivity>()) == before.count)
+    }
+}

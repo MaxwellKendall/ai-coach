@@ -43,6 +43,8 @@ struct TodayTests {
         ([Measurement(metric: "sets", value: 3, unit: "sets"), Measurement(metric: "duration_s", value: 45, unit: "s")],
          "3 sets 45 s"),
         ([], ""),
+        ([Measurement(metric: "sets", value: 3, unit: "sets"), Measurement(metric: "reps", value: 5, unit: "reps"),
+          Measurement(metric: "rpe", value: 8, unit: "RPE")], "3×5 RPE 8"),
     ])
     func plannedTargetsRead(_ targets: [AICoach.Measurement], _ expected: String) {
         #expect(DayPage.targets(targets) == expected)

@@ -69,7 +69,7 @@ final class Profile {
     var trainingSettings: TrainingSettings {
         TrainingSettings(age: age, daysPerWeek: trainingDays.count, sessionMinutes: sessionMinutes,
                          trainingDays: trainingDays.sorted(), workoutTime: workoutTime, equipment: Set(equipment),
-                         injuredAreas: Set(injuredAreas), avoidExercises: Set(avoidExercises),
+                         injuredAreas: BodyArea.muscles(for: injuredAreas), avoidExercises: Set(avoidExercises),
                          maxWeeklySets: maxWeeklySets, style: style, warmups: warmups, deloadEveryWeeks: deloadEveryWeeks)
     }
 }

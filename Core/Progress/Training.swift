@@ -59,6 +59,23 @@ enum Training {
         }
     }
 
+    /// Consecutive full training weeks before `monday`. A week with less than 60% of the median training
+    /// week's sets (a deload, a missed week or a layoff) resets the count. Derived, so imported history works.
+    static func weeksSinceDeload(_ sets: [LoggedSet], before monday: Date, calendar: Calendar = .current) -> Int {
+        var perWeek: [Date: Int] = [:]
+        for set in sets where set.date < monday { perWeek[Week.monday(of: set.date, calendar: calendar), default: 0] += 1 }
+        let volumes = perWeek.values.sorted()
+        guard !volumes.isEmpty else { return 0 }
+        let threshold = Double(volumes[volumes.count / 2]) * 0.6
+        var weeks = 0
+        var week = calendar.date(byAdding: .day, value: -7, to: monday)!
+        while Double(perWeek[week] ?? 0) >= threshold {
+            weeks += 1
+            week = calendar.date(byAdding: .day, value: -7, to: week)!
+        }
+        return weeks
+    }
+
     /// Working sets per movement pattern over the `days` calendar days ending on `date` (review.md step 3).
     static func setsByPattern(_ sets: [LoggedSet], endingOn date: Date, days: Int = 28,
                               calendar: Calendar = .current) -> [String: Int] {
