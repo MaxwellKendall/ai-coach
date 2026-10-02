@@ -75,14 +75,21 @@ struct WorkoutLogView: View {
     }
 
     private func save() {
-        let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
-        // One entry per set, seconds apart so they keep their order (as the history import does).
-        for (index, row) in draft.rows.filter(\.done).enumerated() {
-            context.insert(LogEntry(kind: .workout, timestamp: date + TimeInterval(index), plannedRef: row.plannedRef,
-                                    templateRef: ids[row.exercise], measurements: row.measurements, note: draft.session))
-        }
-        context.insert(LogEntry(kind: .workout, timestamp: date + TimeInterval(draft.rows.count), measurements: draft.summary,
-                                note: draft.session))
+        draft.save(at: date, templates: templates, in: context)
         dismiss()
+    }
+}
+
+extension WorkoutDraft {
+    /// One entry per done set, seconds apart so they keep their order (as the history import does),
+    /// then the session summary. Shared by the form and workout mode.
+    func save(at date: Date, templates: [Template], in context: ModelContext) {
+        let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
+        for (index, row) in rows.filter(\.done).enumerated() {
+            context.insert(LogEntry(kind: .workout, timestamp: date + TimeInterval(index), plannedRef: row.plannedRef,
+                                    templateRef: ids[row.exercise], measurements: row.measurements, note: session))
+        }
+        context.insert(LogEntry(kind: .workout, timestamp: date + TimeInterval(rows.count), measurements: summary,
+                                note: session))
     }
 }

@@ -46,4 +46,35 @@ struct LogDraftTests {
     @Test func ratiosDisplayAsPercent() {
         #expect(Measurement(metric: "completion_rate", value: 0.8, unit: "ratio").display == "80% completion")
     }
+
+    @Test func finishingASetCarriesItsNumbersForwardAndPointsToTheNextSet() {
+        var draft = WorkoutDraft(session: "Session A", planned: [squat, carry])
+        draft.rows[0].load = 170
+        draft.rows[0].value = 4
+        #expect(draft.finish(0) == 1)
+        #expect(draft.rows[0].done)
+        #expect(draft.rows[1].load == 170 && draft.rows[2].load == 170 && draft.rows[2].value == 4)
+        #expect(draft.rows[3].load == 50) // another exercise is untouched
+        // Skipping ahead and finishing the last set points back to the first one left.
+        #expect(draft.finish(4) == 1)
+        draft.rows[1].done = true
+        draft.rows[2].done = true
+        #expect(draft.finish(3) == nil)
+    }
+
+    @Test func restDependsOnTheSet() {
+        let draft = WorkoutDraft(session: "Session A", planned: [squat, carry])
+        #expect(WorkoutDraft.rest(after: draft.rows[0]) == 180) // 5 reps
+        var light = draft.rows[0]
+        light.value = 10
+        #expect(WorkoutDraft.rest(after: light) == 90)
+        #expect(WorkoutDraft.rest(after: draft.rows[3]) == 60) // distance
+    }
+
+    @Test func plannedTargetsStepByMetric() {
+        #expect(WorkoutEditor.step("load_lb") == 5)
+        #expect(WorkoutEditor.step("rpe") == 0.5)
+        #expect(WorkoutEditor.step("reps") == 1)
+        #expect(WorkoutEditor.label("load_lb_hand") == "Load per hand")
+    }
 }

@@ -7,15 +7,17 @@ struct WeekPager: View {
     let names: [UUID: String]
     let logged: Set<UUID>
     let onLog: ([PlannedActivity]) -> Void
+    let onEdit: ([PlannedActivity]) -> Void
     @State private var day: Int?
 
     init(days: [Date], items: [PlannedActivity], names: [UUID: String], logged: Set<UUID>,
-         today: Date = .now, onLog: @escaping ([PlannedActivity]) -> Void) {
+         today: Date = .now, onLog: @escaping ([PlannedActivity]) -> Void, onEdit: @escaping ([PlannedActivity]) -> Void) {
         self.days = days
         self.items = items
         self.names = names
         self.logged = logged
         self.onLog = onLog
+        self.onEdit = onEdit
         let calendar = Calendar.current
         _day = State(initialValue: days.firstIndex { calendar.isDate($0, inSameDayAs: today) } ?? 0)
     }
@@ -53,7 +55,8 @@ struct WeekPager: View {
                 LazyHStack(alignment: .top, spacing: 0) {
                     ForEach(days.indices, id: \.self) { index in
                         DayPage(items: items.filter { Calendar.current.isDate($0.date, inSameDayAs: days[index]) },
-                                names: names, logged: logged, onLog: onLog)
+                                names: names, logged: logged,
+                                isToday: Calendar.current.isDateInToday(days[index]), onLog: onLog, onEdit: onEdit)
                             .padding(.horizontal, 16)
                             .containerRelativeFrame(.horizontal)
                     }
@@ -71,7 +74,9 @@ struct DayPage: View {
     let items: [PlannedActivity]
     let names: [UUID: String]
     var logged: Set<UUID> = []
+    var isToday = false
     var onLog: ([PlannedActivity]) -> Void = { _ in }
+    var onEdit: ([PlannedActivity]) -> Void = { _ in }
 
     var body: some View {
         let workout = items.filter { $0.kind == .workout }.sorted { $0.date < $1.date }
@@ -89,8 +94,17 @@ struct DayPage: View {
                         Text(workout.first?.slot?.uppercased() ?? "WORKOUT")
                         Spacer()
                         if let start = workout.first?.date { Text(start.formatted(date: .omitted, time: .shortened)) }
+                        if !isLogged(workout) {
+                            Button("Edit workout", systemImage: "pencil") { onEdit(workout) }
+                                .labelStyle(.iconOnly)
+                                .font(.subheadline.weight(.bold))
+                                .frame(width: 36, height: 28)
+                                .background(Color(.systemBackground).opacity(0.15), in: .capsule)
+                                .contentShape(.rect.inset(by: -8))
+                        }
                     }
-                    .font(.caption.weight(.semibold)).opacity(0.7)
+                    .font(.caption.weight(.semibold))
+                    .opacity(0.8)
                     ForEach(workout) { item in
                         HStack(alignment: .firstTextBaseline) {
                             VStack(alignment: .leading, spacing: 1) {
@@ -105,11 +119,12 @@ struct DayPage: View {
                             Text(Self.targets(item.targets)).opacity(0.7)
                         }
                     }
-                    if workout.contains(where: { logged.contains($0.id) }) {
+                    if isLogged(workout) {
                         Label("Logged", systemImage: "checkmark.circle.fill").fontWeight(.semibold).foregroundStyle(.tint)
                     } else {
                         Button { onLog(workout) } label: {
-                            Text("Start workout").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 44)
+                            // Today's session runs live in workout mode; other days are logged after the fact.
+                            Text(isToday ? "Start workout" : "Log workout").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .background(.tint, in: .rect(cornerRadius: 12))
                         .foregroundStyle(Color(.label))
@@ -141,6 +156,8 @@ struct DayPage: View {
         }
         .font(.subheadline)
     }
+
+    private func isLogged(_ workout: [PlannedActivity]) -> Bool { workout.contains { logged.contains($0.id) } }
 
     /// "3×5 @ 155 lb", falling back to each measurement's own display.
     nonisolated static func targets(_ targets: [Measurement]) -> String {

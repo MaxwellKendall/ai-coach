@@ -12,6 +12,14 @@ struct TodayScreen: View {
     @Query private var templates: [Template]
     @State private var adjusting: Plan?
     @State private var logging: Logging?
+    @State private var live: WorkoutDraft?
+    @State private var editing: Session?
+
+    /// A day's planned workout items, presented for editing.
+    struct Session: Identifiable {
+        let id = UUID()
+        let items: [PlannedActivity]
+    }
 
     /// What the user tapped to log: a whole planned session, or one other planned item.
     enum Logging: Identifiable {
@@ -49,7 +57,7 @@ struct TodayScreen: View {
                     WeekPager(days: week, items: planned.filter { $0.date >= week[0] && $0.date < week[6] + 86_400 },
                               names: byID.mapValues(\.name), logged: Set(entries.compactMap(\.plannedRef))) { items in
                         startLogging(items, templates: byID)
-                    }
+                    } onEdit: { editing = Session(items: $0) }
                 }
                 .padding(.vertical, 8)
             }
@@ -58,6 +66,8 @@ struct TodayScreen: View {
             .navigationSubtitle(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
             .toolbar { toolbar }
             .sheet(item: $adjusting) { plan in NavigationStack { AdjustSheet(plan: plan) } }
+            .sheet(item: $editing) { session in NavigationStack { WorkoutEditor(items: session.items) } }
+            .fullScreenCover(item: $live) { draft in WorkoutModeView(draft: draft) }
             .sheet(item: $logging) { logging in
                 NavigationStack {
                     switch logging {
@@ -78,9 +88,9 @@ struct TodayScreen: View {
                 WorkoutDraft.Planned(id: $0.id, exercise: $0.templateRef.flatMap { templates[$0]?.slug } ?? "",
                                      targets: $0.targets, note: $0.note)
             }
-            // Logged at now if it's today's session, otherwise at its planned time.
-            let date = Calendar.current.isDateInToday(first.date) ? Date.now : first.date
-            logging = .workout(WorkoutDraft(session: first.slot ?? "Workout", planned: planned), date)
+            // Today's session runs in workout mode; another day's is logged at its planned time.
+            let draft = WorkoutDraft(session: first.slot ?? "Workout", planned: planned)
+            if Calendar.current.isDateInToday(first.date) { live = draft } else { logging = .workout(draft, first.date) }
         } else {
             logging = .item(first)
         }
@@ -135,4 +145,8 @@ struct TodayScreen: View {
         }
         return pages
     }
+}
+
+extension WorkoutDraft: Identifiable {
+    var id: String { session + rows.map(\.id.uuidString).joined() }
 }

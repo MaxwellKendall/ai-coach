@@ -57,6 +57,26 @@ struct WorkoutDraft: Equatable {
         }
     }
 
+    /// Workout mode's "Done": ticks the set and carries its numbers to the exercise's remaining sets,
+    /// so a load bumped on set 1 doesn't have to be re-entered. Returns the next set still to do, if any.
+    @discardableResult
+    mutating func finish(_ index: Int) -> Int? {
+        rows[index].done = true
+        let row = rows[index]
+        for later in rows.indices where later > index && !rows[later].done && rows[later].exercise == row.exercise {
+            rows[later].value = row.value
+            rows[later].load = row.load
+        }
+        return rows.indices.first { $0 > index && !rows[$0].done } ?? rows.indices.first { !rows[$0].done }
+    }
+
+    /// Rest after a set. Not in fitness-planner's spec; FIT-20 decision: heavy sets (≤ 6 reps) 3:00,
+    /// other rep sets 1:30, timed or distance sets 1:00.
+    static func rest(after row: SetRow) -> TimeInterval {
+        guard row.metric == "reps" else { return 60 }
+        return (row.value ?? 0) <= 6 ? 180 : 90
+    }
+
     var completion: Double { rows.isEmpty ? 0 : Double(rows.filter(\.done).count) / Double(rows.count) }
 
     /// The session's own entry: ratings and completion. It has no exercise, so set-based rules skip it.
