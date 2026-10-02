@@ -26,6 +26,12 @@ enum Training {
         return loadLb * 36 / (37 - reps)
     }
 
+    /// CLAUDE.md "Session Rating Composite". Effort is 1–10, energy and form 1–5, completion 0–1.
+    /// Below 0.5 is a bad day whose sets shouldn't move 1RM estimates.
+    static func composite(effort: Double, energy: Double, form: Double, completion: Double) -> Double {
+        (effort / 2 + energy + form * 2 + completion * 5) / 10
+    }
+
     /// Best estimate per exercise. review.md step 4: estimates never regress, so it's the max over history.
     static func estimated1RMs(_ sets: [LoggedSet]) -> [String: Double] {
         var best: [String: Double] = [:]
