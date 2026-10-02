@@ -8,8 +8,12 @@ struct GoalsScreen: View {
         NavigationStack {
             List(goals) { goal in
                 VStack(alignment: .leading) {
-                    Text(goal.metric).font(.headline)
+                    Text(Goal.label(goal.metric)).font(.headline)
                     Text("\(goal.target.formatted()) \(goal.unit)").foregroundStyle(.secondary)
+                    if let deadline = goal.deadline {
+                        Text("by \(deadline.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
             .overlay {

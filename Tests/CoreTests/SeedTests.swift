@@ -69,6 +69,10 @@ struct SeedGenerator {
             profileJSON: try String(contentsOf: dev.appending(path: "fitness-planner/profile.json"), encoding: .utf8)))
 
         try write(history.entries.sorted { $0.timestamp < $1.timestamp }, "history")
+        let goals = GoalImporter.goals(
+            profileJSON: try String(contentsOf: dev.appending(path: "fitness-planner/profile.json"), encoding: .utf8))
+        try write(goals.goals, "goals")
+        history.skipped += goals.skipped
         let counts = Dictionary(grouping: history.entries, by: \.kind).mapValues(\.count)
         print("History: \(counts)\nSkipped:\n" + history.skipped.joined(separator: "\n"))
         #expect(!history.entries.isEmpty)

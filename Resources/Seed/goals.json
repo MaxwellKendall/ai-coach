@@ -1,0 +1,51 @@
+[
+  {
+    "deadline" : "2026-08-30T16:00:00Z",
+    "kind" : "training",
+    "metric" : "back-squat.1rm_lb",
+    "target" : 250,
+    "unit" : "lb"
+  },
+  {
+    "deadline" : "2026-08-30T16:00:00Z",
+    "kind" : "training",
+    "metric" : "bench-press.1rm_lb",
+    "target" : 200,
+    "unit" : "lb"
+  },
+  {
+    "deadline" : "2026-08-30T16:00:00Z",
+    "kind" : "training",
+    "metric" : "deadlift.1rm_lb",
+    "target" : 350,
+    "unit" : "lb"
+  },
+  {
+    "deadline" : "2026-08-30T16:00:00Z",
+    "kind" : "training",
+    "metric" : "pull-up.reps",
+    "target" : 10,
+    "unit" : "reps"
+  },
+  {
+    "deadline" : "2026-08-30T16:00:00Z",
+    "kind" : "training",
+    "metric" : "5k.duration_min",
+    "target" : 25,
+    "unit" : "min"
+  },
+  {
+    "deadline" : "2026-08-30T16:00:00Z",
+    "kind" : "body",
+    "metric" : "weight_lb",
+    "target" : 180,
+    "unit" : "lb"
+  },
+  {
+    "deadline" : "2026-08-30T16:00:00Z",
+    "kind" : "body",
+    "metric" : "waist_in",
+    "target" : 34,
+    "unit" : "in"
+  }
+]

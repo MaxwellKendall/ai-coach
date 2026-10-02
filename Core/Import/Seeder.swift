@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 /// Loads the bundled catalog and pantry into an empty store. Never touches existing data.
-/// Debug builds also load the author's fitness-planner history, which Release builds don't bundle.
+/// Debug builds also load the author's fitness-planner history and goals, which Release builds don't bundle.
 enum Seeder {
     @MainActor
     static func seedIfEmpty(_ context: ModelContext, bundle: Bundle = .main) throws {
@@ -26,6 +26,13 @@ enum Seeder {
                 context.insert(LogEntry(kind: seed.kind, timestamp: seed.timestamp,
                                         templateRef: seed.template.flatMap { templates[$0] },
                                         measurements: seed.measurements, note: seed.note))
+            }
+        }
+        if try context.fetchCount(FetchDescriptor<Goal>()) == 0, bundle.url(forResource: "goals", withExtension: "json") != nil {
+            for (index, seed) in try decode([GoalSeed].self, "goals", bundle).enumerated() {
+                // Goals list in createdAt order, so keep the file's order.
+                context.insert(Goal(kind: seed.kind, metric: seed.metric, target: seed.target, unit: seed.unit,
+                                    deadline: seed.deadline, now: .now + TimeInterval(index)))
             }
         }
 #endif

@@ -27,7 +27,7 @@ targets:
       configs:
         # The author's personal history is a dogfooding aid, never shipped.
         Release:
-          EXCLUDED_SOURCE_FILE_NAMES: history.json
+          EXCLUDED_SOURCE_FILE_NAMES: history.json goals.json
   AICoachTests:
     type: bundle.unit-test
     platform: iOS
