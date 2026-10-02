@@ -22,6 +22,13 @@ struct PlanScreen: View {
                 }
             }
             .navigationTitle("This week")
+            .toolbar {
+                NavigationLink {
+                    CatalogScreen()
+                } label: {
+                    Label("Catalog", systemImage: "books.vertical")
+                }
+            }
         }
     }
 }

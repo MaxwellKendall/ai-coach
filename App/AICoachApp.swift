@@ -8,6 +8,7 @@ struct AICoachApp: App {
     init() {
         do {
             container = try AppSchema.container()
+            try Seeder.seedIfEmpty(container.mainContext)
         } catch {
             fatalError("Could not open the data store: \(error)")
         }

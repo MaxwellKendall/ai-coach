@@ -1,0 +1,1020 @@
+[
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "squat"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "quads",
+          "glutes"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "hamstrings",
+          "adductors",
+          "spinal_erectors",
+          "core"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "barbell",
+          "rack"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "4"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "5"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "4"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "goblet-squat",
+          "split-squat",
+          "front-squat"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "bilateral",
+          "lower_body",
+          "barbell",
+          "powerbuilding",
+          "goal_lift"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Bar position: high bar rests on upper traps; low bar sits across rear delts. Use high bar as default.",
+          "Unrack with a full breath into the belly. Brace before you step back, not after.",
+          "Feet shoulder-width or slightly wider; toes out 20–30 degrees. Stance is individual — find yours.",
+          "Descend by sitting between the knees, not by pushing the butt back first. Elbows stay under the bar.",
+          "Depth: crease of the hip at or below the top of the knee. No partial reps.",
+          "Drive out of the hole through the whole foot. Think \"spread the floor\" not just \"push up.\"",
+          "On the way up, hips and shoulders rise at the same rate — don't let the hips shoot up first."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "Tier 30–39 barbell target: 1.25× BW (250 lb at 200 lb bodyweight). Re-establish current capacity in weeks 1–3 using conservative loads (RPE 6–7, 3–5 sets of 5 reps). Run working sets through Brzycki to estimate 1RM once form is solid. Powerbuilding split: squat on Session A days (low-rep compound), goblet squat can substitute for warm-up or accessory work. Do not squat and deadlift heavy in the same session — separate by at least one day."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "Hip circles × 10, bodyweight squat × 10 (pause 2 sec at bottom), then barbell: 1 × 10 @ empty bar, 1 × 5 @ 50% working weight, 1 × 5 @ 75% working weight, then top sets."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Back Squat",
+    "slug" : "back-squat"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "push"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "pectorals",
+          "anterior_deltoids",
+          "triceps"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "serratus_anterior",
+          "coracobrachialis"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "barbell",
+          "bench",
+          "rack"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "4"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "4"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "dumbbell-bench-press",
+          "push-up",
+          "floor-press"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "horizontal_push",
+          "barbell",
+          "powerbuilding",
+          "goal_lift"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Set up: 5 points of contact — both feet flat on floor, both glutes on bench, upper back on bench.",
+          "Grip: slightly wider than shoulder-width. Wrists stacked over elbows (not bent back).",
+          "Retract and depress scapula before unracking — \"proud chest\" arch. Hold this throughout the set.",
+          "Unrack with locked elbows; walk bar out over the chest before descending.",
+          "Bar path: lower to the lower chest / upper abdomen, not straight down. Slight arc.",
+          "Touch lightly at the bottom — no bounce. Tuck the elbows 45–75 degrees (not straight out, not tucked to sides).",
+          "Press along the same arc path back to lockout. Bar over wrists, wrists over elbows throughout."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "Tier 30–39 target: 1.0× BW bench press (200 lb at 200 lb bodyweight). Historical PR 225 lb is ~1 year old — do not use it as a training baseline. Re-establish with conservative loads (RPE 6–7, 3–5 sets of 5 reps) over weeks 1–3. Estimate current 1RM via Brzycki from a working set of 5+ reps at RPE ≤ 8. Pair with deadlift on Session B days; avoid pressing to failure on the same day as heavy overhead work if that's added later."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "Shoulder circles × 10, push-up × 5 slow tempo (3 sec down), then barbell: 1 × 10 @ empty bar, 1 × 5 @ 50% working weight, 1 × 5 @ 75% working weight, then top sets."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Bench Press",
+    "slug" : "bench-press"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "hinge"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "hamstrings",
+          "glutes",
+          "spinal_erectors"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "quads",
+          "lats",
+          "traps",
+          "forearms",
+          "core"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "barbell"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "4"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "5"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "4"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "dumbbell-romanian-deadlift",
+          "trap-bar-deadlift",
+          "romanian-deadlift"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "bilateral",
+          "hinge",
+          "barbell",
+          "powerbuilding",
+          "goal_lift"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Bar over mid-foot (1 inch from shin). Hips hinge back to grip — do not squat down to the bar.",
+          "Grip just outside the legs. Double overhand until grip is the limiting factor, then use mixed or hook.",
+          "Before pulling: chest up (\"proud chest\"), lats engaged (\"protect your armpits\"), breath and brace.",
+          "Initiate by pushing the floor away — think leg press first, then hinge. Do not yank.",
+          "Bar stays in contact with the legs the entire pull. It should scrape the shin and drag up the thigh.",
+          "Lock out by squeezing glutes and standing tall — do not hyperextend the lumbar at the top.",
+          "Lower under control (hinge back first, then bend knees) or do a controlled drop from lockout."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "Tier 30–39 target: 1.75× BW deadlift (350 lb at 200 lb bodyweight). Historical PR 255 lb is the biggest long-term strength gap. Re-establish starting at RPE 6 with conservative loads (weeks 1–3). Deadlift on Session B days only — never pair heavy squat + heavy deadlift in the same session. Fatigue cost is high (5/5): limit to 3–5 working sets, do not add excessive volume early in a block. Warm-up sets count toward total session fatigue; include them in weekly set tracking."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "Hip hinge drill with dowel rod or broomstick × 10, then barbell: 1 × 5 @ 50% working weight, 1 × 3 @ 75% working weight, then top sets."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Deadlift",
+    "slug" : "deadlift"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "push"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "pectorals",
+          "anterior_deltoids",
+          "triceps"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "serratus_anterior",
+          "core"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "dumbbells"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "push-up",
+          "dumbbell-floor-press",
+          "dumbbell-incline-press"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "horizontal_push",
+          "home_gym"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Lie on a bench or floor. DBs at chest level, elbows at ~45 degrees from torso (not flared 90).",
+          "Brace your core and press your feet into the floor.",
+          "Press the DBs up and slightly together — not straight up — to maximize pec engagement.",
+          "Control the descent for 2 seconds; do not bounce off the chest.",
+          "Floor press variation: forearms hit the floor at the bottom — shorter ROM but safer for",
+          "shoulders when no bench is available."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "The DB press is the primary horizontal push for home gym setups. The Tier 30–39 target is",
+          "3× BW per hand × 8 reps (e.g., 24kg per hand for an 80kg athlete). Adjust targets to",
+          "available dumbbell increments. Sets of 6–10 are effective across strength and hypertrophy goals. If training on the floor (no bench), use dumbbell-floor-press as the substitute — it reduces shoulder stress and is equally effective for the push pattern."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "Light DBs × 10 reps (focus on shoulder retraction), then moderate DBs × 5, then working weight."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Dumbbell Bench Press",
+    "slug" : "dumbbell-bench-press"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "hinge"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "hamstrings",
+          "glutes"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "spinal_erectors",
+          "core",
+          "upper_back"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "dumbbells"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "good-morning",
+          "single-leg-rdl",
+          "hip-thrust"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "bilateral",
+          "lower_body",
+          "posterior_chain",
+          "home_gym"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Hold DBs in front of thighs, overhand grip. Stand tall — shoulders back, chest up.",
+          "Push hips back first, not down. The movement is a hinge, not a squat.",
+          "Maintain a slight knee bend throughout — do not let knees travel forward.",
+          "Lower until you feel a strong hamstring stretch (typically mid-shin). Back stays neutral.",
+          "Drive hips forward to stand — squeeze glutes at the top, don't hyperextend."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "Primary hinge pattern for dumbbell setups. The 0.4× BW per hand target (Tier 30–39) means roughly 32kg per hand for an 80kg athlete — calibrate to what's available. Sets of 8–10 are the sweet spot for hamstring development; sets of 4–6 heavier build posterior chain strength. Easier on the lower back than conventional deadlift from the floor — appropriate for most injury profiles. Pair with goblet squat in the same session for a complete lower day."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "Hip hinge pattern with dowel or PVC × 10, then light DB RDL × 8, then working weight."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Dumbbell Romanian Deadlift",
+    "slug" : "dumbbell-romanian-deadlift"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "pull"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "lats",
+          "rhomboids",
+          "mid_trapezius"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "biceps",
+          "rear_deltoids",
+          "core"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "dumbbells"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "inverted-row",
+          "pull-up",
+          "face-pull"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "horizontal_pull",
+          "unilateral",
+          "home_gym"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Brace one hand and one knee on a bench or use a staggered stance.",
+          "DB hangs straight down from the shoulder, arm fully extended.",
+          "Row elbow past the hip — not out to the side. Think \"put your elbow in your back pocket.\"",
+          "Pause briefly at the top; don't shrug the shoulder or rotate excessively.",
+          "Lower with control. Keep the core braced throughout — no twisting for momentum."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "Pairs with dumbbell bench press to balance horizontal push and pull on the same session. Target 1:1 push:pull set ratio (or slightly more pull) to protect shoulder health over time. Sets of 8–12 work well. Heavier loads (5–8 reps) develop mid-back thickness. Because it's unilateral, it also trains anti-rotation core stability. Counts as a pull-pattern set in session logs (each arm = 1 set)."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "Scapular retractions (no weight) × 10, then light DB × 8, then working weight."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Dumbbell Row (Single-Arm)",
+    "slug" : "dumbbell-row"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "carry"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "forearms",
+          "traps",
+          "core"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "glutes",
+          "quads",
+          "spinal_erectors",
+          "deltoids"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "dumbbells"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "suitcase-carry",
+          "loaded-march",
+          "rack-carry"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "carry",
+          "loaded_gait",
+          "grip",
+          "unilateral_option",
+          "powerbuilding",
+          "undertrained"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Pick up with a deadlift pattern — hinge, grip, brace, stand. Do not round to grab the floor.",
+          "Stand tall: shoulders packed down and back, chin level. Do not lean forward or tilt to either side.",
+          "Short, controlled steps — heel strike → midfoot → toe-off. Keep the hips level; do not waddle.",
+          "Breathing: small sips of air while braced. Do not fully relax the core mid-carry.",
+          "Set down with control using the same hinge pattern. Do not drop unless using bumper plates."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "Carry pattern was absent from training prior to week 1 (trend: undertrained). Introduces without spike in session fatigue — low technique demand, easy to add as a finisher. Start at 22 kg/hand (~49 lb) for 30 m × 3 sets and progress load or distance weekly. Suitcase carry (one arm only) can substitute to add anti-lateral-flexion demand for core development. Do not superset with other grip-intensive exercises (pull-ups, rows) — let grip recover between."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "No warm-up set needed. Grip the handles, brace, and go. Lighter first set (75% load) if needed."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Farmer Carry",
+    "slug" : "farmer-carry"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "squat"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "quads",
+          "glutes"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "adductors",
+          "core",
+          "upper_back"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "dumbbells"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "split-squat",
+          "step-up",
+          "wall-sit"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "bilateral",
+          "lower_body",
+          "beginner_friendly",
+          "home_gym"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Hold the dumbbell vertically at chest height, both hands cupping the top end.",
+          "Feet shoulder-width or slightly wider; toes turned out 15–30 degrees.",
+          "Brace hard before descending — ribs down, belt tight.",
+          "Sit between your knees, not behind them. Elbows track inside the knees at the bottom.",
+          "Drive through the whole foot — not just the heel — on the way up."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "Primary squat-pattern movement for home gym and dumbbell-only setups. Works at any rep range: sets of 5–6 at a heavy DB for strength development; sets of 10–15 at moderate load for hypertrophy or metabolic work. A reliable 1.25× BW squat proxy when barbell is unavailable — test with the heaviest available dumbbell for 8 clean reps. Pairs well with Romanian deadlift in the same session; keep total compound sets ≤ 8 if pairing."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "Bodyweight squat × 10 (pause 2 sec at bottom), then light DB goblet squat × 8, then working weight."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Goblet Squat",
+    "slug" : "goblet-squat"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "core"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "rectus_abdominis",
+          "transverse_abdominis"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "obliques",
+          "glutes",
+          "serratus_anterior"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "1"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "1"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "1"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "dead-bug",
+          "hollow-body-hold",
+          "ab-wheel-rollout"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "isometric",
+          "core",
+          "bodyweight",
+          "home_gym",
+          "beginner_friendly"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Forearms on the floor, elbows under shoulders. Toes tucked.",
+          "Body forms a straight line from head to heels — do not let hips sag or pike up.",
+          "Squeeze glutes and abs simultaneously. Breathe normally.",
+          "If form breaks before the target duration, stop and rest — do not grind through bad reps."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "Use for core work in a full-body session when time is limited. Duration-based: build from 20–30 sec holds toward 60 sec. Once 3 × 60 sec is easy, progress to ab-wheel rollout or dead bug for greater anti-extension challenge. One plank set = one core set in session logs. Carries and unilateral work (split squat, single-arm row) also accumulate core volume indirectly — count those in their primary pattern only."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "No specific warm-up needed. Can be placed at the end of any session or between compound sets as active rest."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Plank (Forearm)",
+    "slug" : "plank"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "pull"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "lats",
+          "biceps"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "rhomboids",
+          "rear_deltoids",
+          "core"
+        ]
+      },
+      {
+        "key" : "equipment",
+        "values" : [
+          "pull_up_bar"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "3"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "inverted-row",
+          "dumbbell-row",
+          "band-assisted-pull-up"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "vertical_pull",
+          "bodyweight",
+          "home_gym",
+          "goal_lift"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Dead hang start — shoulders fully elevated, arms straight. Do not kip or swing.",
+          "Initiate by depressing the scapula (shoulders down and back) before pulling.",
+          "Pull elbows toward your back pockets, not just down. Drive the chest toward the bar.",
+          "Chin clears the bar at the top. Control the descent — 2–3 seconds down.",
+          "Full extension at the bottom before the next rep. No half-rep bunny hops."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "The pull goal for Tier 30–39 is 10 unbroken pull-ups (from dead hang). Progress by adding one rep every 1–2 weeks, or by adding load (weight vest or dumbbell between feet) once 8+ clean reps are consistent. Work sets of 3–5 reps (2 reps short of failure) outperform grinding sets to failure for long-term development. If current max is < 5, use band-assisted-pull-up as the primary movement and accumulate volume there first. Never count partial reps toward the goal."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "Dead hang × 20 sec, scapular pulls × 5 (no elbow bend), then 2–3 easy warm-up reps."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Pull-up",
+    "slug" : "pull-up"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "push"
+        ]
+      },
+      {
+        "key" : "muscles_primary",
+        "values" : [
+          "pectorals",
+          "anterior_deltoids",
+          "triceps"
+        ]
+      },
+      {
+        "key" : "muscles_secondary",
+        "values" : [
+          "serratus_anterior",
+          "core"
+        ]
+      },
+      {
+        "key" : "difficulty",
+        "values" : [
+          "1"
+        ]
+      },
+      {
+        "key" : "fatigue_cost",
+        "values" : [
+          "2"
+        ]
+      },
+      {
+        "key" : "technique_demand",
+        "values" : [
+          "1"
+        ]
+      },
+      {
+        "key" : "substitutes",
+        "values" : [
+          "dumbbell-bench-press",
+          "dumbbell-floor-press",
+          "incline-push-up"
+        ]
+      },
+      {
+        "key" : "tags",
+        "values" : [
+          "compound",
+          "horizontal_push",
+          "bodyweight",
+          "home_gym",
+          "goal_lift"
+        ]
+      },
+      {
+        "key" : "cues",
+        "values" : [
+          "Hands slightly wider than shoulder-width. Elbows track at ~45 degrees — not flared out.",
+          "Body forms a rigid plank from head to heels — squeeze glutes and abs before descending.",
+          "Chest touches or nearly touches the floor at the bottom. Do not short-rep.",
+          "Press up explosively; control the descent for 2 seconds.",
+          "For easier variation: hands elevated on a surface reduces load. For harder: feet elevated."
+        ]
+      },
+      {
+        "key" : "programming_notes",
+        "values" : [
+          "The Tier 30–39 push goal is 15 unbroken full push-ups (chest to floor, full extension). Progress by tracking max unbroken reps each week and aiming to add 1–2 reps per week. When current max is ≥ 12, begin adding resistance (weight vest, plate on back) to continue progression. Counts as a push-pattern set. Push-ups and dumbbell bench press target the same pattern — use them interchangeably or combine in the same session without doubling the push volume beyond the weekly target."
+        ]
+      },
+      {
+        "key" : "warm_up_protocol",
+        "values" : [
+          "5 slow-tempo push-ups (3 sec down, 1 sec pause) before working sets."
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Push-up",
+    "slug" : "push-up"
+  }
+]

@@ -23,7 +23,7 @@ struct ModelTests {
             context.insert(plan)
             context.insert(log)
             context.insert(Template(kind: .exercise, name: "Bench Press", slug: "bench-press",
-                                    attributes: ["pattern": "push"]))
+                                    attributes: [TemplateAttribute(key: "movement_pattern", values: ["push"])]))
             context.insert(Win(kind: .pr, goalRef: goal.id, logRef: log.id, date: start))
             try context.save()
         }
@@ -35,7 +35,7 @@ struct ModelTests {
         #expect(log.plannedRef == plan.items.first?.id)
         #expect(log.measurements.count == 2)
         #expect(try context.fetch(FetchDescriptor<Goal>()).first?.target == 225)
-        #expect(try context.fetch(FetchDescriptor<Template>()).first?.attributes["pattern"] == "push")
+        #expect(try context.fetch(FetchDescriptor<Template>()).first?.values("movement_pattern") == ["push"])
         #expect(try context.fetch(FetchDescriptor<Win>()).first?.kind == .pr)
     }
 

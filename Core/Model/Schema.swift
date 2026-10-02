@@ -3,7 +3,7 @@ import SwiftData
 
 enum AppSchema {
     static let models: [any PersistentModel.Type] = [
-        Goal.self, Plan.self, PlannedActivity.self, LogEntry.self, Template.self, Win.self,
+        Goal.self, Plan.self, PlannedActivity.self, LogEntry.self, Template.self, Win.self, PantryItem.self,
     ]
 
     static func container(inMemory: Bool = false, url: URL? = nil) throws -> ModelContainer {

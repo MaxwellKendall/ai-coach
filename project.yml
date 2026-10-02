@@ -14,7 +14,7 @@ targets:
   AICoach:
     type: application
     platform: iOS
-    sources: [App, Core, Features]
+    sources: [App, Core, Features, Resources]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach

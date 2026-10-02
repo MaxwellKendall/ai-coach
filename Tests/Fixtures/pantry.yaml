@@ -1,0 +1,231 @@
+last_updated: 2026-05-02
+
+staples:
+  olive oil:
+    status: stocked
+    last_restocked: null
+  kosher salt:
+    status: stocked
+    last_restocked: null
+  black pepper:
+    status: stocked
+    last_restocked: null
+  garlic:
+    status: stocked
+    last_restocked: null
+  chicken stock:
+    status: stocked
+    last_restocked: null
+  beef stock:
+    status: stocked
+    last_restocked: null
+  baking powder:
+    status: stocked
+    last_restocked: 2026-05-01
+  maple syrup:
+    status: stocked
+    last_restocked: 2026-05-01
+  redmond real salt:
+    status: stocked
+    last_restocked: 2026-05-01
+
+current_stock:
+  # Dairy & Eggs
+  greek yogurt:
+    quantity: "1 container (2 lb)"
+    brand: "Cabot Creamery Whole Milk Plain"
+    note: "not labeled lactose-free; purchased 2026-04-25"
+    expires: null
+  eggs:
+    quantity: "18 large brown"
+    brand: "Latta Egg Ranch"
+    expires: null
+  whole milk (HT):
+    quantity: "1 gallon"
+    brand: "Harris Teeter Vitamin D"
+    expires: null
+  lactaid whole milk:
+    quantity: "1 gallon"
+    brand: "Lactaid Whole Milk"
+    expires: null
+  lactaid milk (2%):
+    quantity: "partial half gallon"
+    brand: "Lactaid 2% Reduced Fat"
+    note: "purchased 2026-04-25; likely low"
+    expires: null
+  lactose-free sour cream:
+    quantity: "1 tub (12 oz)"
+    brand: "Green Valley Lactose Free Organic"
+    expires: null
+  cheddar cheese:
+    quantity: "1 bar (8 oz)"
+    brand: "Cabot Seriously Sharp"
+    expires: null
+  cabot cheese:
+    quantity: "1 package"
+    note: "variety unclear from receipt"
+    expires: null
+  string cheese:
+    quantity: "1 package"
+    brand: "Galbani"
+    expires: null
+  grass-fed butter:
+    quantity: "1 package (organic)"
+    expires: null
+
+  # Produce
+  lemon:
+    quantity: "~5 each"
+    note: "had 5 from Apr 25, bought 2 more May 1; several used in cooking"
+    expires: null
+  lime:
+    quantity: "2 large"
+    expires: null
+  yellow bananas:
+    quantity: "3.86 lbs (loose)"
+    expires: null
+  carrots:
+    quantity: "1 lb bag"
+    expires: null
+  organic cucumbers:
+    quantity: "1–2 each"
+    expires: null
+  organic honeycrisp apples:
+    quantity: "2.43 lbs"
+    expires: null
+  cuties mandarins:
+    quantity: "1 bag (organic)"
+    expires: null
+  fresh blueberries:
+    quantity: "2 containers (organic)"
+    expires: null
+  creek salad kit:
+    quantity: "1 kit"
+    expires: null
+  sweet potatoes:
+    quantity: "1 bag"
+    expires: null
+  yukon gold potatoes:
+    quantity: "5 lb bag"
+    expires: null
+
+  # Meat
+  chicken breast:
+    quantity: "0.84 lb"
+    brand: "Smart brand boneless skinless"
+    expires: null
+  niman ranch no sugar added:
+    quantity: "1 package"
+    note: "bacon or sausage; verify"
+    expires: null
+
+  # Pantry / Dry Goods
+  all-purpose flour:
+    quantity: "1 bag (5 lb)"
+    brand: "King Arthur Unbleached"
+    expires: null
+  cornbread mix:
+    quantity: "1 box (15 oz)"
+    brand: "Krusteaz Honey"
+    expires: null
+  mission flour tortillas:
+    quantity: "1 pack"
+    expires: null
+  mission tortilla strips:
+    quantity: "1 bag"
+    expires: null
+  tortilla chips:
+    quantity: "1 bag (10.1 oz)"
+    brand: "Late July Sea Salt Organic"
+    expires: null
+  colored sweet peppers:
+    quantity: "1 jar/bag"
+    expires: null
+  crazy richard's nut butter:
+    quantity: "1 jar"
+    expires: null
+  crmcl s organic:
+    quantity: "1 unit"
+    note: "item unclear from receipt abbreviation"
+    expires: null
+  peanut butter:
+    quantity: "1 jar (16 oz)"
+    brand: "365 Organic Creamy Unsweetened"
+    expires: null
+  crackers:
+    quantity: "1 box (6 oz)"
+    brand: "Milton's Organic Multi-Grain"
+    expires: null
+
+  # Frozen
+  frozen wild blueberries:
+    quantity: "1 bag (10 oz)"
+    brand: "365 Organic"
+    expires: null
+  frozen dark cherries:
+    quantity: "1 bag (10 oz)"
+    brand: "365 Organic Sweet Dark"
+    expires: null
+  frozen avocados:
+    quantity: "1 bag (16 oz)"
+    brand: "Private Selection Diced Haas"
+    expires: null
+  frozen spinach:
+    quantity: "1 bag (12 oz)"
+    brand: "Simple Truth Organic Chopped"
+    expires: null
+
+  # Beverages
+  coffee whole bean:
+    quantity: "1 bag (12 oz)"
+    brand: "Charleston Coffee Roasters Kiawah Dark Roast Organic"
+    expires: null
+  cold brew coffee:
+    quantity: "1 bottle (48 fl oz)"
+    brand: "SToK Unsweetened Decaf"
+    expires: null
+  olipop soda:
+    quantity: "1 Classic Root Beer, 1 Banana Cream"
+    expires: null
+  zevia zero sugar:
+    quantity: "1 unit"
+    expires: null
+  harney & sons tea:
+    quantity: "1 box"
+    expires: null
+  yogi tea elderberry:
+    quantity: "1 box"
+    expires: null
+  celestial tea:
+    quantity: "1 box"
+    expires: null
+  crafters organic black:
+    quantity: "1 unit"
+    note: "coffee or tea; variety unclear from receipt"
+    expires: null
+  cmate cold sweet:
+    quantity: "1 unit"
+    note: "beverage; brand/variety unclear from receipt"
+    expires: null
+  granola:
+    quantity: "2 bags (10.6 oz each)"
+    brand: "Nature's Path Love Crunch Dark Chocolate & Hazelnut Butter"
+    expires: null
+
+  # Snacks
+  perfect snack bars:
+    quantity: "1 pack"
+    expires: null
+
+  # Non-grocery
+  ht nighttime sf:
+    quantity: "1 bottle"
+    note: "cold & sleep formula"
+    expires: null
+  ricola lozenge:
+    quantity: "1 package"
+    expires: null
+  ricola throat drops (Max Throat):
+    quantity: "1 package"
+    brand: "Ricola Max Throat"
+    expires: null

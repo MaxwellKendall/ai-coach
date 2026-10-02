@@ -1,0 +1,230 @@
+[
+  {
+    "name" : "olive oil",
+    "stocked" : true
+  },
+  {
+    "name" : "kosher salt",
+    "stocked" : true
+  },
+  {
+    "name" : "black pepper",
+    "stocked" : true
+  },
+  {
+    "name" : "garlic",
+    "stocked" : true
+  },
+  {
+    "name" : "chicken stock",
+    "stocked" : true
+  },
+  {
+    "name" : "beef stock",
+    "stocked" : true
+  },
+  {
+    "name" : "baking powder",
+    "stocked" : true
+  },
+  {
+    "name" : "maple syrup",
+    "stocked" : true
+  },
+  {
+    "name" : "redmond real salt",
+    "stocked" : true
+  },
+  {
+    "name" : "greek yogurt",
+    "stocked" : true
+  },
+  {
+    "name" : "eggs",
+    "stocked" : true
+  },
+  {
+    "name" : "whole milk (HT)",
+    "stocked" : true
+  },
+  {
+    "name" : "lactaid whole milk",
+    "stocked" : true
+  },
+  {
+    "name" : "lactaid milk (2%)",
+    "stocked" : true
+  },
+  {
+    "name" : "lactose-free sour cream",
+    "stocked" : true
+  },
+  {
+    "name" : "cheddar cheese",
+    "stocked" : true
+  },
+  {
+    "name" : "cabot cheese",
+    "stocked" : true
+  },
+  {
+    "name" : "string cheese",
+    "stocked" : true
+  },
+  {
+    "name" : "grass-fed butter",
+    "stocked" : true
+  },
+  {
+    "name" : "lemon",
+    "stocked" : true
+  },
+  {
+    "name" : "lime",
+    "stocked" : true
+  },
+  {
+    "name" : "yellow bananas",
+    "stocked" : true
+  },
+  {
+    "name" : "carrots",
+    "stocked" : true
+  },
+  {
+    "name" : "organic cucumbers",
+    "stocked" : true
+  },
+  {
+    "name" : "organic honeycrisp apples",
+    "stocked" : true
+  },
+  {
+    "name" : "cuties mandarins",
+    "stocked" : true
+  },
+  {
+    "name" : "fresh blueberries",
+    "stocked" : true
+  },
+  {
+    "name" : "creek salad kit",
+    "stocked" : true
+  },
+  {
+    "name" : "sweet potatoes",
+    "stocked" : true
+  },
+  {
+    "name" : "yukon gold potatoes",
+    "stocked" : true
+  },
+  {
+    "name" : "chicken breast",
+    "stocked" : true
+  },
+  {
+    "name" : "niman ranch no sugar added",
+    "stocked" : true
+  },
+  {
+    "name" : "all-purpose flour",
+    "stocked" : true
+  },
+  {
+    "name" : "cornbread mix",
+    "stocked" : true
+  },
+  {
+    "name" : "mission flour tortillas",
+    "stocked" : true
+  },
+  {
+    "name" : "mission tortilla strips",
+    "stocked" : true
+  },
+  {
+    "name" : "tortilla chips",
+    "stocked" : true
+  },
+  {
+    "name" : "colored sweet peppers",
+    "stocked" : true
+  },
+  {
+    "name" : "crazy richard's nut butter",
+    "stocked" : true
+  },
+  {
+    "name" : "crmcl s organic",
+    "stocked" : true
+  },
+  {
+    "name" : "peanut butter",
+    "stocked" : true
+  },
+  {
+    "name" : "crackers",
+    "stocked" : true
+  },
+  {
+    "name" : "frozen wild blueberries",
+    "stocked" : true
+  },
+  {
+    "name" : "frozen dark cherries",
+    "stocked" : true
+  },
+  {
+    "name" : "frozen avocados",
+    "stocked" : true
+  },
+  {
+    "name" : "frozen spinach",
+    "stocked" : true
+  },
+  {
+    "name" : "coffee whole bean",
+    "stocked" : true
+  },
+  {
+    "name" : "cold brew coffee",
+    "stocked" : true
+  },
+  {
+    "name" : "olipop soda",
+    "stocked" : true
+  },
+  {
+    "name" : "zevia zero sugar",
+    "stocked" : true
+  },
+  {
+    "name" : "harney & sons tea",
+    "stocked" : true
+  },
+  {
+    "name" : "yogi tea elderberry",
+    "stocked" : true
+  },
+  {
+    "name" : "celestial tea",
+    "stocked" : true
+  },
+  {
+    "name" : "crafters organic black",
+    "stocked" : true
+  },
+  {
+    "name" : "cmate cold sweet",
+    "stocked" : true
+  },
+  {
+    "name" : "granola",
+    "stocked" : true
+  },
+  {
+    "name" : "perfect snack bars",
+    "stocked" : true
+  }
+]
