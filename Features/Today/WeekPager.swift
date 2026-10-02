@@ -117,68 +117,77 @@ struct DayPage: View {
         .font(.subheadline)
     }
 
-    private func isLogged(_ workout: [PlannedActivity]) -> Bool { workout.contains { logged.contains($0.id) } }
+    private func done(_ workout: [PlannedActivity]) -> Bool { workout.contains { logged.contains($0.id) } }
 
-    /// Prototype artboard 1: the session as one chip per block, then Details and Start.
+    /// Prototype artboard 1: a header that opens Details, one chip per block, then the one action for the day:
+    /// Start today, Log a missed past session, or view a logged one. Future days only show the plan.
     private func workoutCard(_ workout: [PlannedActivity]) -> some View {
         let session = Planner.session(workout, templates: templates)
         let titles = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-        let done = isLogged(workout)
+        let start = workout.first?.date ?? .now
+        let day = isToday ? "TODAY" : start.formatted(.dateTime.weekday(.abbreviated)).uppercased()
+        let past = !isToday && start < .now
         return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(workout.first?.slot?.uppercased() ?? "WORKOUT")
-                Spacer()
-                if let start = workout.first?.date { Text(start.formatted(date: .omitted, time: .shortened)) }
+            Button { done(workout) ? onRecord(workout) : onDetails(workout) } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(day) · \(start.formatted(date: .omitted, time: .shortened)) · \(session.blocks.flatMap(\.movements).reduce(0) { $0 + $1.working.count }) SETS")
+                            .font(.caption2.weight(.semibold)).tracking(0.8).opacity(0.65)
+                        Text(workout.first?.slot ?? "Workout")
+                            .font(.system(size: 30, weight: .heavy)).fontWidth(.condensed)
+                    }
+                    Spacer(minLength: 0)
+                    HStack(spacing: 2) {
+                        Text("Details")
+                        Image(systemName: "chevron.right").font(.caption.weight(.bold))
+                    }
+                    .font(.footnote.weight(.semibold)).opacity(0.75).padding(.top, 2)
+                }
+                .contentShape(.rect)
             }
-            .font(.caption.weight(.semibold))
-            .opacity(0.7)
             FlowLayout(spacing: 6) {
                 ForEach(Array(session.blocks.enumerated()), id: \.offset) { index, block in
                     HStack(spacing: 6) {
                         Text(SessionPlan.letter(index))
-                            .font(.system(size: 15, weight: .bold)).fontWidth(.condensed)
+                            .font(.system(size: 13, weight: .bold)).fontWidth(.condensed)
                             .foregroundStyle(RootView.accent)
+                            .frame(width: 20, height: 20)
+                            .background(Color.primary, in: .circle)
                         Text(block.movements.map { titles[$0.exercise] ?? $0.exercise }.joined(separator: " + "))
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
+                            .font(.footnote.weight(.medium)).lineLimit(1)
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 32)
+                    .padding(.leading, 4).padding(.trailing, 10)
+                    .frame(height: 28)
                     .background(Color(.systemBackground).opacity(0.12), in: .capsule)
                 }
             }
-            Text(Self.summary(session))
-                .font(.caption).opacity(0.6)
-            if done {
+            if done(workout) {
                 Button { onRecord(workout) } label: {
-                    Label("Done · view session", systemImage: "checkmark.circle.fill")
-                        .fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
-                }
-                .background(Color(.systemBackground).opacity(0.12), in: .rect(cornerRadius: 12))
-                .foregroundStyle(RootView.accent)
-            } else {
-                HStack(spacing: 8) {
-                    Button { onDetails(workout) } label: {
-                        Text("Details").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
+                    HStack(spacing: 8) {
+                        Text("✓").foregroundStyle(RootView.accent)
+                        Text("Done · view session")
                     }
-                    .background(Color(.systemBackground).opacity(0.12), in: .rect(cornerRadius: 12))
-                    Button { onLog(workout) } label: {
-                        // Today's session runs live in workout mode; other days are logged after the fact.
-                        Text(isToday ? "Start" : "Log workout").fontWeight(.bold).frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
-                    }
-                    .background(RootView.accent, in: .rect(cornerRadius: 12))
-                    .foregroundStyle(Color(.label))
+                    .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
                 }
+                .background(Color(.systemBackground).opacity(0.12), in: .rect(cornerRadius: 14))
+            } else if isToday || past {
+                Button { onLog(workout) } label: {
+                    // Today's session runs live in workout mode; a missed one is logged after the fact.
+                    Label(isToday ? "Start workout" : "Log workout", systemImage: isToday ? "play.fill" : "square.and.pencil")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 52).contentShape(.rect)
+                }
+                .background(RootView.accent, in: .rect(cornerRadius: 16))
+                .foregroundStyle(Color(.label))
             }
         }
         .buttonStyle(.plain)
-        .padding(16)
+        .padding(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 14))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary, in: .rect(cornerRadius: 20))
+        .background(Color.primary, in: .rect(cornerRadius: 22))
         .foregroundStyle(Color(.systemBackground))
     }
 
-    /// "18 working sets · deload" style one-liner under the chips.
+    /// "15 working sets · deload": the header caption's tail.
     nonisolated static func summary(_ session: SessionPlan) -> String {
         let sets = session.blocks.flatMap(\.movements).reduce(0) { $0 + $1.working.count }
         let reasons = Set(session.blocks.flatMap(\.movements).flatMap(\.sets).compactMap(\.adjustedReason)).sorted()
