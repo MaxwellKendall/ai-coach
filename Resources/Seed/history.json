@@ -1,0 +1,7557 @@
+[
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 60
+      }
+    ],
+    "note" : "Session A — Full Body — Solid depth. Last set felt like RPE 7.",
+    "template" : "goblet-squat",
+    "timestamp" : "2026-05-12T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 60
+      }
+    ],
+    "note" : "Session A — Full Body — Solid depth. Last set felt like RPE 7.",
+    "template" : "goblet-squat",
+    "timestamp" : "2026-05-12T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 60
+      }
+    ],
+    "note" : "Session A — Full Body — Solid depth. Last set felt like RPE 7.",
+    "template" : "goblet-squat",
+    "timestamp" : "2026-05-12T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 55
+      }
+    ],
+    "note" : "Session A — Full Body — Hamstrings loaded well. No lower back issues.",
+    "template" : "dumbbell-romanian-deadlift",
+    "timestamp" : "2026-05-12T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 55
+      }
+    ],
+    "note" : "Session A — Full Body — Hamstrings loaded well. No lower back issues.",
+    "template" : "dumbbell-romanian-deadlift",
+    "timestamp" : "2026-05-12T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 55
+      }
+    ],
+    "note" : "Session A — Full Body — Hamstrings loaded well. No lower back issues.",
+    "template" : "dumbbell-romanian-deadlift",
+    "timestamp" : "2026-05-12T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Full Body — Floor press — no bench. Good control.",
+    "template" : "dumbbell-bench-press",
+    "timestamp" : "2026-05-12T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Full Body — Floor press — no bench. Good control.",
+    "template" : "dumbbell-bench-press",
+    "timestamp" : "2026-05-12T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Full Body — Floor press — no bench. Good control.",
+    "template" : "dumbbell-bench-press",
+    "timestamp" : "2026-05-12T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session A — Full Body — Finisher after floor press.",
+    "template" : "push-up",
+    "timestamp" : "2026-05-12T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session A — Full Body — Finisher after floor press.",
+    "template" : "push-up",
+    "timestamp" : "2026-05-12T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 6
+      }
+    ],
+    "note" : "Session A — Full Body — Clean dead-hang reps. Stopped 2 short of failure.",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-12T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 6
+      }
+    ],
+    "note" : "Session A — Full Body — Clean dead-hang reps. Stopped 2 short of failure.",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-12T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 6
+      }
+    ],
+    "note" : "Session A — Full Body — Clean dead-hang reps. Stopped 2 short of failure.",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-12T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 45
+      }
+    ],
+    "note" : "Session A — Full Body — Easy — bump to 55 lb next time.",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-12T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 45
+      }
+    ],
+    "note" : "Session A — Full Body — Easy — bump to 55 lb next time.",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-12T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 45
+      }
+    ],
+    "note" : "Session A — Full Body — Held form throughout.",
+    "template" : "plank",
+    "timestamp" : "2026-05-12T16:00:16Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 45
+      }
+    ],
+    "note" : "Session A — Full Body — Held form throughout.",
+    "template" : "plank",
+    "timestamp" : "2026-05-12T16:00:17Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 45
+      }
+    ],
+    "note" : "Session A — Full Body — Held form throughout.",
+    "template" : "plank",
+    "timestamp" : "2026-05-12T16:00:18Z"
+  },
+  {
+    "kind" : "sleep",
+    "measurements" : [
+      {
+        "metric" : "sleep_h",
+        "unit" : "h",
+        "value" : 7
+      },
+      {
+        "metric" : "sleep_quality",
+        "unit" : "/5",
+        "value" : 3
+      }
+    ],
+    "note" : "restless — woke briefly around 3am",
+    "timestamp" : "2026-05-18T11:15:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 620
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 58
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 72
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 8
+      }
+    ],
+    "note" : "Greek yogurt protein bowl",
+    "timestamp" : "2026-05-18T11:30:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-18T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-18T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-18T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 4
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-18T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 4
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-18T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 4
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-18T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 24
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-18T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 24
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-18T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 15
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "push-up",
+    "timestamp" : "2026-05-18T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 15
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "push-up",
+    "timestamp" : "2026-05-18T16:00:09Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 680
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 54
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 78
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 12
+      }
+    ],
+    "note" : "Grilled chicken rice bowl",
+    "timestamp" : "2026-05-18T16:30:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 320
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 9
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 28
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 18
+      }
+    ],
+    "note" : "Snacks",
+    "timestamp" : "2026-05-18T19:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 710
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 48
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 52
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 26
+      }
+    ],
+    "note" : "Salmon with quinoa and asparagus",
+    "timestamp" : "2026-05-18T22:45:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 550
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 45
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 50
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 10
+      }
+    ],
+    "note" : "Chicken and potatoes",
+    "timestamp" : "2026-05-19T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 175
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 27
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 8
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 3
+      }
+    ],
+    "note" : "Protein shake",
+    "timestamp" : "2026-05-19T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 350
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 20
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 30
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 15
+      }
+    ],
+    "note" : "Leftover steak quesadilla (1 slice)",
+    "timestamp" : "2026-05-19T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 710
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 53
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 5
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 51
+      }
+    ],
+    "note" : "Whole Foods half-pound burger, cheese, ketchup",
+    "timestamp" : "2026-05-19T16:00:00Z"
+  },
+  {
+    "kind" : "sleep",
+    "measurements" : [
+      {
+        "metric" : "sleep_h",
+        "unit" : "h",
+        "value" : 8
+      },
+      {
+        "metric" : "sleep_quality",
+        "unit" : "/5",
+        "value" : 4
+      }
+    ],
+    "note" : "~1 hr to fall asleep — attributed to Monday heavy dinner/alcohol",
+    "timestamp" : "2026-05-19T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 6
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-20T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 1000
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 82
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 68
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 42
+      }
+    ],
+    "note" : "Shredded pork tacos ×4 tortillas",
+    "timestamp" : "2026-05-20T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 175
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 27
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 8
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 3
+      }
+    ],
+    "note" : "Protein shake",
+    "timestamp" : "2026-05-20T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 265
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 3
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 49
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 9
+      }
+    ],
+    "note" : "Banana + chocolate chips",
+    "timestamp" : "2026-05-20T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 6
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-20T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 6
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-20T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 4
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-20T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 4
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-20T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 4
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-20T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 4
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-20T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 24
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-20T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 24
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-20T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 24
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-20T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 22
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-20T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 22
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-20T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 22
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-20T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "plank",
+    "timestamp" : "2026-05-20T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "plank",
+    "timestamp" : "2026-05-20T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "plank",
+    "timestamp" : "2026-05-20T16:00:15Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 480
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 56
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 45
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 6
+      }
+    ],
+    "note" : "Chicken and rice",
+    "timestamp" : "2026-05-21T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 1750
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 55
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 195
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 73
+      }
+    ],
+    "note" : "Burger, fries, milkshake",
+    "timestamp" : "2026-05-21T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-23T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-23T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 135
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-23T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 195
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-23T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 195
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-23T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 195
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-23T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "push-up",
+    "timestamp" : "2026-05-23T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge",
+    "template" : "push-up",
+    "timestamp" : "2026-05-23T16:00:07Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 900
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 55
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 65
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 42
+      }
+    ],
+    "note" : "Philly cheesesteak",
+    "timestamp" : "2026-05-25T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 350
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 4
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 55
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 14
+      }
+    ],
+    "note" : "Brownies + vanilla ice cream (small)",
+    "timestamp" : "2026-05-25T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 700
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 45
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 30
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 38
+      }
+    ],
+    "note" : "Burgers (planned)",
+    "timestamp" : "2026-05-25T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-27T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-27T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-27T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-27T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-27T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-27T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 8
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-27T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-27T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-27T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-27T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-27T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-27T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-27T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "plank",
+    "timestamp" : "2026-05-27T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "plank",
+    "timestamp" : "2026-05-27T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry",
+    "template" : "plank",
+    "timestamp" : "2026-05-27T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-29T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-29T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-05-29T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 210
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-29T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 210
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-29T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 210
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-05-29T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-29T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-29T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-29T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-05-29T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-05-29T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-05-29T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-05-29T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-05-29T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-31T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-31T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 145
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-05-31T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-31T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-31T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-31T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-05-31T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-31T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-31T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-05-31T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 48.5
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-31T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 48.5
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-31T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 48.5
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-05-31T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-05-31T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-05-31T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-05-31T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-02T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-02T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-02T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-02T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-02T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-02T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-02T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-02T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-02T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-02T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-02T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-02T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-02T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-02T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 152
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-04T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 152
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-04T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 152
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-04T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-04T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-04T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-04T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-04T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-04T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-04T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-04T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-04T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-04T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-04T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-04T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-04T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-04T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-07T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-07T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-07T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-07T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-07T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-07T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-07T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-07T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-07T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-07T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-07T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-07T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-07T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-07T16:00:13Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 300
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 18
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 29
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 12
+      }
+    ],
+    "note" : "2 eggs + toast",
+    "timestamp" : "2026-06-08T12:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-08T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-08T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-08T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-08T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-08T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-08T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 3
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-08T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 5.5
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-08T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 5.5
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-08T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 5.5
+      }
+    ],
+    "note" : "Session A — Squat + Pull (partial)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-08T16:00:09Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 600
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 32
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 60
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 28
+      }
+    ],
+    "note" : "Ground beef and potatoes",
+    "timestamp" : "2026-06-08T16:30:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 625
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 40
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 42
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 32
+      }
+    ],
+    "note" : "Nachos — ground chicken, cheese, guac",
+    "timestamp" : "2026-06-08T22:30:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 1050
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 12
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 130
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 50
+      }
+    ],
+    "note" : "Ice cream — late night",
+    "timestamp" : "2026-06-09T01:30:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-09T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-09T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-09T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 215
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-09T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 215
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-09T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 215
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-09T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-09T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-09T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-09T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-09T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-09T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-09T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-09T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-09T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-11T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-11T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-11T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-11T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-11T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-11T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-11T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-11T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-11T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-11T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-11T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-11T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-11T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-11T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-13T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-13T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 150
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-13T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-13T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-13T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-13T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-13T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-13T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-13T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-13T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-13T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-13T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-13T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-13T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-13T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-13T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-16T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-16T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-16T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-16T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-16T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-16T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-16T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-16T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-16T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-16T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-16T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-16T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-16T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-16T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-19T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-19T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-19T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-19T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-19T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-19T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-19T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-19T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-19T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-19T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-19T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-19T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-19T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-19T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-19T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-19T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-20T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-20T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-20T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-20T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-20T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-20T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-20T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-20T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-20T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-20T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-20T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-20T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-20T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-20T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-22T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-22T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-22T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-22T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-22T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-22T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-22T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-22T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-22T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-22T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-22T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-22T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-22T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-22T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-22T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-22T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-24T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-24T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-24T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-24T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-24T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-24T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-24T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-24T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-24T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-24T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-24T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-24T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-24T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-24T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-26T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-26T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-06-26T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-26T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-26T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-26T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-06-26T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-26T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-26T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-26T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-26T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-26T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-06-26T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-26T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-26T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-06-26T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-29T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-29T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-06-29T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-29T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-29T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-06-29T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-29T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-29T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-06-29T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-29T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-06-29T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-29T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-29T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-06-29T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-01T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-01T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-01T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-01T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-01T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-01T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-01T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-01T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-01T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-01T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-01T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-01T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-01T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-01T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-01T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-01T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-07-03T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-07-03T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-07-03T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-07-03T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-07-03T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-07-03T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-03T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-03T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-03T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-07-03T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-07-03T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-07-03T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-07-03T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-07-03T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-06T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-06T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-06T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-06T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-06T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-06T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-06T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-06T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-06T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-06T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-06T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-06T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-06T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-06T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-06T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-06T16:00:15Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-07-08T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-07-08T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 155
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "bench-press",
+    "timestamp" : "2026-07-08T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-07-08T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-07-08T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 220
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "deadlift",
+    "timestamp" : "2026-07-08T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-08T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-08T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-08T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-07-08T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "push-up",
+    "timestamp" : "2026-07-08T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-07-08T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-07-08T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 8
+      }
+    ],
+    "note" : "Session B — Push + Hinge (reconstructed from plan)",
+    "template" : "dead-bug",
+    "timestamp" : "2026-07-08T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-10T16:00:00Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-10T16:00:01Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 165
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "back-squat",
+    "timestamp" : "2026-07-10T16:00:02Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-10T16:00:03Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-10T16:00:04Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-10T16:00:05Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 5
+      },
+      {
+        "metric" : "rpe",
+        "unit" : "RPE",
+        "value" : 7
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "pull-up",
+    "timestamp" : "2026-07-10T16:00:06Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-10T16:00:07Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-10T16:00:08Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "reps",
+        "unit" : "reps",
+        "value" : 10
+      },
+      {
+        "metric" : "load_lb",
+        "unit" : "lb",
+        "value" : 95
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "dumbbell-row",
+    "timestamp" : "2026-07-10T16:00:09Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-10T16:00:10Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-10T16:00:11Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "distance_m",
+        "unit" : "m",
+        "value" : 30
+      },
+      {
+        "metric" : "load_lb_hand",
+        "unit" : "lb/hand",
+        "value" : 52.9
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "farmer-carry",
+    "timestamp" : "2026-07-10T16:00:12Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-10T16:00:13Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-10T16:00:14Z"
+  },
+  {
+    "kind" : "workout",
+    "measurements" : [
+      {
+        "metric" : "duration_s",
+        "unit" : "s",
+        "value" : 50
+      }
+    ],
+    "note" : "Session A — Squat + Pull + Carry (reconstructed from plan)",
+    "template" : "plank",
+    "timestamp" : "2026-07-10T16:00:15Z"
+  },
+  {
+    "kind" : "bodyweight",
+    "measurements" : [
+      {
+        "metric" : "weight_lb",
+        "unit" : "lb",
+        "value" : 201
+      },
+      {
+        "metric" : "waist_in",
+        "unit" : "in",
+        "value" : 38.5
+      }
+    ],
+    "note" : "first measured baseline (time of day unspecified)",
+    "timestamp" : "2026-07-12T16:00:00Z"
+  },
+  {
+    "kind" : "bodyweight",
+    "measurements" : [
+      {
+        "metric" : "weight_lb",
+        "unit" : "lb",
+        "value" : 197
+      }
+    ],
+    "note" : "morning, fasted — 4 lb below yesterday; normal day-to-day variance, not fat loss. Use morning-fasted as the standard going forward.",
+    "timestamp" : "2026-07-13T16:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 420
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 24
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 30
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 18
+      }
+    ],
+    "note" : "3 eggs and toast",
+    "timestamp" : "2026-07-15T12:00:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 780
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 73
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 81
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 23
+      }
+    ],
+    "note" : "Chicken & rice with ground beef and potatoes",
+    "timestamp" : "2026-07-15T16:30:00Z"
+  },
+  {
+    "kind" : "meal",
+    "measurements" : [
+      {
+        "metric" : "kcal",
+        "unit" : "kcal",
+        "value" : 410
+      },
+      {
+        "metric" : "protein_g",
+        "unit" : "g",
+        "value" : 34
+      },
+      {
+        "metric" : "carbs_g",
+        "unit" : "g",
+        "value" : 40
+      },
+      {
+        "metric" : "fat_g",
+        "unit" : "g",
+        "value" : 16
+      }
+    ],
+    "note" : "More ground beef and potatoes",
+    "timestamp" : "2026-07-15T19:00:00Z"
+  }
+]

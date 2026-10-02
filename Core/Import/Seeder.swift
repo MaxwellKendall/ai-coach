@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 
 /// Loads the bundled catalog and pantry into an empty store. Never touches existing data.
+/// Debug builds also load the author's fitness-planner history, which Release builds don't bundle.
 enum Seeder {
     @MainActor
     static func seedIfEmpty(_ context: ModelContext, bundle: Bundle = .main) throws {
@@ -17,13 +18,26 @@ enum Seeder {
                 context.insert(PantryItem(name: seed.name, stocked: seed.stocked))
             }
         }
+#if DEBUG
+        if try context.fetchCount(FetchDescriptor<LogEntry>()) == 0, bundle.url(forResource: "history", withExtension: "json") != nil {
+            let templates = Dictionary(try context.fetch(FetchDescriptor<Template>()).map { ($0.slug, $0.id) },
+                                       uniquingKeysWith: { first, _ in first })
+            for seed in try decode([LogSeed].self, "history", bundle) {
+                context.insert(LogEntry(kind: seed.kind, timestamp: seed.timestamp,
+                                        templateRef: seed.template.flatMap { templates[$0] },
+                                        measurements: seed.measurements, note: seed.note))
+            }
+        }
+#endif
         try context.save()
     }
 
-    private static func decode<T: Decodable>(_ type: T.Type, _ name: String, _ bundle: Bundle) throws -> T {
+    static func decode<T: Decodable>(_ type: T.Type, _ name: String, _ bundle: Bundle) throws -> T {
         guard let url = bundle.url(forResource: name, withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: "\(name).json"])
         }
-        return try JSONDecoder().decode(T.self, from: Data(contentsOf: url))
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(T.self, from: Data(contentsOf: url))
     }
 }

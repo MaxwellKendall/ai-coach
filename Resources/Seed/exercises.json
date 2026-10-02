@@ -1016,5 +1016,18 @@
     "kind" : "exercise",
     "name" : "Push-up",
     "slug" : "push-up"
+  },
+  {
+    "attributes" : [
+      {
+        "key" : "movement_pattern",
+        "values" : [
+          "core"
+        ]
+      }
+    ],
+    "kind" : "exercise",
+    "name" : "Dead Bug",
+    "slug" : "dead-bug"
   }
 ]
