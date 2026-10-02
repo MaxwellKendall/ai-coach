@@ -5,12 +5,17 @@ struct WeekPager: View {
     let days: [Date]
     let items: [PlannedActivity]
     let names: [UUID: String]
+    let logged: Set<UUID>
+    let onLog: ([PlannedActivity]) -> Void
     @State private var day: Int?
 
-    init(days: [Date], items: [PlannedActivity], names: [UUID: String], today: Date = .now) {
+    init(days: [Date], items: [PlannedActivity], names: [UUID: String], logged: Set<UUID>,
+         today: Date = .now, onLog: @escaping ([PlannedActivity]) -> Void) {
         self.days = days
         self.items = items
         self.names = names
+        self.logged = logged
+        self.onLog = onLog
         let calendar = Calendar.current
         _day = State(initialValue: days.firstIndex { calendar.isDate($0, inSameDayAs: today) } ?? 0)
     }
@@ -48,7 +53,7 @@ struct WeekPager: View {
                 LazyHStack(alignment: .top, spacing: 0) {
                     ForEach(days.indices, id: \.self) { index in
                         DayPage(items: items.filter { Calendar.current.isDate($0.date, inSameDayAs: days[index]) },
-                                names: names)
+                                names: names, logged: logged, onLog: onLog)
                             .padding(.horizontal, 16)
                             .containerRelativeFrame(.horizontal)
                     }
@@ -65,6 +70,8 @@ struct WeekPager: View {
 struct DayPage: View {
     let items: [PlannedActivity]
     let names: [UUID: String]
+    var logged: Set<UUID> = []
+    var onLog: ([PlannedActivity]) -> Void = { _ in }
 
     var body: some View {
         let workout = items.filter { $0.kind == .workout }.sorted { $0.date < $1.date }
@@ -98,6 +105,16 @@ struct DayPage: View {
                             Text(Self.targets(item.targets)).opacity(0.7)
                         }
                     }
+                    if workout.contains(where: { logged.contains($0.id) }) {
+                        Label("Logged", systemImage: "checkmark.circle.fill").fontWeight(.semibold).foregroundStyle(.tint)
+                    } else {
+                        Button { onLog(workout) } label: {
+                            Text("Start workout").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .background(.tint, in: .rect(cornerRadius: 12))
+                        .foregroundStyle(Color(.label))
+                        .padding(.top, 4)
+                    }
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -105,7 +122,9 @@ struct DayPage: View {
                 .foregroundStyle(Color(.systemBackground))
             }
             ForEach(items.filter { $0.kind != .workout }.sorted { $0.date < $1.date }) { item in
+                Button { onLog([item]) } label: {
                 HStack {
+                    if logged.contains(item.id) { Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint) }
                     Text(item.templateRef.flatMap { names[$0] } ?? item.slot ?? item.kind.rawValue.capitalized)
                         .fontWeight(.semibold).foregroundStyle(.tint)
                     Spacer()
@@ -115,6 +134,9 @@ struct DayPage: View {
                 }
                 .padding(14)
                 .background(.background, in: .rect(cornerRadius: 16))
+                }
+                .buttonStyle(.plain)
+                .disabled(logged.contains(item.id))
             }
         }
         .font(.subheadline)

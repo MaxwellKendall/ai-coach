@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 
 struct LogScreen: View {
+    @Environment(\.modelContext) private var context
+    @State private var adding = false
+    @State private var editing: LogEntry?
     @Query(sort: \LogEntry.timestamp, order: .reverse) private var entries: [LogEntry]
     @Query private var templates: [Template]
 
@@ -22,9 +25,12 @@ struct LogScreen: View {
             List(days, id: \.day) { day in
                 Section(day.day.formatted(date: .complete, time: .omitted)) {
                     ForEach(day.entries) { entry in
+                        Button { editing = entry } label: {
                         VStack(alignment: .leading, spacing: 2) {
+                            // Meals and workout session summaries are named by their note.
                             Text(entry.templateRef.flatMap { names[$0] }
-                                 ?? (entry.kind == .meal && !entry.note.isEmpty ? entry.note : entry.kind.rawValue.capitalized))
+                                 ?? ([.meal, .workout].contains(entry.kind) && !entry.note.isEmpty
+                                     ? entry.note : entry.kind.rawValue.capitalized))
                             Text(entry.measurements.map(\.display).joined(separator: " · "))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -33,7 +39,11 @@ struct LogScreen: View {
                                 Text(entry.note).font(.caption).foregroundStyle(.secondary)
                             }
                         }
+                        }
+                        .tint(.primary)
                     }
+                    // Entries are only ever removed by an explicit delete.
+                    .onDelete { offsets in offsets.forEach { context.delete(day.entries[$0]) } }
                 }
             }
             .overlay {
@@ -42,6 +52,11 @@ struct LogScreen: View {
                 }
             }
             .navigationTitle("Log")
+            .toolbar {
+                Button("Log something", systemImage: "plus") { adding = true }
+            }
+            .sheet(isPresented: $adding) { NavigationStack { EntryEditor() } }
+            .sheet(item: $editing) { entry in NavigationStack { EntryEditor(editing: entry) } }
         }
     }
 }
@@ -52,6 +67,7 @@ extension Measurement {
         let number = value.formatted(.number.precision(.fractionLength(0...1)))
         if unit == "g" { return "\(number) g \(metric.replacingOccurrences(of: "_g", with: ""))" }
         if unit.hasPrefix("/") { return number + unit }
+        if unit == "ratio" { return "\(value.formatted(.percent.precision(.fractionLength(0)))) \(metric.replacingOccurrences(of: "_rate", with: ""))" }
         return "\(number) \(unit)"
     }
 }
