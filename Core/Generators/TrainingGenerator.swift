@@ -141,6 +141,7 @@ struct PlannedWorkout: Equatable, Sendable {
     var exercise: String
     var targets: [Measurement]
     var note: String?
+    var adjustedReason: String?
 
     func target(_ metric: String) -> Double? { targets.first { $0.metric == metric }?.value }
 }
