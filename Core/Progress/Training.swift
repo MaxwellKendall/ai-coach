@@ -12,6 +12,12 @@ struct LoggedSet: Sendable {
     }
 }
 
+/// One point on a per-day chart.
+struct DatedValue: Hashable, Sendable {
+    var date: Date
+    var value: Double
+}
+
 /// Training derivations ported from fitness-planner (.claude/CLAUDE.md and commands/review.md).
 enum Training {
     /// Brzycki, CLAUDE.md "1RM Estimation": valid for 1–10 reps at RPE ≤ 8.
@@ -29,6 +35,22 @@ enum Training {
             best[set.exercise] = max(best[set.exercise] ?? 0, estimate)
         }
         return best
+    }
+
+    /// Best estimate so far, one point per training day. Like `estimated1RMs`, it never regresses.
+    static func estimated1RMTrend(_ sets: [LoggedSet], exercise: String, calendar: Calendar = .current) -> [DatedValue] {
+        var byDay: [Date: Double] = [:]
+        for set in sets where set.exercise == exercise {
+            guard let load = set.value("load_lb"), let reps = set.value("reps"),
+                  let estimate = estimated1RM(loadLb: load, reps: reps, rpe: set.value("rpe")) else { continue }
+            let day = calendar.startOfDay(for: set.date)
+            byDay[day] = max(byDay[day] ?? 0, estimate)
+        }
+        var best = 0.0
+        return byDay.keys.sorted().map { day in
+            best = max(best, byDay[day]!)
+            return DatedValue(date: day, value: best)
+        }
     }
 
     /// Working sets per movement pattern over the `days` calendar days ending on `date` (review.md step 3).
