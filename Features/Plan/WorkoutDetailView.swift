@@ -14,6 +14,8 @@ struct WorkoutDetailView: View {
     var onStart: ([PlannedActivity]) -> Void = { _ in }
     /// Called with the saved rows after Save.
     var onSave: ([PlannedActivity]) -> Void = { _ in }
+    /// Pushed rather than presented: the system Back button leaves instead of Cancel.
+    var pushed = false
     @State private var session: SessionPlan
     @State private var original: SessionPlan
     @State private var collapsed: Set<UUID> = []
@@ -25,12 +27,13 @@ struct WorkoutDetailView: View {
         var metric: String
     }
 
-    init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil,
+    init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil, pushed: Bool = false,
          onStart: @escaping ([PlannedActivity]) -> Void = { _ in }, onSave: @escaping ([PlannedActivity]) -> Void = { _ in }) {
         self.items = items
         self.startTitle = startTitle
         self.onStart = onStart
         self.onSave = onSave
+        self.pushed = pushed
         _session = State(initialValue: session)
         _original = State(initialValue: session)
     }
@@ -66,7 +69,7 @@ struct WorkoutDetailView: View {
         .background(Color(.secondarySystemBackground))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            if !pushed { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { onSave(save()); dismiss() }.disabled(session.items == original.items || session.blocks.isEmpty)
             }

@@ -319,11 +319,10 @@ struct ProgramScreen: View {
             SessionRecordView(planned: items)
         } else if !items.isEmpty {
             // An edited session is pinned, so regenerating the week keeps it.
-            WorkoutDetailView(items: items, session: Planner.session(items, templates: templates)) { _ in } onSave: { saved in
+            WorkoutDetailView(items: items, session: Planner.session(items, templates: templates), pushed: true) { _ in } onSave: { saved in
                 for item in saved { item.pinned = true }
                 try? context.save()
             }
-            .navigationBarBackButtonHidden()
         }
     }
 
