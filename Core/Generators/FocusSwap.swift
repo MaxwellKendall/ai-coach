@@ -14,6 +14,14 @@ enum FocusSwap {
         "squat": ["squat"], "hinge": ["hinge"], "carry": ["carry"],
     ]
 
+    /// FIT-46: a different kind of day ("make today a squat day", "can I do legs") trades days; naming exercises
+    /// ("swap deadlifts for RDLs") rebuilds today instead (SessionEdit).
+    static func asksForADay(_ text: String) -> Bool {
+        let words = Set(text.lowercased().split { !$0.isLetter }.map { singular(String($0)) })
+        return words.contains("day") || !words.isDisjoint(with: ["leg", "lower", "upper", "chest", "push", "back", "pull", "core", "abs"])
+            && words.isDisjoint(with: ["up", "row", "press", "squat", "deadlift", "bench"])
+    }
+
     /// The exercises asked for, by slug, or nil when the words don't ask for a session or name none.
     static func wanted(_ text: String, catalog: [Exercise], names: [String: String]) -> Set<String>? {
         let words = Set(text.lowercased().split { !$0.isLetter }.map { singular(String($0)) })

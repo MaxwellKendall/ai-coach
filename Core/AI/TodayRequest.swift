@@ -5,8 +5,17 @@ import FoundationModels
 /// the plan rules decide what changes, and the user checks it before anything is saved.
 @Generable
 struct TodayRequestKind {
-    @Guide(.anyOf(["change", "did_workout", "log"]))
+    @Guide(.anyOf(["change", "exercises", "did_workout", "log"]))
     var kind: String
+}
+
+/// FIT-46: which exercises they want today and which they don't. Code checks each name against what was said.
+@Generable
+struct ExerciseRequestDraft {
+    @Guide(description: "Exercises they want to do today. Use the library's name when it's the same exercise, else the name as they said it.")
+    var add: [String]
+    @Guide(description: "Exercises they don't want today, or want swapped out")
+    var remove: [String]
 }
 
 @Generable
@@ -53,6 +62,8 @@ struct SpokenRequest: Equatable, Sendable {
 
     enum Kind: Equatable, Sendable {
         case change(Change)
+        /// Names as the model returned them; `SessionEdit.resolve` matches them to the library.
+        case exercises(add: [String], remove: [String], only: Bool)
         case didWorkout([Difference])
         case log
     }
@@ -122,11 +133,14 @@ extension SpokenRequest {
 enum TodayRequestParser {
     /// Two small steps, because the on-device model mixes fields up in one big schema: sort what was said,
     /// then copy out only that kind's facts. Code then drops anything the words don't support.
-    static func parse(_ text: String) async throws -> SpokenRequest? {
+    /// `library` is the exercise names, so the model can say "Dumbbell Romanian Deadlift" for "RDLs".
+    static func parse(_ text: String, library: [String] = []) async throws -> SpokenRequest? {
         let sorter = LanguageModelSession(instructions: """
             Sort what the user said to their fitness app.
             change: they can't do today's workout as planned. "I only have thirty minutes", "my knee hurts",
             "slept badly", "move it to Saturday".
+            exercises: they want different exercises today. "Give me squats and split squats", "swap deadlifts for RDLs",
+            "no bench today", "just pull-ups and rows".
             did_workout: they did their workout. "Did it", "done, last bench set was only four".
             log: food, sleep, body weight or grocery spending. "Had a chicken bowl", "weighed 182".
             """)
@@ -137,13 +151,34 @@ enum TodayRequestParser {
             kind = try await sorter.respond(to: text, generating: TodayRequestKind.self).content.kind
         } catch LanguageModelSession.GenerationError.refusal {
             let read = SpokenRequest.checked(TodayRequestDraft(kind: "change"), against: text)
-            guard read.minutes != nil || read.hurts != nil || read.moveTo != nil || read.lowEnergy == true else { throw CocoaError(.featureUnsupported) }
-            kind = "change"
+            kind = read.minutes != nil || read.hurts != nil || read.moveTo != nil || read.lowEnergy == true ? "change" : "exercises"
         }
+        if kind == "exercises" { return try await exercises(text, library: library) }
         var draft = TodayRequestDraft(kind: kind)
         // A change's minutes, body part, day and tiredness are read by code (`checked`); sets need the model.
         if kind == "did_workout" { draft.differences = try await differences(text, doing: nil) }
-        return SpokenRequest(SpokenRequest.checked(draft, against: text))
+        // A change none of those rules can read may still name exercises ("give me squats today").
+        if let request = SpokenRequest(SpokenRequest.checked(draft, against: text)) { return request }
+        return kind == "change" ? try await exercises(text, library: library) : nil
+    }
+
+    /// FIT-46. "Just" or "only" is read by code: the model sets flags nobody said.
+    private static func exercises(_ text: String, library: [String]) async throws -> SpokenRequest? {
+        let session = LanguageModelSession(instructions: """
+            The user wants different exercises in today's workout. Copy out the exercises they want and the ones they don't.
+            Their exercise library: \(library.joined(separator: ", ")).
+            Example: "swap deadlifts for RDLs" adds Dumbbell Romanian Deadlift and removes Deadlift.
+            """)
+        let draft: ExerciseRequestDraft
+        do {
+            draft = try await session.respond(to: text, generating: ExerciseRequestDraft.self).content
+        } catch LanguageModelSession.GenerationError.refusal {
+            draft = ExerciseRequestDraft(add: library, remove: []) // resolve keeps only the ones that were said
+        }
+        guard !draft.add.isEmpty || !draft.remove.isEmpty else { return nil }
+        let words = text.lowercased().split { !$0.isLetter }
+        return SpokenRequest(kind: .exercises(add: draft.add, remove: draft.remove,
+                                              only: words.contains("just") || words.contains("only")))
     }
 
     /// Mid-workout (FIT-31): how the sets of the exercise on screen went. Empty means as planned.

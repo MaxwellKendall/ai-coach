@@ -11,6 +11,8 @@ struct Proposal: Identifiable {
     var keep: String
     var plan: Plan
     var workouts: [PlannedWorkout]
+    /// FIT-46: exercises asked for that aren't in the library yet, added to it on Apply.
+    var newExercises: [TemplateSeed] = []
 
     struct Line: Equatable, Identifiable {
         enum Mark: String { case removed = "−", changed = "~", added = "+", same = "=" }
