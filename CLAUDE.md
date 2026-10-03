@@ -11,7 +11,7 @@ All scope, decisions and status live in Linear. **Read Linear before building an
 
 - Workspace team: **Fitness Planner** (key `FIT`)
 - Project: **AI Coach App** (`P-FIT-12`): https://linear.app/custom-voice-app/project/ai-coach-app-a83b6b0b9285
-- Milestones: M1 Core loop (current) → M2 Accounts, groups and live workouts → M3 Monetization and launch → M4 Coach dashboard (B2B)
+- Milestones: M1 Core loop (current) → M2 Accounts, groups and live workouts → M3 Monetization and launch → M4 Coach dashboard (B2B). **Meals: cook windows, recipes and groceries** is its own milestone, parked until training is solid (FIT-11, FIT-17, FIT-60); its order against M2 to M4 is the author's call
 
 **Workflow per issue**
 1. Read the issue, its parent/sub-issues and its blockers. Only start issues whose blockers are Done.
@@ -142,7 +142,7 @@ xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 P
 2. **FIT-3** Catalog seed (exercises + recipes) and **FIT-13** history import, so real data exists early
 3. **FIT-6** Log (manual, pre-filled from plan) → **FIT-9** voice/NL logging (the differentiator)
 4. **FIT-4** Goals and onboarding
-5. **FIT-5** Plan + **FIT-2** training generator + **FIT-11** meal generator
+5. **FIT-5** Plan + **FIT-2** training generator (the meal generator, FIT-11, moved to the Meals milestone)
 6. **FIT-8** Progress, alerts, weekly review
 7. **FIT-15** Wins and share cards
 
