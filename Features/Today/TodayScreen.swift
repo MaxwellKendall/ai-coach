@@ -10,6 +10,7 @@ struct TodayScreen: View {
     @Query private var profiles: [Profile]
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
     @Query private var templates: [Template]
+    @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @State private var day: Int?
     @State private var voice = VoiceCapture()
     /// What was said, while it's worked on (FIT-50: the progress pill shows it and `step`).
@@ -24,6 +25,7 @@ struct TodayScreen: View {
     @State private var live: WorkoutDraft?
     @State private var you = false
     @State private var showProgram = false
+    @State private var review: WeekReport?
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
@@ -109,6 +111,8 @@ struct TodayScreen: View {
                 try? await Task.sleep(for: .seconds(2))
                 heard(said)
             }
+            // `-review YES` opens this week's review.
+            if UserDefaults.standard.bool(forKey: "review") { review = weekReport() }
         }
         #endif
         .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
@@ -118,6 +122,9 @@ struct TodayScreen: View {
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen() }
         .sheet(isPresented: $showProgram) { ProgramScreen() }
+        .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
+            if let review { WeeklyReviewScreen(report: review, profile: profiles.first) }
+        }
         .fullScreenCover(item: $live) { draft in
             WorkoutModeView(draft: draft) {
                 day = todayIndex
@@ -234,7 +241,25 @@ struct TodayScreen: View {
         }
     }
 
+    private func weekReport() -> WeekReport {
+        WeekReport.make(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
+    }
+
     @ViewBuilder private func card(_ card: DayCard, isToday: Bool, isPast: Bool) -> some View {
+        VStack(spacing: 18) {
+            // FIT-8: the week's review is the first thing on its last day.
+            if isToday && WeekReport.isDue() {
+                let report = weekReport()
+                WeekReviewCard(report: report) { review = report }
+            }
+            dayContent(card, isToday: isToday, isPast: isPast)
+        }
+        .padding(EdgeInsets(top: 26, leading: 24, bottom: 24, trailing: 24))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+    }
+
+    @ViewBuilder private func dayContent(_ card: DayCard, isToday: Bool, isPast: Bool) -> some View {
         Group {
             switch card {
             case .plan(let plan): planCard(plan, isToday: isToday, isPast: isPast)
@@ -248,9 +273,6 @@ struct TodayScreen: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .padding(EdgeInsets(top: 26, leading: 24, bottom: 24, trailing: 24))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
     }
 
     private func planCard(_ plan: DayCard.Planned, isToday: Bool, isPast: Bool) -> some View {
