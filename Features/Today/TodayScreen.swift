@@ -14,6 +14,8 @@ struct TodayScreen: View {
     @State private var logging: Logging?
     @State private var live: WorkoutDraft?
     @State private var checking: Checking?
+    @State private var voice = VoiceCapture()
+    @State private var heard: String?
     @State private var editing: LogEntry?
     @State private var details: Rows?
     @State private var record: Rows?
@@ -79,8 +81,15 @@ struct TodayScreen: View {
             .navigationSubtitle(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
             .toolbar { toolbar }
             .safeAreaInset(edge: .bottom) {
-                LogBar(onDraft: { checking = Checking(entries: $0) }, recipes: templates.filter { $0.kind == .recipe })
+                LogBar(voice: voice, heard: $heard, recipes: templates.filter { $0.kind == .recipe }) {
+                    checking = Checking(entries: $0)
+                }
             }
+            .overlay {
+                if voice.listening || heard != nil { ListeningSheet(voice: voice, heard: heard) }
+            }
+            .animation(.snappy, value: voice.listening || heard != nil)
+            .toolbar(voice.listening || heard != nil ? .hidden : .visible, for: .tabBar)
             .sheet(item: $checking) { LogCheckSheet(entries: $0.entries) }
             .sheet(item: $editing) { entry in NavigationStack { EntryEditor(editing: entry) } }
             .sheet(item: $adjusting) { plan in NavigationStack { AdjustSheet(plan: plan) } }
