@@ -50,7 +50,7 @@ struct WorkoutModeView: View {
             topBar
             segments.padding(.horizontal, 22).padding(.top, 8)
             SwipeDeck(index: $page, count: cards.count + 1, vertical: { vertical($0, $1, cards: cards) },
-                      swiped: { swiped(from: $0, $1, cards: cards) }) { index in
+                      hint: { hint($0, $1, cards: cards) }, swiped: { swiped(from: $0, $1, cards: cards) }) { index in
                 if index == cards.count {
                     finishCard(names: names)
                 } else {
@@ -278,6 +278,23 @@ struct WorkoutModeView: View {
         if edge == .top { return .off }
         if case .set(let line) = cards[index], line.allSatisfy({ draft.rows[$0].done }) { return .back }
         return nil
+    }
+
+    /// What a swipe will do: green logs, blue skips, orange unlogs, gray just moves.
+    private func hint(_ index: Int, _ swipe: CardSwipe, cards: [WorkoutDraft.Card]) -> SwipeHint? {
+        guard cards.indices.contains(index) else { return swipe == .back ? SwipeHint("Back") : nil }
+        switch (cards[index], swipe) {
+        case (.set(let line), .next):
+            return line.allSatisfy({ draft.rows[$0].done }) ? SwipeHint("Next") : SwipeHint("Log set", symbol: "checkmark", tint: .green)
+        case (.set, .up):
+            let restAfter = if cards.indices.contains(index + 1), case .rest = cards[index + 1] { true } else { false }
+            return SwipeHint("Skip set", symbol: "forward.end", tint: .blue, to: restAfter ? index + 2 : nil)
+        case (.set, .down): return SwipeHint("Unlog", symbol: "arrow.uturn.backward", tint: .orange)
+        case (.rest, .next): return SwipeHint("Next set")
+        case (.rest, .up): return SwipeHint("Skip rest", symbol: "forward.end", tint: .blue)
+        case (_, .back): return SwipeHint("Back")
+        default: return nil
+        }
     }
 
     /// Swiping a set on logs it as shown and starts its rest. Swiping it up skips it, and its rest with it.

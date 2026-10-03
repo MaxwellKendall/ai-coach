@@ -29,7 +29,7 @@ struct SessionRecordView: View {
             stats(record, summary: summary)
             if !record.blocks.isEmpty {
                 tabs(record)
-                SwipeDeck(index: $page, count: record.blocks.count) { index in
+                SwipeDeck(index: $page, count: record.blocks.count, cornerRadius: 0) { index in
                     ScrollView { blockPage(index, record.blocks[index], bySlug) }
                         .background(Color(.secondarySystemBackground))
                 }
