@@ -29,12 +29,11 @@ struct SessionRecordView: View {
             stats(record, summary: summary)
             if !record.blocks.isEmpty {
                 tabs(record)
-                TabView(selection: $page) {
-                    ForEach(Array(record.blocks.enumerated()), id: \.offset) { index, block in
-                        ScrollView { blockPage(index, block, bySlug).padding(.horizontal, 16) }.tag(index)
-                    }
+                SwipeDeck(index: $page, count: record.blocks.count) { index in
+                    ScrollView { blockPage(index, record.blocks[index], bySlug) }
+                        .background(Color(.secondarySystemBackground))
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                .padding(.horizontal, 16)
             } else {
                 ContentUnavailableView("No sets logged", systemImage: "dumbbell")
             }

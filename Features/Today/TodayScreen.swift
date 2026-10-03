@@ -60,20 +60,10 @@ struct TodayScreen: View {
             header(week[selected], index: selected)
             strip(week, cards: cards, selected: selected)
                 .padding(.horizontal, 14).padding(.top, 18)
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
-                    ForEach(week.indices, id: \.self) { index in
-                        card(cards[index], isToday: index == todayIndex, isPast: index < todayIndex)
-                            .containerRelativeFrame(.horizontal)
-                            .id(index)
-                    }
-                }
-                .scrollTargetLayout()
+            SwipeDeck(index: Binding(get: { day ?? todayIndex }, set: { day = $0 }), count: week.count) { index in
+                card(cards[index], isToday: index == todayIndex, isPast: index < todayIndex)
             }
-            .contentMargins(.horizontal, 22, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
-            .scrollIndicators(.hidden)
-            .scrollPosition(id: $day)
+            .padding(.horizontal, 22)
             .padding(.top, 22)
             .padding(.bottom, LanguageModel.isAvailable ? 126 : 24)
         }
