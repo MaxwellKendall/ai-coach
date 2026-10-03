@@ -140,6 +140,29 @@ struct PlannerTests {
         #expect(try context.fetchCount(FetchDescriptor<PlannedActivity>()) == plan.items.count)
     }
 
+    /// FIT-45: a week saved before it began is planned again when it starts; its pinned days stay.
+    @Test func aWeekSavedEarlyIsPlannedAgainExceptPinnedDays() throws {
+        let context = try store()
+        let profile = Profile(age: 36, weightLb: 200)
+        context.insert(profile)
+        let plan = try #require(try Planner.generate(weekOf: date(10, 5), in: context, calendar: calendar))
+        plan.updatedAt = date(10, 1)
+        for item in plan.items where calendar.isDate(item.date, inSameDayAs: date(10, 7)) { item.pinned = true }
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let before = Planner.workouts(plan, templates: templates)
+        func on(_ day: Int, _ workouts: [PlannedWorkout]) -> [PlannedWorkout] {
+            workouts.filter { calendar.isDate($0.date, inSameDayAs: date(10, day)) }
+        }
+
+        profile.trainingDays = [1, 3, 5]
+        try Planner.ensureWeek(of: date(10, 5), in: context, calendar: calendar)
+        let after = Planner.workouts(plan, templates: templates)
+        #expect(on(7, after) == on(7, before) && !on(7, after).isEmpty)
+        #expect(on(5, after).isEmpty && on(9, after).isEmpty)
+        #expect(!on(6, after).isEmpty && !on(8, after).isEmpty && !on(10, after).isEmpty)
+        #expect(try context.fetchCount(FetchDescriptor<Plan>()) == 1)
+    }
+
     /// FIT-29: Undo writes the week back as it was.
     @Test func applyingTheOldWorkoutsUndoesAChange() throws {
         let context = try store()

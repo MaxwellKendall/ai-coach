@@ -25,6 +25,8 @@ struct ProgramScreen: View {
     @State private var peeking = false
     /// The program as it was when the whole-program sheet opened.
     @State private var before: ProgramSettings?
+    /// The day whose session is open (FIT-45).
+    @State private var opened: Date?
 
     struct Regenerate: Identifiable {
         let id = UUID()
@@ -63,6 +65,7 @@ struct ProgramScreen: View {
             }
             .animation(.snappy, value: toast)
             .animation(.snappy, value: voice.listening || working != nil)
+            .navigationDestination(item: $opened, destination: session)
             .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK") {}
             } message: { Text(message ?? "") }
@@ -152,8 +155,9 @@ struct ProgramScreen: View {
             Text(ProgramPlan.title(week)).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 6)
             Text(ProgramPlan.why(week, tests: tests)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
             if index == current || index == current + 1 {
-                sessions(index == current ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped(),
-                         pinnable: index == current)
+                let saved = index == current || !dayItems(in: monday).isEmpty
+                sessions(saved ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped(),
+                         pinnable: saved, monday: monday)
                     .padding(.top, 18)
                 Spacer(minLength: 12)
                 if index == current {
@@ -171,7 +175,8 @@ struct ProgramScreen: View {
                         }
                     }
                 } else {
-                    Text("Planned from this week. Changes after this week ends.").font(.footnote).foregroundStyle(.tertiary)
+                    Text(saved ? "Pinned sessions stay. The rest is planned again when this week ends."
+                         : "Planned from this week. Changes after this week ends.").font(.footnote).foregroundStyle(.tertiary)
                 }
             } else if index < current {
                 Spacer()
@@ -212,7 +217,9 @@ struct ProgramScreen: View {
         }
         let rest: String = if index < current { "Done" }
             else if index == current { unique(thisWeek(monday)) }
-            else if index == current + 1 { unique(nextWeek.map { Planner.SketchDay($0, names: names) }.grouped()) }
+            else if index == current + 1 {
+                unique(dayItems(in: monday).isEmpty ? nextWeek.map { Planner.SketchDay($0, names: names) }.grouped() : thisWeek(monday))
+            }
             else {
                 (sketch(index, weeks: weeks).map { "\($0.name.split(separator: " ").first ?? "") \($0.value)" }
                  + ["\(ProgramPlan.weeklySets(weeks[index], daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes)) sets"])
@@ -233,20 +240,28 @@ struct ProgramScreen: View {
         }
     }
 
-    private func sessions(_ days: [Planner.SketchDay], pinnable: Bool = false) -> some View {
+    /// Each day opens its session to edit (FIT-45); a done day opens what was logged.
+    private func sessions(_ days: [Planner.SketchDay], pinnable: Bool, monday: Date) -> some View {
         VStack(spacing: 0) {
             ForEach(days) { day in
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Text(day.date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                        .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                        .lineLimit(1).fixedSize()
-                        .frame(minWidth: 36, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(day.session).font(.body.weight(.semibold))
-                        Text(day.lifts + (day.more > 0 ? " + \(day.more) more" : "")).font(.footnote).foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    Button { open(day.date, monday: monday) } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 14) {
+                            Text(day.date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                                .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                                .lineLimit(1).fixedSize()
+                                .frame(minWidth: 36, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(day.session).font(.body.weight(.semibold))
+                                Text(day.lifts + (day.more > 0 ? " + \(day.more) more" : "")).font(.footnote).foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(.rect)
                     }
-                    Spacer(minLength: 0)
+                    .buttonStyle(.plain)
+                    .accessibilityHint(done(day.date) ? "Shows what you logged" : "Opens the session to change it")
                     if done(day.date) {
                         Image(systemName: "checkmark").font(.footnote.weight(.bold)).accessibilityLabel("Done")
                     } else if pinnable, day.date >= Calendar.current.startOfDay(for: .now) {
@@ -284,6 +299,32 @@ struct ProgramScreen: View {
 
     private func dayItems(_ date: Date) -> [PlannedActivity] {
         planned.filter { $0.kind == .workout && Calendar.current.isDate($0.date, inSameDayAs: date) }
+    }
+
+    private func dayItems(in monday: Date) -> [PlannedActivity] {
+        let end = Calendar.current.date(byAdding: .day, value: 7, to: monday)!
+        return planned.filter { $0.kind == .workout && $0.date >= monday && $0.date < end }
+    }
+
+    /// Next week is only a preview until one of its sessions is opened: then it's saved, to be planned again
+    /// when it starts, keeping what's pinned (Planner.ensureWeek).
+    private func open(_ date: Date, monday: Date) {
+        if dayItems(in: monday).isEmpty { try? Planner.generate(weekOf: monday, in: context) }
+        opened = Calendar.current.startOfDay(for: date)
+    }
+
+    @ViewBuilder private func session(_ date: Date) -> some View {
+        let items = dayItems(date).sorted { $0.date < $1.date }
+        if done(date) {
+            SessionRecordView(planned: items)
+        } else if !items.isEmpty {
+            // An edited session is pinned, so regenerating the week keeps it.
+            WorkoutDetailView(items: items, session: Planner.session(items, templates: templates)) { _ in } onSave: { saved in
+                for item in saved { item.pinned = true }
+                try? context.save()
+            }
+            .navigationBarBackButtonHidden()
+        }
     }
 
     private func workout(_ item: PlannedActivity) -> PlannedWorkout {

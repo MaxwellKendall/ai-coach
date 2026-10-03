@@ -12,6 +12,8 @@ struct WorkoutDetailView: View {
     var startTitle: String?
     /// Called with the saved rows when the user starts the session from here.
     var onStart: ([PlannedActivity]) -> Void = { _ in }
+    /// Called with the saved rows after Save.
+    var onSave: ([PlannedActivity]) -> Void = { _ in }
     @State private var session: SessionPlan
     @State private var original: SessionPlan
     @State private var collapsed: Set<UUID> = []
@@ -24,10 +26,11 @@ struct WorkoutDetailView: View {
     }
 
     init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil,
-         onStart: @escaping ([PlannedActivity]) -> Void = { _ in }) {
+         onStart: @escaping ([PlannedActivity]) -> Void = { _ in }, onSave: @escaping ([PlannedActivity]) -> Void = { _ in }) {
         self.items = items
         self.startTitle = startTitle
         self.onStart = onStart
+        self.onSave = onSave
         _session = State(initialValue: session)
         _original = State(initialValue: session)
     }
@@ -65,7 +68,7 @@ struct WorkoutDetailView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { save(); dismiss() }.disabled(session.items == original.items || session.blocks.isEmpty)
+                Button("Save") { onSave(save()); dismiss() }.disabled(session.items == original.items || session.blocks.isEmpty)
             }
         }
         .safeAreaInset(edge: .bottom) { bottom(names) }

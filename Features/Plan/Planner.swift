@@ -11,9 +11,18 @@ enum Planner {
     }
 
     /// Generates the current week once a profile is complete and nothing is planned yet.
-    static func ensureWeek(of date: Date = .now, in context: ModelContext) throws {
-        guard try plan(weekOf: date, in: context) == nil else { return }
-        try generate(weekOf: date, in: context)
+    /// A week saved before it began (a session edited from next week's card, FIT-45) is planned again once, now that
+    /// the week before is done; its pinned days stay.
+    static func ensureWeek(of date: Date = .now, in context: ModelContext, calendar: Calendar = .current) throws {
+        guard let plan = try plan(weekOf: date, in: context) else {
+            try generate(weekOf: date, in: context, calendar: calendar)
+            return
+        }
+        guard plan.updatedAt < plan.weekStart else { return }
+        let pinned = Dictionary(grouping: plan.items.filter { $0.kind == .workout }) { calendar.startOfDay(for: $0.date) }
+            .filter { $0.value.allSatisfy(\.pinned) }.keys
+        try replan(plan, with: preview(weekOf: date, in: context, calendar: calendar), keep: Set(pinned), today: date,
+                   templates: try context.fetch(FetchDescriptor<Template>()), in: context, calendar: calendar)
     }
 
     /// Idempotent: replaces whatever was planned for that week.
