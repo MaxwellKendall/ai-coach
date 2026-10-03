@@ -1,8 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// The workout (FIT-32, prototype row 2): one card per set, swiped sideways. Swiping forward logs the set you
-/// leave as shown and starts its rest; tap a number to change it first. The last card is the log: Save writes it.
+/// The workout (FIT-32, prototype row 2): one card per set, each followed by a rest card, swiped sideways. Swiping
+/// forward logs the set you leave as shown and starts its rest; swiping on (or up) skips the rest. Tap a number to
+/// change it, swipe down on a logged set to unlog it. The last card is the log: Save writes it.
 struct WorkoutModeView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -23,9 +24,11 @@ struct WorkoutModeView: View {
     @State private var toast: Toast?
     @State private var message: String?
 
+    /// The running rest, on its card.
     struct Rest: Equatable {
         var ends: Date
         var total: TimeInterval
+        var page: Int
     }
 
     /// The number being changed: a card's reps (or time) or its load.
@@ -39,18 +42,23 @@ struct WorkoutModeView: View {
     }
 
     var body: some View {
-        let pages = draft.pages
+        let cards = draft.cards
         let names = names
         VStack(spacing: 0) {
             topBar
             segments.padding(.horizontal, 22).padding(.top, 8)
             ScrollView(.horizontal) {
                 HStack(spacing: 12) {
-                    ForEach(pages.indices, id: \.self) { index in
-                        setCard(pages[index], index: index, pages: pages, names: names)
-                            .containerRelativeFrame(.horizontal).id(index)
+                    ForEach(cards.indices, id: \.self) { index in
+                        Group {
+                            switch cards[index] {
+                            case .set(let line): setCard(line, index: index, cards: cards, names: names)
+                            case .rest(let seconds): restCard(index: index, seconds: seconds, cards: cards, names: names)
+                            }
+                        }
+                        .containerRelativeFrame(.horizontal).id(index)
                     }
-                    finishCard(names: names).containerRelativeFrame(.horizontal).id(pages.count)
+                    finishCard(names: names).containerRelativeFrame(.horizontal).id(cards.count)
                 }
                 .scrollTargetLayout()
             }
@@ -59,18 +67,26 @@ struct WorkoutModeView: View {
             .scrollIndicators(.hidden)
             .scrollPosition(id: $page)
             .padding(.top, 16)
-            micArea(onFinish: page == pages.count).frame(height: 104)
+            micArea(onFinish: page == cards.count).frame(height: 104)
         }
         .background(Color(.systemBackground))
         .onChange(of: page) { old, new in
             editing = nil
-            guard let old, let new, let seconds = draft.swiped(from: old, to: new) else { return }
-            withAnimation(.snappy) { rest = new < draft.pages.count && seconds > 0 ? Rest(ends: .now + seconds, total: seconds) : nil }
+            guard let old, let new else { return }
+            let logged = draft.swiped(from: old, to: new)
+            let cards = draft.cards
+            withAnimation(.snappy) {
+                if logged, new == old + 1, cards.indices.contains(new), case .rest(let seconds) = cards[new] {
+                    rest = Rest(ends: .now + seconds, total: seconds, page: new)
+                } else if rest?.page != new {
+                    rest = nil // left the rest card: skipped
+                }
+            }
         }
         .overlay {
             if voice.listening || working != nil {
                 ListeningVeil(voice: voice, working: working,
-                              prompt: page == draft.pages.count ? "Add a note" : "Say how that set went")
+                              prompt: page == draft.cards.count ? "Add a note" : "Say how that set went")
             }
         }
         .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 116) }
@@ -83,11 +99,15 @@ struct WorkoutModeView: View {
         .sensoryFeedback(.success, trigger: restsFinished)
         .sensoryFeedback(.impact(weight: .light), trigger: draft.rows.filter(\.done).count)
         .task(id: rest?.ends) {
-            guard let ends = rest?.ends else { return }
+            guard let ends = rest?.ends, let on = rest?.page else { return }
             try? await Task.sleep(for: .seconds(max(0, ends.timeIntervalSinceNow)))
             guard !Task.isCancelled else { return }
-            withAnimation { rest = nil }
             restsFinished += 1
+            // Rest's over: on to the next set.
+            withAnimation(.snappy) {
+                rest = nil
+                if page == on { page = on + 1 }
+            }
         }
         // A phone that locks mid-set loses the clock; keep it awake while training.
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
@@ -120,7 +140,7 @@ struct WorkoutModeView: View {
 
     /// One bar per exercise, filled by its logged sets; the one on screen is darker.
     private var segments: some View {
-        let current = page.flatMap { draft.pages.indices.contains($0) ? draft.rows[draft.pages[$0][0]].block : nil }
+        let current = page.flatMap { set(at: $0, in: draft.cards).map { draft.rows[$0[0]].block } }
         return HStack(spacing: 4) {
             ForEach(draft.blocks, id: \.self) { block in
                 let rows = draft.rows.filter { $0.block == block }
@@ -142,15 +162,27 @@ struct WorkoutModeView: View {
 
     // MARK: Set card
 
-    private func setCard(_ line: [Int], index: Int, pages: [[Int]], names: [String: String]) -> some View {
+    /// The set on a card, or the one a rest card follows.
+    private func set(at index: Int, in cards: [WorkoutDraft.Card]) -> [Int]? {
+        guard cards.indices.contains(index) else { return nil }
+        if case .set(let line) = cards[index] { return line }
+        return set(at: index - 1, in: cards)
+    }
+
+    /// The next set card after `index`.
+    private func nextSet(after index: Int, in cards: [WorkoutDraft.Card]) -> [Int]? {
+        cards[(index + 1)...].lazy.compactMap { if case .set(let line) = $0 { line } else { nil } }.first
+    }
+
+    private func setCard(_ line: [Int], index: Int, cards: [WorkoutDraft.Card], names: [String: String]) -> some View {
         let rows = line.map { draft.rows[$0] }
         let first = rows[0]
         let exercises = rows.map(\.exercise).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         let rounds = draft.lines(block: first.block).count
         let done = rows.allSatisfy(\.done)
         let field = editing?.page == index ? editing : nil
-        let next = pages.indices.contains(index + 1) ? draft.rows[pages[index + 1][0]] : nil
-        let hint = done ? "" : next == nil ? "Swipe to finish" : next!.block != first.block ? "Swipe · \(names[next!.exercise] ?? next!.exercise)" : "Swipe when done"
+        let next = nextSet(after: index, in: cards).map { draft.rows[$0[0]] }
+        let hint = done ? "Swipe down to unlog" : next == nil ? "Swipe to finish" : next!.block != first.block ? "Swipe · \(names[next!.exercise] ?? next!.exercise)" : "Swipe when done"
         let values = rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+")
         let loads = rows.compactMap(\.load).reduce(into: [Double]()) { if !$0.contains($1) { $0.append($1) } }
         let load = first.loadMetric == nil ? nil : loads.map(Coach.number).joined(separator: "/")
@@ -208,13 +240,20 @@ struct WorkoutModeView: View {
         }
         .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .overlay(alignment: .top) {
-            if let rest, index == page {
-                restPanel(rest).transition(.opacity)
-            }
-        }
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
         .clipShape(.rect(cornerRadius: 30))
+        // Swipe down on a logged set to unlog it.
+        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
+            guard done, drag.translation.height > 60, abs(drag.translation.height) > abs(drag.translation.width) else { return }
+            unlog(line)
+        })
+        .accessibilityAction(named: "Unlog") { if done { unlog(line) } }
+    }
+
+    private func unlog(_ line: [Int]) {
+        let before = draft
+        withAnimation(.snappy) { draft.untick(line) }
+        withAnimation { toast = Toast(text: "Set \(draft.rows[line[0]].round + 1) unlogged") { draft = before } }
     }
 
     private func number(_ text: String, size: CGFloat, on: Bool, heard: Bool, label: String, action: @escaping () -> Void) -> some View {
@@ -262,34 +301,70 @@ struct WorkoutModeView: View {
         return "Last time \(Coach.number(reps))" + (top.value("load_lb").map { " × \(Coach.number($0))" } ?? "")
     }
 
-    /// The rest countdown, over the top of the card that's next.
-    private func restPanel(_ rest: Rest) -> some View {
-        TimelineView(.periodic(from: .now, by: 0.25)) { context in
-            let left = max(0, rest.ends.timeIntervalSince(context.date))
-            VStack(spacing: 0) {
-                Text("Rest").font(.subheadline).foregroundStyle(.secondary)
-                Text(Duration.seconds(left.rounded(.up)).formatted(.time(pattern: .minuteSecond)))
-                    .font(.system(size: 64, weight: .semibold, design: .rounded)).tracking(-1).monospacedDigit()
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color(.separator))
-                        Capsule().fill(.primary).frame(width: proxy.size.width * left / max(rest.total, 1))
+    /// The rest after a set: a countdown with −10s, +10s and Skip. It runs when you arrive by logging the set;
+    /// swiping on, or up, skips it.
+    private func restCard(index: Int, seconds: TimeInterval, cards: [WorkoutDraft.Card], names: [String: String]) -> some View {
+        let active = rest?.page == index ? rest : nil
+        let next = nextSet(after: index, in: cards).map { draft.rows[$0[0]] }
+        let skip = { withAnimation(.snappy) { page = index + 1 } }
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("Rest").font(.subheadline).foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            TimelineView(.periodic(from: .now, by: 0.25)) { context in
+                let left = active.map { max(0, $0.ends.timeIntervalSince(context.date)) } ?? seconds
+                VStack(spacing: 0) {
+                    Text(Duration.seconds(left.rounded(.up)).formatted(.time(pattern: .minuteSecond)))
+                        .font(.system(size: 96, weight: .semibold, design: .rounded)).tracking(-2).monospacedDigit()
+                        .foregroundStyle(active == nil ? .tertiary : .primary)
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color(.separator))
+                            Capsule().fill(.primary).frame(width: proxy.size.width * left / max(active?.total ?? seconds, 1))
+                        }
                     }
+                    .frame(width: 200, height: 4).padding(.top, 8)
+                    HStack(spacing: 8) {
+                        Button("−10s") {
+                            if left > 10 { rest?.ends -= 10 } else { skip() }
+                        }
+                        .accessibilityLabel("10 seconds less")
+                        Button("+10s") {
+                            if let active { rest?.ends += 10; rest?.total = max(active.total, left + 10) }
+                            else { rest = Rest(ends: .now + seconds + 10, total: seconds + 10, page: index) }
+                        }
+                        .accessibilityLabel("10 seconds more")
+                        Button("Skip", action: skip)
+                    }
+                    .buttonStyle(RestButton())
+                    .padding(.top, 22)
+                    .opacity(active == nil ? 0 : 1)
+                    .disabled(active == nil)
                 }
-                .frame(width: 180, height: 4).padding(.top, 6)
-                HStack(spacing: 8) {
-                    Button("+30") { self.rest?.ends += 30; self.rest?.total = max(rest.total, left + 30) }
-                    Button("Skip") { withAnimation { self.rest = nil } }
-                }
-                .buttonStyle(RestButton())
-                .padding(.top, 14)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 26).padding(.bottom, 18)
-            .background(Color(.secondarySystemBackground))
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Rest")
+            Spacer(minLength: 12)
+            if let next {
+                Text("Next").font(.subheadline).foregroundStyle(.secondary)
+                Text("\(names[next.exercise] ?? next.exercise), set \(next.round + 1)")
+                    .font(.title3.weight(.semibold)).lineLimit(1).padding(.top, 2)
+                Text(Coach.number(next.value ?? 0) + (next.metric == "reps" ? "" : " " + (SetRow.units[next.metric] ?? ""))
+                     + (next.load.map { " × \(Coach.number($0))" } ?? ""))
+                    .font(.title3).foregroundStyle(.secondary).monospacedDigit()
+            }
+            HStack {
+                Spacer()
+                Text("Swipe to skip").font(.subheadline).foregroundStyle(.tertiary)
+            }
+            .padding(.top, 8)
         }
+        .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+        .contentShape(.rect(cornerRadius: 30))
+        // Swipe up to skip.
+        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
+            if drag.translation.height < -60, abs(drag.translation.height) > abs(drag.translation.width) { skip() }
+        })
     }
 
     private struct RestButton: ButtonStyle {
@@ -314,20 +389,18 @@ struct WorkoutModeView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// FIT-32: on a set card, what's said is about the set just logged ("only got four on that one"), or the one
-    /// on screen if nothing's been logged since; that one is then logged and its rest starts. Heard values are
-    /// dashed, with Undo. On the finish card, speech is the note. Nothing is stored until Save.
+    /// FIT-32: on a rest card, what's said is about the set just done ("only got four on that one"); on a set
+    /// card it's about that set, which is then logged and its rest starts. Heard values are dashed, with Undo.
+    /// On the finish card, speech is the note. Nothing is stored until Save.
     private func heard(_ said: String) {
         talked = true
-        let pages = draft.pages
-        guard let position = page, pages.indices.contains(position) else {
+        let cards = draft.cards
+        guard let position = page, let line = set(at: position, in: cards) else {
             draft.note = said
             withAnimation { toast = Toast(text: "Note added") }
             return
         }
-        let isDone = { (index: Int) in pages[index].allSatisfy { draft.rows[$0].done } }
-        let target = position > 0 && isDone(position - 1) && !isDone(position) ? position - 1 : position
-        let line = pages[target]
+        let onSet = if case .set = cards[position] { true } else { false }
         let names = names
         let exercise = names[draft.rows[line[0]].exercise] ?? draft.rows[line[0]].exercise
         working = said
@@ -345,10 +418,11 @@ struct WorkoutModeView: View {
                     "Set \(number) logged"
                 }
                 withAnimation { toast = Toast(text: text) { draft = before } }
-                if target == position {
-                    let seconds = draft.rest(after: line[line.count - 1])
+                if onSet {
                     withAnimation(.snappy) {
-                        rest = position + 1 < pages.count && seconds > 0 ? Rest(ends: .now + seconds, total: seconds) : nil
+                        if cards.indices.contains(position + 1), case .rest(let seconds) = cards[position + 1] {
+                            rest = Rest(ends: .now + seconds, total: seconds, page: position + 1)
+                        }
                         page = position + 1
                     }
                 }

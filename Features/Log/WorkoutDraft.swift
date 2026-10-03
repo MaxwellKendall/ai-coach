@@ -133,16 +133,34 @@ struct WorkoutDraft: Equatable {
         return line.last.map { rest(after: $0) } ?? 0
     }
 
-    /// Swiping from one card to a later one logs the cards passed, as shown. Returns the rest after the last
-    /// one logged, or nil when they were all logged already. Swiping back logs nothing.
-    mutating func swiped(from: Int, to: Int) -> TimeInterval? {
+    mutating func untick(_ line: [Int]) { for index in line { rows[index].done = false } }
+
+    /// Workout mode's cards: each set, then its rest when it has one. No rest after the last set.
+    enum Card: Equatable {
+        case set([Int])
+        case rest(TimeInterval)
+    }
+
+    var cards: [Card] {
         let pages = pages
-        guard to > from, from < pages.count else { return nil }
-        var rest: TimeInterval?
-        for page in pages[from..<min(to, pages.count)] where !page.allSatisfy({ rows[$0].done }) {
-            rest = tick(page)
+        return pages.enumerated().flatMap { offset, line -> [Card] in
+            let seconds = line.last.map { rest(after: $0) } ?? 0
+            return offset < pages.count - 1 && seconds > 0 ? [.set(line), .rest(seconds)] : [.set(line)]
         }
-        return rest
+    }
+
+    /// Swiping from one card to a later one logs the sets passed, as shown. Returns whether any was logged.
+    /// Swiping back logs nothing.
+    @discardableResult
+    mutating func swiped(from: Int, to: Int) -> Bool {
+        let cards = cards
+        guard to > from, from < cards.count else { return false }
+        var logged = false
+        for case .set(let line) in cards[from..<min(to, cards.count)] where !line.allSatisfy({ rows[$0].done }) {
+            tick(line)
+            logged = true
+        }
+        return logged
     }
 
     /// −/+ on a line: reps by 1 (time and distance by 5), load by 5 lb. Never below zero.

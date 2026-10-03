@@ -134,18 +134,29 @@ struct LogDraftTests {
         #expect(draft.pages == [[0], [1], [2], [3, 4], [5, 6]])
     }
 
-    @Test func swipingForwardLogsTheCardsPassedAndRestsAfterTheLast() {
+    @Test func eachSetIsFollowedByItsRestCard() {
+        let draft = WorkoutDraft(session: "B", plan: SessionPlan([squat] + superset))
+        #expect(draft.cards == [.set([0]), .rest(180), .set([1]), .rest(180), .set([2]), .rest(180),
+                                .set([3, 4]), .rest(90), .set([5, 6])]) // no rest after the last set
+    }
+
+    private func swipe(_ draft: inout WorkoutDraft, _ from: Int, _ to: Int) -> Bool { draft.swiped(from: from, to: to) }
+
+    @Test func swipingForwardLogsTheSetsPassed() {
         var draft = WorkoutDraft(session: "B", plan: SessionPlan([squat] + superset))
         draft.rows[0].value = 4
-        #expect(draft.swiped(from: 0, to: 1) == 180)
+        #expect(swipe(&draft, 0, 1)) // set → its rest
         #expect(draft.rows[0].done && draft.rows[0].value == 4 && !draft.rows[1].done)
         #expect(draft.rows[1].value == 4) // carried to the sets planned the same
-        #expect(draft.swiped(from: 1, to: 0) == nil) // back logs nothing
-        #expect(draft.swiped(from: 0, to: 1) == nil) // already logged: no new rest
-        #expect(draft.swiped(from: 2, to: 4) == 90) // a superset round, rest after its last movement
-        #expect(draft.rows.map(\.done) == [true, false, true, true, true, false, false])
-        #expect(draft.swiped(from: 4, to: 5) != nil) // onto the finish card
+        #expect(!swipe(&draft, 1, 2)) // rest → next set: skipping rest logs nothing
+        #expect(!swipe(&draft, 2, 0)) // back logs nothing
+        #expect(swipe(&draft, 2, 7)) // past several cards
+        #expect(draft.rows.map(\.done) == [true, true, true, true, true, false, false])
+        #expect(swipe(&draft, 8, 9)) // onto the finish card
         #expect(draft.rows[5].done && draft.rows[6].done)
+        draft.untick([3, 4]) // swiped down: unlogged, numbers kept
+        #expect(!draft.rows[3].done && !draft.rows[4].done && draft.rows[3].value == 10)
+        #expect(swipe(&draft, 6, 7)) // swiping on again logs it again
     }
 
     @Test func adjustingALineStepsRepsAndLoadAndClearsHeard() {
