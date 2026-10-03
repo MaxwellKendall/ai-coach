@@ -9,6 +9,8 @@ final class Goal {
     var target: Double
     var unit: String
     var deadline: Date?
+    /// Where the goal started (FIT-36), in the goal's unit. User-owned; progress since is derived from logs.
+    var baseline: Double?
     var status: GoalStatus
     var createdAt: Date
     var updatedAt: Date

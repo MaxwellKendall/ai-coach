@@ -34,6 +34,8 @@ final class PlannedActivity {
     var adjustedReason: String?
     /// Rows sharing a group are one superset or circuit (FIT-21); nil is a block of its own.
     var group: Int?
+    /// Kept when the week is regenerated (FIT-40).
+    var pinned = false
     var plan: Plan?
     var createdAt: Date
     var updatedAt: Date

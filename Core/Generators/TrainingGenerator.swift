@@ -17,6 +17,8 @@ struct TrainingSettings: Sendable {
     var warmups = true
     /// nil uses the age tier's default.
     var deloadEveryWeeks: Int?
+    /// Where each exercise starts when it has no history yet (FIT-36).
+    var starts: [StartingSet] = []
 }
 
 enum TrainingStyle: String, Codable, CaseIterable, Sendable {
@@ -166,20 +168,29 @@ enum TrainingGenerator {
     static let deloadSets = 0.55, deloadLoad = 0.87, deloadRPE = 6.0
 
     /// `asOf` and `rotationStart` are for an extra session mid-week (`session(on:)`): history up to that day,
-    /// and a chosen session of the rotation.
+    /// and a chosen session of the rotation. In a program (FIT-36) its week decides the deload, the volume and
+    /// the equipment while travelling.
     static func week(startingOn monday: Date, settings: TrainingSettings, catalog: [Exercise],
-                     history: [LoggedSet], weeksSinceDeload: Int, asOf: Date? = nil, rotationStart: Int? = nil,
-                     calendar: Calendar = .current) -> TrainingWeek {
+                     history: [LoggedSet], weeksSinceDeload: Int, program: ProgramWeek? = nil, asOf: Date? = nil,
+                     rotationStart: Int? = nil, calendar: Calendar = .current) -> TrainingWeek {
+        var settings = settings
+        if program?.travel == true { settings.equipment.formIntersection(ProgramPlan.travelEquipment) }
         let tier = AgeTier.of(age: settings.age)
         let volume = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes)
-        let deload = weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks)
+        let deload = program?.light ?? (weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks))
+        let range = program.map { ProgramPlan.sessionSets(volume.setsPerSession, phase: $0.phase) } ?? volume.setsPerSession
         let past = history.filter { $0.date < (asOf ?? monday) }
         let undertrained = undertrainedPatterns(past, before: monday, calendar: calendar)
         let recent = recentExercises(past, sessions: 2, calendar: calendar)
         let allowed = catalog.filter { allows($0, settings) }
 
         var warnings: [String] = []
-        if deload { warnings.append("Deload week: about half the sets, loads down ~13%, RPE capped at 6.") }
+        if program?.kind == .test {
+            warnings.append("Test week: light sessions, then see where your goals are.")
+        } else if deload {
+            warnings.append("Deload week: about half the sets, loads down ~13%, RPE capped at 6.")
+        }
+        if program?.travel == true { warnings.append("Travel week: dumbbells and bodyweight only.") }
 
         let rotation = volume.split.rotation
         let start = rotationStart ?? Self.rotationStart(rotation, history: past)
@@ -196,7 +207,7 @@ enum TrainingGenerator {
                 }
                 picks.append((slot, exercise, undertrained.contains(slot.pattern) ? 4 : 3))
             }
-            let sets = fit(picks.map { ($0.slot.main, $0.sets) }, to: volume.setsPerSession)
+            let sets = fit(picks.map { ($0.slot.main, $0.sets) }, to: range)
             for (pick, count) in zip(picks, sets) {
                 let count = deload ? max(1, Int((Double(count) * deloadSets).rounded())) : count
                 let item = workout(pick.exercise, main: pick.slot.main, sets: count, date: date, session: session.name,
@@ -311,15 +322,17 @@ enum TrainingGenerator {
         let last = lastSession(of: exercise.slug, history, calendar: calendar)
         func lastValue(_ metric: String) -> Double? { last.compactMap { $0.value(metric) }.max() }
         let rpeCap = deload ? deloadRPE : (main ? tier.topRPE : tier.accessoryRPE)
+        let reps = main ? settings.style.reps.main : settings.style.reps.accessory
+        let first = last.isEmpty ? settings.starts.first { $0.exercise == exercise.slug }
+            .map { ProgramPlan.firstTargets($0, reps: reps) } : nil
 
         var targets = [Measurement(metric: "sets", value: Double(sets), unit: "sets")]
         if exercise.isTimed {
-            targets.append(Measurement(metric: "duration_s", value: lastValue("duration_s") ?? 45, unit: "s"))
+            targets.append(Measurement(metric: "duration_s", value: lastValue("duration_s") ?? first?.seconds ?? 45, unit: "s"))
         } else if exercise.pattern == "carry" {
             targets.append(Measurement(metric: "distance_m", value: lastValue("distance_m") ?? 30, unit: "m"))
         } else {
-            targets.append(Measurement(metric: "reps", value: main ? settings.style.reps.main : settings.style.reps.accessory,
-                                       unit: "reps"))
+            targets.append(Measurement(metric: "reps", value: first?.reps ?? reps, unit: "reps"))
         }
         let daysOff = last.first.map { calendar.dateComponents([.day], from: calendar.startOfDay(for: $0.date), to: date).day ?? 0 }
         if let load = lastValue("load_lb") {
@@ -330,6 +343,8 @@ enum TrainingGenerator {
             targets.append(Measurement(metric: "load_lb_hand", value: nextLoad(load, lastRPE: nil, main: false, tier: tier,
                                                                                deload: deload, daysOff: daysOff),
                                        unit: "lb/hand"))
+        } else if let load = first?.load {
+            targets.append(Measurement(metric: "load_lb", value: deload ? roundTo5(load * deloadLoad) : load, unit: "lb"))
         }
         if !exercise.isTimed, exercise.pattern != "carry" {
             targets.append(Measurement(metric: "rpe", value: rpeCap, unit: "RPE"))

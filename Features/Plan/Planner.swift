@@ -25,7 +25,8 @@ enum Planner {
         let history = loggedSets(try context.fetch(FetchDescriptor<LogEntry>()), templates: templates)
         let week = TrainingGenerator.week(
             startingOn: monday, settings: profile.trainingSettings, catalog: catalog(templates), history: history,
-            weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar), calendar: calendar)
+            weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar),
+            program: profile.programWeek(of: monday, calendar: calendar)?.week, calendar: calendar)
         let kitchen = KitchenSchedule.week(startingOn: monday, cookWindows: profile.cookWindows,
                                            groceryDay: profile.groceryDay, calendar: calendar)
 

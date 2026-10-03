@@ -32,6 +32,12 @@ final class Profile {
     var cookWindows: [CookWindow]
     var groceryDay: Int?
     var weeklyBudgetUSD: Double?
+    /// The program (FIT-36): its first Monday and the target date that sets its length.
+    var programStart: Date?
+    var targetDate: Date?
+    /// Program weeks away from the usual gym, 0-based.
+    var travelWeeks: [Int] = []
+    var starts: [StartingSet] = []
     var createdAt: Date
     var updatedAt: Date
 
@@ -70,6 +76,22 @@ final class Profile {
         TrainingSettings(age: age, daysPerWeek: trainingDays.count, sessionMinutes: sessionMinutes,
                          trainingDays: trainingDays.sorted(), workoutTime: workoutTime, equipment: Set(equipment),
                          injuredAreas: BodyArea.muscles(for: injuredAreas), avoidExercises: Set(avoidExercises),
-                         maxWeeklySets: maxWeeklySets, style: style, warmups: warmups, deloadEveryWeeks: deloadEveryWeeks)
+                         maxWeeklySets: maxWeeklySets, style: style, warmups: warmups, deloadEveryWeeks: deloadEveryWeeks,
+                         starts: starts)
+    }
+
+    /// The program's weeks, when there is one.
+    var program: [ProgramWeek]? {
+        guard let programStart, let targetDate else { return nil }
+        return ProgramPlan.weeks(count: ProgramPlan.weekCount(start: programStart, target: targetDate),
+                                 deloadEvery: deloadEveryWeeks ?? AgeTier.of(age: age).deloadEveryWeeks,
+                                 travel: Set(travelWeeks))
+    }
+
+    /// The program week a date falls in, if it's within the program.
+    func programWeek(of date: Date, calendar: Calendar = .current) -> (index: Int, week: ProgramWeek)? {
+        guard let weeks = program, let programStart else { return nil }
+        let index = ProgramPlan.week(of: date, start: programStart, calendar: calendar)
+        return weeks.indices.contains(index) ? (index, weeks[index]) : nil
     }
 }
