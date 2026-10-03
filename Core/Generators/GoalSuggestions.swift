@@ -3,12 +3,12 @@ import Foundation
 /// Starting goals from the age tier and body weight (fitness-planner CLAUDE.md "Age-Bracket Goal Tiers"
 /// and "Daily nutrition targets"). Only proposals: the user accepts or edits each one.
 enum GoalSuggestions {
-    private struct Tier {
+    struct Tier {
         var squat: Double, hinge: Double, push: Double   // × body weight, barbell
         var pushUps: Int, pullUps: Int, fiveKMinutes: Double
     }
 
-    private static func tier(age: Int) -> Tier {
+    static func tier(age: Int) -> Tier {
         switch age {
         case ..<30: Tier(squat: 1.5, hinge: 2.0, push: 1.25, pushUps: 20, pullUps: 15, fiveKMinutes: 22)
         case 30..<40: Tier(squat: 1.25, hinge: 1.75, push: 1.0, pushUps: 15, pullUps: 10, fiveKMinutes: 25)
