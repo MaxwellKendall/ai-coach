@@ -443,10 +443,11 @@ struct TodayScreen: View {
         let library = Dictionary(exercises.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
         let all = Planner.workouts(plan, templates: templates)
         let todays = all.filter { calendar.isDateInToday($0.date) }
-        let edited = try await WorkoutEditor.edit(WorkoutEdit.items(todays, names: library), library: Planner.catalog(templates).compactMap { exercise in library[exercise.slug].map { "\($0) (\(exercise.pattern))" } }.sorted(), said: said)
         let date = todays.first?.date ?? calendar.date(byAdding: .minute, value: profile.workoutTime, to: calendar.startOfDay(for: .now))!
-        guard let result = WorkoutEdit.apply(edited.items, to: todays, library: library, date: date,
-                                             session: todays.first?.session ?? "Workout") else {
+        let patterns = Dictionary(Planner.catalog(templates).map { ($0.slug, $0.pattern) }, uniquingKeysWith: { first, _ in first })
+        let edited = try await WorkoutEditor.run(said, today: todays, library: library, patterns: patterns, date: date,
+                                                 session: todays.first?.session ?? "Workout")
+        guard let result = edited.result else {
             message = "Couldn’t make that change. Try saying it another way."
             return
         }
@@ -458,8 +459,7 @@ struct TodayScreen: View {
         for template in added { context.insert(template) }
         let workouts = (all.filter { !calendar.isDateInToday($0.date) } + result.workouts).sorted { $0.date < $1.date }
         try Planner.apply(workouts, to: plan, templates: templates + added, in: context)
-        let summary = edited.summary.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(["."]))
-        withAnimation { toast = Toast(text: summary.isEmpty ? "Today changed" : summary) { [context, templates] in
+        withAnimation { toast = Toast(text: edited.summary.isEmpty ? "Today changed" : edited.summary) { [context, templates] in
             try? Planner.apply(all, to: plan, templates: templates, in: context)
             for template in added { context.delete(template) }
             try? context.save()

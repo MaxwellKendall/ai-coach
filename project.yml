@@ -39,6 +39,16 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+  # FIT-48: the real on-device model, scored. Slow and nondeterministic, so not in the AICoach scheme's tests.
+  AICoachEvals:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests/Evals]
+    dependencies:
+      - target: AICoach
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   AICoach:
     build:
@@ -47,3 +57,10 @@ schemes:
         AICoachTests: [test]
     test:
       targets: [AICoachTests]
+  AICoachEvals:
+    build:
+      targets:
+        AICoach: all
+        AICoachEvals: [test]
+    test:
+      targets: [AICoachEvals]

@@ -16,6 +16,56 @@ enum WorkoutEdit {
         var pattern: String? = nil
     }
 
+    /// One change the model asked for, applied by `applying` (the "changes" strategy).
+    struct Change: Equatable, Sendable {
+        enum Action: String, Sendable { case add, remove, replace, update }
+        var action: Action
+        var exercise: String
+        /// For replace: what takes its place.
+        var with: String? = nil
+        var sets: Int? = nil, reps: Int? = nil, seconds: Int? = nil, pounds: Double? = nil
+        var pattern: String? = nil
+    }
+
+    /// Today's items with the changes made. A changed exercise keeps the numbers the change doesn't give;
+    /// a replacement keeps the sets and reps of what it replaces, but not its weight.
+    static func applying(_ changes: [Change], to items: [Item]) -> [Item] {
+        var items = items
+        for change in changes {
+            let index = items.firstIndex { same(change.exercise, $0.name) }
+            func numbers(_ item: inout Item) {
+                if let sets = change.sets { item.sets = sets }
+                if let reps = change.reps { (item.reps, item.seconds) = (reps, nil) }
+                if let seconds = change.seconds { (item.seconds, item.reps) = (seconds, nil) }
+                if let pounds = change.pounds { item.pounds = pounds }
+                if let pattern = change.pattern { item.pattern = pattern }
+            }
+            switch change.action {
+            case .remove:
+                items.removeAll { same(change.exercise, $0.name) }
+            case .replace:
+                guard let index, let with = change.with, !with.isEmpty else { continue }
+                var item = items[index]
+                (item.name, item.pounds) = (with, nil)
+                numbers(&item)
+                items[index] = item
+            case .update where index != nil:
+                numbers(&items[index!])
+            case .add, .update:
+                var item = Item(name: change.exercise, sets: 3, reps: 10)
+                numbers(&item)
+                items.append(item)
+            }
+        }
+        return items
+    }
+
+    /// "bench" is Bench Press, "rows" Dumbbell Row (Single-Arm).
+    private static func same(_ said: String, _ name: String) -> Bool {
+        let a = Set(key(Slug.make(said)).split(separator: "-")), b = Set(key(Slug.make(name)).split(separator: "-"))
+        return !a.isEmpty && (a.isSubset(of: b) || b.isSubset(of: a))
+    }
+
     struct Result: Equatable {
         var workouts: [PlannedWorkout]
         /// Exercises the model named that aren't in the library, saved with the plan.

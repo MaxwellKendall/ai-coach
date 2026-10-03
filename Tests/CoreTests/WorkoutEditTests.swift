@@ -88,4 +88,19 @@ struct WorkoutEditTests {
         let odd = try #require(apply([.init(name: "Bicep Curl", sets: 3, reps: 12, pattern: "arms")]))
         #expect(odd.newExercises.first?.attributes.first?.values == ["core"])
     }
+
+    @Test func changesAreMadeToTodaysItems() {
+        let items = WorkoutEdit.items(lower, names: library)
+        func names(_ changes: [WorkoutEdit.Change]) -> [String] { WorkoutEdit.applying(changes, to: items).map(\.name) }
+        #expect(names([.init(action: .replace, exercise: "deadlifts", with: "Dumbbell Romanian Deadlift")])
+                == ["Back Squat", "Goblet Squat", "Dumbbell Romanian Deadlift", "Plank (Forearm)"])
+        #expect(names([.init(action: .remove, exercise: "Plank"), .init(action: .add, exercise: "Split Squat", pattern: "squat")])
+                == ["Back Squat", "Goblet Squat", "Deadlift", "Split Squat"])
+        let replaced = WorkoutEdit.applying([.init(action: .replace, exercise: "Deadlift", with: "RDL")], to: items)[2]
+        #expect(replaced.sets == 3 && replaced.reps == 5 && replaced.pounds == nil) // its weight isn't the deadlift's
+        let updated = WorkoutEdit.applying([.init(action: .update, exercise: "plank", seconds: 60)], to: items)[3]
+        #expect(updated.seconds == 60 && updated.reps == nil && updated.sets == 3)
+        // An update to something not planned today adds it.
+        #expect(WorkoutEdit.applying([.init(action: .update, exercise: "Pull-up", sets: 4)], to: []).first?.sets == 4)
+    }
 }
