@@ -16,7 +16,6 @@ struct RootView: View {
         TabView {
             Tab("Today", systemImage: "calendar") { TodayScreen() }
             Tab("Goals", systemImage: "target") { GoalsScreen() }
-            Tab("Log", systemImage: "square.and.pencil") { LogScreen() }
             Tab("Progress", systemImage: "chart.line.uptrend.xyaxis") { ProgressScreen() }
         }
         .tint(Self.accent)

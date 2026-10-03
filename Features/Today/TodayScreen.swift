@@ -13,6 +13,8 @@ struct TodayScreen: View {
     @State private var adjusting: Plan?
     @State private var logging: Logging?
     @State private var live: WorkoutDraft?
+    @State private var checking: Checking?
+    @State private var editing: LogEntry?
     @State private var details: Rows?
     @State private var record: Rows?
     /// Set by Start on the detail sheet; workout mode opens once the sheet is gone.
@@ -34,6 +36,12 @@ struct TodayScreen: View {
             case .item(let item): item.id.uuidString
             }
         }
+    }
+
+    /// Cards the log bar produced, waiting for the user to check them.
+    struct Checking: Identifiable {
+        let id = UUID()
+        let entries: [LogDraftEntry]
     }
 
     private var week: [Date] {
@@ -58,7 +66,9 @@ struct TodayScreen: View {
                     }
                     ForEach(thisWeeksPlan?.warnings ?? [], id: \.self, content: notice)
                     WeekPager(days: week, items: planned.filter { $0.date >= week[0] && $0.date < week[6] + 86_400 },
-                              templates: templates, logged: Set(entries.compactMap(\.plannedRef))) { items in
+                              templates: templates, logged: Set(entries.compactMap(\.plannedRef)),
+                              entries: entries.filter { $0.kind != .workout && $0.plannedRef == nil },
+                              onEdit: { editing = $0 }, onDelete: { context.delete($0) }) { items in
                         startLogging(items)
                     } onDetails: { details = Rows(items: $0) } onRecord: { record = Rows(items: $0) }
                 }
@@ -68,6 +78,11 @@ struct TodayScreen: View {
             .navigationTitle("Today")
             .navigationSubtitle(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
             .toolbar { toolbar }
+            .safeAreaInset(edge: .bottom) {
+                LogBar(onDraft: { checking = Checking(entries: $0) }, recipes: templates.filter { $0.kind == .recipe })
+            }
+            .sheet(item: $checking) { LogCheckSheet(entries: $0.entries) }
+            .sheet(item: $editing) { entry in NavigationStack { EntryEditor(editing: entry) } }
             .sheet(item: $adjusting) { plan in NavigationStack { AdjustSheet(plan: plan) } }
             .sheet(item: $details, onDismiss: {
                 if let items = startAfterDetails { startLogging(items) }

@@ -6,18 +6,26 @@ struct WeekPager: View {
     let items: [PlannedActivity]
     let templates: [Template]
     let logged: Set<UUID>
+    /// Unplanned non-workout entries (FIT-9): shown on their day, tap to edit, hold to delete.
+    var entries: [LogEntry] = []
+    var onEdit: (LogEntry) -> Void = { _ in }
+    var onDelete: (LogEntry) -> Void = { _ in }
     let onLog: ([PlannedActivity]) -> Void
     let onDetails: ([PlannedActivity]) -> Void
     let onRecord: ([PlannedActivity]) -> Void
     @State private var day: Int?
 
     init(days: [Date], items: [PlannedActivity], templates: [Template], logged: Set<UUID>, today: Date = .now,
-         onLog: @escaping ([PlannedActivity]) -> Void, onDetails: @escaping ([PlannedActivity]) -> Void,
+         entries: [LogEntry] = [], onEdit: @escaping (LogEntry) -> Void = { _ in },
+         onDelete: @escaping (LogEntry) -> Void = { _ in }, onLog: @escaping ([PlannedActivity]) -> Void, onDetails: @escaping ([PlannedActivity]) -> Void,
          onRecord: @escaping ([PlannedActivity]) -> Void) {
         self.days = days
         self.items = items
         self.templates = templates
         self.logged = logged
+        self.entries = entries
+        self.onEdit = onEdit
+        self.onDelete = onDelete
         self.onLog = onLog
         self.onDetails = onDetails
         self.onRecord = onRecord
@@ -55,10 +63,12 @@ struct WeekPager: View {
             .padding(.horizontal, 16)
 
             ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 0) {
+                HStack(alignment: .top, spacing: 0) {
                     ForEach(days.indices, id: \.self) { index in
                         DayPage(items: items.filter { Calendar.current.isDate($0.date, inSameDayAs: days[index]) },
-                                templates: templates, logged: logged, isToday: Calendar.current.isDateInToday(days[index]),
+                                templates: templates, logged: logged,
+                                entries: entries.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: days[index]) },
+                                onEdit: onEdit, onDelete: onDelete, isToday: Calendar.current.isDateInToday(days[index]),
                                 onLog: onLog, onDetails: onDetails, onRecord: onRecord)
                             .padding(.horizontal, 16)
                             .containerRelativeFrame(.horizontal)
@@ -69,6 +79,13 @@ struct WeekPager: View {
             .scrollTargetBehavior(.paging)
             .scrollIndicators(.hidden)
             .scrollPosition(id: $day)
+            // Not lazy: a lazy stack keeps the height it first measured, which clips rows logged later.
+            .defaultScrollAnchor(.leading)
+            .onAppear {
+                let start = day
+                day = nil
+                Task { day = start }
+            }
         }
     }
 }
@@ -77,6 +94,9 @@ struct DayPage: View {
     let items: [PlannedActivity]
     let templates: [Template]
     var logged: Set<UUID> = []
+    var entries: [LogEntry] = []
+    var onEdit: (LogEntry) -> Void = { _ in }
+    var onDelete: (LogEntry) -> Void = { _ in }
     var isToday = false
     var onLog: ([PlannedActivity]) -> Void = { _ in }
     var onDetails: ([PlannedActivity]) -> Void = { _ in }
@@ -86,7 +106,7 @@ struct DayPage: View {
         let workout = items.filter { $0.kind == .workout }.sorted { $0.date < $1.date }
         let names = Dictionary(templates.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         VStack(spacing: 8) {
-            if items.isEmpty {
+            if items.isEmpty && entries.isEmpty {
                 Text("Nothing planned")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
@@ -112,6 +132,23 @@ struct DayPage: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(logged.contains(item.id))
+            }
+            ForEach(entries.sorted { $0.timestamp < $1.timestamp }) { entry in
+                Button { onEdit(entry) } label: {
+                    HStack {
+                        Text(entry.kind == .meal && !entry.note.isEmpty ? entry.note
+                             : entry.kind == .bodyweight ? "Weight" : entry.kind == .grocery ? "Groceries" : entry.kind.rawValue.capitalized)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Text(([entry.timestamp.formatted(date: .omitted, time: .shortened)] + entry.measurements.map(\.display))
+                            .joined(separator: " · "))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(14)
+                    .background(.background, in: .rect(cornerRadius: 16))
+                }
+                .buttonStyle(.plain)
+                .contextMenu { Button("Delete", systemImage: "trash", role: .destructive) { onDelete(entry) } }
             }
         }
         .font(.subheadline)

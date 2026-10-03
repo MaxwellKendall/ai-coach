@@ -51,7 +51,7 @@ If Linear tools aren't available, stop and tell the user. Don't invent scope.
 
 ```
 project.yml                 # XcodeGen spec — source of truth for targets/settings
-App/                        # @main, root TabView (Goals · Plan · Log · Progress)
+App/                        # @main, root TabView (Today · Goals · Progress)
 Core/
   Model/                    # SwiftData models: Goal, Plan, PlannedActivity, LogEntry, Measurement, Template, Win
   Generators/               # pure functions: TrainingGenerator, MealGenerator (no SwiftUI, no SwiftData imports)
