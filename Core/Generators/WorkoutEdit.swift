@@ -88,9 +88,9 @@ enum WorkoutEdit {
         return row
     }
 
-    /// "Back Squats" finds back-squat.
+    /// "Back Squats" finds back-squat, "pull-ups" pull-up.
     private static func key(_ slug: String) -> String {
-        slug.split(separator: "-").map { $0.count > 3 && $0.hasSuffix("s") && !$0.hasSuffix("ss") ? String($0.dropLast()) : String($0) }
+        slug.split(separator: "-").map { ($0.count > 3 || $0 == "ups") && $0.hasSuffix("s") && !$0.hasSuffix("ss") ? String($0.dropLast()) : String($0) }
             .joined(separator: "-")
     }
 }

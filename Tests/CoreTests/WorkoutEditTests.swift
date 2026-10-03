@@ -31,13 +31,16 @@ struct WorkoutEditTests {
 /// FIT-49: names the agent's tools are given.
 struct WorkoutEditFindTests {
     private let library = ["deadlift": "Deadlift", "dumbbell-romanian-deadlift": "Dumbbell Romanian Deadlift",
-                           "bench-press": "Bench Press", "dumbbell-bench-press": "Dumbbell Bench Press", "back-squat": "Back Squat"]
+                           "bench-press": "Bench Press", "dumbbell-bench-press": "Dumbbell Bench Press", "back-squat": "Back Squat",
+                           "pull-up": "Pull-up", "push-up": "Push-up"]
 
     @Test func acronymsAndShortNamesFindTheLibrary() {
         #expect(WorkoutEdit.find("RDLs", in: library) == "dumbbell-romanian-deadlift")
         #expect(WorkoutEdit.find("RDL", in: library) == "dumbbell-romanian-deadlift")
         #expect(WorkoutEdit.find("Bench", in: library) == "bench-press")
         #expect(WorkoutEdit.find("back squats", in: library) == "back-squat")
+        #expect(WorkoutEdit.find("pull-ups", in: library) == "pull-up")
+        #expect(WorkoutEdit.find("Push-Ups", in: library) == "push-up")
         #expect(WorkoutEdit.find("Bicep Curl", in: library) == nil)
         #expect(WorkoutEdit.find("dip", in: library) == nil)
     }

@@ -44,7 +44,7 @@ struct WorkoutEditEvals {
 
     static let cases: [Case] = [
         // A full-body day: Deadlift (with warm-up), Bench Press, Goblet Squat, Dead Bug.
-        Case(said: "Give me squats and split squat for today", day: .full, has: ["back-squat|goblet-squat", "split-squat|bulgarian-split-squat"]),
+        Case(said: "Give me squats and split squat for today", day: .full, has: ["back-squat|goblet-squat", "split-squat|bulgarian-split-squat"], only: true),
         Case(said: "Swap deadlifts for RDLs", day: .full, has: ["dumbbell-romanian-deadlift"], lacks: ["deadlift"]),
         Case(said: "RDLs instead of deadlifts today", day: .full, has: ["dumbbell-romanian-deadlift"], lacks: ["deadlift"]),
         Case(said: "No bench today", day: .full, lacks: ["bench-press"]),
@@ -75,7 +75,7 @@ struct WorkoutEditEvals {
         Case(said: "Add dips at the end", day: .upper, has: ["dip|tricep-dip|chest-dip|bench-dip"]),
         Case(said: "Bench 165 today", day: .upper, targets: ["bench-press": .init(pounds: 165)]),
         // A rest day: nothing planned.
-        Case(said: "Give me squats and split squat for today", day: .rest, has: ["back-squat|goblet-squat", "split-squat|bulgarian-split-squat"]),
+        Case(said: "Give me squats and split squat for today", day: .rest, has: ["back-squat|goblet-squat", "split-squat|bulgarian-split-squat"], only: true),
         Case(said: "I want to do pull-ups and push-ups", day: .rest, has: ["pull-up", "push-up"]),
         Case(said: "Deadlift 3 sets of 5 at 225", day: .rest, has: ["deadlift"], targets: ["deadlift": .init(sets: 3, reps: 5, pounds: 225)]),
         Case(said: "Give me a quick core workout", day: .rest, has: ["plank|dead-bug"], open: true),
@@ -221,6 +221,10 @@ struct WorkoutEditEvals {
         var failures: [String]
         var output: String
         var seconds: Double
+        /// Of `seconds`, the time spent sorting what was said into an edit.
+        var routing = 0.0
+        /// Of `seconds`, the time from the user finishing speaking to the edit being made.
+        var agent = 0.0
     }
 
     /// The author's settings (fitness-planner config.yaml) and bundled history, so new exercises are dosed for real.
@@ -238,14 +242,20 @@ struct WorkoutEditEvals {
     static func run(_ test: Case, names: [String: String], patterns: [String: String], catalog: [String: Exercise],
                     history: [LoggedSet]) async -> Run {
         let start = Date.now
-        func done(_ failures: [String], _ output: String) -> Run { Run(failures: failures, output: output, seconds: Date.now.timeIntervalSince(start)) }
+        var routing = 0.0, agent = 0.0
+        func done(_ failures: [String], _ output: String) -> Run {
+            Run(failures: failures, output: output, seconds: Date.now.timeIntervalSince(start), routing: routing, agent: agent)
+        }
         do {
             let request = try await TodayRequestParser.parse(test.said)
+            routing = Date.now.timeIntervalSince(start)
             guard request?.kind == .edit else { return done(["routed to \(request.map { "\($0.kind)" } ?? "nothing")"], "") }
             let today = today(test.day)
             let setup = TodayWorkout.Setup(names: names, catalog: catalog.values.sorted { $0.slug < $1.slug }, settings: settings,
                                            history: history, weeksSinceDeload: 1, date: today.first?.date ?? date, session: "Workout")
+            let started = Date.now
             let outcome = try await WorkoutAgent.run(test.said, today: today, setup: setup)
+            agent = Date.now.timeIntervalSince(started)
             let output = "\(outcome.summary) ⇐ \(outcome.calls.joined(separator: " · "))"
             guard outcome.changed else { return done(["nothing changed"], output) }
             return done(failures(outcome.workouts, for: test, catalog: catalog, new: outcome.newExercises), output)
@@ -262,7 +272,7 @@ struct WorkoutEditEvals {
         let selected = Self.cases.filter { filter.isEmpty || $0.said.lowercased().contains(filter) }
         let library = try Self.library()
         let history = try Self.history(library.patterns)
-        var report: [String] = [], passed = 0, total = 0, seconds = 0.0
+        var report: [String] = [], passed = 0, total = 0, seconds = 0.0, routing = 0.0, agent = 0.0
         for test in selected {
             var results: [Run] = []
             for _ in 0..<runs { results.append(await Self.run(test, names: library.names, patterns: library.patterns, catalog: library.catalog, history: history)) }
@@ -270,6 +280,8 @@ struct WorkoutEditEvals {
             passed += good
             total += results.count
             seconds += results.reduce(0) { $0 + $1.seconds }
+            routing += results.reduce(0) { $0 + $1.routing }
+            agent += results.reduce(0) { $0 + $1.agent }
             report.append("| \(good == runs ? "✅" : good == 0 ? "❌" : "🟡") \(good)/\(runs) | \(test.day.rawValue) | \(test.said) |")
             for (index, run) in results.enumerated() where !run.failures.isEmpty {
                 report.append("|  | run \(index + 1) | \(run.failures.joined(separator: "; ")) — `\(run.output.replacingOccurrences(of: "|", with: "/"))` |")
@@ -277,7 +289,8 @@ struct WorkoutEditEvals {
         }
         let header = ["# Spoken workout edit evals", "",
                       "**\(passed)/\(total) runs pass (\(total == 0 ? 0 : passed * 100 / total)%)** · \(selected.count) cases × \(runs) runs · "
-                          + "\(String(format: "%.1f", total == 0 ? 0 : seconds / Double(total))) s per run", "",
+                          + "\(String(format: "%.1f", total == 0 ? 0 : seconds / Double(total))) s per run "
+                          + "(\(String(format: "%.1f", total == 0 ? 0 : routing / Double(total))) s sorting what was said, \(String(format: "%.1f", total == 0 ? 0 : agent / Double(total))) s making the edit)", "",
                       "| Pass | Day | Said / why it failed |", "|---|---|---|"]
         for line in header + report { print("EVAL§ " + line) }
         // A score, not a gate: the run always passes so the report is always written.
