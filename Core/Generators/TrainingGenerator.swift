@@ -199,28 +199,9 @@ enum TrainingGenerator {
             let session = rotation[(start + index) % rotation.count]
             let date = calendar.date(byAdding: .minute, value: settings.workoutTime,
                                      to: calendar.date(byAdding: .day, value: day, to: monday)!)!
-            var picks: [(slot: Slot, exercise: Exercise, sets: Int)] = []
-            for slot in session.slots {
-                guard let exercise = pick(slot, from: allowed, excluding: picks.map(\.exercise.slug), recent: recent) else {
-                    warnings.append("No allowed \(slot.pattern) exercise for \(session.name).")
-                    continue
-                }
-                picks.append((slot, exercise, undertrained.contains(slot.pattern) ? 4 : 3))
-            }
-            let sets = fit(picks.map { ($0.slot.main, $0.sets) }, to: range)
-            for (pick, count) in zip(picks, sets) {
-                let count = deload ? max(1, Int((Double(count) * deloadSets).rounded())) : count
-                let item = workout(pick.exercise, main: pick.slot.main, sets: count, date: date, session: session.name,
-                                   settings: settings, tier: tier, deload: deload, history: past, calendar: calendar)
-                if pick.slot.main, settings.warmups || tier.mandatoryWarmup, let load = item.target("load_lb") {
-                    workouts.append(PlannedWorkout(date: date, session: session.name, exercise: pick.exercise.slug, targets: [
-                        Measurement(metric: "sets", value: 1, unit: "sets"),
-                        Measurement(metric: "reps", value: 5, unit: "reps"),
-                        Measurement(metric: "load_lb", value: max(45, roundTo5(load * 0.6)), unit: "lb"),
-                    ], note: warmupNote))
-                }
-                workouts.append(item)
-            }
+            workouts += build(session, on: date, prefer: allowed, allowed: allowed, range: range, settings: settings, tier: tier,
+                              deload: deload, recent: recent, undertrained: undertrained, history: past, calendar: calendar,
+                              warnings: &warnings)
         }
         let week = TrainingWeek(workouts: workouts, deload: deload, warnings: warnings)
         if week.totalSets > settings.maxWeeklySets {
@@ -248,6 +229,77 @@ enum TrainingGenerator {
             if workouts.contains(where: { wanted.contains($0.exercise) }) { return workouts }
         }
         return nil
+    }
+
+    /// One session's exercises picked, set and dosed: picks come from `prefer` when it has one for the slot.
+    private static func build(_ session: SessionTemplate, on date: Date, prefer: [Exercise], allowed: [Exercise],
+                              range: ClosedRange<Int>, settings: TrainingSettings, tier: AgeTier, deload: Bool,
+                              recent: Set<String>, undertrained: Set<String>, history: [LoggedSet], calendar: Calendar,
+                              warnings: inout [String]) -> [PlannedWorkout] {
+        var picks: [(slot: Slot, exercise: Exercise, sets: Int)] = []
+        for slot in session.slots {
+            let used = picks.map(\.exercise.slug)
+            guard let exercise = pick(slot, from: prefer, excluding: used, recent: recent)
+                    ?? pick(slot, from: allowed, excluding: used, recent: recent) else {
+                warnings.append("No allowed \(slot.pattern) exercise for \(session.name).")
+                continue
+            }
+            picks.append((slot, exercise, undertrained.contains(slot.pattern) ? 4 : 3))
+        }
+        var workouts: [PlannedWorkout] = []
+        let sets = fit(picks.map { ($0.slot.main, $0.sets) }, to: range)
+        for (pick, count) in zip(picks, sets) {
+            let count = deload ? max(1, Int((Double(count) * deloadSets).rounded())) : count
+            let item = workout(pick.exercise, main: pick.slot.main, sets: count, date: date, session: session.name,
+                               settings: settings, tier: tier, deload: deload, history: history, calendar: calendar)
+            if pick.slot.main, let warmup = warmup(for: item, settings: settings, tier: tier) { workouts.append(warmup) }
+            workouts.append(item)
+        }
+        return workouts
+    }
+
+    private static func warmup(for item: PlannedWorkout, settings: TrainingSettings, tier: AgeTier) -> PlannedWorkout? {
+        guard settings.warmups || tier.mandatoryWarmup, let load = item.target("load_lb") else { return nil }
+        return PlannedWorkout(date: item.date, session: item.session, exercise: item.exercise, targets: [
+            Measurement(metric: "sets", value: 1, unit: "sets"),
+            Measurement(metric: "reps", value: 5, unit: "reps"),
+            Measurement(metric: "load_lb", value: max(45, roundTo5(load * 0.6)), unit: "lb"),
+        ], note: warmupNote)
+    }
+
+    /// FIT-49: today's session rebuilt to order ("leg day", "mix it up", "dumbbells only", "a quick one"): these
+    /// slots, filled and dosed by the week's rules from history up to today, preferring exercises not in `avoiding`.
+    /// `minutes` shrinks the session's sets in proportion to the usual session length.
+    static func session(on date: Date, slots: [Slot], name: String, avoiding: Set<String> = [], minutes: Int? = nil,
+                        settings: TrainingSettings, catalog: [Exercise], history: [LoggedSet], weeksSinceDeload: Int,
+                        calendar: Calendar = .current) -> [PlannedWorkout] {
+        let tier = AgeTier.of(age: settings.age)
+        let deload = weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks)
+        var range = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes).setsPerSession
+        if let minutes, minutes < settings.sessionMinutes {
+            let scale = Double(max(minutes, 10)) / Double(max(settings.sessionMinutes, 1))
+            range = max(3, Int(Double(range.lowerBound) * scale)) ... max(3, Int(Double(range.upperBound) * scale))
+        }
+        let past = history.filter { $0.date < calendar.startOfDay(for: date) }
+        let allowed = catalog.filter { allows($0, settings) }
+        var warnings: [String] = []
+        return build(SessionTemplate(name: name, slots: slots), on: date, prefer: allowed.filter { !avoiding.contains($0.slug) },
+                     allowed: allowed, range: range, settings: settings, tier: tier, deload: deload,
+                     recent: recentExercises(past, sessions: 2, calendar: calendar),
+                     undertrained: undertrainedPatterns(past, before: date, calendar: calendar), history: past,
+                     calendar: calendar, warnings: &warnings)
+    }
+
+    /// FIT-49: one exercise added or swapped in, dosed like the generator would: from history, else its starting set.
+    /// A main lift gets its warm-up.
+    static func dose(_ exercise: Exercise, main: Bool, sets: Int, date: Date, session: String, settings: TrainingSettings,
+                     history: [LoggedSet], weeksSinceDeload: Int, calendar: Calendar = .current) -> [PlannedWorkout] {
+        let tier = AgeTier.of(age: settings.age)
+        let deload = weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks)
+        let item = workout(exercise, main: main, sets: sets, date: date, session: session, settings: settings, tier: tier,
+                           deload: deload, history: history.filter { $0.date < calendar.startOfDay(for: date) },
+                           calendar: calendar)
+        return (main ? warmup(for: item, settings: settings, tier: tier).map { [$0] } ?? [] : []) + [item]
     }
 
     /// plan.md step 6: equipment on hand, not on the avoid list, and not loading an injured area.

@@ -223,16 +223,40 @@ struct WorkoutEditEvals {
         var seconds: Double
     }
 
+    /// FIT-49: the tool-calling agent, or one of FIT-48's single-response editors.
+    enum Strategy: String, Sendable { case agent, rewrite, changes }
+
+    /// The author's settings (fitness-planner config.yaml) and bundled history, so new exercises are dosed for real.
+    static let settings = TrainingSettings(
+        age: 36, daysPerWeek: 3, sessionMinutes: 45, trainingDays: [0, 2, 4], workoutTime: 7 * 60,
+        equipment: ["barbell", "rack", "dumbbells", "pull_up_bar", "bench"], maxWeeklySets: 60,
+        style: .powerbuilding, warmups: true, deloadEveryWeeks: 6)
+
+    static func history(_ patterns: [String: String]) throws -> [LoggedSet] {
+        try Seeder.decode([LogSeed].self, "history", .main).filter { $0.kind == .workout }.map {
+            LoggedSet(date: $0.timestamp, exercise: $0.template ?? "", pattern: patterns[$0.template ?? ""], measurements: $0.measurements)
+        }
+    }
+
     static func run(_ test: Case, names: [String: String], patterns: [String: String], catalog: [String: Exercise],
-                    strategy: WorkoutEditor.Strategy) async -> Run {
+                    history: [LoggedSet], strategy: Strategy) async -> Run {
         let start = Date.now
         func done(_ failures: [String], _ output: String) -> Run { Run(failures: failures, output: output, seconds: Date.now.timeIntervalSince(start)) }
         do {
             let request = try await TodayRequestParser.parse(test.said)
             guard request?.kind == .edit else { return done(["routed to \(request.map { "\($0.kind)" } ?? "nothing")"], "") }
             let today = today(test.day)
+            if strategy == .agent {
+                let setup = TodayWorkout.Setup(names: names, catalog: catalog.values.sorted { $0.slug < $1.slug }, settings: settings,
+                                               history: history, weeksSinceDeload: 1, date: today.first?.date ?? date, session: "Workout")
+                let outcome = try await WorkoutAgent.run(test.said, today: today, setup: setup)
+                let output = "\(outcome.summary) ⇐ \(outcome.calls.joined(separator: " · "))"
+                guard outcome.changed else { return done(["nothing changed"], output) }
+                return done(failures(outcome.workouts, for: test, catalog: catalog, new: outcome.newExercises), output)
+            }
             let outcome = try await WorkoutEditor.run(test.said, today: today, library: names, patterns: patterns,
-                                                      date: today.first?.date ?? date, session: "Workout", strategy: strategy)
+                                                      date: today.first?.date ?? date, session: "Workout",
+                                                      strategy: strategy == .changes ? .changes : .rewrite)
             let output = "\(outcome.summary) ⇒ \(WorkoutEdit.json(outcome.raw))"
             guard let result = outcome.result else { return done(["nothing usable came back"], output) }
             return done(failures(result.workouts, for: test, catalog: catalog, new: result.newExercises), output)
@@ -245,14 +269,15 @@ struct WorkoutEditEvals {
         try #require(SystemLanguageModel.default.isAvailable, "Apple Intelligence is off on this Mac")
         let environment = ProcessInfo.processInfo.environment
         let runs = Int(environment["EVAL_RUNS"] ?? "") ?? 3
-        let strategy = WorkoutEditor.Strategy(rawValue: environment["EVAL_STRATEGY"] ?? "") ?? .rewrite
+        let strategy = Strategy(rawValue: environment["EVAL_STRATEGY"] ?? "") ?? .agent
         let filter = environment["EVAL_FILTER"].map { $0.lowercased() } ?? ""
         let selected = Self.cases.filter { filter.isEmpty || $0.said.lowercased().contains(filter) }
         let library = try Self.library()
+        let history = try Self.history(library.patterns)
         var report: [String] = [], passed = 0, total = 0, seconds = 0.0
         for test in selected {
             var results: [Run] = []
-            for _ in 0..<runs { results.append(await Self.run(test, names: library.names, patterns: library.patterns, catalog: library.catalog, strategy: strategy)) }
+            for _ in 0..<runs { results.append(await Self.run(test, names: library.names, patterns: library.patterns, catalog: library.catalog, history: history, strategy: strategy)) }
             let good = results.filter(\.failures.isEmpty).count
             passed += good
             total += results.count

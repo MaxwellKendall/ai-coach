@@ -103,7 +103,8 @@ extension SpokenRequest {
     init?(_ draft: TodayRequestDraft) {
         switch draft.kind {
         case "change":
-            if let minutes = draft.minutes, minutes > 0 { kind = .change(.time(minutes: minutes)) }
+            // Under ten minutes isn't a session length: "make the plank a minute" is an edit.
+            if let minutes = draft.minutes, minutes >= 10 { kind = .change(.time(minutes: minutes)) }
             else if let area = draft.hurts?.trimmingCharacters(in: .whitespaces), !area.isEmpty { kind = .change(.injury(area: area)) }
             else if let day = draft.moveTo.flatMap(Self.weekdays.firstIndex) { kind = .change(.move(weekday: day)) }
             else if draft.lowEnergy == true { kind = .change(.energy) }
@@ -130,7 +131,8 @@ enum TodayRequestParser {
             change: they can't do today's workout as planned. "I only have thirty minutes", "my knee hurts",
             "slept badly", "move it to Saturday".
             edit: any other change to today's workout. "Give me squats and split squats", "swap deadlifts for RDLs",
-            "no bench today", "make it a leg day", "add some arm work".
+            "no bench today", "make it a leg day", "add some arm work", "mix it up, I'm bored", "regenerate my workout",
+            "make it harder", "plank for a minute".
             did_workout: they did their workout. "Did it", "done, last bench set was only four".
             log: food, sleep, body weight or grocery spending. "Had a chicken bowl", "weighed 182".
             """)

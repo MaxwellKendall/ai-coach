@@ -66,6 +66,8 @@ struct SpokenTests {
             TodayRequestDraft(kind: kind, minutes: minutes, lowEnergy: lowEnergy, hurts: hurts, moveTo: moveTo, differences: differences)
         }
         #expect(SpokenRequest(draft("change", minutes: 30))?.kind == .change(.time(minutes: 30)))
+        // "Make the plank a minute" isn't a session length (FIT-49).
+        #expect(SpokenRequest(draft("change", minutes: 1)) == nil)
         #expect(SpokenRequest(draft("change", hurts: "Shoulder"))?.kind == .change(.injury(area: "Shoulder")))
         #expect(SpokenRequest(draft("change", moveTo: "saturday"))?.kind == .change(.move(weekday: 5)))
         #expect(SpokenRequest(draft("change", lowEnergy: true))?.kind == .change(.energy))

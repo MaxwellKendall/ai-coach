@@ -61,7 +61,7 @@ enum WorkoutEdit {
     }
 
     /// "bench" is Bench Press, "rows" Dumbbell Row (Single-Arm).
-    private static func same(_ said: String, _ name: String) -> Bool {
+    static func same(_ said: String, _ name: String) -> Bool {
         let a = Set(key(Slug.make(said)).split(separator: "-")), b = Set(key(Slug.make(name)).split(separator: "-"))
         return !a.isEmpty && (a.isSubset(of: b) || b.isSubset(of: a))
     }
@@ -93,17 +93,12 @@ enum WorkoutEdit {
     /// Numbers outside what a person could do are dropped. nil when nothing usable came back.
     static func apply(_ edited: [Item], to today: [PlannedWorkout], library: [String: String], date: Date,
                       session: String) -> Result? {
-        var bySlug: [String: String] = [:]
-        for (slug, name) in library {
-            bySlug[key(slug)] = slug
-            bySlug[key(Slug.make(name))] = slug
-        }
         var rows: [PlannedWorkout] = [], seeds: [TemplateSeed] = []
         var used = Set<Int>()
         for item in edited {
             let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { continue }
-            var slug = bySlug[key(Slug.make(name))] ?? closest(name, library: library, taken: Set(rows.map(\.exercise)))
+            var slug = find(name, in: library, taken: Set(rows.map(\.exercise)))
             if slug == nil {
                 let new = Slug.make(name)
                 guard !new.isEmpty else { continue }
@@ -150,6 +145,40 @@ enum WorkoutEdit {
         return Result(workouts: rows, newExercises: seeds.filter { seed in rows.contains { $0.exercise == seed.slug } })
     }
 
+    /// The library exercise a name means: its name or slug, plural or not, else `closest`.
+    static func find(_ name: String, in library: [String: String], taken: Set<String> = []) -> String? {
+        let wanted = key(Slug.make(name))
+        guard !wanted.isEmpty else { return nil }
+        return library.keys.sorted().first { key($0) == wanted || key(Slug.make(library[$0]!)) == wanted }
+            ?? closest(name, library: library, taken: taken)
+            ?? acronym(wanted, library: library)
+    }
+
+    /// "RDL" is (Dumbbell) Romanian Deadlift: each letter in order, every word but the equipment starting with one.
+    private static func acronym(_ said: String, library: [String: String]) -> String? {
+        guard (2...4).contains(said.count), said.allSatisfy(\.isLetter) else { return nil }
+        let equipment: Set<Substring> = ["dumbbell", "barbell", "kettlebell", "cable", "band", "machine"]
+        func matches(_ name: String) -> Bool {
+            var words = Slug.make(name).split(separator: "-").filter { !equipment.contains($0) }[...]
+            var letters = said[...]
+            while let word = words.first {
+                guard let letter = letters.first, word.first == letter else { return false }
+                letters.removeFirst()
+                var rest = word.dropFirst()[...]
+                // The word's other letters may take the next ones, as Deadlift takes the L.
+                while let next = letters.first, words.count == 1 || next != words.dropFirst().first?.first,
+                      let at = rest.firstIndex(of: next) {
+                    letters.removeFirst()
+                    rest = rest[rest.index(after: at)...]
+                }
+                words.removeFirst()
+            }
+            return letters.isEmpty
+        }
+        let found = library.keys.sorted().filter { matches(library[$0]!) }
+        return found.count == 1 ? found[0] : nil
+    }
+
     /// A shortened library name ("Squat", "Romanian Deadlift"): the library exercise with all its words and the
     /// fewest others, preferring one not already in the workout.
     private static func closest(_ name: String, library: [String: String], taken: Set<String>) -> String? {
@@ -169,7 +198,7 @@ enum WorkoutEdit {
             && (row.target("load_lb") ?? row.target("load_lb_hand")) == item.pounds
     }
 
-    private static func changed(_ row: PlannedWorkout, to item: Item) -> PlannedWorkout {
+    static func changed(_ row: PlannedWorkout, to item: Item) -> PlannedWorkout {
         var row = row
         let perHand = row.target("load_lb_hand") != nil
         let replaced: Set<String> = ["sets", "reps", "duration_s", "load_lb", "load_lb_hand"]
