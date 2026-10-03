@@ -142,6 +142,34 @@ struct GoalProgressTests {
         // After week 4 (index 3) the line expects 4/14 of the way: 194.3 lb. 80% of that is 195.4.
         #expect(GoalProgress.pace(from: 200, now: 195, target: 180, week: 4, weeks: weeks) == .onPace)
         #expect(GoalProgress.pace(from: 200, now: 196, target: 180, week: 4, weeks: weeks) == .behind)
+        // 125% of 4/14 of the way is 192.9 lb.
+        #expect(GoalProgress.pace(from: 200, now: 193, target: 180, week: 4, weeks: weeks) == .onPace)
+        #expect(GoalProgress.pace(from: 200, now: 192.5, target: 180, week: 4, weeks: weeks) == .ahead)
+    }
+
+    @Test func trendIsTheBestSoFarAndBestIsTheSetBehindIt() {
+        let start = date(2026, 9, 28)
+        let sets = [set("back-squat", 9, 21, [("load_lb", 225), ("reps", 5)]),
+                    set("back-squat", 9, 28, [("load_lb", 155), ("reps", 5)]),
+                    set("back-squat", 9, 30, [("load_lb", 165), ("reps", 5)]),
+                    set("back-squat", 9, 30, [("load_lb", 135), ("reps", 8)]),
+                    set("back-squat", 10, 2, [("load_lb", 145), ("reps", 5)])]
+        let trend = GoalProgress.trend("back-squat.1rm_lb", sets: sets, weighIns: [], since: start, calendar: calendar)
+        // Before the start doesn't count, and a lighter day doesn't bring the max down.
+        #expect(trend.map(\.value) == [174, 186, 186])
+        #expect(trend.map(\.date) == [date(2026, 9, 28), date(2026, 9, 30), date(2026, 10, 2)].map(calendar.startOfDay))
+        #expect(GoalProgress.best("back-squat.1rm_lb", sets: sets, since: start)?.value("load_lb") == 165)
+        let weighIns = [DatedValue(date: date(2026, 9, 29), value: 199), DatedValue(date: date(2026, 10, 2), value: 197.4)]
+        #expect(GoalProgress.trend("weight_lb", sets: [], weighIns: weighIns, since: start, calendar: calendar).map(\.value) == [199, 197.4])
+    }
+
+    /// The prototype's weight goal: 201 to 194.6 lb over 8 weeks lands near 188 by the end of 16.
+    @Test func forecastAndPerWeek() throws {
+        let start = date(2026, 8, 10), today = date(2026, 10, 5), end = date(2026, 11, 30)
+        let forecast = try #require(GoalProgress.forecast(from: 201, now: 194.6, started: start, today: today, end: end))
+        #expect(abs(forecast - 188.2) < 0.1)
+        #expect(abs(GoalProgress.perWeek(now: 194.6, target: 180, today: today, end: end) + 1.825) < 0.01)
+        #expect(GoalProgress.forecast(from: 201, now: 200, started: start, today: date(2026, 8, 14), end: end) == nil)
     }
 
     @Test func weekCopy() {

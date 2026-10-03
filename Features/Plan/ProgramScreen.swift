@@ -457,67 +457,52 @@ struct ProgramScreen: View {
         let weighIns = entries.filter { $0.kind == .bodyweight }.compactMap { entry in
             entry.measurements.first { $0.metric == "weight_lb" }.map { DatedValue(date: entry.timestamp, value: $0.value) }
         }
-        let end = profile.targetDate.map { $0.formatted(.dateTime.month(.abbreviated).day()) } ?? ""
+        let end = profile.targetDate ?? ProgramPlan.monday(weeks.count, start: start)
+        let paces = programGoals.map { item in
+            let from = item.goal.baseline ?? item.goal.target
+            let now = GoalProgress.current(item.goal.metric, sets: sets, weighIns: weighIns, since: start) ?? from
+            return GoalProgress.pace(from: from, now: now, target: item.goal.target, week: current, weeks: weeks)
+        }
         return ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(programGoals, id: \.goal.id) { item in
-                    goalRow(item.goal, option: GoalOption.with(id: item.option)!, weeks: weeks, current: current, end: end,
-                            now: GoalProgress.current(item.goal.metric, sets: sets, weighIns: weighIns, since: start))
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Week \(current + 1) of \(weeks.count) · ends \(end.formatted(.dateTime.month(.abbreviated).day()))".uppercased())
+                        .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    if let summary = Self.summary(paces) { Text(summary).foregroundStyle(.secondary) }
                 }
-                Text("Tap a goal to change its target.").font(.footnote).foregroundStyle(.secondary).padding(.top, 16)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 2)
+                ForEach(programGoals, id: \.goal.id) { item in
+                    let option = GoalOption.with(id: item.option)!
+                    GoalCard(goal: item.goal, option: option, weeks: weeks, start: start, end: end, current: current,
+                             sets: sets, weighIns: weighIns, next: option.exercise.flatMap(nextWorkout),
+                             open: openGoal == item.goal.id,
+                             toggle: { withAnimation(.snappy) { openGoal = openGoal == item.goal.id ? nil : item.goal.id } },
+                             setTarget: { setTarget(item.goal, $0) })
+                }
             }
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 16)
             .padding(.top, 8)
+            .padding(.bottom, 120)
         }
     }
 
-    private func goalRow(_ goal: Goal, option: GoalOption, weeks: [ProgramWeek], current: Int, end: String, now logged: Double?) -> some View {
-        let from = goal.baseline ?? logged ?? goal.target
-        let now = logged ?? from
-        let fraction = GoalProgress.fraction(from: from, now: now, target: goal.target)
-        let pace: String = switch GoalProgress.pace(from: from, now: now, target: goal.target, week: current, weeks: weeks) {
-        case .starting: "Starting"
-        case .onPace: "On pace"
-        case .behind: "Behind"
+    /// "1 ahead, 2 on pace, 1 behind".
+    static func summary(_ paces: [GoalProgress.Pace]) -> String? {
+        let parts = [(GoalProgress.Pace.ahead, "ahead"), (.onPace, "on pace"), (.behind, "behind")].compactMap { pace, word in
+            let count = paces.filter { $0 == pace }.count
+            return count > 0 ? "\(count) \(word)" : nil
         }
-        let moved = abs(now - from)
-        let change = moved == 0 ? "" : " · \(Coach.number(moved)) \(goal.unit) \(goal.target < from ? "down" : "up")"
-        return VStack(alignment: .leading, spacing: 8) {
-            Button { withAnimation(.snappy) { openGoal = openGoal == goal.id ? nil : goal.id } } label: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(option.name).font(.subheadline).foregroundStyle(.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("\(Coach.number(now)) →").foregroundStyle(.secondary)
-                        Text(Coach.number(goal.target)).contentTransition(.numericText())
-                        Text(goal.unit).font(.title3).foregroundStyle(.secondary)
-                    }
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color(.tertiarySystemFill))
-                            Capsule().fill(Color.primary).frame(width: max(4, proxy.size.width * fraction))
-                        }
-                    }
-                    .frame(height: 4)
-                    HStack {
-                        Text(pace + change)
-                        Spacer()
-                        Text("by \(end)")
-                    }
-                    .font(.footnote).foregroundStyle(.secondary)
-                }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityHint("Change the target")
-            if openGoal == goal.id {
-                Nudge(label: "\(Coach.number(goal.target)) \(goal.unit)", lessLabel: "Lower", moreLabel: "Raise",
-                      less: { setTarget(goal, goal.target - option.step) }, more: { setTarget(goal, goal.target + option.step) })
-            }
-        }
-        .padding(.vertical, 16)
-        .overlay(alignment: .bottom) { Divider() }
+        guard !parts.isEmpty else { return nil }
+        let text = parts.joined(separator: ", ")
+        return text.prefix(1).uppercased() + text.dropFirst()
+    }
+
+    /// The day of the next planned workout with this exercise, today included.
+    private func nextWorkout(_ exercise: String) -> Date? {
+        let today = Calendar.current.startOfDay(for: .now)
+        let ids = Set(templates.filter { $0.slug == exercise }.map(\.id))
+        return planned.first { $0.kind == .workout && $0.date >= today && $0.templateRef.map(ids.contains) == true }?.date
     }
 
     private func setTarget(_ goal: Goal, _ target: Double) {
