@@ -1,0 +1,12 @@
+{
+  "app": "npx tsx bin/app.ts",
+  "context": {
+    "stage": "dev",
+    "region": "us-east-1",
+    "alertEmail": "maxwell.n.kendall@gmail.com",
+    "stages": {
+      "dev": { "identityProviders": [] },
+      "prod": { "identityProviders": ["apple", "google"] }
+    }
+  }
+}

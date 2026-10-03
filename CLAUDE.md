@@ -62,6 +62,7 @@ Features/
   Goals/ Plan/ Log/ Progress/ Catalog/   # SwiftUI views, one folder per loop step
 Resources/
   Seed/                     # bundled exercise + recipe seed JSON
+infra/                      # AWS CDK (TypeScript): Cognito, DynamoDB, AppSync, push. See infra/README.md
 Tests/
   CoreTests/                # Swift Testing; fixtures from real repo history
   Fixtures/

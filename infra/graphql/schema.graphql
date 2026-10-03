@@ -1,0 +1,130 @@
+# FIT-56. Cognito user pools is the only auth mode, so every field requires a signed-in user.
+# The caller's uid always comes from the token (ctx.identity.sub), never from arguments,
+# so a member can only write items keyed by their own uid.
+#
+# Subscribers only receive the fields the publishing mutation selected, so clients must
+# select every field of LiveSet / Progress / FeedItem when they publish.
+
+type Profile {
+  uid: ID!
+  displayName: String
+  units: String
+  createdAt: AWSDateTime
+  updatedAt: AWSDateTime
+}
+
+type GroupSummary {
+  groupId: ID!
+  name: String!
+  role: String!
+  inviteCode: String
+}
+
+type Member {
+  groupId: ID!
+  uid: ID!
+  displayName: String
+  role: String!
+  shareLive: Boolean!
+  joinedAt: AWSDateTime!
+}
+
+type GroupGoal {
+  groupId: ID!
+  goalId: ID!
+  metric: String!
+  target: Float!
+  deadline: AWSDate
+  mode: String!
+  createdBy: ID!
+  createdAt: AWSDateTime!
+}
+
+type Progress {
+  groupId: ID!
+  uid: ID!
+  goalId: ID!
+  baseline: Float
+  value: Float
+  pct: Float
+  onPace: Boolean
+  updatedAt: AWSDateTime!
+}
+
+type LiveSet {
+  groupId: ID!
+  uid: ID!
+  workout: String
+  exercise: String
+  setIndex: Int
+  setCount: Int
+  loadLb: Float
+  reps: Int
+  seconds: Int
+  rpe: Float
+  state: String!
+  startedAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type FeedItem {
+  groupId: ID!
+  id: ID!
+  uid: ID!
+  kind: String!
+  measurements: AWSJSON
+  createdAt: AWSDateTime!
+}
+
+type Group {
+  id: ID!
+  name: String!
+  createdBy: ID!
+  inviteCode: String!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  members: [Member!]!
+  goals: [GroupGoal!]!
+  progress: [Progress!]!
+  live: [LiveSet!]!
+  feed(limit: Int): [FeedItem!]!
+}
+
+type Query {
+  me: Profile
+  myGroups: [GroupSummary!]!
+  group(groupId: ID!): Group
+}
+
+type Mutation {
+  updateProfile(displayName: String, units: String): Profile
+  createGroup(name: String!): GroupSummary
+  joinGroup(inviteCode: String!): GroupSummary
+  leaveGroup(groupId: ID!): Boolean
+  setShareLive(groupId: ID!, shareLive: Boolean!): Member
+  addGroupGoal(groupId: ID!, metric: String!, target: Float!, deadline: AWSDate, mode: String!): GroupGoal
+  publishProgress(groupId: ID!, goalId: ID!, baseline: Float, value: Float, pct: Float, onPace: Boolean): Progress
+  publishLiveSet(
+    groupId: ID!
+    workout: String
+    exercise: String!
+    setIndex: Int!
+    setCount: Int!
+    loadLb: Float
+    reps: Int
+    seconds: Int
+    rpe: Float
+    state: String!
+    startedAt: AWSDateTime!
+  ): LiveSet
+  endLiveSession(groupId: ID!): LiveSet
+  postFeed(groupId: ID!, kind: String!, measurements: AWSJSON): FeedItem
+  registerDevice(token: String!, platform: String!): Boolean
+  deleteAccount: Boolean
+}
+
+type Subscription {
+  onLiveSet(groupId: ID!): LiveSet @aws_subscribe(mutations: ["publishLiveSet", "endLiveSession"])
+  onProgress(groupId: ID!): Progress @aws_subscribe(mutations: ["publishProgress"])
+  onFeed(groupId: ID!): FeedItem @aws_subscribe(mutations: ["postFeed"])
+}
