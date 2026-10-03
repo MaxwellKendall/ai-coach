@@ -316,7 +316,7 @@ enum TrainingGenerator {
         return sets
     }
 
-    static func workout(_ exercise: Exercise, main: Bool, sets: Int, date: Date, session: String,
+    private static func workout(_ exercise: Exercise, main: Bool, sets: Int, date: Date, session: String,
                                 settings: TrainingSettings, tier: AgeTier, deload: Bool,
                                 history: [LoggedSet], calendar: Calendar) -> PlannedWorkout {
         let last = lastSession(of: exercise.slug, history, calendar: calendar)

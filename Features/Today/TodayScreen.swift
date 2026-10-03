@@ -330,22 +330,13 @@ struct TodayScreen: View {
     /// The mic on Today (FIT-29, FIT-30): change the plan, log the session, or log a meal, sleep or weight
     /// (FIT-9). The model sorts what was said; the rules decide; a sheet confirms.
     private func heard(_ said: String) {
-        // FIT-33: "make today a squat day" is read by code against the catalog, unless something hurts
-        // (then the injury rule decides what to swap).
-        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-        let hurts = ["hurt", "pain", "sore", "injur", "tweak", "ache", "tight", "stiff"].contains { said.lowercased().contains($0) }
-        if !hurts, FocusSwap.asksForADay(said), let wanted = FocusSwap.wanted(said, catalog: Planner.catalog(templates), names: names) {
-            proposeFocus(wanted, said: said)
-            return
-        }
         working = said
         Task {
             defer { working = nil }
             do {
-                let library = templates.filter { $0.kind == .exercise }.map(\.name).sorted()
-                switch try await TodayRequestParser.parse(said, library: library)?.kind {
+                switch try await TodayRequestParser.parse(said)?.kind {
                 case .change(let change)?: propose(change, said: said)
-                case .exercises(let add, let remove, let only)?: try await proposeExercises(add: add, remove: remove, only: only, said: said)
+                case .edit?: try await editToday(said)
                 case .didWorkout(let differences)?: logSpoken(differences, said: said)
                 case .log?:
                     let result = LogResolver.resolve(try await LogParser.parse(said), recipes: templates.filter { $0.kind == .recipe })
@@ -436,136 +427,48 @@ struct TodayScreen: View {
         sheet = .propose(proposal)
     }
 
-    /// FIT-33: trade today for the day that has what was asked for, or swap today's main lift for it.
-    private func proposeFocus(_ wanted: Set<String>, said: String) {
-        let calendar = Calendar.current
-        guard let plan = thisWeeksPlan else {
-            message = "There’s no plan this week to change."
-            return
-        }
-        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-        // Nothing left to do today: today gets one more session, built by the plan's rules.
-        guard let session = nextSession, let first = session.first, calendar.isDateInToday(first.date) else {
-            guard let extra = try? Planner.extraSession(on: .now, wanting: wanted, in: context), let name = extra.first?.session else {
-                message = "None of your plan’s sessions has that exercise."
-                return
-            }
-            let all = Planner.workouts(plan, templates: templates)
-            sheet = .propose(Proposal(said: said, title: "\(name) today", lines: Proposal.lines(before: [], after: extra, names: names),
-                              footnote: "Today was a rest day, so your plan’s rules built this from your history. Nothing changes until you apply it.",
-                              keep: "Keep today a rest day", plan: plan, workouts: (all + extra).sorted { $0.date < $1.date }))
-            return
-        }
-        let day = Planner.workouts(plan, templates: templates).first { calendar.isDate($0.date, inSameDayAs: first.date) }?.date ?? first.date
-        let catalog = Planner.catalog(templates)
-        let dayName = calendar.isDateInToday(day) ? "today" : day.formatted(.dateTime.weekday(.wide))
-        var outcome = FocusSwap.Result.none
-        guard let result = Planner.adjust(plan, templates: templates, { week in
-            outcome = FocusSwap.swap(week, on: day, wanted: wanted, catalog: catalog)
-            return switch outcome {
-            case .swapped(let week, _), .replaced(let week, _): week
-            case .already, .none: nil
-            }
-        }) else {
-            if outcome == .already {
-                let has = Set(Planner.workouts(plan, templates: templates).filter { calendar.isDate($0.date, inSameDayAs: day) }.map(\.exercise))
-                let name = wanted.intersection(has).compactMap { names[$0] }.sorted().first ?? "that"
-                withAnimation { toast = Toast(text: "\(name) is already \(dayName)") }
-            } else {
-                message = "Couldn’t find that exercise in your library."
-            }
-            return
-        }
-        let before = result.before.filter { calendar.isDate($0.date, inSameDayAs: day) }
-        let after = result.after.filter { calendar.isDate($0.date, inSameDayAs: day) }
-        let lines = Proposal.lines(before: before, after: after, names: names)
-        let proposal: Proposal
-        switch outcome {
-        case .swapped(_, let other):
-            let weekday = other.formatted(.dateTime.weekday(.wide))
-            let session = after.first?.session ?? "session"
-            proposal = Proposal(said: said, title: "Swap with \(weekday)’s \(session)", lines: lines,
-                                footnote: "\(weekday) gets \(dayName == "today" ? "today’s" : dayName + "’s") session instead. Loads stay as the plan set them. Nothing changes until you apply it.",
-                                keep: "Keep \(dayName) as planned", plan: plan, workouts: result.past + result.after)
-        default:
-            let slug: String = if case .replaced(_, let slug) = outcome { slug } else { "" }
-            proposal = Proposal(said: said, title: "\(first.slot ?? "Workout") with \(names[slug] ?? slug)",
-                                lines: lines,
-                                footnote: "No day this week has it, so it takes the main lift’s place. Pick its weight on the first set. Nothing changes until you apply it.",
-                                keep: "Keep \(dayName) as planned", plan: plan, workouts: result.past + result.after)
-        }
-        sheet = .propose(proposal)
-    }
-
-    /// FIT-46: today rebuilt around the exercises asked for. Ones not in the library are drafted by the model and
-    /// saved with the plan on Apply.
-    private func proposeExercises(add: [String], remove: [String], only: Bool, said: String) async throws {
+    /// FIT-47: the model edits today's workout as JSON; code checks what comes back and it's applied at once,
+    /// with Undo. A rest day is edited as an empty workout.
+    private func editToday(_ said: String) async throws {
         let calendar = Calendar.current
         guard let plan = thisWeeksPlan, let profile = profiles.first else {
             message = "There’s no plan this week to change."
             return
         }
-        let exercises = templates.filter { $0.kind == .exercise }
-        let library = Dictionary(exercises.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-        var catalog = Planner.catalog(templates)
-        let all = Planner.workouts(plan, templates: templates)
-        let todays = all.filter { calendar.isDateInToday($0.date) }
-        let logged = entries.contains { $0.kind == .workout && calendar.isDateInToday($0.timestamp) }
-        guard !logged else {
+        guard !entries.contains(where: { $0.kind == .workout && calendar.isDateInToday($0.timestamp) }) else {
             message = "Today’s workout is already logged."
             return
         }
-        let wanted = SessionEdit.resolve(add, said: said, library: library, catalog: catalog, today: Set(todays.map(\.exercise)))
-        let unwanted = SessionEdit.resolve(remove + [SessionEdit.swappedOut(said)].compactMap { $0 }, said: said, library: library, catalog: catalog, today: Set(todays.map(\.exercise)))
-        let missed = SessionEdit.mentioned(said, library: library, catalog: catalog, today: Set(todays.map(\.exercise)),
-                                           covered: wanted.slugs + unwanted.slugs + wanted.unknown)
-        let settled = SessionEdit.settle(add: wanted.slugs + missed, remove: unwanted.slugs, only: only, said: said)
-        var add = settled.add, seeds: [TemplateSeed] = []
-        for name in wanted.unknown {
-            let seed = try await NewExercise.draft(name)
-            if library[seed.slug] != nil {
-                if !add.contains(seed.slug) { add.append(seed.slug) }
-            } else if let exercise = Exercise(slug: seed.slug, attributes: seed.attributes) {
-                seeds.append(seed)
-                catalog.append(exercise)
-                add.append(seed.slug)
-            }
-        }
-        guard !add.isEmpty || !settled.remove.isEmpty else {
-            message = "Couldn’t tell which exercises you want. Try “give me squats and lunges”."
+        let exercises = templates.filter { $0.kind == .exercise }
+        let library = Dictionary(exercises.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let all = Planner.workouts(plan, templates: templates)
+        let todays = all.filter { calendar.isDateInToday($0.date) }
+        let edited = try await WorkoutEditor.edit(WorkoutEdit.items(todays, names: library), library: Planner.catalog(templates).compactMap { exercise in library[exercise.slug].map { "\($0) (\(exercise.pattern))" } }.sorted(), said: said)
+        let date = todays.first?.date ?? calendar.date(byAdding: .minute, value: profile.workoutTime, to: calendar.startOfDay(for: .now))!
+        guard let result = WorkoutEdit.apply(edited.items, to: todays, library: library, date: date,
+                                             session: todays.first?.session ?? "Workout") else {
+            message = "Couldn’t make that change. Try saying it another way."
             return
         }
-        let date = todays.first?.date ?? calendar.date(byAdding: .minute, value: profile.workoutTime, to: calendar.startOfDay(for: .now))!
-        let name = todays.first?.session ?? "Workout"
-        let history = Planner.loggedSets(entries, templates: templates)
-        let rebuilt = SessionEdit.rebuild(todays, add: add, remove: Set(settled.remove), only: only, date: date, session: name,
-                                          catalog: catalog, settings: profile.trainingSettings, history: history)
-        guard rebuilt != todays else {
+        guard result.workouts != todays else {
             withAnimation { toast = Toast(text: "That’s already today’s plan") }
             return
         }
-        var names = library
-        for seed in seeds { names[seed.slug] = seed.name }
-        let workouts = (all.filter { !calendar.isDateInToday($0.date) } + rebuilt).sorted { $0.date < $1.date }
-        let asked = add.filter { slug in !todays.contains { $0.exercise == slug } }.compactMap { names[$0] }
-        let new = seeds.map(\.name)
-        sheet = .propose(Proposal(
-            said: said, title: asked.isEmpty ? "\(name) without \(ListFormatter.localizedString(byJoining: settled.remove.compactMap { names[$0] }))"
-                : "\(name) with \(ListFormatter.localizedString(byJoining: asked))",
-            lines: Proposal.lines(before: todays, after: rebuilt, names: names),
-            footnote: (new.isEmpty ? "" : "New to your library: \(ListFormatter.localizedString(byJoining: new)). ")
-                + (todays.isEmpty ? "Today was a rest day, so this is a session of just these. " : "")
-                + "Sets, reps and weights follow your plan’s rules. Nothing changes until you apply it.",
-            keep: "Keep today as planned", plan: plan, workouts: workouts, newExercises: seeds))
+        let added = result.newExercises.map { Template(kind: $0.kind, name: $0.name, slug: $0.slug, attributes: $0.attributes) }
+        for template in added { context.insert(template) }
+        let workouts = (all.filter { !calendar.isDateInToday($0.date) } + result.workouts).sorted { $0.date < $1.date }
+        try Planner.apply(workouts, to: plan, templates: templates + added, in: context)
+        let summary = edited.summary.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(["."]))
+        withAnimation { toast = Toast(text: summary.isEmpty ? "Today changed" : summary) { [context, templates] in
+            try? Planner.apply(all, to: plan, templates: templates, in: context)
+            for template in added { context.delete(template) }
+            try? context.save()
+        } }
     }
 
     private func apply(_ proposal: Proposal) {
         let before = Planner.workouts(proposal.plan, templates: templates)
-        let added = proposal.newExercises.filter { seed in !templates.contains { $0.slug == seed.slug } }.map {
-            Template(kind: $0.kind, name: $0.name, slug: $0.slug, attributes: $0.attributes)
-        }
-        for template in added { context.insert(template) }
-        try? Planner.apply(proposal.workouts, to: proposal.plan, templates: templates + added, in: context)
+        try? Planner.apply(proposal.workouts, to: proposal.plan, templates: templates, in: context)
         withAnimation { toast = Toast(text: "Plan changed") { [context, templates] in
             try? Planner.apply(before, to: proposal.plan, templates: templates, in: context)
         } }

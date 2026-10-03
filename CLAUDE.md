@@ -33,7 +33,7 @@ If Linear tools aren't available, stop and tell the user. Don't invent scope.
 4. **Code decides, the LLM parses and explains.** Plan generation, progression, macros math, alerts and wins are **deterministic Swift with unit tests**. The LLM only (a) turns natural language into structured data via `@Generable` and (b) writes plain-English summaries of numbers code already computed.
 5. **The app works without Apple Intelligence.** Check `SystemLanguageModel.default.availability`; if unavailable, hide voice/NL entry and keep manual flows fully functional.
 6. **User-owned vs derived.** Goals and constraints are user-owned; the app only *proposes* changes. Progress is **derived** from log entries and never stored as source data, so it's always regenerable.
-7. **Always confirm before saving AI output.** Every LLM parse lands on an editable confirm screen.
+7. **Always confirm before saving AI output.** Every LLM parse lands on an editable confirm screen. Exception (FIT-47): a spoken edit to today's workout is applied at once with Undo; the model writes the edited workout and code only validates it.
 
 ---
 

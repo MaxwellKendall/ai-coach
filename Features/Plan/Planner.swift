@@ -65,18 +65,6 @@ enum Planner {
             program: profile.programWeek(of: monday, calendar: calendar)?.week, calendar: calendar).workouts
     }
 
-    /// FIT-33: a session for a day with nothing planned, with an exercise asked for (TrainingGenerator.session).
-    static func extraSession(on date: Date, wanting wanted: Set<String>, in context: ModelContext,
-                             calendar: Calendar = .current) throws -> [PlannedWorkout]? {
-        guard let profile = try context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete else { return nil }
-        let templates = try context.fetch(FetchDescriptor<Template>())
-        let history = loggedSets(try context.fetch(FetchDescriptor<LogEntry>()), templates: templates)
-        let monday = Week.monday(of: date, calendar: calendar)
-        return TrainingGenerator.session(on: date, wanting: wanted, settings: profile.trainingSettings, catalog: catalog(templates),
-                                         history: history, weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar),
-                                         calendar: calendar)
-    }
-
     /// Exercises in a session share a start time; `order` seconds keep them in the generator's order.
     static func activity(_ workout: PlannedWorkout, order: Int, ids: [String: UUID]) -> PlannedActivity {
         PlannedActivity(kind: .workout, date: workout.date + TimeInterval(order), slot: workout.session,
