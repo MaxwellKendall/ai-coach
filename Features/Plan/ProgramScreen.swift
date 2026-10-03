@@ -17,6 +17,10 @@ struct ProgramScreen: View {
     @State private var nextWeek: [PlannedWorkout] = []
     @State private var regenerating: Regenerate?
     @State private var toast: Toast?
+    @State private var voice = VoiceCapture()
+    @State private var working: String?
+    @State private var message: String?
+    @State private var amend: AmendSheet.Amend?
 
     struct Regenerate: Identifiable {
         let id = UUID()
@@ -38,8 +42,28 @@ struct ProgramScreen: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 14) }
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 14) {
+                    ToastView(toast: $toast)
+                    if LanguageModel.isAvailable {
+                        MicButton(voice: voice, onHeard: heard)
+                        Text(voice.listening ? " " : "Say what changed").font(.footnote).foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.bottom, LanguageModel.isAvailable ? 4 : 14)
+            }
+            .overlay {
+                if voice.listening || working != nil {
+                    ListeningVeil(voice: voice, working: working, prompt: "“I’m traveling November 9 to 20, hotel gym with dumbbells”")
+                }
+            }
             .animation(.snappy, value: toast)
+            .animation(.snappy, value: voice.listening || working != nil)
+            .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+                Button("OK") {}
+            } message: { Text(message ?? "") }
+            .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
+            .sheet(item: $amend) { amend in AmendSheet(amend: amend) { applyTravel(amend.travel) } }
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -80,7 +104,7 @@ struct ProgramScreen: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
-            .padding(.bottom, 72)
+            .padding(.bottom, LanguageModel.isAvailable ? 130 : 72)
         }
     }
 
@@ -250,6 +274,57 @@ struct ProgramScreen: View {
     }
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first }) }
+
+    // MARK: Changing the program (FIT-41)
+
+    /// A trip, read by code from the words: travel weeks are dumbbells and bodyweight, and the deload moves into them.
+    private func heard(_ said: String) {
+        guard let profile = profiles.first, let weeks = profile.program, let start = profile.programStart,
+              let target = profile.targetDate else { return }
+        let words = said.lowercased()
+        let isTrip = ["travel", "trip", "away", "hotel", "vacation", "holiday", "visiting", "out of town"].contains { words.contains($0) }
+        guard isTrip, let trip = SpokenDates.range(in: said, after: .now) else {
+            message = "For now the program can change for a trip. Try “I’m traveling November 9 to 20”."
+            return
+        }
+        let added = ProgramPlan.travelWeeks(from: trip.start, to: trip.end, start: start, count: weeks.count,
+                                            trainingDays: profile.trainingDays)
+        guard !added.isEmpty else {
+            message = "That trip doesn’t miss a training day in the program."
+            return
+        }
+        let travel = Set(profile.travelWeeks).union(added).sorted()
+        let after = ProgramPlan.weeks(count: weeks.count, deloadEvery: profile.deloadEveryWeeks ?? AgeTier.of(age: profile.age).deloadEveryWeeks,
+                                      travel: Set(travel))
+        func deloads(_ weeks: [ProgramWeek]) -> [Int] { weeks.indices.filter { weeks[$0].kind == .deload } }
+        let numbers = added.sorted().map { $0 + 1 }
+        func day(_ date: Date) -> String { date.formatted(.dateTime.month(.abbreviated).day()) }
+        var rows = [AmendSheet.Row(head: (numbers.count == 1 ? "Week \(numbers[0])" : "Weeks \(numbers.first!)–\(numbers.last!)") + " · travel",
+                                   tag: "\(day(trip.start)) – \(day(trip.end))", line: "Dumbbells and bodyweight only.")]
+        let moved = deloads(after).filter { !deloads(weeks).contains($0) }
+        let was = deloads(weeks).filter { !deloads(after).contains($0) }
+        if let to = moved.first {
+            rows.append(AmendSheet.Row(head: "Deload moves to week \(to + 1)", tag: was.first.map { "was week \($0 + 1)" } ?? "",
+                                       line: "A lighter week while away, so you come back fresh."))
+        }
+        rows.append(AmendSheet.Row(head: "Target date \(day(target))", tag: "stays",
+                                   line: "Goals hold while away, then pick up where they left off."))
+        amend = AmendSheet.Amend(said: said, travel: travel, rows: rows)
+    }
+
+    private func applyTravel(_ travel: [Int]) {
+        guard let profile = profiles.first else { return }
+        let before = profile.travelWeeks
+        profile.travelWeeks = travel
+        profile.updatedAt = .now
+        try? context.save()
+        if let first = travel.first(where: { !before.contains($0) }) { withAnimation(.snappy) { selected = first } }
+        toast = Toast(text: "Program changed") {
+            profile.travelWeeks = before
+            profile.updatedAt = .now
+            try? context.save()
+        }
+    }
 
     // MARK: Goals
 

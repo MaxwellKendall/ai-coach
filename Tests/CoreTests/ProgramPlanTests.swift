@@ -150,3 +150,26 @@ struct GoalProgressTests {
         #expect(ProgramPlan.why(ProgramWeek(phase: .peak, kind: .test), tests: ["back squat max 250"]) == "Test: back squat max 250.")
     }
 }
+
+struct TravelTests {
+    @Test func tripDatesAsSaid() throws {
+        let now = date(2026, 10, 3)
+        let trip = try #require(SpokenDates.range(in: "I'm traveling November 9 to 20, hotel gym with dumbbells", after: now, calendar: calendar))
+        #expect(trip.start == date(2026, 11, 9))
+        #expect(trip.end == date(2026, 11, 20))
+        let holiday = try #require(SpokenDates.range(in: "away from Dec 28 to Jan 3", after: now, calendar: calendar))
+        #expect(holiday.start == date(2026, 12, 28))
+        #expect(holiday.end == date(2027, 1, 3))
+        #expect(SpokenDates.range(in: "I'm traveling next week", after: now, calendar: calendar) == nil)
+    }
+
+    /// The prototype's trip: Nov 9–20 from a Sep 14 start is weeks 9 and 10 (indices 8, 9).
+    @Test func tripWeeksAreThoseItTakesATrainingDayFrom() {
+        let start = date(2026, 9, 14)
+        #expect(ProgramPlan.travelWeeks(from: date(2026, 11, 9), to: date(2026, 11, 20), start: start, count: 16,
+                                        trainingDays: [0, 2, 4], calendar: calendar) == [8, 9])
+        // Leaving Saturday the 7th misses no Mon/Wed/Fri of week 8.
+        #expect(ProgramPlan.travelWeeks(from: date(2026, 11, 7), to: date(2026, 11, 11), start: start, count: 16,
+                                        trainingDays: [0, 2, 4], calendar: calendar) == [8])
+    }
+}

@@ -243,4 +243,29 @@ enum SpokenDates {
         }
         return nil
     }
+
+    /// A trip as said: "November 9 to 20", "from Nov 9 to Nov 20", "December 28 to January 3". The next one after
+    /// `now`. Days without a month take the month before them.
+    static func range(in text: String, after now: Date, calendar: Calendar = .current) -> (start: Date, end: Date)? {
+        let words = text.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        var found: [(month: Int, day: Int)] = []
+        var month: Int?
+        for word in words {
+            if let index = months.firstIndex(where: { $0 == word || ($0.prefix(3) == word && word.count == 3) }) {
+                month = index + 1
+            } else if let day = Int(word.trimmingCharacters(in: .letters)), (1...31).contains(day), let month {
+                found.append((month, day))
+            }
+        }
+        guard found.count >= 2 else { return nil }
+        var year = calendar.component(.year, from: now)
+        func date(_ item: (month: Int, day: Int), _ year: Int) -> Date {
+            calendar.date(from: DateComponents(year: year, month: item.month, day: item.day, hour: 12))!
+        }
+        if date(found[0], year) < calendar.startOfDay(for: now) { year += 1 }
+        let start = date(found[0], year)
+        var end = date(found[1], year)
+        if end < start { end = date(found[1], year + 1) }
+        return (start, end)
+    }
 }

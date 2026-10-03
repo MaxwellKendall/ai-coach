@@ -111,6 +111,18 @@ enum ProgramPlan {
         return (nil, nil, nil)
     }
 
+    /// FIT-41: the program weeks a trip takes a training day from.
+    static func travelWeeks(from first: Date, to last: Date, start: Date, count: Int, trainingDays: [Int],
+                            calendar: Calendar = .current) -> Set<Int> {
+        let from = calendar.startOfDay(for: first), to = calendar.startOfDay(for: last)
+        return Set((0..<count).filter { week in
+            trainingDays.contains { day in
+                let date = calendar.date(byAdding: .day, value: day, to: monday(week, start: start, calendar: calendar))!
+                return date >= from && date <= to
+            }
+        })
+    }
+
     /// "Base", "Deload", "Test week"; "· travel" while away.
     static func title(_ week: ProgramWeek) -> String {
         let name = switch week.kind {

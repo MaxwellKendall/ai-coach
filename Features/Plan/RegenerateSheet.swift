@@ -41,29 +41,26 @@ struct RegenerateSheet: View {
             }
             .scrollEdgeEffectHidden(true, for: .bottom)
             .padding(.top, 10)
-            HStack(spacing: 12) {
-                if changing > 0 {
-                    Button("Try another") { withAnimation(.snappy) { variant += 1 } }
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(Color(.secondarySystemBackground), in: .capsule)
+            Button {
+                let changes = days.indices.compactMap { index in
+                    alternatives[index].map { (items: days[index].items, workouts: marked($0)) }
                 }
-                Button(changing > 0 ? "Use this" : "OK") {
-                    let changes = days.indices.compactMap { index in
-                        alternatives[index].map { (items: days[index].items, workouts: marked($0)) }
-                    }
-                    apply(changes)
-                    dismiss()
-                }
-                .frame(maxWidth: .infinity, minHeight: 50)
-                .foregroundStyle(Color(.systemBackground))
-                .background(Color.primary, in: .capsule)
+                apply(changes)
+                dismiss()
+            } label: {
+                Text(changing > 0 ? "Use this" : "OK").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                    .foregroundStyle(Color(.systemBackground)).background(Color.primary, in: .capsule)
             }
-            .font(.headline)
             .buttonStyle(.plain)
+            if changing > 0 {
+                Button("Try another") { withAnimation(.snappy) { variant += 1 } }
+                    .foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 44).padding(.top, 6)
+            }
         }
         .padding(EdgeInsets(top: 28, leading: 22, bottom: 12, trailing: 22))
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.66), .large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(Color(.systemBackground))
     }
 
     private func row(_ day: Day, _ alternative: WeekRegenerator.Alternative?) -> some View {
