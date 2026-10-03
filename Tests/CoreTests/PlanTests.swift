@@ -107,6 +107,39 @@ struct PlannerTests {
         #expect(try context.fetchCount(FetchDescriptor<PlannedActivity>()) == before.count)
     }
 
+    /// FIT-44: a changed program re-plans the rest of the week; past and kept days stay, and Undo puts it back.
+    @Test func replanKeepsPastAndKeptDaysAndUndoes() throws {
+        let context = try store()
+        let profile = Profile(age: 36, weightLb: 200)
+        context.insert(profile)
+        let plan = try #require(try Planner.generate(weekOf: date(10, 5), in: context, calendar: calendar))
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let before = Planner.workouts(plan, templates: templates)
+        func on(_ day: Int, _ workouts: [PlannedWorkout]) -> [PlannedWorkout] {
+            workouts.filter { calendar.isDate($0.date, inSameDayAs: date(10, day)) }
+        }
+        #expect(!on(5, before).isEmpty && !on(7, before).isEmpty && !on(9, before).isEmpty)
+
+        // Wednesday morning, Friday pinned; training moves to Tuesday, Thursday and Saturday.
+        profile.trainingDays = [1, 3, 5]
+        let new = try Planner.preview(weekOf: date(10, 5), in: context, calendar: calendar)
+        let keep: Set<Date> = [date(10, 9)]
+        let removed = try Planner.replan(plan, with: new, keep: keep, today: date(10, 7, hour: 6), templates: templates,
+                                         in: context, calendar: calendar)
+        let after = Planner.workouts(plan, templates: templates)
+        #expect(removed == on(7, before))
+        #expect(on(5, after) == on(5, before))
+        #expect(on(9, after) == on(9, before))
+        #expect(on(6, after).isEmpty && on(7, after).isEmpty)
+        #expect(on(8, after) == on(8, new) && !on(8, after).isEmpty)
+        #expect(on(10, after) == on(10, new) && !on(10, after).isEmpty)
+
+        try Planner.replan(plan, with: removed, keep: keep, today: date(10, 7, hour: 6), templates: templates,
+                           in: context, calendar: calendar)
+        #expect(Planner.workouts(plan, templates: templates).sorted { $0.date < $1.date } == before)
+        #expect(try context.fetchCount(FetchDescriptor<PlannedActivity>()) == plan.items.count)
+    }
+
     /// FIT-29: Undo writes the week back as it was.
     @Test func applyingTheOldWorkoutsUndoesAChange() throws {
         let context = try store()

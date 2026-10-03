@@ -164,6 +164,7 @@ struct Flow: Layout {
 }
 
 /// The program's weeks as bars: taller as the work climbs, deloads short and quiet, the test week tallest.
+/// On the program screen the week shown is solid and this week has a dot over it.
 struct PhaseBars: View {
     let weeks: [ProgramWeek]
     var current: Int?
@@ -176,34 +177,35 @@ struct PhaseBars: View {
                 ForEach(weeks.indices, id: \.self) { index in
                     let week = weeks[index]
                     VStack(spacing: 2) {
-                        Text(week.travel ? "✈︎" : " ").font(.system(size: 9)).foregroundStyle(.secondary)
+                        ZStack {
+                            if index == current { Circle().fill(.secondary).frame(width: 4, height: 4) }
+                            else { Text(week.travel ? "✈︎" : " ").font(.system(size: 9)).foregroundStyle(.secondary) }
+                        }
+                        .frame(height: 11)
                         RoundedRectangle(cornerRadius: 3)
                             .fill(color(index))
                             .frame(height: Self.height(week))
-                            .overlay {
-                                if index == selected {
-                                    RoundedRectangle(cornerRadius: 4).inset(by: -3).strokeBorder(Color.primary, lineWidth: 1.5)
-                                }
-                            }
                     }
                     .frame(maxWidth: .infinity)
                     .contentShape(.rect)
                     .onTapGesture { tap?(index) }
                     .accessibilityElement()
-                    .accessibilityLabel("Week \(index + 1)" + (week.kind == .deload ? ", deload" : "") + (week.travel ? ", travel" : ""))
+                    .accessibilityLabel("Week \(index + 1)" + (week.kind == .deload ? ", deload" : week.kind == .test ? ", test" : "")
+                        + (week.travel ? ", travel" : "") + (index == current ? ", this week" : ""))
                     .accessibilityAddTraits(tap == nil ? [] : .isButton)
+                    .accessibilityAddTraits(index == selected ? .isSelected : [])
                 }
             }
-            .frame(height: 40, alignment: .bottom)
-            GeometryReader { proxy in
-                let unit = proxy.size.width / CGFloat(max(1, weeks.count))
+            .frame(height: 42, alignment: .bottom)
+            // Sized by its text, so a larger text size pushes what's below down instead of running under it.
+            PhaseLabels(count: weeks.count, starts: groups.map(\.start)) {
                 ForEach(groups, id: \.start) { group in
                     Text(group.phase.rawValue.capitalized)
                         .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        .offset(x: unit * CGFloat(group.start))
+                        .lineLimit(1)
                 }
             }
-            .frame(height: 16)
+            .accessibilityHidden(true)
         }
     }
 
@@ -227,9 +229,62 @@ struct PhaseBars: View {
 
     private func color(_ index: Int) -> Color {
         let week = weeks[index]
-        guard let current else { return week.kind == .deload ? Color(.quaternaryLabel) : Color.primary.opacity(week.phase == .base ? 0.45 : week.phase == .build ? 0.7 : 1) }
-        if index < current { return .secondary }
-        if index == current { return .primary }
+        guard let selected else { return week.kind == .deload ? Color(.quaternaryLabel) : Color.primary.opacity(week.phase == .base ? 0.45 : week.phase == .build ? 0.7 : 1) }
+        if index == selected { return .primary }
         return week.kind == .deload ? Color(.quaternaryLabel) : Color(.tertiaryLabel)
+    }
+}
+
+/// Each phase's name under the bar its phase starts at.
+private struct PhaseLabels: Layout {
+    let count: Int
+    let starts: [Int]
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: proposal.width ?? 0, height: subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (index, subview) in subviews.enumerated() where starts.indices.contains(index) {
+            let x = bounds.minX + bounds.width * CGFloat(starts[index]) / CGFloat(max(1, count))
+            subview.place(at: CGPoint(x: x, y: bounds.minY), proposal: .unspecified)
+        }
+    }
+}
+
+/// Seven day circles, Monday first; at least one stays on.
+struct DayCircles: View {
+    @Binding var days: [Int]
+    var dashed = false
+    var minimum = 0
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<7, id: \.self) { day in
+                let on = days.contains(day)
+                Button {
+                    withAnimation(.snappy) {
+                        if on { if days.count > minimum { days.removeAll { $0 == day } } } else { days = (days + [day]).sorted() }
+                    }
+                } label: {
+                    ZStack {
+                        Circle().fill(on ? AnyShapeStyle(Color.primary) : AnyShapeStyle(.clear))
+                        if !on { Circle().strokeBorder(Color(.separator)) }
+                        if on && dashed {
+                            Circle().inset(by: -3).strokeBorder(.secondary, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        }
+                        Text(ProfileEditor.weekdays[day].prefix(1))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(on ? Color(.systemBackground) : .primary)
+                    }
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(ProfileEditor.weekdays[day])
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
     }
 }

@@ -215,34 +215,8 @@ struct OnboardingStepView: View {
     private var schedule: some View {
         VStack(alignment: .leading, spacing: 10) {
             Eyebrow("Days · \(answers.days.count) a week")
-            HStack(spacing: 6) {
-                ForEach(0..<7, id: \.self) { day in
-                    let on = answers.days.contains(day)
-                    Button {
-                        withAnimation(.snappy) {
-                            if on { answers.days.removeAll { $0 == day } } else { answers.days = (answers.days + [day]).sorted() }
-                            touch("days")
-                        }
-                    } label: {
-                        ZStack {
-                            Circle().fill(on ? AnyShapeStyle(Color.primary) : AnyShapeStyle(.clear))
-                            if !on { Circle().strokeBorder(Color(.separator)) }
-                            if on && answers.unconfirmed.contains("days") {
-                                Circle().inset(by: -3).strokeBorder(.secondary, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                            }
-                            Text(ProfileEditor.weekdays[day].prefix(1))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(on ? Color(.systemBackground) : .primary)
-                        }
-                        .aspectRatio(1, contentMode: .fit)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(.circle)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(ProfileEditor.weekdays[day])
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
-            }
+            DayCircles(days: Binding(get: { answers.days }, set: { answers.days = $0; touch("days") }),
+                       dashed: answers.unconfirmed.contains("days"))
             Eyebrow("Each session").padding(.top, 14)
             Picker("Session length", selection: Binding(get: { answers.minutes }, set: { answers.minutes = $0; touch("minutes") })) {
                 ForEach([30, 45, 60, 75], id: \.self) { Text("\($0) min") }
@@ -283,7 +257,8 @@ struct OnboardingStepView: View {
             ForEach(picked) { option in goalRow(option) }
             Eyebrow("Program").padding(.top, 22)
             targetDate
-            ValueRow(name: "Training", value: training, open: Binding(get: { false }, set: { _ in go(3) })) {}
+            ValueRow(name: "Training", value: answers.training, open: Binding(get: { false }, set: { _ in go(3) })) {}
+            let startSummary = answers.startSummary(catalog, names: names)
             ValueRow(name: "Starting point", value: startSummary, muted: startSummary == "Found in week 1",
                      open: Binding(get: { false }, set: { _ in go(2) })) {}
             PhaseBars(weeks: weeks).padding(.top, 22)
@@ -306,14 +281,18 @@ struct OnboardingStepView: View {
             }
         }
     }
+}
 
-    private var training: String {
-        answers.days.sorted().map { String(ProfileEditor.weekdays[$0].prefix(3)) }.joined(separator: " ") + " · \(answers.minutes) min"
+extension OnboardingAnswers {
+    /// "Mon Wed Fri · 45 min".
+    var training: String {
+        days.sorted().map { String(ProfileEditor.weekdays[$0].prefix(3)) }.joined(separator: " ") + " · \(minutes) min"
     }
 
-    private var startSummary: String {
-        let parts = answers.startRows(catalog).filter { $0.measure != .age && $0.measure != .body }.compactMap { row -> String? in
-            guard let start = answers.starts[row.id] else { return nil }
+    /// "Bench ≈185 · Squat ≈225", or "Found in week 1".
+    func startSummary(_ catalog: [Exercise], names: [String: String]) -> String {
+        let parts = startRows(catalog).filter { $0.measure != .age && $0.measure != .body }.compactMap { row -> String? in
+            guard let start = starts[row.id] else { return nil }
             let name = (names[row.id] ?? row.id).split(separator: " ").first.map(String.init) ?? row.id
             if let load = start.value("load_lb"), let reps = start.value("reps") {
                 return "\(name) ≈\(Int(ProgramPlan.estimatedMax(load: load, reps: reps).rounded()))"

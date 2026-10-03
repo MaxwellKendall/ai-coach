@@ -39,7 +39,8 @@ struct SwipeDeck<Card: View>: View {
             ZStack {
                 ForEach(visible, id: \.self) { position in
                     card(position)
-                        .frame(width: size.width, height: size.height)
+                        // A card taller than the deck runs off the bottom, never up over what's above it.
+                        .frame(width: size.width, height: size.height, alignment: .top)
                         .overlay {
                             if position == index, let shown, let swipe {
                                 HintOverlay(hint: shown, swipe: swipe, progress: progress, cornerRadius: cornerRadius)

@@ -141,20 +141,9 @@ struct OnboardingView: View {
         guard !prefilled else { return }
         prefilled = true
         var answers = OnboardingAnswers()
-        if profile.isComplete {
-            answers.age = profile.age
-            answers.weight = profile.weightLb
-            answers.days = profile.trainingDays.sorted()
-            answers.minutes = [30, 45, 60, 75].min { abs($0 - profile.sessionMinutes) < abs($1 - profile.sessionMinutes) }!
-            answers.equipment = Set(profile.equipment)
-            answers.avoid = Set(profile.avoidExercises)
-            answers.hurts = Set(profile.injuredAreas.map { $0.replacingOccurrences(of: "_", with: " ") })
-        }
-        for option in GoalOption.all {
-            guard let goal = goals.first(where: { $0.metric == option.metric && $0.status == .active }) else { continue }
-            answers.goals.append(option.id)
-            answers.targets[option.id] = goal.target
-        }
+        if profile.isComplete { answers = OnboardingAnswers(profile, goals: goals) } else { answers.add(goals) }
+        // Starting points come from the logs, to confirm.
+        answers.starts = [:]
         let now = Date.now
         for exercise in catalog {
             guard let best = OnboardingAnswers.recentBest(history, exercise: exercise, before: now) else { continue }
@@ -197,5 +186,30 @@ struct OnboardingView: View {
         try? context.save()
         try? Planner.generate(weekOf: now, in: context)
         onDone()
+    }
+}
+
+extension OnboardingAnswers {
+    /// The answers a profile and its goals were started from, for editing them again.
+    init(_ profile: Profile, goals: [Goal]) {
+        self.init()
+        age = profile.age
+        weight = profile.weightLb
+        days = profile.trainingDays.sorted()
+        minutes = [30, 45, 60, 75].min { abs($0 - profile.sessionMinutes) < abs($1 - profile.sessionMinutes) }!
+        equipment = Set(profile.equipment)
+        avoid = Set(profile.avoidExercises)
+        hurts = Set(profile.injuredAreas.map { $0.replacingOccurrences(of: "_", with: " ") })
+        starts = Dictionary(profile.starts.map { ($0.exercise, $0) }, uniquingKeysWith: { first, _ in first })
+        add(goals)
+    }
+
+    /// Active goals that onboarding offers, with their targets.
+    mutating func add(_ goals: [Goal]) {
+        for option in GoalOption.all {
+            guard let goal = goals.first(where: { $0.metric == option.metric && $0.status == .active }) else { continue }
+            self.goals.append(option.id)
+            targets[option.id] = goal.target
+        }
     }
 }

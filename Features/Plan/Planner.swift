@@ -123,6 +123,26 @@ enum Planner {
         return new
     }
 
+    /// FIT-44: the program changed, so the rest of the week is planned again. Days in `keep` (done, past or
+    /// pinned) and days before `today` stay as they are. Returns what the replaced days had, for Undo.
+    @discardableResult
+    static func replan(_ plan: Plan, with workouts: [PlannedWorkout], keep: Set<Date>, today: Date = .now,
+                       templates: [Template], in context: ModelContext, calendar: Calendar = .current) throws -> [PlannedWorkout] {
+        let start = calendar.startOfDay(for: today)
+        func open(_ date: Date) -> Bool { date >= start && !keep.contains(calendar.startOfDay(for: date)) }
+        let old = plan.items.filter { $0.kind == .workout && open($0.date) }
+        let removed = Self.workouts(plan, templates: templates).filter { open($0.date) }
+        let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
+        let gone = Set(old.map(\.id))
+        // As in `apply`: the array first, so a deleted row can't be written back.
+        plan.items = plan.items.filter { !gone.contains($0.id) }
+            + workouts.filter { open($0.date) }.enumerated().map { activity($0.element, order: $0.offset, ids: ids) }
+        for item in old { context.delete(item) }
+        plan.updatedAt = .now
+        try context.save()
+        return removed
+    }
+
     /// A day's workout rows as blocks.
     static func session(_ items: [PlannedActivity], templates: [Template]) -> SessionPlan {
         let slugs = Dictionary(templates.map { ($0.id, $0.slug) }, uniquingKeysWith: { first, _ in first })

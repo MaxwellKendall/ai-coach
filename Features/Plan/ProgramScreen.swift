@@ -1,8 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// The program (FIT-39, prototype boards A, B, D): Program | Goals. The weeks as bars and a deck of week cards;
-/// this week and next list their sessions, later weeks are a sketch of where each goal should be.
+/// The program (FIT-39, FIT-44): Program | Goals. The weeks as bars and a deck of week cards; this week and next
+/// list their sessions, later weeks are a sketch of where each goal should be. The list button peeks at the whole
+/// program, where it can be changed.
 struct ProgramScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -21,6 +22,9 @@ struct ProgramScreen: View {
     @State private var working: String?
     @State private var message: String?
     @State private var amend: AmendSheet.Amend?
+    @State private var peeking = false
+    /// The program as it was when the whole-program sheet opened.
+    @State private var before: ProgramSettings?
 
     struct Regenerate: Identifiable {
         let id = UUID()
@@ -77,6 +81,14 @@ struct ProgramScreen: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
                 }
+                if tab == .program, let profile = profiles.first {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Whole program", systemImage: "list.bullet") {
+                            before = ProgramSettings(profile)
+                            peeking = true
+                        }
+                    }
+                }
             }
         }
         .sheet(item: $regenerating) { request in
@@ -86,13 +98,28 @@ struct ProgramScreen: View {
                                 names: names) { changes in apply(changes, week: request.week) }
             }
         }
-        .task { nextWeek = (try? Planner.preview(weekOf: Calendar.current.date(byAdding: .day, value: 7, to: .now)!, in: context)) ?? [] }
+        .sheet(isPresented: $peeking, onDismiss: replanned) {
+            if let profile = profiles.first, let weeks = profile.program, let start = profile.programStart {
+                let current = max(0, min(weeks.count - 1, ProgramPlan.week(of: .now, start: start)))
+                WholeProgramSheet(profile: profile, goals: goals, catalog: Planner.catalog(templates), names: names, current: current,
+                                  selected: min(selected ?? current, weeks.count - 1),
+                                  line: { line($0, weeks: weeks, start: start, current: current, profile: profile) }) { week in
+                    selected = week
+                    peeking = false
+                }
+            }
+        }
+        .task(refreshNextWeek)
+    }
+
+    private func refreshNextWeek() {
+        nextWeek = (try? Planner.preview(weekOf: Calendar.current.date(byAdding: .day, value: 7, to: .now)!, in: context)) ?? []
     }
 
     // MARK: Program
 
     private func program(_ weeks: [ProgramWeek], start: Date, current: Int, profile: Profile) -> some View {
-        let index = Binding(get: { selected ?? current }, set: { selected = $0 })
+        let index = Binding(get: { min(selected ?? current, weeks.count - 1) }, set: { selected = $0 })
         return VStack(spacing: 0) {
             PhaseBars(weeks: weeks, current: current, selected: index.wrappedValue) { week in
                 withAnimation(.snappy) { selected = week }
@@ -151,12 +178,7 @@ struct ProgramScreen: View {
                 Text("Done.").font(.footnote).foregroundStyle(.tertiary)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(programGoals, id: \.goal.id) { item in
-                        let value = ProgramPlan.expected(from: item.goal.baseline ?? item.goal.target, target: item.goal.target, at: index, weeks: weeks)
-                        let option = GoalOption.with(id: item.option)
-                        let shown = option?.measure == .load ? TrainingGenerator.roundTo5(value) : value.rounded()
-                        row(option?.name ?? item.goal.metric, (item.option == "weight" ? "~" : "") + "\(Coach.number(shown)) \(item.goal.unit)")
-                    }
+                    ForEach(sketch(index, weeks: weeks), id: \.name) { goal in row(goal.name, goal.value + " " + goal.unit) }
                     row("Weekly sets", "\(ProgramPlan.weeklySets(week, daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes))")
                 }
                 .padding(.top, 18)
@@ -168,6 +190,35 @@ struct ProgramScreen: View {
         .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+        .clipShape(.rect(cornerRadius: 30))
+    }
+
+    /// Where each goal should be by a later week: "~190", "185".
+    private func sketch(_ index: Int, weeks: [ProgramWeek]) -> [(name: String, value: String, unit: String)] {
+        programGoals.map { item in
+            let value = ProgramPlan.expected(from: item.goal.baseline ?? item.goal.target, target: item.goal.target, at: index, weeks: weeks)
+            let option = GoalOption.with(id: item.option)
+            let shown = option?.measure == .load ? TrainingGenerator.roundTo5(value) : value.rounded()
+            return (option?.name ?? item.goal.metric, (item.option == "weight" ? "~" : "") + Coach.number(shown), item.goal.unit)
+        }
+    }
+
+    /// A week in the whole-program list: "Oct 5 – Oct 11 · Session A · Session B", or where the goals should be.
+    private func line(_ index: Int, weeks: [ProgramWeek], start: Date, current: Int, profile: Profile) -> String {
+        let monday = ProgramPlan.monday(index, start: start)
+        let dates = "\(monday.formatted(.dateTime.month(.abbreviated).day())) – \(Calendar.current.date(byAdding: .day, value: 6, to: monday)!.formatted(.dateTime.month(.abbreviated).day()))"
+        func unique(_ days: [Planner.SketchDay]) -> String {
+            days.map(\.session).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: " · ")
+        }
+        let rest: String = if index < current { "Done" }
+            else if index == current { unique(thisWeek(monday)) }
+            else if index == current + 1 { unique(nextWeek.map { Planner.SketchDay($0, names: names) }.grouped()) }
+            else {
+                (sketch(index, weeks: weeks).map { "\($0.name.split(separator: " ").first ?? "") \($0.value)" }
+                 + ["\(ProgramPlan.weeklySets(weeks[index], daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes)) sets"])
+                    .joined(separator: " · ")
+            }
+        return rest.isEmpty ? dates : dates + " · " + rest
     }
 
     private func row(_ name: String, _ value: String) -> some View {
@@ -188,10 +239,12 @@ struct ProgramScreen: View {
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
                     Text(day.date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
                         .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                        .frame(width: 36, alignment: .leading)
+                        .lineLimit(1).fixedSize()
+                        .frame(minWidth: 36, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(day.session).font(.body.weight(.semibold))
                         Text(day.lifts + (day.more > 0 ? " + \(day.more) more" : "")).font(.footnote).foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                     if done(day.date) {
@@ -275,7 +328,31 @@ struct ProgramScreen: View {
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first }) }
 
-    // MARK: Changing the program (FIT-41)
+    // MARK: Changing the program (FIT-41, FIT-44)
+
+    /// The whole-program sheet closed: if anything changed, the rest of this week is planned again, with an Undo
+    /// that puts the settings and the sessions back.
+    private func replanned() {
+        guard let profile = profiles.first, let before, before != ProgramSettings(profile) else { return }
+        try? context.save()
+        let removed = replanWeek(nil)
+        refreshNextWeek()
+        toast = Toast(text: "Program re-planned") {
+            before.restore(to: profile, goals: goals)
+            try? context.save()
+            replanWeek(removed)
+            refreshNextWeek()
+        }
+    }
+
+    /// This week from today on, planned again (or put back to `workouts`). Done, past and pinned days stay.
+    @discardableResult
+    private func replanWeek(_ workouts: [PlannedWorkout]?) -> [PlannedWorkout] {
+        guard let plan = try? Planner.plan(weekOf: .now, in: context) else { return [] }
+        let keep = Set(regenerateDays(Week.monday(of: .now)).filter { $0.kept != nil }.map(\.date))
+        let workouts = workouts ?? (try? Planner.preview(weekOf: .now, in: context)) ?? []
+        return (try? Planner.replan(plan, with: workouts, keep: keep, templates: templates, in: context)) ?? []
+    }
 
     /// A trip, read by code from the words: travel weeks are dumbbells and bodyweight, and the deload moves into them.
     private func heard(_ said: String) {
