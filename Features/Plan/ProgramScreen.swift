@@ -15,6 +15,14 @@ struct ProgramScreen: View {
     @State private var selected: Int?
     @State private var openGoal: UUID?
     @State private var nextWeek: [PlannedWorkout] = []
+    @State private var regenerating: Regenerate?
+    @State private var toast: Toast?
+
+    struct Regenerate: Identifiable {
+        let id = UUID()
+        var week: Int
+        var days: [RegenerateSheet.Day]
+    }
 
     enum Tab: String, CaseIterable { case program = "Program", goals = "Goals" }
 
@@ -29,6 +37,9 @@ struct ProgramScreen: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 14) }
+            .animation(.snappy, value: toast)
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -42,6 +53,13 @@ struct ProgramScreen: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close", systemImage: "xmark") { dismiss() }
                 }
+            }
+        }
+        .sheet(item: $regenerating) { request in
+            if let profile = profiles.first {
+                RegenerateSheet(week: request.week, days: request.days, catalog: Planner.catalog(templates),
+                                settings: profile.trainingSettings, history: Planner.loggedSets(entries, templates: templates),
+                                names: names) { changes in apply(changes, week: request.week) }
             }
         }
         .task { nextWeek = (try? Planner.preview(weekOf: Calendar.current.date(byAdding: .day, value: 7, to: .now)!, in: context)) ?? [] }
@@ -62,7 +80,7 @@ struct ProgramScreen: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
-            .padding(.bottom, 24)
+            .padding(.bottom, 72)
         }
     }
 
@@ -83,11 +101,27 @@ struct ProgramScreen: View {
             Text(ProgramPlan.title(week)).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 6)
             Text(ProgramPlan.why(week, tests: tests)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
             if index == current || index == current + 1 {
-                sessions(index == current ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped())
+                sessions(index == current ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped(),
+                         pinnable: index == current)
                     .padding(.top, 18)
                 Spacer(minLength: 12)
-                Text(index == current ? "Done sessions stay as they are." : "Planned from this week. Changes after this week ends.")
-                    .font(.footnote).foregroundStyle(.tertiary)
+                if index == current {
+                    let days = regenerateDays(monday)
+                    HStack(alignment: .center) {
+                        Text("Pinned sessions stay when you regenerate.").font(.footnote).foregroundStyle(.tertiary)
+                        Spacer(minLength: 8)
+                        if days.contains(where: { $0.kept == nil }) {
+                            Button("Regenerate", systemImage: "arrow.triangle.2.circlepath") {
+                                regenerating = Regenerate(week: index + 1, days: days)
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.capsule)
+                        }
+                    }
+                } else {
+                    Text("Planned from this week. Changes after this week ends.").font(.footnote).foregroundStyle(.tertiary)
+                }
             } else if index < current {
                 Spacer()
                 Text("Done.").font(.footnote).foregroundStyle(.tertiary)
@@ -124,7 +158,7 @@ struct ProgramScreen: View {
         }
     }
 
-    private func sessions(_ days: [Planner.SketchDay]) -> some View {
+    private func sessions(_ days: [Planner.SketchDay], pinnable: Bool = false) -> some View {
         VStack(spacing: 0) {
             ForEach(days) { day in
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
@@ -138,6 +172,21 @@ struct ProgramScreen: View {
                     Spacer(minLength: 0)
                     if done(day.date) {
                         Image(systemName: "checkmark").font(.footnote.weight(.bold)).accessibilityLabel("Done")
+                    } else if pinnable, day.date >= Calendar.current.startOfDay(for: .now) {
+                        let items = dayItems(day.date)
+                        let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
+                        Button {
+                            withAnimation(.snappy) { for item in items { item.pinned = !pinned; item.updatedAt = .now } }
+                        } label: {
+                            Image(systemName: pinned ? "pin.fill" : "pin")
+                                .font(.subheadline)
+                                .foregroundStyle(pinned ? Color.primary : Color(.tertiaryLabel))
+                                .frame(width: 44, height: 44)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(pinned ? "Unpin \(day.session). Regenerating can change it." : "Pin \(day.session) so regenerating keeps it")
+                        .accessibilityAddTraits(pinned ? .isSelected : [])
                     }
                 }
                 .padding(.vertical, 10)
@@ -154,6 +203,46 @@ struct ProgramScreen: View {
             Planner.SketchDay(PlannedWorkout(date: $0.date, session: $0.slot ?? "Workout", exercise: $0.templateRef.flatMap { slugs[$0] } ?? "",
                                              targets: $0.targets, note: $0.note.isEmpty ? nil : $0.note), names: names)
         }.grouped()
+    }
+
+    private func dayItems(_ date: Date) -> [PlannedActivity] {
+        planned.filter { $0.kind == .workout && Calendar.current.isDate($0.date, inSameDayAs: date) }
+    }
+
+    private func workout(_ item: PlannedActivity) -> PlannedWorkout {
+        let slugs = Dictionary(templates.map { ($0.id, $0.slug) }, uniquingKeysWith: { first, _ in first })
+        return PlannedWorkout(date: Date(timeIntervalSinceReferenceDate: (item.date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60),
+                              session: item.slot ?? "Workout", exercise: item.templateRef.flatMap { slugs[$0] } ?? "",
+                              targets: item.targets, note: item.note.isEmpty ? nil : item.note, adjustedReason: item.adjustedReason,
+                              group: item.group)
+    }
+
+    /// This week's sessions for the regenerate sheet: done, past and pinned ones are kept.
+    private func regenerateDays(_ monday: Date) -> [RegenerateSheet.Day] {
+        let end = Calendar.current.date(byAdding: .day, value: 7, to: monday)!
+        let today = Calendar.current.startOfDay(for: .now)
+        let items = planned.filter { $0.kind == .workout && $0.date >= monday && $0.date < end }
+        let days = Dictionary(grouping: items) { Calendar.current.startOfDay(for: $0.date) }
+        return days.keys.sorted().map { date in
+            let rows = days[date]!.sorted { $0.date < $1.date }
+            let kept: String? = done(date) ? "Done · kept" : date < today ? "Past · kept" : rows.allSatisfy(\.pinned) ? "Pinned · kept" : nil
+            return RegenerateSheet.Day(date: date, session: rows.first?.slot ?? "Workout", items: rows, workouts: rows.map(workout), kept: kept)
+        }
+    }
+
+    /// Writes the chosen sessions over their days, with an Undo that puts the old ones back.
+    private func apply(_ changes: [(items: [PlannedActivity], workouts: [PlannedWorkout])], week: Int) {
+        var undo: [(items: [PlannedActivity], workouts: [PlannedWorkout])] = []
+        for change in changes {
+            let old = change.items.sorted { $0.date < $1.date }.map(workout)
+            undo.append((replace(change.items, with: change.workouts), old))
+        }
+        guard !undo.isEmpty else { return }
+        toast = Toast(text: "Week \(week) updated") { for change in undo { _ = replace(change.items, with: change.workouts) } }
+    }
+
+    private func replace(_ items: [PlannedActivity], with workouts: [PlannedWorkout]) -> [PlannedActivity] {
+        (try? Planner.replace(items, with: workouts, templates: templates, in: context)) ?? []
     }
 
     private func done(_ date: Date) -> Bool {

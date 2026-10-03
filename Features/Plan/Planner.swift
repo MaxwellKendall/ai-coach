@@ -98,11 +98,29 @@ enum Planner {
     }
 
     static func apply(_ workouts: [PlannedWorkout], to plan: Plan, templates: [Template], in context: ModelContext) throws {
-        for item in plan.items where item.kind == .workout { context.delete(item) }
+        let old = plan.items.filter { $0.kind == .workout }
         let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
-        plan.items.append(contentsOf: workouts.enumerated().map { activity($0.element, order: $0.offset, ids: ids) })
+        // Set the array without the old rows before deleting them, so appending can't write a deleted row back.
+        plan.items = plan.items.filter { $0.kind != .workout } + workouts.enumerated().map { activity($0.element, order: $0.offset, ids: ids) }
+        for item in old { context.delete(item) }
         plan.updatedAt = .now
         try context.save()
+    }
+
+    /// FIT-40: one day's rows replaced by other workouts; returns the new rows (for Undo).
+    @discardableResult
+    static func replace(_ items: [PlannedActivity], with workouts: [PlannedWorkout], templates: [Template],
+                        in context: ModelContext) throws -> [PlannedActivity] {
+        guard let plan = items.first?.plan else { return [] }
+        let gone = Set(items.map(\.id))
+        let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
+        let new = workouts.enumerated().map { activity($0.element, order: $0.offset, ids: ids) }
+        // As in `apply`: the array first, so a deleted row can't be written back.
+        plan.items = plan.items.filter { !gone.contains($0.id) } + new
+        for item in items { context.delete(item) }
+        plan.updatedAt = .now
+        try context.save()
+        return new
     }
 
     /// A day's workout rows as blocks.
