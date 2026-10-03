@@ -1,75 +1,22 @@
 import Foundation
 
-/// FIT-47: today's workout as the model sees it, and the model's edited copy checked and turned back into plan rows.
-/// The model isn't expected to be deterministic; this only makes sure what it returns is something the plan can hold.
+/// FIT-47: today's workout in the shape the agent's tools change it, and the name matching they share.
 enum WorkoutEdit {
     static let patterns = ["squat", "hinge", "push", "pull", "carry", "core"]
 
-    /// One exercise as the model reads and writes it.
+    /// One working row's numbers, as `TodayWorkout` changes them.
     struct Item: Codable, Equatable, Sendable {
         var name: String
         var sets: Int
         var reps: Int?
         var seconds: Int?
         var pounds: Double?
-        /// Only read for an exercise that isn't in the library.
-        var pattern: String? = nil
-    }
-
-    /// One change the model asked for, applied by `applying` (the "changes" strategy).
-    struct Change: Equatable, Sendable {
-        enum Action: String, Sendable { case add, remove, replace, update }
-        var action: Action
-        var exercise: String
-        /// For replace: what takes its place.
-        var with: String? = nil
-        var sets: Int? = nil, reps: Int? = nil, seconds: Int? = nil, pounds: Double? = nil
-        var pattern: String? = nil
-    }
-
-    /// Today's items with the changes made. A changed exercise keeps the numbers the change doesn't give;
-    /// a replacement keeps the sets and reps of what it replaces, but not its weight.
-    static func applying(_ changes: [Change], to items: [Item]) -> [Item] {
-        var items = items
-        for change in changes {
-            let index = items.firstIndex { same(change.exercise, $0.name) }
-            func numbers(_ item: inout Item) {
-                if let sets = change.sets { item.sets = sets }
-                if let reps = change.reps { (item.reps, item.seconds) = (reps, nil) }
-                if let seconds = change.seconds { (item.seconds, item.reps) = (seconds, nil) }
-                if let pounds = change.pounds { item.pounds = pounds }
-                if let pattern = change.pattern { item.pattern = pattern }
-            }
-            switch change.action {
-            case .remove:
-                items.removeAll { same(change.exercise, $0.name) }
-            case .replace:
-                guard let index, let with = change.with, !with.isEmpty else { continue }
-                var item = items[index]
-                (item.name, item.pounds) = (with, nil)
-                numbers(&item)
-                items[index] = item
-            case .update where index != nil:
-                numbers(&items[index!])
-            case .add, .update:
-                var item = Item(name: change.exercise, sets: 3, reps: 10)
-                numbers(&item)
-                items.append(item)
-            }
-        }
-        return items
     }
 
     /// "bench" is Bench Press, "rows" Dumbbell Row (Single-Arm).
     static func same(_ said: String, _ name: String) -> Bool {
         let a = Set(key(Slug.make(said)).split(separator: "-")), b = Set(key(Slug.make(name)).split(separator: "-"))
         return !a.isEmpty && (a.isSubset(of: b) || b.isSubset(of: a))
-    }
-
-    struct Result: Equatable {
-        var workouts: [PlannedWorkout]
-        /// Exercises the model named that aren't in the library, saved with the plan.
-        var newExercises: [TemplateSeed]
     }
 
     /// Today's working sets, warm-ups left out, one item per row.
@@ -79,70 +26,6 @@ enum WorkoutEdit {
                  reps: row.target("reps").map { Int($0) }, seconds: row.target("duration_s").map { Int($0) },
                  pounds: row.target("load_lb") ?? row.target("load_lb_hand"))
         }
-    }
-
-    static func json(_ items: [Item]) -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return (try? encoder.encode(items)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-    }
-
-    /// The edited workout as plan rows. An exercise left exactly as it was keeps its rows (warm-up, effort cap,
-    /// superset); a changed one keeps its other targets and any number the model left out; a name that isn't in the
-    /// library becomes a new exercise.
-    /// Numbers outside what a person could do are dropped. nil when nothing usable came back.
-    static func apply(_ edited: [Item], to today: [PlannedWorkout], library: [String: String], date: Date,
-                      session: String) -> Result? {
-        var rows: [PlannedWorkout] = [], seeds: [TemplateSeed] = []
-        var used = Set<Int>()
-        for item in edited {
-            let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { continue }
-            var slug = find(name, in: library, taken: Set(rows.map(\.exercise)))
-            if slug == nil {
-                let new = Slug.make(name)
-                guard !new.isEmpty else { continue }
-                if !seeds.contains(where: { $0.slug == new }) {
-                    let pattern = item.pattern.flatMap { patterns.contains($0) ? $0 : nil } ?? "core"
-                    seeds.append(TemplateSeed(kind: .exercise, name: name, slug: new,
-                                              attributes: [TemplateAttribute(key: "movement_pattern", values: [pattern])]))
-                }
-                slug = new
-            }
-            guard let slug else { continue }
-            // The same new exercise twice in a row ("Curl", "Curl") is one exercise with both sets.
-            if let last = rows.last, last.exercise == slug, !today.contains(where: { $0.exercise == slug }) {
-                rows[rows.count - 1].targets = last.targets.map {
-                    $0.metric == "sets" ? Measurement(metric: "sets", value: min($0.value + Double(item.sets), 10), unit: "sets") : $0
-                }
-                continue
-            }
-            let clean = Item(name: name, sets: min(max(item.sets, 1), 10),
-                             reps: item.reps.flatMap { (1...50).contains($0) ? $0 : nil },
-                             seconds: item.seconds.flatMap { (5...600).contains($0) ? $0 : nil },
-                             pounds: item.pounds.flatMap { $0 > 0 && $0 <= 1500 ? $0 : nil })
-            // The first of today's rows for this exercise not yet used, with its warm-up.
-            if let index = today.indices.first(where: { !used.contains($0) && working(today[$0]) && today[$0].exercise == slug }) {
-                used.insert(index)
-                if !rows.contains(where: { $0.exercise == slug }) {
-                    rows += today.filter { !working($0) && $0.exercise == slug }
-                }
-                let old = today[index]
-                // The model often leaves numbers out of exercises it didn't touch: what it omits stays as planned.
-                var kept = clean
-                if old.target("duration_s") != nil, kept.seconds == nil, let reps = kept.reps { (kept.seconds, kept.reps) = (reps, nil) }
-                if kept.reps == nil && kept.seconds == nil {
-                    kept.reps = old.target("reps").map { Int($0) }
-                    kept.seconds = old.target("duration_s").map { Int($0) }
-                }
-                kept.pounds = kept.pounds ?? old.target("load_lb") ?? old.target("load_lb_hand")
-                rows.append(same(old, kept) ? old : changed(old, to: kept))
-            } else {
-                rows.append(changed(PlannedWorkout(date: date, session: session, exercise: slug, targets: []), to: clean))
-            }
-        }
-        guard rows.contains(where: working) else { return nil }
-        return Result(workouts: rows, newExercises: seeds.filter { seed in rows.contains { $0.exercise == seed.slug } })
     }
 
     /// The library exercise a name means: its name or slug, plural or not, else `closest`.
@@ -191,12 +74,6 @@ enum WorkoutEdit {
     }
 
     private static func working(_ row: PlannedWorkout) -> Bool { row.note != TrainingGenerator.warmupNote }
-
-    private static func same(_ row: PlannedWorkout, _ item: Item) -> Bool {
-        Int(row.target("sets") ?? 1) == item.sets && row.target("reps").map { Int($0) } == item.reps
-            && row.target("duration_s").map { Int($0) } == item.seconds
-            && (row.target("load_lb") ?? row.target("load_lb_hand")) == item.pounds
-    }
 
     static func changed(_ row: PlannedWorkout, to item: Item) -> PlannedWorkout {
         var row = row

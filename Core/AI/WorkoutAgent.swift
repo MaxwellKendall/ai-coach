@@ -26,14 +26,17 @@ enum WorkoutAgent {
 
     static func run(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup,
                     progress: Progress? = nil) async throws -> Outcome {
-        // The on-device model now and then fails to decode a tool call; a second try from the start usually works.
-        do {
-            return try await attempt(said, today: today, setup: setup, progress: progress)
-        } catch let error as LanguageModelSession.GenerationError {
-            if case .guardrailViolation = error { throw error }
-            if let progress { await progress(Change(step: "Trying again", workouts: today, newExercises: [])) }
-            return try await attempt(said, today: today, setup: setup, progress: progress)
+        // The on-device model now and then fails to decode a tool call; trying again from the start usually works.
+        for tries in 1... {
+            do {
+                return try await attempt(said, today: today, setup: setup, progress: progress)
+            } catch let error as LanguageModelSession.GenerationError {
+                if case .guardrailViolation = error { throw error }
+                if tries == 3 { throw error }
+                if let progress { await progress(Change(step: "Trying again", workouts: today, newExercises: [])) }
+            }
         }
+        fatalError("unreachable")
     }
 
     private static func attempt(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup,
@@ -43,7 +46,7 @@ enum WorkoutAgent {
             "\(setup.names[slug]!) (\(setup.catalog.first { $0.slug == slug }?.pattern ?? "other"))"
         }
         let session = LanguageModelSession(tools: tools(state, today: state.workout.withLock { $0.names }, said: said), instructions: """
-            You change the user's workout for today by calling tools, one call per change they ask for. Then say what you did in a few words.
+            You change the user's workout for today by calling tools, one call per change they ask for, even when they ask for several. Then say what you did in a few words.
             Change only what they ask for. Exercises they don't mention stay exactly as they are.
             Their exercise library, with the movement each trains: \(library.joined(separator: ", ")).
             Use the library name when it's the same exercise; anything else keeps its usual name.
@@ -51,6 +54,9 @@ enum WorkoutAgent {
             "swap deadlifts for RDLs" or "RDLs instead of deadlifts": swap_exercise Deadlift with Dumbbell Romanian Deadlift.
             "no bench today": remove_exercises Bench Press.
             "just pull-ups and rows" or "I want to do pull-ups and rows": only_these Pull-up and Dumbbell Row (Single-Arm).
+            "give me squats and split squat": only_these Back Squat and Split Squat. Naming exercises is never new_workout.
+            "dumbbell bench instead of barbell": swap_exercise Bench Press with Dumbbell Bench Press.
+            "drop the dead bugs and add planks": two calls, remove_exercises Dead Bug, then add_exercise Plank, pattern core.
             "add curls": add_exercise Bicep Curl, pattern pull.
             "deadlift 3 sets of 5 at 225": add_exercise Deadlift, sets 3, reps 5, pounds 225.
             "make everything 4 sets": change_exercise every exercise, sets 4. "bench 165": change_exercise Bench Press, pounds 165.
@@ -150,7 +156,8 @@ enum WorkoutAgent {
             tool("remove_exercises", "Take exercises out of today's workout",
                  [.init(name: "exercises", schema: DynamicGenerationSchema(arrayOf: DynamicGenerationSchema(name: "today", anyOf: today),
                                                                            minimumElements: 1))]) { arguments, workout in
-                workout.remove(try arguments.value([String].self, forProperty: "exercises"))
+                if SaidChecks.meansJustThese(said) { return "They said just these exercises, so call only_these with the ones they want to do." }
+                return workout.remove(try arguments.value([String].self, forProperty: "exercises"))
             }
             tool("swap_exercise", "Replace one of today's exercises with a different one",
                  [choice("exercise", "The exercise in today's workout to replace", today),
@@ -163,6 +170,9 @@ enum WorkoutAgent {
                  [choice("exercise", "The exercise in today's workout, or every exercise", today + ["every exercise"])] + numbers
                     + [number("more_sets", "Sets to add to what's planned, for \"add a set\"", 1...5)]) { arguments, workout in
                 let exercise = try arguments.value(String.self, forProperty: "exercise")
+                if exercise == "every exercise", !SaidChecks.meansEvery(said) {
+                    return "They didn't say every exercise. Change only the one they named, or call add_exercise for a new one."
+                }
                 let sets = int(arguments, "sets")
                 return workout.change(exercise == "every exercise" ? nil : exercise, sets: sets,
                                       more: int(arguments, "more_sets") ?? (sets == nil && oneMore ? 1 : nil), reps: int(arguments, "reps"),
@@ -175,7 +185,10 @@ enum WorkoutAgent {
         }
         tool("add_exercise", "Add an exercise to today's workout",
              [text("exercise", "The exercise to add, by its library name when it's in the library"), pattern] + numbers) { arguments, workout in
-            workout.add(try arguments.value(String.self, forProperty: "exercise"),
+            let name = try arguments.value(String.self, forProperty: "exercise")
+            // "Add a set to deadlifts" is a change to one that's already there, however the model called it.
+            if oneMore, int(arguments, "sets") == nil, workout.change(name, more: 1) == nil { return nil }
+            return workout.add(name,
                         pattern: try? arguments.value(String?.self, forProperty: "pattern"), sets: int(arguments, "sets"),
                         reps: int(arguments, "reps"), seconds: int(arguments, "seconds"),
                         pounds: int(arguments, "pounds").map(Double.init))
@@ -188,7 +201,13 @@ enum WorkoutAgent {
              [choice("focus", "What it trains; same kind keeps today's kind of day", TodayWorkout.Focus.allCases.map(\.rawValue)),
               choice("equipment", "Equipment it may use", TodayWorkout.Equipment.allCases.map(\.rawValue), optional: true),
               number("minutes", "How long it should take, only if they said", 10...120)]) { arguments, workout in
-            let focus = TodayWorkout.Focus(rawValue: try arguments.value(String.self, forProperty: "focus")) ?? .same
+            let named = SaidChecks.named(in: said, library: workout.setup.names.values)
+            if !named.isEmpty {
+                return "They named \(WeeklyReview.list(named)), so don't plan a new workout: call only_these, add_exercise or swap_exercise."
+            }
+            var focus = TodayWorkout.Focus(rawValue: try arguments.value(String.self, forProperty: "focus")) ?? .same
+            // "Nothing for legs" asks for the opposite of a leg day.
+            if SaidChecks.rulesOutLegs(said), [.lower, .same, .full].contains(focus) { focus = .upper }
             let equipment = (try? arguments.value(String?.self, forProperty: "equipment")).flatMap { $0.flatMap(TodayWorkout.Equipment.init) }
             return workout.regenerate(focus, equipment: equipment ?? .all, minutes: int(arguments, "minutes"))
         }

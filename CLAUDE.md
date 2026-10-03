@@ -11,7 +11,7 @@ All scope, decisions and status live in Linear. **Read Linear before building an
 
 - Workspace team: **Fitness Planner** (key `FIT`)
 - Project: **AI Coach App** (`P-FIT-12`): https://linear.app/custom-voice-app/project/ai-coach-app-a83b6b0b9285
-- Milestones: M1 Core loop (current) → M2 Monetization and launch → M3 Accounts, sync and groups → M4 Coach dashboard (B2B)
+- Milestones: M1 Core loop (current) → M2 Accounts, groups and live workouts → M3 Monetization and launch → M4 Coach dashboard (B2B)
 
 **Workflow per issue**
 1. Read the issue, its parent/sub-issues and its blockers. Only start issues whose blockers are Done.
