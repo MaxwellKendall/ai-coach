@@ -106,4 +106,22 @@ struct PlannerTests {
         #expect(Array(after.prefix(result.past.count)) == result.past)
         #expect(try context.fetchCount(FetchDescriptor<PlannedActivity>()) == before.count)
     }
+
+    /// FIT-29: Undo writes the week back as it was.
+    @Test func applyingTheOldWorkoutsUndoesAChange() throws {
+        let context = try store()
+        context.insert(Profile(age: 36, weightLb: 200))
+        let plan = try #require(try Planner.generate(weekOf: date(10, 5), in: context))
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let before = Planner.workouts(plan, templates: templates)
+        let friday = try #require(before.last?.date)
+        let result = try #require(Planner.adjust(plan, templates: templates, today: date(10, 7, hour: 6)) {
+            TrainingAdjuster.energy($0, on: friday)
+        })
+        try Planner.apply(result.past + result.after, to: plan, templates: templates, in: context)
+        #expect(Planner.workouts(plan, templates: templates) != before)
+        try Planner.apply(before, to: plan, templates: templates, in: context)
+        #expect(Planner.workouts(plan, templates: templates) == before)
+        #expect(try context.fetch(FetchDescriptor<PlannedActivity>()).filter { $0.kind == .workout }.count == before.count)
+    }
 }

@@ -23,4 +23,14 @@ enum BodyArea {
             return muscles[key] ?? muscles[key + "s"] ?? [key]
         })
     }
+
+    /// The first body part named in a sentence, as said ("my lower back is tight" → "lower back").
+    static func mentioned(in words: [String]) -> String? {
+        let text = " " + words.joined(separator: " ") + " "
+        let names = muscles.keys.map { $0.replacingOccurrences(of: "_", with: " ") }.sorted { $0.count > $1.count }
+        return names.first { name in
+            let singular = name.hasSuffix("s") ? String(name.dropLast()) : name
+            return text.contains(" \(name) ") || text.contains(" \(singular) ")
+        }.map { $0.hasSuffix("s") && $0 != "abs" ? String($0.dropLast()) : $0 }
+    }
 }

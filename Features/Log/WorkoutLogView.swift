@@ -92,14 +92,18 @@ extension WorkoutDraft {
     /// One entry per done set, seconds apart so they keep their order (as the history import does),
     /// then the session summary with the user's note. Unrated sets take the session's feel as their RPE.
     /// Shared by the form and workout mode.
-    func save(at date: Date, templates: [Template], in context: ModelContext) {
+    @discardableResult
+    func save(at date: Date, templates: [Template], in context: ModelContext) -> [LogEntry] {
         let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
-        for (index, var row) in rows.filter(\.done).enumerated() {
+        var entries = rows.filter(\.done).enumerated().map { index, row in
+            var row = row
             row.rpe = row.rpe ?? feel?.rpe
-            context.insert(LogEntry(kind: .workout, timestamp: date + TimeInterval(index), plannedRef: row.plannedRef,
-                                    templateRef: ids[row.exercise], measurements: row.measurements, note: session))
+            return LogEntry(kind: .workout, timestamp: date + TimeInterval(index), plannedRef: row.plannedRef,
+                            templateRef: ids[row.exercise], measurements: row.measurements, note: session)
         }
-        context.insert(LogEntry(kind: .workout, timestamp: date + TimeInterval(rows.count), measurements: summary,
+        entries.append(LogEntry(kind: .workout, timestamp: date + TimeInterval(rows.count), measurements: summary,
                                 note: note.trimmingCharacters(in: .whitespacesAndNewlines)))
+        for entry in entries { context.insert(entry) }
+        return entries
     }
 }

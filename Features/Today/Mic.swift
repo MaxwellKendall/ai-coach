@@ -131,7 +131,7 @@ struct ToastView: View {
             .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .task(id: current.id) {
-                try? await Task.sleep(for: .seconds(4))
+                try? await Task.sleep(for: .seconds(current.undo == nil ? 3 : 6))
                 if toast?.id == current.id { withAnimation { toast = nil } }
             }
         }

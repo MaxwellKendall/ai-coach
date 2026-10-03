@@ -18,6 +18,11 @@ struct WorkoutModeView: View {
     @State private var rest: Rest?
     @State private var restsFinished = 0
     @State private var quitting = false
+    @State private var voice = VoiceCapture()
+    @State private var working: String?
+    @State private var talked = false
+    @State private var toast: Toast?
+    @State private var message: String?
 
     struct Rest: Equatable {
         var ends: Date
@@ -48,6 +53,19 @@ struct WorkoutModeView: View {
             dock.padding(.horizontal, 22).frame(height: 68).padding(.vertical, 10)
         }
         .background(Color(.systemBackground))
+        .overlay {
+            if voice.listening || working != nil {
+                ListeningVeil(voice: voice, working: working,
+                              prompt: page == draft.blocks.count ? "Add a note" : "Say how the sets went")
+            }
+        }
+        .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 100) }
+        .animation(.snappy, value: voice.listening || working != nil)
+        .animation(.snappy, value: toast)
+        .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("OK") {}
+        } message: { Text(message ?? "") }
+        .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sensoryFeedback(.success, trigger: restsFinished)
         .task(id: rest?.ends) {
             guard let ends = rest?.ends else { return }
@@ -281,10 +299,51 @@ struct WorkoutModeView: View {
             if let rest {
                 restDock(rest).transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
-                Spacer()
+                Text(talked || !LanguageModel.isAvailable ? "" : "Tap ✓, or hold and say it")
+                    .font(.subheadline).foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
+            if LanguageModel.isAvailable { MicButton(voice: voice, onHeard: heard) }
         }
         .animation(.snappy, value: rest)
+    }
+
+    /// FIT-31: on an exercise card, how its sets went ("only got four on the last one") ticks them, with the
+    /// heard values dashed and Undo; on the finish card, it's the note. Nothing is stored until Save.
+    private func heard(_ said: String) {
+        talked = true
+        let blocks = draft.blocks
+        guard let position = page, blocks.indices.contains(position) else {
+            draft.note = said
+            withAnimation { toast = Toast(text: "Note added") }
+            return
+        }
+        let block = blocks[position]
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let exercise = draft.lines(block: block).first.map { names[draft.rows[$0[0]].exercise] ?? draft.rows[$0[0]].exercise } ?? ""
+        working = said
+        Task {
+            defer { working = nil }
+            do {
+                let differences = try await TodayRequestParser.parseSets(said, exercise: exercise)
+                let before = draft
+                let changed = SpokenLog.apply(differences, to: &draft, names: names, block: block)
+                let count = draft.lines(block: block).count
+                let text = if changed.count == 1, let index = changed.first, let value = draft.rows[index].value {
+                    "Set \(draft.rows[..<index].filter { $0.exercise == draft.rows[index].exercise }.count + 1) · \(Coach.number(value)) \(draft.rows[index].metric == "reps" ? "reps" : SetRow.units[draft.rows[index].metric] ?? "")"
+                } else {
+                    "\(count) \(count == 1 ? "set" : "sets") done"
+                }
+                withAnimation {
+                    rest = nil
+                    toast = Toast(text: text) { draft = before }
+                }
+                try? await Task.sleep(for: .milliseconds(650))
+                withAnimation(.snappy) { page = position + 1 }
+            } catch {
+                message = "Couldn’t understand that. Tap ✓ instead, or try again."
+            }
+        }
     }
 
     private func restDock(_ rest: Rest) -> some View {
@@ -403,7 +462,7 @@ struct WorkoutModeView: View {
 }
 
 /// A horizontal line, for the dashed "heard" underline.
-private struct Line: Shape {
+struct Line: Shape {
     func path(in rect: CGRect) -> Path {
         Path { $0.move(to: CGPoint(x: rect.minX, y: rect.midY)); $0.addLine(to: CGPoint(x: rect.maxX, y: rect.midY)) }
     }

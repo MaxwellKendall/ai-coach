@@ -21,6 +21,7 @@ struct TodayScreen: View {
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
+        case propose(Proposal), spoken(Spoken)
         var id: String {
             switch self {
             case .details(let items): "details \(items.map(\.id))"
@@ -28,8 +29,19 @@ struct TodayScreen: View {
             case .log(let items): "log \(items.map(\.id))"
             case .adjust(let plan): "adjust \(plan.id)"
             case .check: "check"
+            case .propose(let proposal): "propose \(proposal.id)"
+            case .spoken(let spoken): "spoken \(spoken.id)"
             }
         }
+    }
+
+    /// A session said out loud, waiting on the check sheet (FIT-30).
+    struct Spoken: Identifiable {
+        let id = UUID()
+        var said: String
+        var title: String
+        var draft: WorkoutDraft
+        var changed: [Int]
     }
 
     private var week: [Date] {
@@ -294,18 +306,132 @@ struct TodayScreen: View {
         live = WorkoutDraft(session: plan.title, plan: plan.session)
     }
 
-    /// Meals, sleep and weight said to the mic land on the check sheet (FIT-9).
+    /// The mic on Today (FIT-29, FIT-30): change the plan, log the session, or log a meal, sleep or weight
+    /// (FIT-9). The model sorts what was said; the rules decide; a sheet confirms.
     private func heard(_ said: String) {
         working = said
         Task {
             defer { working = nil }
             do {
-                let result = LogResolver.resolve(try await LogParser.parse(said), recipes: templates.filter { $0.kind == .recipe })
-                if !result.entries.isEmpty { sheet = .check(result.entries) } else { message = "Couldn’t find anything to log in that." }
+                switch try await TodayRequestParser.parse(said)?.kind {
+                case .change(let change)?: propose(change, said: said)
+                case .didWorkout(let differences)?: logSpoken(differences, said: said)
+                case .log?:
+                    let result = LogResolver.resolve(try await LogParser.parse(said), recipes: templates.filter { $0.kind == .recipe })
+                    if !result.entries.isEmpty { sheet = .check(result.entries) } else { message = "Couldn’t find anything to log in that." }
+                case nil:
+                    message = "Couldn’t tell what to change. Try “I only have 30 minutes” or “my shoulder hurts”."
+                }
             } catch {
                 message = "Couldn’t understand that. Try again."
             }
         }
+    }
+
+    /// The next session not yet done, today or later this week.
+    private var nextSession: [PlannedActivity]? {
+        let start = Calendar.current.startOfDay(for: .now)
+        let loggedDays = Set(entries.filter { $0.kind == .workout }.map { Calendar.current.startOfDay(for: $0.timestamp) })
+        let upcoming = planned.filter { $0.kind == .workout && $0.date >= start && !loggedDays.contains(Calendar.current.startOfDay(for: $0.date)) }
+        guard let first = upcoming.first else { return nil }
+        return upcoming.filter { Calendar.current.isDate($0.date, inSameDayAs: first.date) }
+    }
+
+    private func propose(_ change: SpokenRequest.Change, said: String) {
+        guard let plan = thisWeeksPlan, let profile = profiles.first, let session = nextSession, let first = session.first else {
+            message = "There’s no session left this week to change."
+            return
+        }
+        let calendar = Calendar.current
+        let day = Planner.workouts(plan, templates: templates).first { calendar.isDate($0.date, inSameDayAs: first.date) }?.date ?? first.date
+        let catalog = Planner.catalog(templates)
+        let bySlug = Dictionary(catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
+        let name = first.slot ?? "Workout"
+        var moveTo: Date?
+        guard let result = Planner.adjust(plan, templates: templates, { week in
+            switch change {
+            case .time(let minutes):
+                return TrainingAdjuster.time(week, on: day, minutes: minutes, sessionMinutes: profile.sessionMinutes) {
+                    bySlug[$0.exercise]?.isGoalLift == true
+                }
+            case .energy: return TrainingAdjuster.energy(week, on: day)
+            case .injury(let area):
+                return TrainingAdjuster.injury(week, areas: BodyArea.muscles(for: [area]), label: area.lowercased(),
+                                               settings: profile.trainingSettings, catalog: catalog)
+            case .move(let weekday):
+                let time = calendar.dateComponents([.hour, .minute], from: day)
+                let target = calendar.date(byAdding: DateComponents(day: weekday, hour: time.hour, minute: time.minute),
+                                           to: Week.monday(of: day))!
+                moveTo = target
+                return TrainingAdjuster.reschedule(week, from: day, to: target) { bySlug[$0]?.pattern }
+            }
+        }) else {
+            message = "That day is within 48 hours of another session for the same muscles, so the plan can’t move it there."
+            return
+        }
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let before = result.before.filter { calendar.isDate($0.date, inSameDayAs: day) }
+        let after = result.after.filter { calendar.isDate($0.date, inSameDayAs: moveTo ?? day) }
+        var lines = Proposal.lines(before: before, after: after, names: names)
+        let unchanged = "Nothing changes until you apply it."
+        let proposal: Proposal
+        switch change {
+        case .time(let minutes):
+            proposal = Proposal(said: said, title: "\(name) in \(minutes) minutes", lines: lines,
+                                footnote: "Your plan’s rules picked this, so the main lifts stay. \(unchanged)",
+                                keep: "Keep \(profile.sessionMinutes) minutes", plan: plan, workouts: result.past + result.after)
+        case .energy:
+            proposal = Proposal(said: said, title: "An easier \(name)", lines: lines,
+                                footnote: "One less on the effort cap and fewer sets. \(unchanged)",
+                                keep: "Keep the plan", plan: plan, workouts: result.past + result.after)
+        case .injury(let area):
+            let later = result.before.filter { !calendar.isDate($0.date, inSameDayAs: day) }
+                != result.after.filter { !calendar.isDate($0.date, inSameDayAs: day) }
+            proposal = Proposal(said: said, title: "Working around your \(area.lowercased())", lines: lines,
+                                footnote: "Exercises that load it are swapped for safe ones, or dropped if there are none\(later ? ", here and later this week" : ""). \(unchanged)",
+                                keep: "Keep the plan", plan: plan, workouts: result.past + result.after)
+        case .move:
+            let target = moveTo ?? day
+            lines = [Proposal.Line(mark: .changed, text: "\(day.formatted(.dateTime.weekday(.wide))) → \(target.formatted(.dateTime.weekday(.wide).hour().minute()))"),
+                     Proposal.Line(mark: .same, text: "Same exercises")]
+            proposal = Proposal(said: said, title: "\(name) on \(target.formatted(.dateTime.weekday(.wide)))", lines: lines,
+                                footnote: "No two sessions for the same muscles within 48 hours. \(unchanged)",
+                                keep: "Keep \(day.formatted(.dateTime.weekday(.wide)))", plan: plan, workouts: result.past + result.after)
+        }
+        if result.before == result.after {
+            withAnimation { toast = Toast(text: "\(name) already fits") }
+            return
+        }
+        sheet = .propose(proposal)
+    }
+
+    private func apply(_ proposal: Proposal) {
+        let before = Planner.workouts(proposal.plan, templates: templates)
+        try? Planner.apply(proposal.workouts, to: proposal.plan, templates: templates, in: context)
+        withAnimation { toast = Toast(text: "Plan changed") { [context, templates] in
+            try? Planner.apply(before, to: proposal.plan, templates: templates, in: context)
+        } }
+    }
+
+    private func logSpoken(_ differences: [SpokenRequest.Difference], said: String) {
+        guard let session = nextSession, let first = session.first, Calendar.current.isDateInToday(first.date) else {
+            message = "There’s no session planned today to log."
+            return
+        }
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        var draft = WorkoutDraft(session: first.slot ?? "Workout", plan: Planner.session(session, templates: templates))
+        let changed = SpokenLog.apply(differences, to: &draft, names: names)
+        sheet = .spoken(Spoken(said: said, title: draft.session, draft: draft, changed: changed))
+    }
+
+    private func save(_ spoken: WorkoutDraft) {
+        let saved = spoken.save(at: .now, templates: templates, in: context)
+        try? context.save()
+        day = todayIndex
+        withAnimation { toast = Toast(text: "\(spoken.session) saved") { [context] in
+            for entry in saved { context.delete(entry) }
+            try? context.save()
+        } }
     }
 
     @ViewBuilder private func sheetView(_ sheet: Sheet) -> some View {
@@ -322,6 +448,11 @@ struct TodayScreen: View {
             }
         case .adjust(let plan): NavigationStack { AdjustSheet(plan: plan) }
         case .check(let entries): LogCheckSheet(entries: entries)
+        case .propose(let proposal): ProposalSheet(proposal: proposal) { apply(proposal) }
+        case .spoken(let spoken):
+            SpokenCheckSheet(said: spoken.said, title: spoken.title, draft: spoken.draft, changed: spoken.changed,
+                             names: Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first }),
+                             onSave: save)
         }
     }
 }
