@@ -18,6 +18,7 @@ struct TodayScreen: View {
     @State private var sheet: Sheet?
     @State private var live: WorkoutDraft?
     @State private var you = false
+    @State private var showProgram = false
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
@@ -93,6 +94,7 @@ struct TodayScreen: View {
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen() }
+        .sheet(isPresented: $showProgram) { ProgramScreen() }
         .fullScreenCover(item: $live) { draft in
             WorkoutModeView(draft: draft) {
                 day = todayIndex
@@ -119,6 +121,7 @@ struct TodayScreen: View {
                     .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
                 Text(title).font(.system(size: 34, weight: .bold)).tracking(-0.5)
                     .contentTransition(.numericText())
+                programPill.padding(.top, 4)
             }
             Spacer()
             Button { you = true } label: {
@@ -129,6 +132,34 @@ struct TodayScreen: View {
         }
         .padding(.leading, 22).padding(.trailing, 12).padding(.top, 8)
         .animation(.snappy, value: index)
+    }
+
+    /// FIT-39: "Week 3 of 16 · Base ›", with how far through the program as a ring. Opens the program.
+    @ViewBuilder private var programPill: some View {
+        if let profile = profiles.first, let weeks = profile.program, let start = profile.programStart {
+            let index = ProgramPlan.week(of: .now, start: start)
+            if weeks.indices.contains(index) {
+                Button { showProgram = true } label: {
+                    HStack(spacing: 7) {
+                        ZStack {
+                            Circle().stroke(Color(.quaternaryLabel), lineWidth: 2.5)
+                            Circle().trim(from: 0, to: (Double(index) + 0.5) / Double(weeks.count))
+                                .stroke(Color.primary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                        }
+                        .frame(width: 14, height: 14)
+                        Text("Week \(index + 1) of \(weeks.count) · \(ProgramPlan.title(weeks[index]))")
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .padding(.horizontal, 12).frame(minHeight: 32)
+                    .background(Color(.secondarySystemBackground), in: .capsule)
+                    .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens your program")
+            }
+        }
     }
 
     private func strip(_ week: [Date], cards: [DayCard], selected: Int) -> some View {

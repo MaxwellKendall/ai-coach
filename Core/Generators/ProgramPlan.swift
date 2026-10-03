@@ -110,4 +110,25 @@ enum ProgramPlan {
         if let reps = start.value("reps") { return (max(3, (reps * 0.7).rounded()), nil, nil) }
         return (nil, nil, nil)
     }
+
+    /// "Base", "Deload", "Test week"; "· travel" while away.
+    static func title(_ week: ProgramWeek) -> String {
+        let name = switch week.kind {
+        case .test: "Test week"
+        default: week.kind.rawValue.capitalized
+        }
+        return week.travel ? "\(name) · travel" : name
+    }
+
+    /// The coach line for a week. A test week names what it tests.
+    static func why(_ week: ProgramWeek, tests: [String] = []) -> String {
+        if week.travel { return "Dumbbells and bodyweight only." }
+        return switch week.kind {
+        case .base: "Moderate work, all the reps. Builds capacity for later."
+        case .build: "The work gets harder each week."
+        case .peak: "Hard and short, so you arrive fresh."
+        case .deload: "Same exercises at about half the work."
+        case .test: tests.isEmpty ? "See where you are." : "Test: \(tests.joined(separator: ", "))."
+        }
+    }
 }

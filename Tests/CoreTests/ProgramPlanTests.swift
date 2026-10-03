@@ -113,3 +113,40 @@ struct ProgramPlanTests {
         #expect(week(ProgramWeek(phase: .peak, kind: .test)).warnings.first?.hasPrefix("Test week") == true)
     }
 }
+
+struct GoalProgressTests {
+    private func set(_ exercise: String, _ month: Int, _ day: Int, _ values: [(String, Double)]) -> LoggedSet {
+        LoggedSet(date: date(2026, month, day), exercise: exercise, pattern: nil,
+                  measurements: values.map { Measurement(metric: $0.0, value: $0.1, unit: "") })
+    }
+
+    @Test func currentFromLogsSinceTheStart() {
+        let start = date(2026, 9, 28)
+        let sets = [set("back-squat", 9, 1, [("load_lb", 200), ("reps", 5)]),
+                    set("back-squat", 9, 30, [("load_lb", 155), ("reps", 5)]),
+                    set("back-squat", 10, 2, [("load_lb", 135), ("reps", 15)]),
+                    set("pull-up", 9, 30, [("reps", 6)]), set("pull-up", 9, 30, [("reps", 8), ("load_lb", 25)])]
+        // Before the program doesn't count; 15 reps is past where Brzycki holds.
+        #expect(GoalProgress.current("back-squat.1rm_lb", sets: sets, weighIns: [], since: start) == 174)
+        #expect(GoalProgress.current("pull-up.reps", sets: sets, weighIns: [], since: start) == 6)
+        #expect(GoalProgress.current("deadlift.1rm_lb", sets: sets, weighIns: [], since: start) == nil)
+        let weighIns = [DatedValue(date: date(2026, 9, 29), value: 199), DatedValue(date: date(2026, 10, 2), value: 197.4)]
+        #expect(GoalProgress.current("weight_lb", sets: [], weighIns: weighIns, since: start) == 197.4)
+    }
+
+    @Test func pace() {
+        let weeks = ProgramPlan.weeks(count: 16, deloadEvery: 6)
+        #expect(GoalProgress.fraction(from: 200, now: 195, target: 180) == 0.25)
+        #expect(GoalProgress.fraction(from: 200, now: 205, target: 180) == 0)
+        #expect(GoalProgress.pace(from: 200, now: 200, target: 180, week: 0, weeks: weeks) == .starting)
+        // After week 4 (index 3) the line expects 4/14 of the way: 194.3 lb. 80% of that is 195.4.
+        #expect(GoalProgress.pace(from: 200, now: 195, target: 180, week: 4, weeks: weeks) == .onPace)
+        #expect(GoalProgress.pace(from: 200, now: 196, target: 180, week: 4, weeks: weeks) == .behind)
+    }
+
+    @Test func weekCopy() {
+        #expect(ProgramPlan.title(ProgramWeek(phase: .build, kind: .deload, travel: true)) == "Deload · travel")
+        #expect(ProgramPlan.title(ProgramWeek(phase: .peak, kind: .test)) == "Test week")
+        #expect(ProgramPlan.why(ProgramWeek(phase: .peak, kind: .test), tests: ["back squat max 250"]) == "Test: back squat max 250.")
+    }
+}

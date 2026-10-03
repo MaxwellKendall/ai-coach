@@ -43,6 +43,19 @@ enum Planner {
         return plan
     }
 
+    /// A week's sessions as they'd be planned now, from the history so far (FIT-39). Next week is shown this way and
+    /// never saved: it's planned for real when it starts, from how this week went.
+    static func preview(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) throws -> [PlannedWorkout] {
+        guard let profile = try context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete else { return [] }
+        let monday = Week.monday(of: date, calendar: calendar)
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let history = loggedSets(try context.fetch(FetchDescriptor<LogEntry>()), templates: templates)
+        return TrainingGenerator.week(
+            startingOn: monday, settings: profile.trainingSettings, catalog: catalog(templates), history: history,
+            weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar),
+            program: profile.programWeek(of: monday, calendar: calendar)?.week, calendar: calendar).workouts
+    }
+
     /// FIT-33: a session for a day with nothing planned, with an exercise asked for (TrainingGenerator.session).
     static func extraSession(on date: Date, wanting wanted: Set<String>, in context: ModelContext,
                              calendar: Calendar = .current) throws -> [PlannedWorkout]? {
