@@ -14,7 +14,7 @@ struct ProgramScreen: View {
     @Query private var templates: [Template]
     @State private var tab = Tab.program
     @State private var selected: Int?
-    @State private var openGoal: UUID?
+    @State private var goalIndex = 0
     @State private var nextWeek: [PlannedWorkout] = []
     @State private var regenerating: Regenerate?
     @State private var toast: Toast?
@@ -463,27 +463,41 @@ struct ProgramScreen: View {
             let now = GoalProgress.current(item.goal.metric, sets: sets, weighIns: weighIns, since: start) ?? from
             return GoalProgress.pace(from: from, now: now, target: item.goal.target, week: current, weeks: weeks)
         }
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Week \(current + 1) of \(weeks.count) · ends \(end.formatted(.dateTime.month(.abbreviated).day()))".uppercased())
-                        .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                    if let summary = Self.summary(paces) { Text(summary).foregroundStyle(.secondary) }
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 2)
-                ForEach(programGoals, id: \.goal.id) { item in
-                    let option = GoalOption.with(id: item.option)!
-                    GoalCard(goal: item.goal, option: option, weeks: weeks, start: start, end: end, current: current,
-                             sets: sets, weighIns: weighIns, next: option.exercise.flatMap(nextWorkout),
-                             open: openGoal == item.goal.id,
-                             toggle: { withAnimation(.snappy) { openGoal = openGoal == item.goal.id ? nil : item.goal.id } },
-                             setTarget: { setTarget(item.goal, $0) })
+        let items = programGoals
+        let index = Binding(get: { min(goalIndex, max(0, items.count - 1)) }, set: { goalIndex = $0 })
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Week \(current + 1) of \(weeks.count) · ends \(end.formatted(.dateTime.month(.abbreviated).day()))".uppercased())
+                    .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
+                if let summary = Self.summary(paces) { Text(summary).foregroundStyle(.secondary) }
+            }
+            .padding(.horizontal, 30)
+            .padding(.top, 8)
+            HStack(spacing: 6) {
+                ForEach(items.indices, id: \.self) { position in
+                    Button { withAnimation(.snappy) { index.wrappedValue = position } } label: {
+                        Capsule().fill(position == index.wrappedValue ? Color.primary : Color(.quaternaryLabel))
+                            .frame(width: position == index.wrappedValue ? 22 : 8, height: 8)
+                            .frame(minHeight: 28)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(GoalOption.with(id: items[position].option)?.name ?? "Goal")
+                    .accessibilityAddTraits(position == index.wrappedValue ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 26)
+            .padding(.top, 6)
+            SwipeDeck(index: index, count: items.count) { position in
+                let item = items[position]
+                let option = GoalOption.with(id: item.option)!
+                GoalCard(goal: item.goal, option: option, weeks: weeks, start: start, end: end, current: current,
+                         sets: sets, weighIns: weighIns, next: option.exercise.flatMap(nextWorkout),
+                         setTarget: { setTarget(item.goal, $0) })
+            }
+            .padding(.horizontal, 22)
             .padding(.top, 8)
-            .padding(.bottom, 120)
+            .padding(.bottom, LanguageModel.isAvailable ? 130 : 72)
         }
     }
 

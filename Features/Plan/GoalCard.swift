@@ -1,8 +1,8 @@
 import SwiftUI
 import Charts
 
-/// One program goal (FIT-8): now → target, a sparkline against the plan and the pace. Opened in place: the plan
-/// line, a forecast at the current rate, what it needs each week, the set behind it, and the target.
+/// One program goal (FIT-8), a card in the Goals deck: now → target and the pace, the logged line against the plan
+/// with a forecast at the current rate, what it needs each week, the set behind it, and the target.
 struct GoalCard: View {
     let goal: Goal
     let option: GoalOption
@@ -16,11 +16,18 @@ struct GoalCard: View {
     let weighIns: [DatedValue]
     /// The next planned workout with the goal's exercise.
     let next: Date?
-    let open: Bool
-    let toggle: () -> Void
     let setTarget: (Double) -> Void
 
     var body: some View {
+        ScrollView { content }
+            .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+            .clipShape(.rect(cornerRadius: 30))
+            .accessibilityElement(children: .contain)
+    }
+
+    var content: some View {
         let logged = GoalProgress.current(goal.metric, sets: sets, weighIns: weighIns, since: start)
         let from = goal.baseline ?? logged ?? goal.target
         let now = logged ?? from
@@ -29,48 +36,30 @@ struct GoalCard: View {
         let forecast = GoalProgress.forecast(from: from, now: now, started: start, today: .now, end: end)
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
                                     forecast: forecast, target: goal.target, start: start, end: end)
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: toggle) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(option.name).font(.subheadline).foregroundStyle(.secondary)
-                        Spacer()
-                        PaceChip(pace: pace)
-                    }
-                    HStack(alignment: .bottom) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(format(now)).contentTransition(.numericText())
-                            Text("→ \(format(goal.target))").foregroundStyle(.secondary).contentTransition(.numericText())
-                            Text(goal.unit).font(.title3).foregroundStyle(.secondary)
-                        }
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        Spacer(minLength: 12)
-                        if !open {
-                            GoalChart(lines: lines, compact: true).frame(width: 118, height: 44)
-                        }
-                    }
-                    Text(line(from: from, now: now)).font(.subheadline).foregroundStyle(.secondary)
-                }
-                .contentShape(.rect)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(option.name).font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                PaceChip(pace: pace)
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityHint(open ? "Hide the trend" : "Show the trend and change the target")
-            if open {
-                details(lines, from: from, now: now, forecast: forecast)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(format(now)).contentTransition(.numericText())
+                Text("→ \(format(goal.target))").foregroundStyle(.secondary).contentTransition(.numericText())
+                Text(goal.unit).font(.title3).foregroundStyle(.secondary)
             }
+            .font(.system(size: 34, weight: .bold, design: .rounded))
+            .padding(.top, 6)
+            Text(line(from: from, now: now)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+            details(lines, from: from, now: now, forecast: forecast)
         }
-        .padding(18)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 24))
-        .clipped()
+        .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
     }
 
     private func details(_ lines: GoalChart.Lines, from: Double, now: Double, forecast: Double?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            GoalChart(lines: lines, compact: false)
+            GoalChart(lines: lines)
                 .frame(height: 150)
-                .padding(.top, 14)
+                .padding(.top, 18)
                 .accessibilityLabel("\(option.name) from \(format(from)) to \(format(now)), goal \(format(goal.target)) by \(day(end))")
             HStack(spacing: 14) {
                 legend("Logged", StrokeStyle(lineWidth: 2), .primary)
@@ -201,7 +190,7 @@ struct GoalChart: View {
     }
 
     let lines: Lines
-    let compact: Bool
+    private let today = Date.now
 
     var body: some View {
         let values = lines.plan.map(\.value) + lines.logged.map(\.value) + [lines.target]
@@ -225,24 +214,18 @@ struct GoalChart: View {
             ForEach(lines.logged, id: \.self) { point in
                 LineMark(x: .value("Date", point.date), y: .value("Value", point.value), series: .value("Line", "Logged"))
                     .foregroundStyle(Color.primary)
-                    .lineStyle(StrokeStyle(lineWidth: compact ? 2 : 2.5, lineCap: .round, lineJoin: .round))
-                if !compact {
-                    PointMark(x: .value("Date", point.date), y: .value("Value", point.value)).foregroundStyle(Color.primary).symbolSize(20)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                PointMark(x: .value("Date", point.date), y: .value("Value", point.value)).foregroundStyle(Color.primary).symbolSize(20)
+            }
+            RuleMark(y: .value("Goal", lines.target)).foregroundStyle(Color(.separator)).lineStyle(StrokeStyle(lineWidth: 1))
+                .annotation(position: lines.target >= lines.plan[0].value ? .top : .bottom, alignment: .leading, spacing: 4) {
+                    Text("Goal \(Coach.number(lines.target))").font(.caption2).foregroundStyle(.secondary)
                 }
-            }
-            if compact {
-                PointMark(x: .value("Date", last.date), y: .value("Value", last.value)).foregroundStyle(Color.primary).symbolSize(28)
-            } else {
-                RuleMark(y: .value("Goal", lines.target)).foregroundStyle(Color(.separator)).lineStyle(StrokeStyle(lineWidth: 1))
-            }
             PointMark(x: .value("Date", lines.end), y: .value("Value", lines.target))
                 .symbol {
                     Circle().fill(Color(.secondarySystemBackground))
-                        .overlay(Circle().strokeBorder(Color.primary, lineWidth: compact ? 1.5 : 2))
-                        .frame(width: compact ? 7 : 9, height: compact ? 7 : 9)
-                }
-                .annotation(position: lines.target >= lines.plan[0].value ? .bottom : .top, alignment: .trailing, spacing: 6) {
-                    if !compact { Text("Goal \(Coach.number(lines.target))").font(.caption2).foregroundStyle(.secondary) }
+                        .overlay(Circle().strokeBorder(Color.primary, lineWidth: 2))
+                        .frame(width: 9, height: 9)
                 }
         }
         .chartXScale(domain: lines.start...lines.end)
@@ -250,22 +233,18 @@ struct GoalChart: View {
         .chartYAxis(.hidden)
         .chartLegend(.hidden)
         .chartXAxis {
-            if !compact {
-                AxisMarks(values: [lines.start, Date.now, lines.end]) { value in
-                    AxisValueLabel(anchor: anchor(value.index, count: value.count)) {
-                        Text(label(value.index))
-                    }
+            AxisMarks(values: dates) { value in
+                AxisValueLabel(anchor: value.index == 0 ? .topLeading : value.index == value.count - 1 ? .topTrailing : .top) {
+                    Text(dates[value.index] == today ? "Today" : dates[value.index].formatted(.dateTime.month(.abbreviated).day()))
                 }
             }
         }
-        .accessibilityHidden(compact)
     }
 
-    private func label(_ index: Int) -> String {
-        index == 1 ? "Today" : (index == 0 ? lines.start : lines.end).formatted(.dateTime.month(.abbreviated).day())
-    }
-
-    private func anchor(_ index: Int, count: Int) -> UnitPoint {
-        index == 0 ? .topLeading : index == count - 1 ? .topTrailing : .top
+    /// Start, today and the target date. Today is left out when it's too near either end to have its own label.
+    private var dates: [Date] {
+        let span = lines.end.timeIntervalSince(lines.start)
+        let along = today.timeIntervalSince(lines.start) / max(span, 1)
+        return (0.2...0.8).contains(along) ? [lines.start, today, lines.end] : [lines.start, lines.end]
     }
 }
