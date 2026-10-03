@@ -81,7 +81,7 @@ PlannedActivity  kind (workout | meal | cook | grocery | …), date/slot, templa
 LogEntry         kind, timestamp, plannedRef?, measurements: [Measurement], note, photo?
 Measurement      metric, value, unit                               (reps, load_lb, rpe, kcal, protein_g, cost_usd, sleep_h, weight_lb …)
 Template         kind (exercise | recipe), name, slug, attributes
-Win              kind (pr | goal_hit | streak), goalRef?, logRef?, date
+Win              kind (pr | goal_hit | streak), goalRef?, logRef?, date   (unused: wins are derived from logs, FIT-15, `Core/Progress/Wins.swift`)
 ```
 
 Adding a new domain = a new `kind` + metrics. **Not** a new model.

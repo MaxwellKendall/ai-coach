@@ -8,7 +8,7 @@ struct YouScreen: View {
         NavigationStack {
             List {
                 NavigationLink { GoalsScreen() } label: { Label("Goals", systemImage: "target") }
-                NavigationLink { ProgressScreen() } label: { Label("Progress", systemImage: "chart.line.uptrend.xyaxis") }
+                NavigationLink { WinsScreen() } label: { Label("Wins", systemImage: "trophy") }
                 NavigationLink { CatalogScreen() } label: { Label("Library", systemImage: "books.vertical") }
             }
             .navigationTitle("You")

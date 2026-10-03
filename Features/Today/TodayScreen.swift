@@ -26,6 +26,7 @@ struct TodayScreen: View {
     @State private var you = false
     @State private var showProgram = false
     @State private var review: WeekReport?
+    @State private var sharing: WinItem?
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
@@ -122,6 +123,7 @@ struct TodayScreen: View {
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen() }
         .sheet(isPresented: $showProgram) { ProgramScreen() }
+        .sheet(item: $sharing) { ShareWinSheet(win: $0) }
         .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
             if let review { WeeklyReviewScreen(report: review, profile: profiles.first) }
         }
@@ -358,6 +360,16 @@ struct TodayScreen: View {
                 Text("“\(done.note)”").font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
             }
             Spacer(minLength: 12)
+            // FIT-15: wins earned that day, a card each (two at most; the rest are in Wins), easy to ignore.
+            let wins = WinFeed.wins(WinFeed.wins(profile: profiles.first, goals: goals, entries: entries, planned: planned,
+                                                templates: templates), on: done.start)
+            if !wins.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(wins.prefix(2)) { win in WinCard(win: win) { sharing = win } }
+                }
+                .padding(.bottom, 14)
+                .sensoryFeedback(.success, trigger: wins.map(\.key))
+            }
             if let feel = done.feel {
                 Text("Felt \(feel.label.lowercased())").font(.footnote).foregroundStyle(.tertiary)
             }
