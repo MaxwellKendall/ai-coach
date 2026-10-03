@@ -473,21 +473,31 @@ struct ProgramScreen: View {
             }
             .padding(.horizontal, 30)
             .padding(.top, 8)
-            HStack(spacing: 6) {
-                ForEach(items.indices, id: \.self) { position in
-                    Button { withAnimation(.snappy) { index.wrappedValue = position } } label: {
-                        Capsule().fill(position == index.wrappedValue ? Color.primary : Color(.quaternaryLabel))
-                            .frame(width: position == index.wrappedValue ? 22 : 8, height: 8)
-                            .frame(minHeight: 28)
-                            .contentShape(.rect)
+            ScrollViewReader { reader in
+                ScrollView(.horizontal) {
+                    HStack(spacing: 6) {
+                        ForEach(items.indices, id: \.self) { position in
+                            let on = position == index.wrappedValue
+                            let option = GoalOption.with(id: items[position].option)!
+                            Button { withAnimation(.snappy) { index.wrappedValue = position } } label: {
+                                Text(WeekReport.short(option)).font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(on ? Color(.systemBackground) : .secondary)
+                                    .padding(.horizontal, 14).frame(minHeight: 34)
+                                    .background(on ? Color.primary : Color(.secondarySystemBackground), in: .capsule)
+                                    .contentShape(.capsule)
+                            }
+                            .buttonStyle(.plain)
+                            .id(position)
+                            .accessibilityLabel(option.name)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(GoalOption.with(id: items[position].option)?.name ?? "Goal")
-                    .accessibilityAddTraits(position == index.wrappedValue ? .isSelected : [])
+                    .padding(.horizontal, 22)
                 }
+                .scrollIndicators(.hidden)
+                .onChange(of: index.wrappedValue) { _, position in withAnimation(.snappy) { reader.scrollTo(position, anchor: .center) } }
             }
-            .padding(.horizontal, 26)
-            .padding(.top, 6)
+            .padding(.top, 10)
             SwipeDeck(index: index, count: items.count) { position in
                 let item = items[position]
                 let option = GoalOption.with(id: item.option)!

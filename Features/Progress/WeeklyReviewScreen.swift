@@ -113,30 +113,37 @@ struct WeeklyReviewScreen: View {
         }
     }
 
+    /// One card per goal, swiped sideways with the next peeking in.
     private var goals: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(report.goals.enumerated()), id: \.element.id) { index, row in
-                let delta = row.week.to - row.week.from
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.option.name).font(.subheadline.weight(.semibold))
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(report.goals) { row in
+                    let delta = row.week.to - row.week.from
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Text(row.option.name).font(.subheadline).foregroundStyle(.secondary)
+                            Spacer(minLength: 8)
+                            PaceChip(pace: row.week.pace)
+                        }
+                        Text(delta == 0 ? "No change" : (delta > 0 ? "+" : "−") + report.format(abs(delta), row.option) + " " + row.goal.unit)
+                            .font(.system(size: 26, weight: .bold, design: .rounded)).padding(.top, 6)
                         Text((delta == 0 ? "" : "\(report.format(row.week.from, row.option)) → ")
                              + "\(report.format(row.week.to, row.option)) \(row.goal.unit) · goal \(report.format(row.goal.target, row.option))")
-                            .font(.footnote).foregroundStyle(.secondary)
+                            .font(.footnote).foregroundStyle(.secondary).padding(.top, 2)
                     }
-                    Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(delta == 0 ? "–" : (delta > 0 ? "+" : "−") + report.format(abs(delta), row.option))
-                            .font(.system(.subheadline, design: .rounded, weight: .bold))
-                        Text(PaceChip(pace: row.week.pace).label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
+                    .containerRelativeFrame(.horizontal) { width, _ in width * 0.8 }
+                    .accessibilityElement(children: .combine)
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .overlay(alignment: .top) { if index > 0 { Divider().padding(.leading, 16) } }
-                .accessibilityElement(children: .combine)
             }
+            .scrollTargetLayout()
         }
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .padding(.horizontal, -16)
     }
 
     private func alert(_ alert: WeeklyReview.Alert) -> some View {
