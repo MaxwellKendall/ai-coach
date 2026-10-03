@@ -165,12 +165,15 @@ enum TrainingGenerator {
     /// plan.md step 4: sets −40–50%, loads −10–15%, RPE cap 6.
     static let deloadSets = 0.55, deloadLoad = 0.87, deloadRPE = 6.0
 
+    /// `asOf` and `rotationStart` are for an extra session mid-week (`session(on:)`): history up to that day,
+    /// and a chosen session of the rotation.
     static func week(startingOn monday: Date, settings: TrainingSettings, catalog: [Exercise],
-                     history: [LoggedSet], weeksSinceDeload: Int, calendar: Calendar = .current) -> TrainingWeek {
+                     history: [LoggedSet], weeksSinceDeload: Int, asOf: Date? = nil, rotationStart: Int? = nil,
+                     calendar: Calendar = .current) -> TrainingWeek {
         let tier = AgeTier.of(age: settings.age)
         let volume = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes)
         let deload = weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks)
-        let past = history.filter { $0.date < monday }
+        let past = history.filter { $0.date < (asOf ?? monday) }
         let undertrained = undertrainedPatterns(past, before: monday, calendar: calendar)
         let recent = recentExercises(past, sessions: 2, calendar: calendar)
         let allowed = catalog.filter { allows($0, settings) }
@@ -179,7 +182,7 @@ enum TrainingGenerator {
         if deload { warnings.append("Deload week: about half the sets, loads down ~13%, RPE capped at 6.") }
 
         let rotation = volume.split.rotation
-        let start = rotationStart(rotation, history: past)
+        let start = rotationStart ?? Self.rotationStart(rotation, history: past)
         var workouts: [PlannedWorkout] = []
         for (index, day) in settings.trainingDays.prefix(settings.daysPerWeek).enumerated() {
             let session = rotation[(start + index) % rotation.count]
@@ -214,6 +217,26 @@ enum TrainingGenerator {
                 + ["\(week.totalSets) planned sets is over your \(settings.maxWeeklySets)-set weekly ceiling."])
         }
         return week
+    }
+
+    /// FIT-33: "make today a squat day" on a day with nothing planned. One more session today, built by the same
+    /// rules from history up to today: the rotation's sessions are tried in the order the plan would reach them, and
+    /// the first one with an exercise asked for is it. nil when none has one.
+    static func session(on date: Date, wanting wanted: Set<String>, settings: TrainingSettings, catalog: [Exercise],
+                        history: [LoggedSet], weeksSinceDeload: Int, calendar: Calendar = .current) -> [PlannedWorkout]? {
+        let monday = Week.monday(of: date, calendar: calendar)
+        let day = calendar.startOfDay(for: date)
+        var today = settings
+        today.trainingDays = [calendar.dateComponents([.day], from: monday, to: day).day ?? 0]
+        let rotation = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes).split.rotation
+        let natural = Self.rotationStart(rotation, history: history.filter { $0.date < day })
+        for offset in rotation.indices {
+            let workouts = week(startingOn: monday, settings: today, catalog: catalog, history: history,
+                                weeksSinceDeload: weeksSinceDeload, asOf: day, rotationStart: (natural + offset) % rotation.count,
+                                calendar: calendar).workouts
+            if workouts.contains(where: { wanted.contains($0.exercise) }) { return workouts }
+        }
+        return nil
     }
 
     /// plan.md step 6: equipment on hand, not on the avoid list, and not loading an injured area.

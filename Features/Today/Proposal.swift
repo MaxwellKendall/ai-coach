@@ -55,8 +55,21 @@ struct Proposal: Identifiable {
             }
         }
         if !easier.isEmpty { lines.append(Line(mark: .changed, text: "\(ListFormatter.localizedString(byJoining: easier)), a little easier")) }
-        lines += order(new).filter { !order(old).contains($0) }.map { Line(mark: .added, text: name($0)) }
+        lines += order(new).filter { !order(old).contains($0) }.map { exercise in
+            let dose = new.first { $0.exercise == exercise }.map(Self.dose) ?? ""
+            return Line(mark: .added, text: dose.isEmpty ? name(exercise) : "\(name(exercise)), \(dose)")
+        }
         if !same.isEmpty { lines.append(Line(mark: .same, text: "\(ListFormatter.localizedString(byJoining: same)) as planned")) }
         return lines
+    }
+
+    /// "3 × 5 · 190", "3 × 45 s", "2 × 10".
+    static func dose(_ workout: PlannedWorkout) -> String {
+        guard let sets = workout.target("sets") else { return "" }
+        let each = workout.target("reps").map(Coach.number) ?? workout.target("duration_s").map { "\(Coach.number($0)) s" }
+            ?? workout.target("distance_m").map { "\(Coach.number($0)) m" }
+        let load = workout.target("load_lb") ?? workout.target("load_lb_hand")
+        return [each.map { "\(Coach.number(sets)) × \($0)" } ?? "\(Coach.number(sets)) sets", load.map(Coach.number)]
+            .compactMap { $0 }.joined(separator: " · ")
     }
 }

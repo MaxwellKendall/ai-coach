@@ -309,6 +309,14 @@ struct TodayScreen: View {
     /// The mic on Today (FIT-29, FIT-30): change the plan, log the session, or log a meal, sleep or weight
     /// (FIT-9). The model sorts what was said; the rules decide; a sheet confirms.
     private func heard(_ said: String) {
+        // FIT-33: "make today a squat day" is read by code against the catalog, unless something hurts
+        // (then the injury rule decides what to swap).
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let hurts = ["hurt", "pain", "sore", "injur", "tweak", "ache", "tight", "stiff"].contains { said.lowercased().contains($0) }
+        if !hurts, let wanted = FocusSwap.wanted(said, catalog: Planner.catalog(templates), names: names) {
+            proposeFocus(wanted, said: said)
+            return
+        }
         working = said
         Task {
             defer { working = nil }
@@ -320,7 +328,7 @@ struct TodayScreen: View {
                     let result = LogResolver.resolve(try await LogParser.parse(said), recipes: templates.filter { $0.kind == .recipe })
                     if !result.entries.isEmpty { sheet = .check(result.entries) } else { message = "Couldn’t find anything to log in that." }
                 case nil:
-                    message = "Couldn’t tell what to change. Try “I only have 30 minutes” or “my shoulder hurts”."
+                    message = "Couldn’t tell what to change. Try “I only have 30 minutes”, “my shoulder hurts” or “make today a squat day”."
                 }
             } catch {
                 message = "Couldn’t understand that. Try again."
@@ -401,6 +409,67 @@ struct TodayScreen: View {
         if result.before == result.after {
             withAnimation { toast = Toast(text: "\(name) already fits") }
             return
+        }
+        sheet = .propose(proposal)
+    }
+
+    /// FIT-33: trade today for the day that has what was asked for, or swap today's main lift for it.
+    private func proposeFocus(_ wanted: Set<String>, said: String) {
+        let calendar = Calendar.current
+        guard let plan = thisWeeksPlan else {
+            message = "There’s no plan this week to change."
+            return
+        }
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        // Nothing left to do today: today gets one more session, built by the plan's rules.
+        guard let session = nextSession, let first = session.first, calendar.isDateInToday(first.date) else {
+            guard let extra = try? Planner.extraSession(on: .now, wanting: wanted, in: context), let name = extra.first?.session else {
+                message = "None of your plan’s sessions has that exercise."
+                return
+            }
+            let all = Planner.workouts(plan, templates: templates)
+            sheet = .propose(Proposal(said: said, title: "\(name) today", lines: Proposal.lines(before: [], after: extra, names: names),
+                              footnote: "Today was a rest day, so your plan’s rules built this from your history. Nothing changes until you apply it.",
+                              keep: "Keep today a rest day", plan: plan, workouts: (all + extra).sorted { $0.date < $1.date }))
+            return
+        }
+        let day = Planner.workouts(plan, templates: templates).first { calendar.isDate($0.date, inSameDayAs: first.date) }?.date ?? first.date
+        let catalog = Planner.catalog(templates)
+        let dayName = calendar.isDateInToday(day) ? "today" : day.formatted(.dateTime.weekday(.wide))
+        var outcome = FocusSwap.Result.none
+        guard let result = Planner.adjust(plan, templates: templates, { week in
+            outcome = FocusSwap.swap(week, on: day, wanted: wanted, catalog: catalog)
+            return switch outcome {
+            case .swapped(let week, _), .replaced(let week, _): week
+            case .already, .none: nil
+            }
+        }) else {
+            if outcome == .already {
+                let has = Set(Planner.workouts(plan, templates: templates).filter { calendar.isDate($0.date, inSameDayAs: day) }.map(\.exercise))
+                let name = wanted.intersection(has).compactMap { names[$0] }.sorted().first ?? "that"
+                withAnimation { toast = Toast(text: "\(name) is already \(dayName)") }
+            } else {
+                message = "Couldn’t find that exercise in your library."
+            }
+            return
+        }
+        let before = result.before.filter { calendar.isDate($0.date, inSameDayAs: day) }
+        let after = result.after.filter { calendar.isDate($0.date, inSameDayAs: day) }
+        let lines = Proposal.lines(before: before, after: after, names: names)
+        let proposal: Proposal
+        switch outcome {
+        case .swapped(_, let other):
+            let weekday = other.formatted(.dateTime.weekday(.wide))
+            let session = after.first?.session ?? "session"
+            proposal = Proposal(said: said, title: "Swap with \(weekday)’s \(session)", lines: lines,
+                                footnote: "\(weekday) gets \(dayName == "today" ? "today’s" : dayName + "’s") session instead. Loads stay as the plan set them. Nothing changes until you apply it.",
+                                keep: "Keep \(dayName) as planned", plan: plan, workouts: result.past + result.after)
+        default:
+            let slug: String = if case .replaced(_, let slug) = outcome { slug } else { "" }
+            proposal = Proposal(said: said, title: "\(first.slot ?? "Workout") with \(names[slug] ?? slug)",
+                                lines: lines,
+                                footnote: "No day this week has it, so it takes the main lift’s place. Pick its weight on the first set. Nothing changes until you apply it.",
+                                keep: "Keep \(dayName) as planned", plan: plan, workouts: result.past + result.after)
         }
         sheet = .propose(proposal)
     }
