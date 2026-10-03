@@ -113,7 +113,7 @@ struct WorkoutDraft: Equatable {
          duration.map { Measurement(metric: "duration_s", value: $0.rounded(), unit: "s") }].compactMap { $0 }
     }
 
-    // MARK: Workout mode (FIT-28): one card per block, one line per round
+    // MARK: Workout mode (FIT-28, FIT-32): one card per round, swipe forward to log it
 
     /// Each block's rounds as row indices: a single lift's set, or one of each movement in a superset.
     func lines(block: Int) -> [[Int]] {
@@ -123,15 +123,27 @@ struct WorkoutDraft: Equatable {
 
     var blocks: [Int] { Array(Set(rows.map(\.block))).sorted() }
 
-    /// Ticks a line; returns the rest after it (none mid-superset) and whether the block is now done.
+    /// Workout mode's cards, in order.
+    var pages: [[Int]] { blocks.flatMap { lines(block: $0) } }
+
+    /// Ticks a line and returns the rest after it (after its last movement, for a superset round).
     @discardableResult
-    mutating func tick(_ line: [Int]) -> (rest: TimeInterval, blockDone: Bool) {
+    mutating func tick(_ line: [Int]) -> TimeInterval {
         for index in line { finish(index) }
-        guard let last = line.last else { return (0, false) }
-        return (rest(after: last), lines(block: rows[last].block).joined().allSatisfy { rows[$0].done })
+        return line.last.map { rest(after: $0) } ?? 0
     }
 
-    mutating func untick(_ line: [Int]) { for index in line { rows[index].done = false } }
+    /// Swiping from one card to a later one logs the cards passed, as shown. Returns the rest after the last
+    /// one logged, or nil when they were all logged already. Swiping back logs nothing.
+    mutating func swiped(from: Int, to: Int) -> TimeInterval? {
+        let pages = pages
+        guard to > from, from < pages.count else { return nil }
+        var rest: TimeInterval?
+        for page in pages[from..<min(to, pages.count)] where !page.allSatisfy({ rows[$0].done }) {
+            rest = tick(page)
+        }
+        return rest
+    }
 
     /// −/+ on a line: reps by 1 (time and distance by 5), load by 5 lb. Never below zero.
     mutating func adjust(_ line: [Int], load: Bool, by direction: Double) {

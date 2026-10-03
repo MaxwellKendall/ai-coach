@@ -1,9 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// The workout (FIT-28, prototype boards 3–4): a clock, one segment per exercise, and one card per exercise
-/// swiped sideways. Tap ✓ to log a set as planned, tap its numbers to change them in place. The rest dock runs
-/// at the bottom, a finished exercise moves on by itself, and the last card is the log: Save writes it.
+/// The workout (FIT-32, prototype row 2): one card per set, swiped sideways. Swiping forward logs the set you
+/// leave as shown and starts its rest; tap a number to change it first. The last card is the log: Save writes it.
 struct WorkoutModeView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -14,7 +13,7 @@ struct WorkoutModeView: View {
     var onSaved: () -> Void = {}
     @State private var startedAt = Date.now
     @State private var page: Int? = 0
-    @State private var open: [Int]?
+    @State private var editing: Field?
     @State private var rest: Rest?
     @State private var restsFinished = 0
     @State private var quitting = false
@@ -29,19 +28,29 @@ struct WorkoutModeView: View {
         var total: TimeInterval
     }
 
+    /// The number being changed: a card's reps (or time) or its load.
+    struct Field: Equatable {
+        var page: Int
+        var load: Bool
+    }
+
+    private var names: [String: String] {
+        Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+    }
+
     var body: some View {
-        let blocks = draft.blocks
-        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let pages = draft.pages
+        let names = names
         VStack(spacing: 0) {
             topBar
-            segments(blocks).padding(.horizontal, 22).padding(.top, 8)
+            segments.padding(.horizontal, 22).padding(.top, 8)
             ScrollView(.horizontal) {
                 HStack(spacing: 12) {
-                    ForEach(Array(blocks.enumerated()), id: \.offset) { position, block in
-                        exerciseCard(block, position: position, of: blocks.count, names: names)
-                            .containerRelativeFrame(.horizontal).id(position)
+                    ForEach(pages.indices, id: \.self) { index in
+                        setCard(pages[index], index: index, pages: pages, names: names)
+                            .containerRelativeFrame(.horizontal).id(index)
                     }
-                    finishCard(names: names).containerRelativeFrame(.horizontal).id(blocks.count)
+                    finishCard(names: names).containerRelativeFrame(.horizontal).id(pages.count)
                 }
                 .scrollTargetLayout()
             }
@@ -50,16 +59,21 @@ struct WorkoutModeView: View {
             .scrollIndicators(.hidden)
             .scrollPosition(id: $page)
             .padding(.top, 16)
-            dock.padding(.horizontal, 22).frame(height: 68).padding(.vertical, 10)
+            micArea(onFinish: page == pages.count).frame(height: 104)
         }
         .background(Color(.systemBackground))
+        .onChange(of: page) { old, new in
+            editing = nil
+            guard let old, let new, let seconds = draft.swiped(from: old, to: new) else { return }
+            withAnimation(.snappy) { rest = new < draft.pages.count && seconds > 0 ? Rest(ends: .now + seconds, total: seconds) : nil }
+        }
         .overlay {
             if voice.listening || working != nil {
                 ListeningVeil(voice: voice, working: working,
-                              prompt: page == draft.blocks.count ? "Add a note" : "Say how the sets went")
+                              prompt: page == draft.pages.count ? "Add a note" : "Say how that set went")
             }
         }
-        .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 100) }
+        .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 116) }
         .animation(.snappy, value: voice.listening || working != nil)
         .animation(.snappy, value: toast)
         .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
@@ -67,6 +81,7 @@ struct WorkoutModeView: View {
         } message: { Text(message ?? "") }
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sensoryFeedback(.success, trigger: restsFinished)
+        .sensoryFeedback(.impact(weight: .light), trigger: draft.rows.filter(\.done).count)
         .task(id: rest?.ends) {
             guard let ends = rest?.ends else { return }
             try? await Task.sleep(for: .seconds(max(0, ends.timeIntervalSinceNow)))
@@ -103,12 +118,13 @@ struct WorkoutModeView: View {
         .padding(.horizontal, 10)
     }
 
-    /// One bar per exercise filled by its done sets, then one for the finish card. Tap one to jump there.
-    private func segments(_ blocks: [Int]) -> some View {
-        HStack(spacing: 4) {
-            ForEach(0...blocks.count, id: \.self) { position in
-                let lines = position < blocks.count ? draft.lines(block: blocks[position]) : []
-                let done = lines.isEmpty ? 0 : Double(lines.filter { $0.allSatisfy { draft.rows[$0].done } }.count) / Double(lines.count)
+    /// One bar per exercise, filled by its logged sets; the one on screen is darker.
+    private var segments: some View {
+        let current = page.flatMap { draft.pages.indices.contains($0) ? draft.rows[draft.pages[$0][0]].block : nil }
+        return HStack(spacing: 4) {
+            ForEach(draft.blocks, id: \.self) { block in
+                let rows = draft.rows.filter { $0.block == block }
+                let done = Double(rows.filter(\.done).count) / Double(max(rows.count, 1))
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color(.separator))
@@ -116,170 +132,124 @@ struct WorkoutModeView: View {
                     }
                 }
                 .frame(height: 4)
-                .opacity(page == position ? 1 : 0.55)
-                .padding(.vertical, 5)
-                .contentShape(.rect)
-                .onTapGesture { withAnimation(.snappy) { page = position } }
+                .opacity(current == block ? 1 : 0.55)
             }
         }
+        .padding(.vertical, 5)
+        .animation(.snappy, value: draft.rows.filter(\.done).count)
         .accessibilityHidden(true)
     }
 
-    // MARK: Exercise card
+    // MARK: Set card
 
-    private func exerciseCard(_ block: Int, position: Int, of count: Int, names: [String: String]) -> some View {
-        let lines = draft.lines(block: block)
-        let exercises = lines.first?.map { draft.rows[$0].exercise } ?? []
-        let next = lines.firstIndex { !$0.allSatisfy { draft.rows[$0].done } }
+    private func setCard(_ line: [Int], index: Int, pages: [[Int]], names: [String: String]) -> some View {
+        let rows = line.map { draft.rows[$0] }
+        let first = rows[0]
+        let exercises = rows.map(\.exercise).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        let rounds = draft.lines(block: first.block).count
+        let done = rows.allSatisfy(\.done)
+        let field = editing?.page == index ? editing : nil
+        let next = pages.indices.contains(index + 1) ? draft.rows[pages[index + 1][0]] : nil
+        let hint = done ? "" : next == nil ? "Swipe to finish" : next!.block != first.block ? "Swipe · \(names[next!.exercise] ?? next!.exercise)" : "Swipe when done"
+        let values = rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+")
+        let loads = rows.compactMap(\.load).reduce(into: [Double]()) { if !$0.contains($1) { $0.append($1) } }
+        let load = first.loadMetric == nil ? nil : loads.map(Coach.number).joined(separator: "/")
+        let size: CGFloat = values.count + (load?.count ?? 0) > 6 ? 68 : 96
         return VStack(alignment: .leading, spacing: 0) {
-            Text("\(position + 1) OF \(count)\(exercises.count > 1 ? " · SUPERSET" : "")")
-                .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
+            HStack {
+                Text("Set \(first.round + 1) of \(rounds)\(exercises.count > 1 ? " · superset" : "")")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                if done {
+                    Label("Logged", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                }
+            }
             Text(exercises.map { names[$0] ?? $0 }.joined(separator: " + "))
                 .font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
                 .lineLimit(2).minimumScaleFactor(0.7)
-            if let cue = exercises.count == 1 ? cue(exercises[0]) : "One of each, then rest." {
-                Text(cue).font(.subheadline).foregroundStyle(.secondary).padding(.top, 6)
-            }
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(Array(lines.enumerated()), id: \.offset) { number, line in
-                        setLine(line, number: number + 1, isNext: number == next)
+            Spacer(minLength: 12)
+            VStack(spacing: 16) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    number(values, size: size, on: field?.load == false, heard: rows.contains(where: \.heard),
+                           label: "\(values) \(unit(first, plain: true)). Change") {
+                        editing = field?.load == false ? nil : Field(page: index, load: false)
+                    }
+                    if let load {
+                        Text("×").font(.system(size: size * 0.3)).foregroundStyle(.tertiary)
+                        number(load, size: size, on: field?.load == true, heard: false, label: "\(load) pounds. Change") {
+                            editing = field?.load == true ? nil : Field(page: index, load: true)
+                        }
                     }
                 }
+                .lineLimit(1).minimumScaleFactor(0.5)
+                Text(unit(first, pair: exercises.count > 1)).font(.subheadline).foregroundStyle(.secondary)
+                if let field {
+                    HStack(spacing: 14) {
+                        round("minus", field.load ? "5 lb less" : "Less") { draft.adjust(line, load: field.load, by: -1) }
+                        Text(field.load ? "5 lb" : first.metric == "reps" ? "reps" : "5 \(SetRow.units[first.metric] ?? "")")
+                            .font(.subheadline).foregroundStyle(.secondary).frame(minWidth: 72)
+                        round("plus", field.load ? "5 lb more" : "More") { draft.adjust(line, load: field.load, by: 1) }
+                    }
+                    .padding(.top, 8)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .padding(.top, 18)
-            HStack {
-                if exercises.count == 1, let last = lastTime(exercises[0]) {
+            .frame(maxWidth: .infinity)
+            .animation(.snappy, value: field)
+            Spacer(minLength: 12)
+            HStack(alignment: .firstTextBaseline) {
+                if first.round == 0, exercises.count == 1, let last = lastTime(exercises[0]) {
                     Text(last).foregroundStyle(.tertiary)
                 }
                 Spacer()
-                Button {
-                    withAnimation(.snappy) { page = position + 1 }
-                } label: {
-                    Text("\(position + 1 < count ? names[draft.lines(block: draft.blocks[position + 1]).first.map { draft.rows[$0[0]].exercise } ?? ""] ?? "Next" : "Finish") ›")
-                        .lineLimit(1)
-                }
-                .foregroundStyle(.secondary)
+                Text(hint).foregroundStyle(.tertiary).lineLimit(1)
             }
             .font(.subheadline)
-            .padding(.top, 8)
         }
-        .padding(EdgeInsets(top: 24, leading: 22, bottom: 20, trailing: 22))
+        .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(alignment: .top) {
+            if let rest, index == page {
+                restPanel(rest).transition(.opacity)
+            }
+        }
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+        .clipShape(.rect(cornerRadius: 30))
     }
 
-    private func setLine(_ line: [Int], number: Int, isNext: Bool) -> some View {
-        let rows = line.map { draft.rows[$0] }
-        let first = rows[0]
-        let done = rows.allSatisfy(\.done)
-        let bright = done || isNext
-        let isOpen = open == line
-        return VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Text("\(number)").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary).frame(width: 16)
-                Button {
-                    withAnimation(.snappy) { open = isOpen ? nil : line }
-                } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text(rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+"))
-                            .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
-                            .overlay(alignment: .bottom) {
-                                if rows.contains(where: \.heard) {
-                                    Line().stroke(style: StrokeStyle(lineWidth: 1.5, dash: [3, 3])).frame(height: 1.5)
-                                        .foregroundStyle(.tertiary).offset(y: 2)
-                                }
-                            }
-                        Text(first.loadMetric == nil ? SetRow.units[first.metric] ?? "" : first.metric == "reps" ? "" : SetRow.units[first.metric] ?? "")
-                            .font(.subheadline).foregroundStyle(bright ? .secondary : .tertiary)
-                        if first.loadMetric != nil {
-                            Text("×").font(.subheadline).foregroundStyle(bright ? .secondary : .tertiary)
-                            Text(Coach.number(first.load ?? 0))
-                                .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
-                            Text(SetRow.units[first.loadMetric!] ?? "").font(.subheadline).foregroundStyle(bright ? .secondary : .tertiary)
-                        }
-                        Spacer(minLength: 0)
+    private func number(_ text: String, size: CGFloat, on: Bool, heard: Bool, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.system(size: size, weight: .semibold, design: .rounded)).tracking(-2).monospacedDigit()
+                .contentTransition(.numericText())
+                .overlay(alignment: .bottom) {
+                    if on {
+                        Capsule().frame(height: 3).offset(y: 8)
+                    } else if heard {
+                        Line().stroke(style: StrokeStyle(lineWidth: 3, dash: [6, 5])).frame(height: 3)
+                            .foregroundStyle(.tertiary).offset(y: 8)
                     }
-                    .foregroundStyle(bright ? .primary : .tertiary)
-                    .contentTransition(.numericText())
-                    .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint("Change")
-                Button { toggle(line) } label: {
-                    ZStack {
-                        if done {
-                            Circle().fill(.primary)
-                            Image(systemName: "checkmark").font(.body.weight(.bold)).foregroundStyle(Color(.systemBackground))
-                        } else {
-                            Circle().strokeBorder(isNext ? Color.primary : Color(.tertiaryLabel), lineWidth: 2)
-                        }
-                    }
-                    .frame(width: 44, height: 44)
-                    .contentShape(.circle)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Set \(number) done")
-                .accessibilityAddTraits(done ? .isSelected : [])
-                .sensoryFeedback(.impact(weight: .light), trigger: done)
-            }
-            .frame(minHeight: 70)
-            if isOpen {
-                HStack(spacing: 10) {
-                    stepper(first.metric == "reps" ? "reps" : SetRow.units[first.metric] ?? "", line: line, load: false)
-                    if first.loadMetric != nil { stepper("lb", line: line, load: true) }
-                }
-                .padding(.leading, 28).padding(.bottom, 14)
-                .transition(.opacity)
-            }
+                .contentShape(.rect)
         }
-        .overlay(alignment: .top) { Divider() }
-    }
-
-    private func stepper(_ unit: String, line: [Int], load: Bool) -> some View {
-        HStack {
-            Button { withAnimation(.snappy) { draft.adjust(line, load: load, by: -1) } } label: {
-                Image(systemName: "minus").frame(width: 36, height: 36)
-            }
-            .accessibilityLabel(load ? "5 lb less" : "Less")
-            Spacer()
-            Text(unit).font(.footnote).foregroundStyle(.secondary)
-            Spacer()
-            Button { withAnimation(.snappy) { draft.adjust(line, load: load, by: 1) } } label: {
-                Image(systemName: "plus").frame(width: 36, height: 36)
-            }
-            .accessibilityLabel(load ? "5 lb more" : "More")
-        }
-        .font(.title3)
         .buttonStyle(.plain)
-        .padding(.horizontal, 4)
-        .frame(height: 44)
-        .background(Color(.systemBackground), in: .capsule)
+        .accessibilityLabel(label)
     }
 
-    private func toggle(_ line: [Int]) {
-        if line.allSatisfy({ draft.rows[$0].done }) {
-            draft.untick(line)
-            return
-        }
-        let result = withAnimation(.snappy) { draft.tick(line) }
-        open = nil
-        withAnimation(.snappy) {
-            rest = result.rest > 0 ? Rest(ends: .now + result.rest, total: result.rest) : nil
-        }
-        if result.blockDone, let block = line.first.map({ draft.rows[$0].block }), let position = draft.blocks.firstIndex(of: block) {
-            Task {
-                try? await Task.sleep(for: .milliseconds(650))
-                withAnimation(.snappy) { page = position + 1 }
-            }
-        }
+    /// "reps × lb", "reps each × lb/hand", "seconds".
+    private func unit(_ row: SetRow, pair: Bool = false, plain: Bool = false) -> String {
+        let value = row.metric == "reps" ? (pair ? "reps each" : "reps") : row.metric == "duration_s" ? "seconds" : SetRow.units[row.metric] ?? ""
+        guard !plain, let loadMetric = row.loadMetric else { return value }
+        return "\(value) × \(SetRow.units[loadMetric] ?? "lb")"
     }
 
-    /// The shortest cue's first sentence: one thing to think about, not the whole card.
-    private func cue(_ exercise: String) -> String? {
-        let cues = templates.first { $0.slug == exercise }?.values("cues") ?? []
-        return cues.map { String($0.prefix { $0 != "." }) + "." }.min { $0.count < $1.count }
+    private func round(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button { withAnimation(.snappy, action) } label: {
+            Image(systemName: symbol).font(.title3.weight(.medium)).frame(width: 56, height: 56)
+                .background(Color(.systemBackground), in: .circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     /// "Last time 5 × 155": the top set of the last session before today.
@@ -292,97 +262,99 @@ struct WorkoutModeView: View {
         return "Last time \(Coach.number(reps))" + (top.value("load_lb").map { " × \(Coach.number($0))" } ?? "")
     }
 
-    // MARK: Dock
-
-    private var dock: some View {
-        HStack(spacing: 12) {
-            if let rest {
-                restDock(rest).transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                Text(talked || !LanguageModel.isAvailable ? "" : "Tap ✓, or hold and say it")
-                    .font(.subheadline).foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+    /// The rest countdown, over the top of the card that's next.
+    private func restPanel(_ rest: Rest) -> some View {
+        TimelineView(.periodic(from: .now, by: 0.25)) { context in
+            let left = max(0, rest.ends.timeIntervalSince(context.date))
+            VStack(spacing: 0) {
+                Text("Rest").font(.subheadline).foregroundStyle(.secondary)
+                Text(Duration.seconds(left.rounded(.up)).formatted(.time(pattern: .minuteSecond)))
+                    .font(.system(size: 64, weight: .semibold, design: .rounded)).tracking(-1).monospacedDigit()
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color(.separator))
+                        Capsule().fill(.primary).frame(width: proxy.size.width * left / max(rest.total, 1))
+                    }
+                }
+                .frame(width: 180, height: 4).padding(.top, 6)
+                HStack(spacing: 8) {
+                    Button("+30") { self.rest?.ends += 30; self.rest?.total = max(rest.total, left + 30) }
+                    Button("Skip") { withAnimation { self.rest = nil } }
+                }
+                .buttonStyle(RestButton())
+                .padding(.top, 14)
             }
-            if LanguageModel.isAvailable { MicButton(voice: voice, onHeard: heard) }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 26).padding(.bottom, 18)
+            .background(Color(.secondarySystemBackground))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Rest")
         }
-        .animation(.snappy, value: rest)
     }
 
-    /// FIT-31: on an exercise card, how its sets went ("only got four on the last one") ticks them, with the
-    /// heard values dashed and Undo; on the finish card, it's the note. Nothing is stored until Save.
+    private struct RestButton: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label.font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 14).frame(height: 36)
+                .background(Color(.systemBackground), in: .capsule)
+                .opacity(configuration.isPressed ? 0.6 : 1)
+        }
+    }
+
+    // MARK: Mic
+
+    private func micArea(onFinish: Bool) -> some View {
+        VStack(spacing: 6) {
+            if LanguageModel.isAvailable {
+                MicButton(voice: voice, onHeard: heard)
+                Text(talked ? " " : onFinish ? "Hold to add a note" : "Or say how it went")
+                    .font(.footnote).foregroundStyle(.tertiary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// FIT-32: on a set card, what's said is about the set just logged ("only got four on that one"), or the one
+    /// on screen if nothing's been logged since; that one is then logged and its rest starts. Heard values are
+    /// dashed, with Undo. On the finish card, speech is the note. Nothing is stored until Save.
     private func heard(_ said: String) {
         talked = true
-        let blocks = draft.blocks
-        guard let position = page, blocks.indices.contains(position) else {
+        let pages = draft.pages
+        guard let position = page, pages.indices.contains(position) else {
             draft.note = said
             withAnimation { toast = Toast(text: "Note added") }
             return
         }
-        let block = blocks[position]
-        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-        let exercise = draft.lines(block: block).first.map { names[draft.rows[$0[0]].exercise] ?? draft.rows[$0[0]].exercise } ?? ""
+        let isDone = { (index: Int) in pages[index].allSatisfy { draft.rows[$0].done } }
+        let target = position > 0 && isDone(position - 1) && !isDone(position) ? position - 1 : position
+        let line = pages[target]
+        let names = names
+        let exercise = names[draft.rows[line[0]].exercise] ?? draft.rows[line[0]].exercise
         working = said
         Task {
             defer { working = nil }
             do {
                 let differences = try await TodayRequestParser.parseSets(said, exercise: exercise)
                 let before = draft
-                let changed = SpokenLog.apply(differences, to: &draft, names: names, block: block)
-                let count = draft.lines(block: block).count
-                let text = if changed.count == 1, let index = changed.first, let value = draft.rows[index].value {
-                    "Set \(draft.rows[..<index].filter { $0.exercise == draft.rows[index].exercise }.count + 1) · \(Coach.number(value)) \(draft.rows[index].metric == "reps" ? "reps" : SetRow.units[draft.rows[index].metric] ?? "")"
+                let changed = SpokenLog.apply(differences, to: &draft, names: names, line: line)
+                let row = draft.rows[changed.first ?? line[0]]
+                let number = row.round + 1
+                let text = if let index = changed.first, let value = draft.rows[index].value {
+                    "Set \(number) · \(Coach.number(value)) \(draft.rows[index].metric == "reps" ? "reps" : SetRow.units[draft.rows[index].metric] ?? "")"
                 } else {
-                    "\(count) \(count == 1 ? "set" : "sets") done"
+                    "Set \(number) logged"
                 }
-                withAnimation {
-                    rest = nil
-                    toast = Toast(text: text) { draft = before }
+                withAnimation { toast = Toast(text: text) { draft = before } }
+                if target == position {
+                    let seconds = draft.rest(after: line[line.count - 1])
+                    withAnimation(.snappy) {
+                        rest = position + 1 < pages.count && seconds > 0 ? Rest(ends: .now + seconds, total: seconds) : nil
+                        page = position + 1
+                    }
                 }
-                try? await Task.sleep(for: .milliseconds(650))
-                withAnimation(.snappy) { page = position + 1 }
             } catch {
-                message = "Couldn’t understand that. Tap ✓ instead, or try again."
+                message = "Couldn’t understand that. Swipe to log it, or try again."
             }
-        }
-    }
-
-    private func restDock(_ rest: Rest) -> some View {
-        TimelineView(.periodic(from: .now, by: 0.25)) { context in
-            let left = max(0, rest.ends.timeIntervalSince(context.date))
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle().stroke(Color(.separator), lineWidth: 3.5)
-                    Circle().trim(from: 0, to: left / max(rest.total, 1))
-                        .stroke(.primary, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                }
-                .frame(width: 30, height: 30)
-                .padding(.trailing, 2)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Rest").font(.caption).foregroundStyle(.secondary)
-                    Text(Duration.seconds(left.rounded(.up)).formatted(.time(pattern: .minuteSecond)))
-                        .font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit()
-                }
-                Spacer(minLength: 0)
-                Button("+30") { self.rest?.ends += 30; self.rest?.total = max(rest.total, left + 30) }
-                    .buttonStyle(DockButton())
-                Button("Skip") { withAnimation { self.rest = nil } }
-                    .buttonStyle(DockButton())
-            }
-            .padding(.leading, 14).padding(.trailing, 8)
-            .frame(height: 64)
-            .background(Color(.secondarySystemBackground), in: .capsule)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Rest")
-        }
-    }
-
-    private struct DockButton: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            configuration.label.font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12).frame(height: 40)
-                .background(Color(.systemBackground), in: .capsule)
-                .opacity(configuration.isPressed ? 0.6 : 1)
         }
     }
 
@@ -394,7 +366,7 @@ struct WorkoutModeView: View {
         let main = Set(Planner.catalog(templates).filter(\.isGoalLift).map(\.slug))
         let lifts = draft.lifts(main: main, names: names, tier: AgeTier.of(age: profiles.first?.age ?? 30))
         return VStack(alignment: .leading, spacing: 0) {
-            Text("FINISH").font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
+            Text("Finish").font(.subheadline).foregroundStyle(.secondary)
             Text(done == total ? "All \(total) sets" : "\(done) of \(total) sets")
                 .font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
             TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -440,7 +412,7 @@ struct WorkoutModeView: View {
             .disabled(done == 0)
             .opacity(done == 0 ? 0.4 : 1)
         }
-        .padding(EdgeInsets(top: 24, leading: 22, bottom: 22, trailing: 22))
+        .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
     }

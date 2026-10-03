@@ -47,15 +47,17 @@ struct SpokenTests {
                                 to: &unknown, names: names).isEmpty)
     }
 
-    @Test func talkingMidWorkoutOnlyLogsTheExerciseOnScreen() {
+    @Test func talkingMidWorkoutOnlyLogsTheCardItsAbout() {
         var draft = sessionB
-        let changed = SpokenLog.apply([.init(exercise: "Bench Press", set: .max, reps: 4)], to: &draft, names: names, block: 0)
-        #expect(changed == [2])
-        #expect(draft.rows.filter(\.done).count == 3) // bench only
-        #expect(draft.rows[3...].allSatisfy { !$0.done })
+        let changed = SpokenLog.apply([.init(exercise: "Bench Press", set: .max, reps: 4)], to: &draft, names: names, line: [1])
+        #expect(changed == [1])
+        #expect(draft.rows.indices.filter { draft.rows[$0].done } == [1]) // that set only
+        var named = sessionB
+        #expect(SpokenLog.apply([.init(exercise: "bench", set: 3, reps: 6)], to: &named, names: names, line: [0]) == [2])
+        #expect(named.rows[0].done && named.rows[2].done && named.rows[2].value == 6)
         var deadlift = sessionB
-        #expect(SpokenLog.apply([], to: &deadlift, names: names, block: 1).isEmpty) // "done": ticked as planned
-        #expect(deadlift.rows.filter(\.done).map(\.exercise) == ["deadlift", "deadlift", "deadlift"])
+        #expect(SpokenLog.apply([], to: &deadlift, names: names, line: [3]).isEmpty) // "done": logged as planned
+        #expect(deadlift.rows.indices.filter { deadlift.rows[$0].done } == [3])
     }
 
     @Test func theParseOnlyKeepsWhatTheRulesCanUse() {

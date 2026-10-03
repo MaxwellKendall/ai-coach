@@ -129,14 +129,23 @@ struct LogDraftTests {
         #expect(draft.lines(block: 1) == [[3, 4], [5, 6]])
     }
 
-    @Test func tickingLogsTheLineRestsAndSaysWhenTheExerciseIsDone() {
+    @Test func everyRoundIsACardInOrder() {
+        let draft = WorkoutDraft(session: "B", plan: SessionPlan([squat] + superset))
+        #expect(draft.pages == [[0], [1], [2], [3, 4], [5, 6]])
+    }
+
+    @Test func swipingForwardLogsTheCardsPassedAndRestsAfterTheLast() {
         var draft = WorkoutDraft(session: "B", plan: SessionPlan([squat] + superset))
-        #expect(draft.tick([0]) == (180, false))
-        draft.tick([1])
-        #expect(draft.tick([2]).blockDone)
-        #expect(draft.tick([3, 4]) == (90, false)) // whole round ticked, rest after its last movement
-        draft.untick([3, 4])
-        #expect(!draft.rows[3].done && !draft.rows[4].done)
+        draft.rows[0].value = 4
+        #expect(draft.swiped(from: 0, to: 1) == 180)
+        #expect(draft.rows[0].done && draft.rows[0].value == 4 && !draft.rows[1].done)
+        #expect(draft.rows[1].value == 4) // carried to the sets planned the same
+        #expect(draft.swiped(from: 1, to: 0) == nil) // back logs nothing
+        #expect(draft.swiped(from: 0, to: 1) == nil) // already logged: no new rest
+        #expect(draft.swiped(from: 2, to: 4) == 90) // a superset round, rest after its last movement
+        #expect(draft.rows.map(\.done) == [true, false, true, true, true, false, false])
+        #expect(draft.swiped(from: 4, to: 5) != nil) // onto the finish card
+        #expect(draft.rows[5].done && draft.rows[6].done)
     }
 
     @Test func adjustingALineStepsRepsAndLoadAndClearsHeard() {

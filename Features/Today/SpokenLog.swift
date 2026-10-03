@@ -3,37 +3,69 @@ import Foundation
 /// "Did it. Last bench set was only four." (FIT-30): every planned set is logged as planned, then each spoken
 /// difference is matched to the plan by code. Changed values are marked heard so the check sheet shows them.
 enum SpokenLog {
-    /// Returns the rows that changed, in plan order. With `block`, only that exercise's sets are logged
-    /// and matched (FIT-31: talking during the workout).
+    /// Returns the rows that changed, in plan order.
     @discardableResult
-    static func apply(_ differences: [SpokenRequest.Difference], to draft: inout WorkoutDraft, names: [String: String],
-                      block: Int? = nil) -> [Int] {
-        let scope = draft.rows.indices.filter { block == nil || draft.rows[$0].block == block }
-        for index in scope { draft.rows[index].done = true }
-        let exercises = scope.map { draft.rows[$0].exercise }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+    static func apply(_ differences: [SpokenRequest.Difference], to draft: inout WorkoutDraft, names: [String: String]) -> [Int] {
+        for index in draft.rows.indices { draft.rows[index].done = true }
+        let exercises = unique(draft.rows.map(\.exercise))
         var changed: Set<Int> = []
         for difference in differences {
             guard let exercise = match(difference.exercise, in: exercises, names: names) else { continue }
-            let rows = scope.filter { draft.rows[$0].exercise == exercise }
+            let rows = draft.rows.indices.filter { draft.rows[$0].exercise == exercise }
             let picked: [Int] = switch difference.set {
             case nil: rows
             case .max?: rows.suffix(1)
             case let number?: rows.indices.contains(number - 1) ? [rows[number - 1]] : []
             }
-            for index in picked {
-                if let reps = difference.reps, draft.rows[index].metric == "reps", draft.rows[index].value != reps {
-                    draft.rows[index].value = reps
-                    draft.rows[index].heard = true
-                    changed.insert(index)
-                }
-                if let pounds = difference.pounds, draft.rows[index].loadMetric != nil, draft.rows[index].load != pounds {
-                    draft.rows[index].load = pounds
-                    draft.rows[index].heard = true
-                    changed.insert(index)
-                }
-            }
+            changed.formUnion(set(difference, on: picked, in: &draft))
         }
         return changed.sorted()
+    }
+
+    /// FIT-32: talking about one card mid-workout ("only got four on that one"). The card's sets are logged,
+    /// and what was said changes them, or the set it names of the same exercise ("set two was six").
+    @discardableResult
+    static func apply(_ differences: [SpokenRequest.Difference], to draft: inout WorkoutDraft, names: [String: String],
+                      line: [Int]) -> [Int] {
+        guard let first = line.first else { return [] }
+        for index in line { draft.rows[index].done = true }
+        let exercises = unique(line.map { draft.rows[$0].exercise })
+        var changed: Set<Int> = []
+        for difference in differences {
+            guard let exercise = match(difference.exercise, in: exercises, names: names)
+                ?? (exercises.count == 1 ? exercises[0] : nil) else { continue }
+            let picked: [Int]
+            if let number = difference.set, number != .max {
+                let rows = draft.rows.indices.filter { draft.rows[$0].block == draft.rows[first].block && draft.rows[$0].exercise == exercise }
+                picked = rows.indices.contains(number - 1) ? [rows[number - 1]] : []
+            } else {
+                picked = line.filter { draft.rows[$0].exercise == exercise }
+            }
+            for index in picked { draft.rows[index].done = true }
+            changed.formUnion(set(difference, on: picked, in: &draft))
+        }
+        return changed.sorted()
+    }
+
+    private static func set(_ difference: SpokenRequest.Difference, on picked: [Int], in draft: inout WorkoutDraft) -> [Int] {
+        var changed: [Int] = []
+        for index in picked {
+            if let reps = difference.reps, draft.rows[index].metric == "reps", draft.rows[index].value != reps {
+                draft.rows[index].value = reps
+                draft.rows[index].heard = true
+                changed.append(index)
+            }
+            if let pounds = difference.pounds, draft.rows[index].loadMetric != nil, draft.rows[index].load != pounds {
+                draft.rows[index].load = pounds
+                draft.rows[index].heard = true
+                changed.append(index)
+            }
+        }
+        return changed
+    }
+
+    private static func unique(_ exercises: [String]) -> [String] {
+        exercises.reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
     }
 
     /// The planned exercise whose name shares the most words with what was said ("bench" → Bench Press).
