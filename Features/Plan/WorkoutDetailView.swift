@@ -156,8 +156,8 @@ struct WorkoutDetailView: View {
                         Text(SetRow.units[metric] ?? metric).font(.caption).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(isSelected ? RootView.accent.opacity(0.12) : Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isSelected ? RootView.accent : .clear, lineWidth: 2))
+                    .background(isSelected ? Color.primary.opacity(0.12) : Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isSelected ? Color.primary : .clear, lineWidth: 2))
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -369,7 +369,7 @@ struct BlockBadge: View {
     var body: some View {
         Text(letter)
             .font(.system(size: size * 0.55, weight: .bold)).fontWidth(.condensed)
-            .foregroundStyle(RootView.accent)
+            .foregroundStyle(Color.primary)
             .frame(width: size, height: size)
             .background(Color(red: 0.08, green: 0.09, blue: 0.11), in: .rect(cornerRadius: size * 0.3))
     }

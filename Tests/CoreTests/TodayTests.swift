@@ -47,6 +47,6 @@ struct TodayTests {
           Measurement(metric: "rpe", value: 8, unit: "RPE")], "3×5 RPE 8"),
     ])
     func plannedTargetsRead(_ targets: [AICoach.Measurement], _ expected: String) {
-        #expect(DayPage.targets(targets) == expected)
+        #expect(Coach.targets(targets) == expected)
     }
 }

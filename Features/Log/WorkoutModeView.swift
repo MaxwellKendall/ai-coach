@@ -48,7 +48,7 @@ struct WorkoutModeView: View {
         .background(Self.background)
         .preferredColorScheme(.dark)
         // Full-screen covers don't inherit the app's tint.
-        .tint(RootView.accent)
+        .tint(Color.primary)
         .sensoryFeedback(.success, trigger: restsFinished)
         .task(id: rest?.ends) {
             guard let ends = rest?.ends else { return }
@@ -100,7 +100,7 @@ struct WorkoutModeView: View {
                     GeometryReader { proxy in
                         ZStack(alignment: .leading) {
                             Capsule().fill(.white.opacity(0.15))
-                            Capsule().fill(RootView.accent).frame(width: proxy.size.width * done)
+                            Capsule().fill(Color.primary).frame(width: proxy.size.width * done)
                         }
                     }
                     .frame(height: 6)
@@ -132,7 +132,7 @@ struct WorkoutModeView: View {
                             Text("\(letter)\(m + 1) \(names[exercise] ?? exercise)")
                                 .font(.caption.weight(.semibold)).lineLimit(1)
                                 .padding(.horizontal, 10).frame(height: 28)
-                                .background(exercise == current.exercise ? RootView.accent : .white.opacity(0.1), in: .capsule)
+                                .background(exercise == current.exercise ? Color.primary : .white.opacity(0.1), in: .capsule)
                                 .foregroundStyle(exercise == current.exercise ? Self.background : .primary)
                         }
                     }
@@ -163,7 +163,7 @@ struct WorkoutModeView: View {
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: 22))
-            .tint(current.done ? Color.secondary : RootView.accent)
+            .tint(current.done ? Color.secondary : Color.primary)
             .foregroundStyle(Self.background)
         }
         .padding(.horizontal, 20)
@@ -189,7 +189,7 @@ struct WorkoutModeView: View {
                 ZStack {
                     Circle().stroke(.white.opacity(0.12), lineWidth: 14)
                     Circle().trim(from: 0, to: left / max(rest.total, left))
-                        .stroke(RootView.accent, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                        .stroke(Color.primary, style: StrokeStyle(lineWidth: 14, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     Text(Duration.seconds(left.rounded(.up)).formatted(.time(pattern: .minuteSecond)))
                         .font(.system(size: 64, weight: .bold).monospacedDigit()).fontWidth(.condensed)
@@ -211,7 +211,7 @@ struct WorkoutModeView: View {
                         Button { draft.rows[rest.after].rpe = on ? nil : rpe } label: {
                             Text(WorkoutDetailView.number(rpe)).font(.headline.monospacedDigit())
                                 .frame(maxWidth: .infinity, minHeight: 44)
-                                .background(on ? RootView.accent : .white.opacity(0.1), in: .rect(cornerRadius: 10))
+                                .background(on ? Color.primary : .white.opacity(0.1), in: .rect(cornerRadius: 10))
                                 .foregroundStyle(on ? Self.background : .primary)
                         }
                         .buttonStyle(.plain)

@@ -109,7 +109,7 @@ struct AdjustSheet: View {
         let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
         func line(_ w: PlannedWorkout) -> String {
             let name = names[w.exercise] ?? w.exercise
-            return "\(w.date.formatted(.dateTime.weekday(.abbreviated))) \(name)\(w.note.map { " (\($0))" } ?? "") \(DayPage.targets(w.targets))"
+            return "\(w.date.formatted(.dateTime.weekday(.abbreviated))) \(name)\(w.note.map { " (\($0))" } ?? "") \(Coach.targets(w.targets))"
         }
         let old = before.map(line), new = after.map(line)
         return old.filter { !new.contains($0) }.map { "− " + $0 } + new.filter { !old.contains($0) }.map { "+ " + $0 }

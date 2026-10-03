@@ -9,15 +9,11 @@ struct RootView: View {
     @State private var onboarding: Profile?
     @State private var suggesting = false
 
-    /// FIT-19 prototype accent #F06418.
-    static let accent = Color(red: 0.94, green: 0.39, blue: 0.09)
+    /// Graphite (FIT-27): monochrome, the label colour is the only accent.
+    static let accent = Color.primary
 
     var body: some View {
-        TabView {
-            Tab("Today", systemImage: "calendar") { TodayScreen() }
-            Tab("Goals", systemImage: "target") { GoalsScreen() }
-            Tab("Progress", systemImage: "chart.line.uptrend.xyaxis") { ProgressScreen() }
-        }
+        TodayScreen()
         .tint(Self.accent)
         // Onboarding (FIT-4): settings once, then suggested goals. The profile is inserted up front so edits
         // are observed, and an unfinished one resumes on the next launch.

@@ -1,182 +1,323 @@
 import SwiftUI
 import SwiftData
 
-/// Home (FIT-19, prototype C2): swipeable progress charts over a swipeable week.
+/// The app (FIT-27, prototype board 1): this week's days as cards swiped sideways, the M–S strip above them,
+/// and one mic. Planned days start a workout, done days show what happened, and the rest stays one tap away.
 struct TodayScreen: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var plans: [Plan]
     @Query private var profiles: [Profile]
-    @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
     @Query private var templates: [Template]
-    @State private var adjusting: Plan?
-    @State private var logging: Logging?
-    @State private var live: WorkoutDraft?
-    @State private var checking: Checking?
+    @State private var day: Int?
     @State private var voice = VoiceCapture()
-    @State private var heard: String?
-    @State private var editing: LogEntry?
-    @State private var details: Rows?
-    @State private var record: Rows?
-    /// Set by Start on the detail sheet; workout mode opens once the sheet is gone.
-    @State private var startAfterDetails: [PlannedActivity]?
+    @State private var working: String?
+    @State private var message: String?
+    @State private var toast: Toast?
+    @State private var sheet: Sheet?
+    @State private var live: WorkoutDraft?
+    @State private var you = false
 
-    /// A day's planned workout rows, presented as a sheet.
-    struct Rows: Identifiable {
-        let id = UUID()
-        let items: [PlannedActivity]
-    }
-
-    /// What the user tapped to log: a whole planned session, or one other planned item.
-    enum Logging: Identifiable {
-        case workout(WorkoutDraft, Date)
-        case item(PlannedActivity)
+    enum Sheet: Identifiable {
+        case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
         var id: String {
             switch self {
-            case .workout(let draft, let date): "\(draft.session)\(date)"
-            case .item(let item): item.id.uuidString
+            case .details(let items): "details \(items.map(\.id))"
+            case .record(let items): "record \(items.map(\.id))"
+            case .log(let items): "log \(items.map(\.id))"
+            case .adjust(let plan): "adjust \(plan.id)"
+            case .check: "check"
             }
         }
-    }
-
-    /// Cards the log bar produced, waiting for the user to check them.
-    struct Checking: Identifiable {
-        let id = UUID()
-        let entries: [LogDraftEntry]
     }
 
     private var week: [Date] {
         (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.monday(of: .now))! }
     }
 
+    private var todayIndex: Int { week.firstIndex { Calendar.current.isDateInToday($0) } ?? 0 }
+
     private var thisWeeksPlan: Plan? { plans.first { $0.weekStart == week[0] } }
 
     var body: some View {
-        let byID = Dictionary(templates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let pages = chartPages(byID)
         let week = week
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if pages.isEmpty {
-                        ContentUnavailableView("No progress yet", systemImage: "chart.line.uptrend.xyaxis",
-                                               description: Text("Log a workout or meal to see your trends here."))
-                            .frame(height: 250)
-                    } else {
-                        ChartCarousel(pages: pages)
-                    }
-                    ForEach(thisWeeksPlan?.warnings ?? [], id: \.self, content: notice)
-                    WeekPager(days: week, items: planned.filter { $0.date >= week[0] && $0.date < week[6] + 86_400 },
-                              templates: templates, logged: Set(entries.compactMap(\.plannedRef)),
-                              entries: entries.filter { $0.kind != .workout && $0.plannedRef == nil },
-                              onEdit: { editing = $0 }, onDelete: { context.delete($0) }) { items in
-                        startLogging(items)
-                    } onDetails: { details = Rows(items: $0) } onRecord: { record = Rows(items: $0) }
-                }
-                .padding(.vertical, 8)
-            }
-            .background(Color(.secondarySystemBackground))
-            .navigationTitle("Today")
-            .navigationSubtitle(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
-            .toolbar { toolbar }
-            .safeAreaInset(edge: .bottom) {
-                LogBar(voice: voice, heard: $heard, recipes: templates.filter { $0.kind == .recipe }) {
-                    checking = Checking(entries: $0)
-                }
-            }
-            .overlay {
-                if voice.listening || heard != nil { ListeningSheet(voice: voice, heard: heard) }
-            }
-            .animation(.snappy, value: voice.listening || heard != nil)
-            .toolbar(voice.listening || heard != nil ? .hidden : .visible, for: .tabBar)
-            .sheet(item: $checking) { LogCheckSheet(entries: $0.entries) }
-            .sheet(item: $editing) { entry in NavigationStack { EntryEditor(editing: entry) } }
-            .sheet(item: $adjusting) { plan in NavigationStack { AdjustSheet(plan: plan) } }
-            .sheet(item: $details, onDismiss: {
-                if let items = startAfterDetails { startLogging(items) }
-                startAfterDetails = nil
-            }) { rows in
-                NavigationStack {
-                    WorkoutDetailView(items: rows.items, session: Planner.session(rows.items, templates: templates),
-                                      startTitle: rows.items.first.map { Calendar.current.isDateInToday($0.date) } == true
-                                          ? "Start workout" : "Log workout") { startAfterDetails = $0 }
-                }
-            }
-            .sheet(item: $record) { rows in NavigationStack { SessionRecordView(planned: rows.items) } }
-            .fullScreenCover(item: $live) { draft in WorkoutModeView(draft: draft) }
-            .sheet(item: $logging) { logging in
-                NavigationStack {
-                    switch logging {
-                    case let .workout(draft, date): WorkoutLogView(draft: draft, date: date)
-                    case let .item(item): EntryEditor(planned: item)
+        let cards = cards(week)
+        let selected = day ?? todayIndex
+        VStack(alignment: .leading, spacing: 0) {
+            header(week[selected], index: selected)
+            strip(week, cards: cards, selected: selected)
+                .padding(.horizontal, 14).padding(.top, 18)
+            ScrollView(.horizontal) {
+                HStack(spacing: 12) {
+                    ForEach(week.indices, id: \.self) { index in
+                        card(cards[index], isToday: index == todayIndex, isPast: index < todayIndex)
+                            .containerRelativeFrame(.horizontal)
+                            .id(index)
                     }
                 }
+                .scrollTargetLayout()
             }
-            // A new week, or a profile that just finished onboarding, gets a plan.
-            .task(id: profiles.first?.isComplete) { try? Planner.ensureWeek(in: context) }
+            .contentMargins(.horizontal, 22, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: $day)
+            .padding(.top, 22)
+            .padding(.bottom, LanguageModel.isAvailable ? 126 : 24)
         }
-    }
-
-    private func startLogging(_ items: [PlannedActivity]) {
-        guard let first = items.min(by: { $0.date < $1.date }) else { return }
-        if first.kind == .workout {
-            // Today's session runs in workout mode; another day's is logged at its planned time.
-            let draft = WorkoutDraft(session: first.slot ?? "Workout", plan: Planner.session(items, templates: templates))
-            if Calendar.current.isDateInToday(first.date) { live = draft } else { logging = .workout(draft, first.date) }
-        } else {
-            logging = .item(first)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(.systemBackground))
+        .overlay {
+            if voice.listening || working != nil {
+                ListeningVeil(voice: voice, working: working, prompt: "Change today, or say what you did")
+            }
         }
-    }
-
-    private func notice(_ text: String) -> some View {
-        Label(text, systemImage: "exclamationmark.triangle.fill")
-            .font(.subheadline)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(.background, in: .rect(cornerRadius: 14))
-            .padding(.horizontal, 16)
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem {
-            Menu("Plan", systemImage: "ellipsis") {
-                if let plan = thisWeeksPlan {
-                    Button("Adjust this week", systemImage: "slider.horizontal.3") { adjusting = plan }
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 14) {
+                ToastView(toast: $toast)
+                if LanguageModel.isAvailable {
+                    MicButton(voice: voice, onHeard: heard)
+                    Text(voice.listening ? " " : "Hold to talk").font(.footnote).foregroundStyle(.tertiary)
                 }
-                Button("Regenerate this week", systemImage: "arrow.clockwise") {
-                    try? Planner.generate(weekOf: .now, in: context)
-                }
-                .disabled(profiles.first?.isComplete != true)
             }
+            .padding(.bottom, 4)
         }
-        ToolbarItem {
-            NavigationLink {
-                CatalogScreen()
-            } label: {
-                Label("Catalog", systemImage: "books.vertical")
+        .animation(.snappy, value: voice.listening || working != nil)
+        .animation(.snappy, value: toast)
+        .onAppear { if day == nil { day = todayIndex } }
+        .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("OK") {}
+        } message: { Text(message ?? "") }
+        .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
+        .sheet(item: $sheet, content: sheetView)
+        .sheet(isPresented: $you) { YouScreen() }
+        .fullScreenCover(item: $live) { draft in WorkoutModeView(draft: draft) }
+        // A new week, or a profile that just finished onboarding, gets a plan.
+        .task(id: profiles.first?.isComplete) { try? Planner.ensureWeek(in: context) }
+    }
+
+    // MARK: Header and strip
+
+    private func header(_ date: Date, index: Int) -> some View {
+        let deload = thisWeeksPlan?.warnings.contains { $0.hasPrefix("Deload") } == true
+        let title = switch index - todayIndex {
+        case 0: "Today"
+        case -1: "Yesterday"
+        case 1: "Tomorrow"
+        default: date.formatted(.dateTime.weekday(.wide))
+        }
+        return HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text((date.formatted(.dateTime.weekday(.wide).month(.wide).day()) + (deload ? " · light week" : "")).uppercased())
+                    .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
+                Text(title).font(.system(size: 34, weight: .bold)).tracking(-0.5)
+                    .contentTransition(.numericText())
+            }
+            Spacer()
+            Button { you = true } label: {
+                Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Goals, progress and settings")
+        }
+        .padding(.leading, 22).padding(.trailing, 12).padding(.top, 8)
+        .animation(.snappy, value: index)
+    }
+
+    private func strip(_ week: [Date], cards: [DayCard], selected: Int) -> some View {
+        HStack(spacing: 0) {
+            ForEach(week.indices, id: \.self) { index in
+                let on = index == selected
+                Button { withAnimation(.snappy) { day = index } } label: {
+                    VStack(spacing: 4) {
+                        Text(week[index].formatted(.dateTime.weekday(.narrow)))
+                            .font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
+                        Text(week[index].formatted(.dateTime.day()))
+                            .font(.body.weight(on || index == todayIndex ? .semibold : .regular)).monospacedDigit()
+                            .foregroundStyle(on ? Color(.systemBackground) : index == todayIndex ? .primary : .secondary)
+                            .frame(width: 34, height: 34)
+                            .background(on ? Color.primary : .clear, in: .circle)
+                        dot(cards[index])
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(week[index].formatted(.dateTime.weekday(.wide)))
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
     }
 
-    /// One lift page per 1RM goal, then protein and weekly volume, each only when there is data for it.
-    private func chartPages(_ templates: [UUID: Template]) -> [ChartPage] {
-        let sets = Planner.loggedSets(entries, templates: Array(templates.values))
-        let names = Dictionary(templates.values.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-        var pages: [ChartPage] = goals.filter { $0.metric.hasSuffix(".1rm_lb") }.compactMap { goal in
-            let slug = String(goal.metric.dropLast(".1rm_lb".count))
-            let trend = Training.estimated1RMTrend(sets, exercise: slug)
-            return trend.isEmpty ? nil : .lift(name: names[slug] ?? Goal.label(goal.metric), trend: trend, goal: goal.target)
+    /// Filled when done, a ring when planned, nothing on rest days.
+    @ViewBuilder private func dot(_ card: DayCard) -> some View {
+        switch card {
+        case .done: Circle().fill(.primary).frame(width: 5, height: 5)
+        case .plan: Circle().strokeBorder(.primary, lineWidth: 1.5).frame(width: 5, height: 5)
+        case .rest: Color.clear.frame(width: 5, height: 5)
         }
-        let protein = Daily.totals(entries.map { ($0.timestamp, $0.measurements) }, metric: "protein_g").suffix(14)
-        if !protein.isEmpty {
-            pages.append(.daily(name: "Protein", unit: "g", values: Array(protein),
-                                goal: goals.first { $0.metric == "protein_g" }?.target))
+    }
+
+    // MARK: Cards
+
+    private func cards(_ week: [Date]) -> [DayCard] {
+        let profile = profiles.first
+        let workouts = planned.filter { $0.kind == .workout }
+        let context = DayCard.Context(templates: templates, sessionMinutes: profile?.sessionMinutes ?? 45,
+                                      deload: thisWeeksPlan?.warnings.contains { $0.hasPrefix("Deload") } == true,
+                                      tier: AgeTier.of(age: profile?.age ?? 30))
+        return week.map { day in
+            let next = workouts.first { $0.date >= Calendar.current.date(byAdding: .day, value: 1, to: day)! }
+            return DayCard.make(day: day, planned: workouts, entries: entries,
+                                next: next.map { ($0.slot ?? "Workout", $0.date) }, context: context)
         }
-        if let last = sets.last?.date {
-            pages.append(.volume(setsByPattern: Training.setsByPattern(sets, endingOn: last), endingOn: last))
+    }
+
+    @ViewBuilder private func card(_ card: DayCard, isToday: Bool, isPast: Bool) -> some View {
+        Group {
+            switch card {
+            case .plan(let plan): planCard(plan, isToday: isToday, isPast: isPast)
+            case .done(let done): doneCard(done)
+            case .rest(let coach):
+                VStack(spacing: 8) {
+                    Text("Rest").font(.system(size: 30, weight: .bold)).tracking(-0.4)
+                    Text(coach).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        .frame(maxWidth: 240)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
-        return pages
+        .padding(EdgeInsets(top: 26, leading: 24, bottom: 24, trailing: 24))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+    }
+
+    private func planCard(_ plan: DayCard.Planned, isToday: Bool, isPast: Bool) -> some View {
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("\(plan.start.formatted(date: .omitted, time: .shortened)) · \(plan.minutes) min")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                Menu {
+                    Button("Edit exercises", systemImage: "list.bullet") { sheet = .details(plan.items) }
+                    if let plan = thisWeeksPlan {
+                        Button("Change this week", systemImage: "slider.horizontal.3") { sheet = .adjust(plan) }
+                    }
+                    Button("Plan this week again", systemImage: "arrow.clockwise") { try? Planner.generate(weekOf: .now, in: context) }
+                } label: {
+                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
+                        .frame(width: 32, height: 24)
+                }
+                .accessibilityLabel("More")
+            }
+            Text(plan.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
+            Text(plan.coach).font(.subheadline).foregroundStyle(.secondary).lineSpacing(2).padding(.top, 10)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 0) {
+                ForEach(plan.session.blocks) { block in
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(block.movements.map { names[$0.exercise] ?? $0.exercise }.joined(separator: " + "))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text(block.dose).font(.system(.subheadline, design: .rounded)).foregroundStyle(.secondary)
+                            .fixedSize()
+                    }
+                    .padding(.vertical, 13)
+                    .overlay(alignment: .top) { Divider() }
+                }
+            }
+            .padding(.top, 22)
+            .contentShape(.rect)
+            .onTapGesture { sheet = .details(plan.items) }
+            Spacer(minLength: 16)
+            if isToday {
+                Button { start(plan) } label: {
+                    Label("Start", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color(.systemBackground))
+                .background(Color.primary, in: .capsule)
+            } else if isPast {
+                Button { sheet = .log(plan.items) } label: {
+                    Text("Log it").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
+                }
+                .buttonStyle(.plain)
+                .background(Color(.systemBackground), in: .capsule)
+            }
+        }
+    }
+
+    private func doneCard(_ done: DayCard.Done) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(done.start.formatted(date: .omitted, time: .shortened)).font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                Label("Done", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            Text(done.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
+            HStack(alignment: .top, spacing: 8) {
+                if let minutes = done.minutes { stat("\(minutes)", "min") }
+                stat("\(done.sets)", "sets")
+                stat(done.volume.formatted(.number.precision(.fractionLength(0))), "lb")
+            }
+            .padding(.top, 26)
+            Text(done.coach).font(.body).lineSpacing(2).padding(.top, 26).fixedSize(horizontal: false, vertical: true)
+            if !done.note.isEmpty {
+                Text("“\(done.note)”").font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
+            }
+            Spacer(minLength: 12)
+            if let feel = done.feel {
+                Text("Felt \(feel.label.lowercased())").font(.footnote).foregroundStyle(.tertiary)
+            }
+        }
+        .contentShape(.rect)
+        .onTapGesture { sheet = .record(done.planned) }
+    }
+
+    private func stat(_ value: String, _ unit: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(value).font(.system(size: 28, weight: .semibold, design: .rounded)).tracking(-0.4)
+            Text(unit).font(.footnote).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Actions
+
+    private func start(_ plan: DayCard.Planned) {
+        live = WorkoutDraft(session: plan.title, plan: plan.session)
+    }
+
+    /// Meals, sleep and weight said to the mic land on the check sheet (FIT-9).
+    private func heard(_ said: String) {
+        working = said
+        Task {
+            defer { working = nil }
+            do {
+                let result = LogResolver.resolve(try await LogParser.parse(said), recipes: templates.filter { $0.kind == .recipe })
+                if !result.entries.isEmpty { sheet = .check(result.entries) } else { message = "Couldn’t find anything to log in that." }
+            } catch {
+                message = "Couldn’t understand that. Try again."
+            }
+        }
+    }
+
+    @ViewBuilder private func sheetView(_ sheet: Sheet) -> some View {
+        switch sheet {
+        case .details(let items):
+            NavigationStack {
+                WorkoutDetailView(items: items, session: Planner.session(items, templates: templates))
+            }
+        case .record(let items): NavigationStack { SessionRecordView(planned: items) }
+        case .log(let items):
+            NavigationStack {
+                WorkoutLogView(draft: WorkoutDraft(session: items.first?.slot ?? "Workout", plan: Planner.session(items, templates: templates)),
+                               date: items.first?.date ?? .now)
+            }
+        case .adjust(let plan): NavigationStack { AdjustSheet(plan: plan) }
+        case .check(let entries): LogCheckSheet(entries: entries)
+        }
     }
 }
 
