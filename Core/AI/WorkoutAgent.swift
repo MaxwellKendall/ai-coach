@@ -15,18 +15,30 @@ enum WorkoutAgent {
         var changed: Bool
     }
 
-    static func run(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup) async throws -> Outcome {
+    /// One change made, as it's made (FIT-50): the step for the progress pill and the workout so far.
+    struct Change: Sendable {
+        var step: String
+        var workouts: [PlannedWorkout]
+        var newExercises: [TemplateSeed]
+    }
+
+    typealias Progress = @MainActor @Sendable (Change) -> Void
+
+    static func run(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup,
+                    progress: Progress? = nil) async throws -> Outcome {
         // The on-device model now and then fails to decode a tool call; a second try from the start usually works.
         do {
-            return try await attempt(said, today: today, setup: setup)
+            return try await attempt(said, today: today, setup: setup, progress: progress)
         } catch let error as LanguageModelSession.GenerationError {
             if case .guardrailViolation = error { throw error }
-            return try await attempt(said, today: today, setup: setup)
+            if let progress { await progress(Change(step: "Trying again", workouts: today, newExercises: [])) }
+            return try await attempt(said, today: today, setup: setup, progress: progress)
         }
     }
 
-    private static func attempt(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup) async throws -> Outcome {
-        let state = State(TodayWorkout(today, setup: setup))
+    private static func attempt(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup,
+                                progress: Progress?) async throws -> Outcome {
+        let state = State(TodayWorkout(today, setup: setup), progress: progress)
         let library = setup.names.keys.sorted().map { slug in
             "\(setup.names[slug]!) (\(setup.catalog.first { $0.slug == slug }?.pattern ?? "other"))"
         }
@@ -64,7 +76,11 @@ enum WorkoutAgent {
     final class State: Sendable {
         let workout: Mutex<TodayWorkout>
         let calls = Mutex<[String]>([])
-        init(_ workout: TodayWorkout) { self.workout = Mutex(workout) }
+        let progress: Progress?
+        init(_ workout: TodayWorkout, progress: Progress?) {
+            self.workout = Mutex(workout)
+            self.progress = progress
+        }
     }
 
     struct AgentTool: Tool {
@@ -76,14 +92,18 @@ enum WorkoutAgent {
 
         func call(arguments: GeneratedContent) async throws -> String {
             state.calls.withLock { $0.append("\(name) \(arguments.jsonString)") }
-            return state.workout.withLock { workout in
+            let (output, change) = state.workout.withLock { workout -> (String, Change?) in
                 do {
-                    if let problem = try act(arguments, &workout) { return problem }
-                    return "Done. Today's workout is now: \(workout.text)"
+                    if let problem = try act(arguments, &workout) { return (problem, nil) }
+                    let change = Change(step: workout.done.last ?? "", workouts: workout.rows,
+                                        newExercises: workout.newExercises)
+                    return ("Done. Today's workout is now: \(workout.text)", change)
                 } catch {
-                    return "Those arguments didn't work: \(error.localizedDescription)"
+                    return ("Those arguments didn't work: \(error.localizedDescription)", nil)
                 }
             }
+            if let change, let progress = state.progress { await progress(change) }
+            return output
         }
     }
 

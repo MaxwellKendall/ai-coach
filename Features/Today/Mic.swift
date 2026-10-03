@@ -103,6 +103,57 @@ struct ListeningVeil: View {
     }
 }
 
+/// FIT-50: in place of the mic while a spoken request is worked on: what was said, the step the agent is on, and
+/// Cancel. The screen stays usable underneath.
+struct WorkingPill: View {
+    let said: String
+    let step: String
+    let cancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ProgressView().tint(Color(.systemBackground))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("“\(said)”").font(.caption).foregroundStyle(Color(.systemBackground).opacity(0.7))
+                Text(step).font(.subheadline.weight(.semibold)).foregroundStyle(Color(.systemBackground))
+                    .contentTransition(.opacity)
+                    .animation(.snappy, value: step)
+            }
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: cancel) {
+                Image(systemName: "xmark").font(.subheadline.weight(.bold)).foregroundStyle(Color(.systemBackground))
+                    .frame(width: 44, height: 44)
+                    .background(Color(.systemBackground).opacity(0.16), in: .circle)
+            }
+            .accessibilityLabel("Cancel")
+        }
+        .padding(.leading, 20).padding(.trailing, 7)
+        .frame(height: 58)
+        .background(Color.primary, in: .capsule)
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// FIT-50: a slow-turning glow around the screen's edge while the on-device model works (the Siri idiom).
+struct EdgeGlow: View {
+    var body: some View {
+        TimelineView(.animation) { context in
+            let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 4) / 4
+            RoundedRectangle(cornerRadius: 58, style: .continuous)
+                .strokeBorder(AngularGradient(colors: [.blue, .purple, .pink, .orange, .yellow, .blue],
+                                              center: .center, angle: .degrees(turn * 360)), lineWidth: 10)
+                .blur(radius: 14)
+                .opacity(0.75)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 /// A short confirmation at the bottom with an optional Undo (prototype toast).
 struct Toast: Equatable {
     var text: String
@@ -118,7 +169,7 @@ struct ToastView: View {
     var body: some View {
         if let current = toast {
             HStack(spacing: 14) {
-                Text(current.text)
+                Text(current.text).lineLimit(1)
                 if let undo = current.undo {
                     Button("Undo") { undo(); toast = nil }.fontWeight(.semibold)
                 }

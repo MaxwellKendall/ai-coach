@@ -12,7 +12,12 @@ struct TodayScreen: View {
     @Query private var templates: [Template]
     @State private var day: Int?
     @State private var voice = VoiceCapture()
+    /// What was said, while it's worked on (FIT-50: the progress pill shows it and `step`).
     @State private var working: String?
+    @State private var step = ""
+    @State private var job: Task<Void, Never>?
+    /// Exercises a spoken edit just brought in, highlighted for a moment.
+    @State private var fresh: Set<String> = []
     @State private var message: String?
     @State private var toast: Toast?
     @State private var sheet: Sheet?
@@ -71,23 +76,41 @@ struct TodayScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))
         .overlay {
-            if voice.listening || working != nil {
-                ListeningVeil(voice: voice, working: working, prompt: "Change today, or say what you did")
+            if working != nil { EdgeGlow().transition(.opacity) }
+        }
+        .overlay {
+            // FIT-50: the veil goes as soon as you stop talking; the pill below shows the work.
+            if voice.listening {
+                ListeningVeil(voice: voice, working: nil, prompt: "Change today, or say what you did")
             }
         }
         .overlay(alignment: .bottom) {
             VStack(spacing: 14) {
                 ToastView(toast: $toast)
-                if LanguageModel.isAvailable {
+                if let said = working {
+                    WorkingPill(said: said, step: step) { job?.cancel() }
+                        .padding(.bottom, 26)
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                } else if LanguageModel.isAvailable {
                     MicButton(voice: voice, onHeard: heard)
                     Text(voice.listening ? " " : "Hold to talk").font(.footnote).foregroundStyle(.tertiary)
                 }
             }
             .padding(.bottom, 4)
         }
-        .animation(.snappy, value: voice.listening || working != nil)
+        .animation(.snappy, value: voice.listening)
+        .animation(.snappy, value: working)
         .animation(.snappy, value: toast)
         .onAppear { if day == nil { day = todayIndex } }
+        #if DEBUG
+        // `-say "swap deadlifts for RDLs"` runs a spoken request without the mic, for the simulator.
+        .task {
+            if let said = UserDefaults.standard.string(forKey: "say") {
+                try? await Task.sleep(for: .seconds(2))
+                heard(said)
+            }
+        }
+        #endif
         .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") {}
         } message: { Text(message ?? "") }
@@ -253,7 +276,8 @@ struct TodayScreen: View {
             Text(plan.coach).font(.subheadline).foregroundStyle(.secondary).lineSpacing(2).padding(.top, 10)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 0) {
-                ForEach(plan.session.blocks) { block in
+                ForEach(Self.keyed(plan.session.blocks), id: \.key) { index, key, block in
+                    let new = isToday && block.movements.contains { fresh.contains($0.exercise) }
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(block.movements.map { names[$0.exercise] ?? $0.exercise }.joined(separator: " + "))
                             .lineLimit(2)
@@ -263,6 +287,13 @@ struct TodayScreen: View {
                     }
                     .padding(.vertical, 13)
                     .overlay(alignment: .top) { Divider() }
+                    .overlay(alignment: .leading) {
+                        if new { Circle().fill(.primary).frame(width: 6, height: 6).offset(x: -14).transition(.opacity) }
+                    }
+                    // FIT-50: a spoken edit's new exercises slide in, a new workout's one after another.
+                    .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 12))
+                                                .animation(.snappy.delay(Double(index) * 0.09)),
+                                            removal: .opacity))
                 }
             }
             .padding(.top, 22)
@@ -321,6 +352,16 @@ struct TodayScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Blocks named by their exercises, so a block keeps its identity across a spoken edit and a new one animates in.
+    private static func keyed(_ blocks: [SessionPlan.Block]) -> [(index: Int, key: String, block: SessionPlan.Block)] {
+        var seen: [String: Int] = [:]
+        return blocks.enumerated().map { index, block in
+            let name = block.movements.map(\.exercise).joined(separator: "+")
+            seen[name, default: 0] += 1
+            return (index, "\(name)#\(seen[name]!)", block)
+        }
+    }
+
     // MARK: Actions
 
     private func start(_ plan: DayCard.Planned) {
@@ -331,8 +372,9 @@ struct TodayScreen: View {
     /// (FIT-9). The model sorts what was said; the rules decide; a sheet confirms.
     private func heard(_ said: String) {
         working = said
-        Task {
-            defer { working = nil }
+        step = "Understanding what you said"
+        job = Task {
+            defer { working = nil; job = nil }
             do {
                 switch try await TodayRequestParser.parse(said)?.kind {
                 case .change(let change)?: propose(change, said: said)
@@ -345,7 +387,7 @@ struct TodayScreen: View {
                     message = "Couldn’t tell what to change. Try “I only have 30 minutes”, “my shoulder hurts” or “give me squats and lunges”."
                 }
             } catch {
-                message = "Couldn’t understand that. Try again."
+                if !Task.isCancelled { message = "Couldn’t understand that. Try again." }
             }
         }
     }
@@ -449,25 +491,62 @@ struct TodayScreen: View {
                                        history: history,
                                        weeksSinceDeload: Training.weeksSinceDeload(history, before: plan.weekStart, calendar: calendar),
                                        date: date, session: todays.first?.session ?? "Workout", calendar: calendar)
-        let result = try await WorkoutAgent.run(said, today: todays, setup: setup)
-        guard result.changed else {
-            message = "Couldn’t make that change. Try saying it another way."
+        // FIT-50: each tool's change is shown in place as it's made, so the ~8 s of work is visible. Cancel or a
+        // failure puts today back as it was.
+        let base = templates, others = all.filter { !calendar.isDateInToday($0.date) }
+        let added = Added()
+        func show(_ rows: [PlannedWorkout], _ seeds: [TemplateSeed]) throws {
+            for seed in seeds where !added.templates.contains(where: { $0.slug == seed.slug }) {
+                let template = Template(kind: seed.kind, name: seed.name, slug: seed.slug, attributes: seed.attributes)
+                context.insert(template)
+                added.templates.append(template)
+            }
+            let shown = Set(Planner.workouts(plan, templates: base + added.templates).filter { calendar.isDateInToday($0.date) }.map(\.exercise))
+            try withAnimation(.snappy) {
+                fresh.formUnion(Set(rows.map(\.exercise)).subtracting(shown))
+                try Planner.apply((others + rows).sorted { $0.date < $1.date }, to: plan, templates: base + added.templates, in: context)
+            }
+        }
+        func restore() {
+            withAnimation(.snappy) {
+                try? Planner.apply(all, to: plan, templates: base, in: context)
+                for template in added.templates { context.delete(template) }
+                try? context.save()
+                fresh = []
+            }
+        }
+        let result: WorkoutAgent.Outcome
+        do {
+            result = try await WorkoutAgent.run(said, today: todays, setup: setup) { change in
+                step = change.step
+                try? show(change.workouts, change.newExercises)
+            }
+            try Task.checkCancellation()
+        } catch {
+            restore()
+            throw error
+        }
+        guard result.changed, result.workouts != todays else {
+            restore()
+            if result.changed { withAnimation { toast = Toast(text: "That’s already today’s plan") } }
+            else { message = "Couldn’t make that change. Try saying it another way." }
             return
         }
-        guard result.workouts != todays else {
-            withAnimation { toast = Toast(text: "That’s already today’s plan") }
-            return
-        }
-        let added = result.newExercises.map { Template(kind: $0.kind, name: $0.name, slug: $0.slug, attributes: $0.attributes) }
-        for template in added { context.insert(template) }
-        let workouts = (all.filter { !calendar.isDateInToday($0.date) } + result.workouts).sorted { $0.date < $1.date }
-        try Planner.apply(workouts, to: plan, templates: templates + added, in: context)
-        withAnimation { toast = Toast(text: result.summary) { [context, templates] in
-            try? Planner.apply(all, to: plan, templates: templates, in: context)
-            for template in added { context.delete(template) }
+        try show(result.workouts, result.newExercises)
+        let kept = added.templates
+        withAnimation { toast = Toast(text: result.summary) { [context] in
+            try? Planner.apply(all, to: plan, templates: base, in: context)
+            for template in kept { context.delete(template) }
             try? context.save()
         } }
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            withAnimation(.easeOut(duration: 0.6)) { fresh = [] }
+        }
     }
+
+    /// Templates a spoken edit added while it ran.
+    private final class Added { var templates: [Template] = [] }
 
     private func apply(_ proposal: Proposal) {
         let before = Planner.workouts(proposal.plan, templates: templates)
