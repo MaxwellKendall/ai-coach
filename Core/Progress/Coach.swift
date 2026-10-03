@@ -82,6 +82,7 @@ enum Feel: Int, CaseIterable, Identifiable, Sendable {
     var id: Int { rawValue }
     var label: String { ["Easy", "Good", "Hard", "Brutal"][rawValue] }
     var effort: Double { [5, 7, 8.5, 10][rawValue] }
+    var rpe: Double { [6, 7, 8.5, 10][rawValue] }
 
     init?(effort: Double?) {
         guard let effort else { return nil }

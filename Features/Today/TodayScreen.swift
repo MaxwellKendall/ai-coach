@@ -91,7 +91,12 @@ struct TodayScreen: View {
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen() }
-        .fullScreenCover(item: $live) { draft in WorkoutModeView(draft: draft) }
+        .fullScreenCover(item: $live) { draft in
+            WorkoutModeView(draft: draft) {
+                day = todayIndex
+                toast = Toast(text: "Workout saved")
+            }
+        }
         // A new week, or a profile that just finished onboarding, gets a plan.
         .task(id: profiles.first?.isComplete) { try? Planner.ensureWeek(in: context) }
     }
@@ -218,7 +223,7 @@ struct TodayScreen: View {
                 ForEach(plan.session.blocks) { block in
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(block.movements.map { names[$0.exercise] ?? $0.exercise }.joined(separator: " + "))
-                            .lineLimit(1)
+                            .lineLimit(2)
                         Spacer(minLength: 0)
                         Text(block.dose).font(.system(.subheadline, design: .rounded)).foregroundStyle(.secondary)
                             .fixedSize()
@@ -234,16 +239,16 @@ struct TodayScreen: View {
             if isToday {
                 Button { start(plan) } label: {
                     Label("Start", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
+                        .foregroundStyle(Color(.systemBackground))
+                        .background(Color.primary, in: .capsule)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color(.systemBackground))
-                .background(Color.primary, in: .capsule)
             } else if isPast {
                 Button { sheet = .log(plan.items) } label: {
                     Text("Log it").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
+                        .background(Color(.systemBackground), in: .capsule)
                 }
                 .buttonStyle(.plain)
-                .background(Color(.systemBackground), in: .capsule)
             }
         }
     }
@@ -258,7 +263,7 @@ struct TodayScreen: View {
             Text(done.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
             HStack(alignment: .top, spacing: 8) {
                 if let minutes = done.minutes { stat("\(minutes)", "min") }
-                stat("\(done.sets)", "sets")
+                stat("\(done.sets)", done.sets == 1 ? "set" : "sets")
                 stat(done.volume.formatted(.number.precision(.fractionLength(0))), "lb")
             }
             .padding(.top, 26)

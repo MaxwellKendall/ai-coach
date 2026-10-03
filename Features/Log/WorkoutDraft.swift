@@ -16,6 +16,8 @@ struct SetRow: Identifiable, Equatable {
     var load: Double?
     var rpe: Double?
     var done = false
+    /// Set by voice (FIT-31): shown dashed until the user edits it.
+    var heard = false
     /// What the plan said, so a change can be carried only to sets that were planned the same.
     var plannedValue: Double?
     var plannedLoad: Double?
@@ -36,9 +38,15 @@ struct SetRow: Identifiable, Equatable {
 struct WorkoutDraft: Equatable {
     var session: String
     var rows: [SetRow]
-    var effort = 7.0
-    var energy = 3.0
-    var form = 3.0
+    /// Unset until rated, so a session saved without them doesn't claim numbers nobody gave.
+    var effort: Double?
+    var energy: Double?
+    var form: Double?
+    /// Workout mode's "How did it feel?" (FIT-28); sets the effort and the RPE of unrated sets on save.
+    var feel: Feel? {
+        didSet { effort = feel?.effort }
+    }
+    var note = ""
     /// Set by workout mode when the session ends.
     var duration: TimeInterval?
 
@@ -98,11 +106,70 @@ struct WorkoutDraft: Equatable {
 
     /// The session's own entry: ratings and completion. It has no exercise, so set-based rules skip it.
     var summary: [Measurement] {
-        [Measurement(metric: "effort", value: effort, unit: "/10"),
-         Measurement(metric: "energy_level", value: energy, unit: "/5"),
-         Measurement(metric: "form_quality", value: form, unit: "/5"),
-         Measurement(metric: "completion_rate", value: completion, unit: "ratio")]
-            + (duration.map { [Measurement(metric: "duration_s", value: $0.rounded(), unit: "s")] } ?? [])
+        [effort.map { Measurement(metric: "effort", value: $0, unit: "/10") },
+         energy.map { Measurement(metric: "energy_level", value: $0, unit: "/5") },
+         form.map { Measurement(metric: "form_quality", value: $0, unit: "/5") },
+         Measurement(metric: "completion_rate", value: completion, unit: "ratio"),
+         duration.map { Measurement(metric: "duration_s", value: $0.rounded(), unit: "s") }].compactMap { $0 }
+    }
+
+    // MARK: Workout mode (FIT-28): one card per block, one line per round
+
+    /// Each block's rounds as row indices: a single lift's set, or one of each movement in a superset.
+    func lines(block: Int) -> [[Int]] {
+        let indices = rows.indices.filter { rows[$0].block == block }
+        return Dictionary(grouping: indices) { rows[$0].round }.sorted { $0.key < $1.key }.map(\.value)
+    }
+
+    var blocks: [Int] { Array(Set(rows.map(\.block))).sorted() }
+
+    /// Ticks a line; returns the rest after it (none mid-superset) and whether the block is now done.
+    @discardableResult
+    mutating func tick(_ line: [Int]) -> (rest: TimeInterval, blockDone: Bool) {
+        for index in line { finish(index) }
+        guard let last = line.last else { return (0, false) }
+        return (rest(after: last), lines(block: rows[last].block).joined().allSatisfy { rows[$0].done })
+    }
+
+    mutating func untick(_ line: [Int]) { for index in line { rows[index].done = false } }
+
+    /// −/+ on a line: reps by 1 (time and distance by 5), load by 5 lb. Never below zero.
+    mutating func adjust(_ line: [Int], load: Bool, by direction: Double) {
+        for index in line {
+            let step = load || rows[index].metric != "reps" ? 5.0 : 1.0
+            if load {
+                rows[index].load = rows[index].load.map { max(0, $0 + step * direction) }
+            } else {
+                rows[index].value = rows[index].value.map { max(0, $0 + step * direction) }
+            }
+            rows[index].heard = false
+        }
+    }
+
+    /// Pounds moved in done sets: reps × load, both hands for per-hand loads.
+    var volume: Double {
+        rows.filter { $0.done && $0.metric == "reps" }.reduce(0) { total, row in
+            total + (row.value ?? 0) * (row.load ?? 0) * (row.loadMetric == "load_lb_hand" ? 2 : 1)
+        }
+    }
+
+    /// The finish card's view of the main lifts: top load done, what the progression rule makes of it with the
+    /// session's feel, and sets that came in under the planned reps.
+    func lifts(main: Set<String>, names: [String: String], tier: AgeTier) -> [Coach.Lift] {
+        var order: [String] = []
+        for row in rows where row.done && main.contains(row.exercise) && !order.contains(row.exercise) { order.append(row.exercise) }
+        return order.compactMap { exercise in
+            let done = rows.filter { $0.done && $0.exercise == exercise }
+            guard let load = done.compactMap(\.load).max() else { return nil }
+            let rpe = done.compactMap(\.rpe).max() ?? feel?.rpe
+            let short = done.enumerated().compactMap { index, row -> (set: Int, done: Double, planned: Double)? in
+                guard row.metric == "reps", let value = row.value, let planned = row.plannedValue, value < planned else { return nil }
+                return (index + 1, value, planned)
+            }
+            return Coach.Lift(name: names[exercise] ?? exercise, load: load,
+                              next: TrainingGenerator.nextLoad(load, lastRPE: rpe, main: true, tier: tier, deload: false),
+                              short: short)
+        }
     }
 }
 

@@ -21,9 +21,9 @@ struct WorkoutLogView: View {
                 }
             }
             Section {
-                Stepper("Effort \(Int(draft.effort))/10", value: $draft.effort, in: 1...10)
-                Stepper("Energy \(Int(draft.energy))/5", value: $draft.energy, in: 1...5)
-                Stepper("Form \(Int(draft.form))/5", value: $draft.form, in: 1...5)
+                Stepper("Effort \(Int(draft.effort ?? 7))/10", value: rating(\.effort, 7), in: 1...10)
+                Stepper("Energy \(Int(draft.energy ?? 3))/5", value: rating(\.energy, 3), in: 1...5)
+                Stepper("Form \(Int(draft.form ?? 3))/5", value: rating(\.form, 3), in: 1...5)
                 LabeledContent("Completed", value: draft.completion.formatted(.percent.precision(.fractionLength(0))))
             } header: {
                 Text("How did it go")
@@ -46,6 +46,11 @@ struct WorkoutLogView: View {
                 }
             }
         }
+    }
+
+    /// The form shows a starting value, and saves it as shown.
+    private func rating(_ key: WritableKeyPath<WorkoutDraft, Double?>, _ start: Double) -> Binding<Double> {
+        Binding(get: { draft[keyPath: key] ?? start }, set: { draft[keyPath: key] = $0 })
     }
 
     private func row(_ row: Binding<SetRow>) -> some View {
@@ -75,6 +80,9 @@ struct WorkoutLogView: View {
     }
 
     private func save() {
+        draft.effort = draft.effort ?? 7
+        draft.energy = draft.energy ?? 3
+        draft.form = draft.form ?? 3
         draft.save(at: date, templates: templates, in: context)
         dismiss()
     }
@@ -82,14 +90,16 @@ struct WorkoutLogView: View {
 
 extension WorkoutDraft {
     /// One entry per done set, seconds apart so they keep their order (as the history import does),
-    /// then the session summary. Shared by the form and workout mode.
+    /// then the session summary with the user's note. Unrated sets take the session's feel as their RPE.
+    /// Shared by the form and workout mode.
     func save(at date: Date, templates: [Template], in context: ModelContext) {
         let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
-        for (index, row) in rows.filter(\.done).enumerated() {
+        for (index, var row) in rows.filter(\.done).enumerated() {
+            row.rpe = row.rpe ?? feel?.rpe
             context.insert(LogEntry(kind: .workout, timestamp: date + TimeInterval(index), plannedRef: row.plannedRef,
                                     templateRef: ids[row.exercise], measurements: row.measurements, note: session))
         }
         context.insert(LogEntry(kind: .workout, timestamp: date + TimeInterval(rows.count), measurements: summary,
-                                note: session))
+                                note: note.trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 }
