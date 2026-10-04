@@ -150,6 +150,16 @@ describe("push", () => {
   });
 });
 
+describe("groupCleanup (FIT-61)", () => {
+  it("runs only when a MEMBER# item is removed", () => {
+    dev.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
+      FilterCriteria: {
+        Filters: [{ Pattern: JSON.stringify({ eventName: ["REMOVE"], dynamodb: { Keys: { SK: { S: [{ prefix: "MEMBER#" }] } } } }) }],
+      },
+    });
+  });
+});
+
 describe("least privilege", () => {
   const actionsOf = (t: Template, logical: RegExp) =>
     Object.entries(t.findResources("AWS::IAM::Policy"))
@@ -162,6 +172,8 @@ describe("least privilege", () => {
     expect(actionsOf(dev, /^deleteAccount/)).not.toContain("dynamodb:PutItem");
     expect(actionsOf(dev, /^push/)).not.toContain("dynamodb:PutItem");
     expect(actionsOf(dev, /^push/)).toContain("secretsmanager:GetSecretValue");
+    expect(actionsOf(dev, /^groupCleanup/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem"]));
+    expect(actionsOf(dev, /^groupCleanup/)).not.toContain("dynamodb:PutItem");
   });
 });
 

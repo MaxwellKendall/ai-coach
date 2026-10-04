@@ -249,13 +249,30 @@ export class AICoachStack extends Stack {
       }),
     );
 
+    // ---- FIT-61: a group with no members left is deleted, with its invite ----
+    const groupCleanup = fn("groupCleanup", {});
+    table.grant(groupCleanup, "dynamodb:Query", "dynamodb:BatchWriteItem");
+    groupCleanup.addEventSource(
+      new DynamoEventSource(table, {
+        startingPosition: lambda.StartingPosition.LATEST,
+        batchSize: 25,
+        retryAttempts: 2,
+        filters: [
+          lambda.FilterCriteria.filter({
+            eventName: lambda.FilterRule.isEqual("REMOVE"),
+            dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("MEMBER#") } } },
+          }),
+        ],
+      }),
+    );
+
     // ---- Ops: one alarm, one budget ----
     const alerts = new sns.Topic(this, "Alerts", { topicName: `AICoach-${stage}-alerts` });
     alerts.addSubscription(new subs.EmailSubscription(props.alertEmail));
 
-    const lambdas = { a: postConfirmation, b: deleteAccount, c: push };
+    const lambdas = { a: postConfirmation, b: deleteAccount, c: push, d: groupCleanup };
     const errors = new cloudwatch.MathExpression({
-      expression: "a + b + c + api",
+      expression: "a + b + c + d + api",
       usingMetrics: {
         ...Object.fromEntries(Object.entries(lambdas).map(([k, f]) => [k, f.metricErrors({ period: Duration.minutes(5) })])),
         api: new cloudwatch.Metric({

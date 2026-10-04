@@ -59,3 +59,27 @@ describe("deleteAccount", () => {
     ]);
   });
 });
+
+describe("groupCleanup (FIT-61)", () => {
+  it("keeps a group while anyone is still a member", async () => {
+    const { orphanedKeys } = await import("../lambda/groupCleanup.ts");
+    expect(orphanedKeys([{ PK: "GROUP#g1", SK: "META", inviteCode: "ABC" }, { PK: "GROUP#g1", SK: "MEMBER#b" }])).toEqual([]);
+  });
+
+  it("deletes the whole partition and the invite once the last member is gone", async () => {
+    const { orphanedKeys } = await import("../lambda/groupCleanup.ts");
+    const items = [
+      { PK: "GROUP#g1", SK: "FEED#t#1", uid: "a" },
+      { PK: "GROUP#g1", SK: "GOAL#x" },
+      { PK: "GROUP#g1", SK: "META", inviteCode: "ABC12345", name: "Family" },
+      { PK: "GROUP#g1", SK: "PROGRESS#a#x" },
+    ];
+    expect(orphanedKeys(items)).toEqual([
+      { PK: "GROUP#g1", SK: "FEED#t#1" },
+      { PK: "GROUP#g1", SK: "GOAL#x" },
+      { PK: "GROUP#g1", SK: "META" },
+      { PK: "GROUP#g1", SK: "PROGRESS#a#x" },
+      { PK: "INVITE#ABC12345", SK: "META" },
+    ]);
+  });
+});

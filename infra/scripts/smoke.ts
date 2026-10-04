@@ -10,6 +10,8 @@ import {
   AdminSetUserPasswordCommand,
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { stackOutputs } from "./stack.ts";
 
 const out = await stackOutputs("dev");
@@ -151,5 +153,19 @@ for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as 
   }
 }
 pass("deleteAccount removes all three test users");
+
+// FIT-61: the stream-triggered cleanup removes the now-empty group and its invite.
+const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: out.Region }));
+const leftovers = async () => {
+  const group = await db.send(new QueryCommand({ TableName: "AICoach-dev", KeyConditionExpression: "PK = :pk", ExpressionAttributeValues: { ":pk": `GROUP#${groupId}` } }));
+  const invite = await db.send(new GetCommand({ TableName: "AICoach-dev", Key: { PK: `INVITE#${created.inviteCode}`, SK: "META" } }));
+  return (group.Items?.length ?? 0) + (invite.Item ? 1 : 0);
+};
+const cleanupStart = Date.now();
+while ((await leftovers()) > 0) {
+  if (Date.now() - cleanupStart > 60_000) throw new Error(`group ${groupId} still has items 60 s after its last member left`);
+  await new Promise((r) => setTimeout(r, 2000));
+}
+pass(`the empty group and its invite are deleted (${((Date.now() - cleanupStart) / 1000).toFixed(1)} s)`);
 
 console.log(`\n${results.length} checks passed against AICoach-dev`);
