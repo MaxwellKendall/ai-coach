@@ -20,6 +20,7 @@ struct GroupScreen: View {
     var body: some View {
         List {
             if let group {
+                liveNow(group)
                 header(group)
                 members(group)
                 activity(group)
@@ -35,6 +36,7 @@ struct GroupScreen: View {
             numbers = GroupSync.sharesNumbers(summary.groupId)
             await load(publish: true)
         }
+        .task { await listenLive() }
         .task { await listen("onProgress") }
         .task { await listen("onFeed") }
         .confirmationDialog("Leave \(summary.name)?", isPresented: $confirmingLeave, titleVisibility: .visible) {
@@ -51,6 +53,31 @@ struct GroupScreen: View {
     }
 
     // MARK: Sections
+
+    /// FIT-53: whoever is training right now, set by set, with the rest clock running.
+    @ViewBuilder private func liveNow(_ group: Cloud.Group) -> some View {
+        let live = group.live.filter { $0.uid != me && $0.isLive() }
+        if !live.isEmpty {
+            Section("Live Now") {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(live, id: \.uid) { set in
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Circle().fill(.red).frame(width: 8, height: 8)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(group.members.first { $0.uid == set.uid }?.name ?? "Someone") · \(set.setLine)")
+                                        .font(.body.weight(.medium))
+                                    Text(set.what(now: context.date)).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                                }
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
 
     @ViewBuilder private func header(_ group: Cloud.Group) -> some View {
         if let goal = group.goals.first {
@@ -123,6 +150,8 @@ struct GroupScreen: View {
         }
         ToolbarItem {
             Menu {
+                Toggle("Share Workouts Live", systemImage: "dot.radiowaves.left.and.right",
+                       isOn: Binding(get: { group.members.first { $0.uid == me }?.shareLive ?? false }, set: { setShareLive($0) }))
                 Toggle("Share My Numbers", systemImage: "number", isOn: Binding(get: { numbers }, set: { setNumbers($0) }))
                 Text("Invite code \(group.inviteCode)")
                 if group.createdBy == me {
@@ -167,6 +196,27 @@ struct GroupScreen: View {
                 if case .data = event { await load(publish: false) }
             }
         } catch {}
+    }
+
+    /// Live sets go straight into the page: a set should show within about a second (FIT-53).
+    private func listenLive() async {
+        do {
+            for try await event in Cloud.liveSets(in: summary.groupId) {
+                guard case .data(.success(let set)) = event, var current = group else { continue }
+                current.live.removeAll { $0.uid == set.uid }
+                current.live.append(set)
+                group = current
+            }
+        } catch {}
+    }
+
+    /// FIT-53 opt-in, per group, off by default. Turning it on is a moment to ask for notifications (FIT-59).
+    private func setShareLive(_ on: Bool) {
+        Task {
+            try? await Cloud.setShareLive(on, in: summary.groupId)
+            if on { await Push.request() }
+            await load(publish: false)
+        }
     }
 
     private func setNumbers(_ on: Bool) {

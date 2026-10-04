@@ -8,6 +8,8 @@ enum Cloud {
         var groupId: String
         var name: String
         var role: String
+        /// Whether I share live workouts with this group (FIT-53).
+        var shareLive: Bool?
         var id: String { groupId }
     }
 
@@ -145,7 +147,7 @@ enum Cloud {
     // MARK: Groups
 
     @MainActor static func myGroups() async throws -> [GroupSummary] {
-        try await run("query { myGroups { groupId name role } }", at: "myGroups", query: true)
+        try await run("query { myGroups { groupId name role shareLive } }", at: "myGroups", query: true)
     }
 
     @MainActor static func group(_ id: String) async throws -> Group? {
@@ -216,7 +218,41 @@ enum Cloud {
             """, ["g": groupId, "k": kind, "m": json(fields)], at: "postFeed", as: AnyDecodable?.self)
     }
 
+    /// FIT-53: work mode's current set, overwriting my LIVE item. Every LiveSet field is selected so
+    /// subscribers get all of it.
+    @MainActor static func publishLive(_ live: LiveSnapshot, workout: String, startedAt: Date, in groupId: String) async throws {
+        var variables: [String: Any] = ["g": groupId, "w": workout, "e": live.exercise, "i": live.setIndex, "n": live.setCount,
+                                        "s": live.state, "t": startedAt.formatted(.iso8601)]
+        if let load = live.loadLb { variables["l"] = load }
+        if let reps = live.reps { variables["r"] = reps }
+        if let seconds = live.seconds { variables["sec"] = seconds }
+        if let rpe = live.rpe { variables["rpe"] = rpe }
+        _ = try await run("""
+            mutation($g: ID!, $w: String, $e: String!, $i: Int!, $n: Int!, $l: Float, $r: Int, $sec: Int, $rpe: Float, $s: String!, $t: AWSDateTime!) {
+              publishLiveSet(groupId: $g, workout: $w, exercise: $e, setIndex: $i, setCount: $n, loadLb: $l, reps: $r, seconds: $sec,
+                             rpe: $rpe, state: $s, startedAt: $t) { \(liveFields) }
+            }
+            """, variables, at: "publishLiveSet", as: AnyDecodable?.self)
+    }
+
+    @MainActor static func endLive(in groupId: String) async throws {
+        _ = try await run("mutation($g: ID!) { endLiveSession(groupId: $g) { \(liveFields) } }", ["g": groupId],
+                          at: "endLiveSession", as: AnyDecodable?.self)
+    }
+
+    /// FIT-53: this iPhone's APNs token, for "Dad started Push day".
+    @MainActor static func registerDevice(_ token: String) async throws {
+        _ = try await run("mutation($t: String!) { registerDevice(token: $t, platform: \"ios\") }", ["t": token],
+                          at: "registerDevice", as: Bool?.self)
+    }
+
     // MARK: Real time
+
+    @MainActor static func liveSets(in groupId: String) -> AmplifyAsyncThrowingSequence<GraphQLSubscriptionEvent<LiveSet>> {
+        Amplify.API.subscribe(request: GraphQLRequest<LiveSet>(
+            document: "subscription($g: ID!) { onLiveSet(groupId: $g) { \(liveFields) } }",
+            variables: ["g": groupId], responseType: LiveSet.self, decodePath: "onLiveSet"))
+    }
 
     /// Something changed in the group: a member's progress or a feed item. The group screen reloads.
     struct Ping: Decodable, Sendable { var groupId: String }

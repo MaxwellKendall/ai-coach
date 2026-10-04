@@ -8,6 +8,7 @@ import SwiftData
 struct WorkoutModeView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(Account.self) private var account
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
     @Query private var profiles: [Profile]
@@ -25,6 +26,8 @@ struct WorkoutModeView: View {
     @State private var talked = false
     @State private var toast: Toast?
     @State private var message: String?
+    /// FIT-53: groups I opted in to see each set as it happens.
+    @State private var live: LiveShare?
 
     /// The running rest, on its card.
     struct Rest: Equatable {
@@ -65,7 +68,11 @@ struct WorkoutModeView: View {
             micArea(onFinish: page == cards.count).frame(height: 104)
         }
         .background(Color(.systemBackground))
-        .onChange(of: page) { editing = nil }
+        .onChange(of: page) {
+            editing = nil
+            live?.update(draft.live(at: page, names: names))
+        }
+        .onChange(of: draft.rows.filter(\.done).count) { live?.update(draft.live(at: page, names: names)) }
         .overlay {
             if voice.listening || working != nil {
                 ListeningVeil(voice: voice, working: working,
@@ -93,8 +100,19 @@ struct WorkoutModeView: View {
             }
         }
         // A phone that locks mid-set loses the clock; keep it awake while training.
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+            if account.user != nil, live == nil {
+                live = LiveShare(workout: draft.session, startedAt: startedAt)
+                live?.start()
+                live?.update(draft.live(at: page, names: names))
+            }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            live?.end(saved: nil)
+            live = nil
+        }
         .confirmationDialog("Leave this workout?", isPresented: $quitting, titleVisibility: .visible) {
             Button("Discard sets", role: .destructive) { dismiss() }
         } message: {
@@ -601,6 +619,8 @@ struct WorkoutModeView: View {
     private func save() {
         draft.duration = Date.now.timeIntervalSince(startedAt)
         draft.save(at: startedAt, templates: templates, in: context)
+        live?.end(saved: (draft.rows.filter(\.done).count, draft.top(names: names)))
+        live = nil
         onSaved()
         dismiss()
     }

@@ -20,6 +20,11 @@ targets:
     type: application
     platform: iOS
     sources: [App, Core, Features, Resources]
+    # FIT-53: push. Archives for TestFlight and the App Store are re-signed with the production APNs environment.
+    entitlements:
+      path: App/AICoach.entitlements
+      properties:
+        aps-environment: development
     dependencies:
       - package: Amplify
         product: Amplify

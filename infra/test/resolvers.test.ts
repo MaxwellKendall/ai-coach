@@ -152,3 +152,14 @@ describe("creator-only operations", () => {
     expect(rotateInvite.response(c)).toBe("11111111");
   });
 });
+
+describe("myGroups", () => {
+  it("says which groups I share live workouts with (FIT-53)", async () => {
+    const myGroups = await import("../resolvers/myGroups.js");
+    const items = [{ groupId: "g1", groupName: "Family", role: "member", shareLive: true }, { groupId: "g2", groupName: "Work", role: "member" }];
+    expect(myGroups.response(ctx({ result: { items } }))).toEqual([
+      { groupId: "g1", name: "Family", role: "member", shareLive: true },
+      { groupId: "g2", name: "Work", role: "member", shareLive: false },
+    ]);
+  });
+});

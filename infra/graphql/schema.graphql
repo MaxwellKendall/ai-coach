@@ -18,6 +18,8 @@ type GroupSummary {
   name: String!
   role: String!
   inviteCode: String
+  # Whether I share live workouts with this group (FIT-53).
+  shareLive: Boolean
 }
 
 type Member {

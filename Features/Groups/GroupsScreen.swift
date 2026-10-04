@@ -63,7 +63,7 @@ struct GroupsScreen: View {
             ContentUnavailableView {
                 Label("Train Together", systemImage: "person.2")
             } description: {
-                Text(failure ?? "Share a goal with family or friends and see each other's progress. Only your progress is shared, never your logs.")
+                Text(failure ?? "Share a goal with family or friends and see each other's progress. Only your progress is shared, plus your workouts live if you turn that on.")
             } actions: {
                 Button("New Group") { open(.create) }
                     .buttonStyle(.borderedProminent)
@@ -85,6 +85,8 @@ struct GroupsScreen: View {
         sheet = nil
         if !(groups ?? []).contains(group) { groups = (groups ?? []) + [group] }
         opened = group
+        // FIT-59: notifications are asked for here, when they start to mean something.
+        Task { await Push.request() }
     }
 
     private func load() async {

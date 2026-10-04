@@ -6,6 +6,7 @@ struct RootView: View {
     @Query private var profiles: [Profile]
     /// Set while onboarding; presenting by item hands the profile straight to the cover.
     @State private var onboarding: Profile?
+    @Bindable private var navigator = Navigator.shared
 
     /// Graphite (FIT-27): monochrome, the label colour is the only accent.
     static let accent = Color.primary
@@ -22,6 +23,14 @@ struct RootView: View {
                 return profile
             }()
             if !profile.isComplete || profile.programStart == nil { onboarding = profile }
+        }
+        // FIT-53: a tapped "started a workout" notification opens that group.
+        .sheet(item: $navigator.group) { group in
+            NavigationStack {
+                GroupScreen(summary: group)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { navigator.group = nil } } }
+            }
+            .tint(Self.accent)
         }
         .fullScreenCover(item: $onboarding) { profile in
             OnboardingView(profile: profile) { onboarding = nil }

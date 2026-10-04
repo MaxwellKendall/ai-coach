@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct AICoachApp: App {
     let container: ModelContainer
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var account = Account()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -28,7 +29,9 @@ struct AICoachApp: App {
             guard phase == .active else { return }
             Task {
                 await account.refresh()
-                if let uid = account.user?.uid { await GroupSync.all(container.mainContext, me: uid) }
+                guard let uid = account.user?.uid else { return }
+                await Push.refresh()
+                await GroupSync.all(container.mainContext, me: uid)
             }
         }
     }

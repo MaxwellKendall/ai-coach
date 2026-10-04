@@ -13,5 +13,5 @@ export function request(ctx) {
 
 export function response(ctx) {
   if (ctx.error) util.error(ctx.error.message, ctx.error.type);
-  return ctx.result.items.map((m) => ({ groupId: m.groupId, name: m.groupName, role: m.role }));
+  return ctx.result.items.map((m) => ({ groupId: m.groupId, name: m.groupName, role: m.role, shareLive: m.shareLive ?? false }));
 }
