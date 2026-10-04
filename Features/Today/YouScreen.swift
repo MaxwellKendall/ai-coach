@@ -4,7 +4,6 @@ import SwiftUI
 struct YouScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(Account.self) private var account
-    @State private var signingIn = false
     @State private var goals = false
 
     var body: some View {
@@ -15,7 +14,13 @@ struct YouScreen: View {
                     NavigationLink { WinsScreen() } label: { Label("Wins", systemImage: "trophy") }
                     NavigationLink { CatalogScreen() } label: { Label("Library", systemImage: "books.vertical") }
                 }
-                // FIT-52: only once there's an account. Groups (FIT-16) are what ask you to sign in.
+                // FIT-16: groups are what ask you to sign in, so they're the way in to an account.
+                if account.isAvailable {
+                    Section {
+                        NavigationLink { GroupsScreen() } label: { Label("Groups", systemImage: "person.2") }
+                    }
+                }
+                // FIT-52: only once there's an account.
                 if let user = account.user {
                     Section {
                         NavigationLink { AccountView() } label: {
@@ -28,14 +33,7 @@ struct YouScreen: View {
                         }
                     }
                 }
-                #if DEBUG
-                // Until FIT-16 adds groups, a debug-only way in to try sign-in.
-                if account.user == nil && account.isAvailable {
-                    Section { Button("Sign In (debug)") { signingIn = true } }
-                }
-                #endif
             }
-            .sheet(isPresented: $signingIn) { SignInSheet() }
             .sheet(isPresented: $goals) { ProgramScreen(tab: .goals) }
             .navigationTitle("You")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

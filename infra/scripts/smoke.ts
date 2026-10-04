@@ -2,55 +2,10 @@
 // A and B create and join a group, A publishes a live set, B's subscription receives it,
 // and non-member C is rejected. Then all three delete their accounts (exercises deleteAccount).
 //   AWS_PROFILE=aicoach-dev npm run smoke
-import { randomBytes } from "node:crypto";
-import {
-  AdminCreateUserCommand,
-  AdminGetUserCommand,
-  AdminInitiateAuthCommand,
-  AdminSetUserPasswordCommand,
-  CognitoIdentityProviderClient,
-} from "@aws-sdk/client-cognito-identity-provider";
+import { AdminGetUserCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
-import { stackOutputs } from "./stack.ts";
-
-const out = await stackOutputs("dev");
-if (!out.TestClientId) throw new Error("No TestClientId output: the smoke test only runs against dev.");
-const cognito = new CognitoIdentityProviderClient({ region: out.Region });
-
-async function signIn(username: string) {
-  const password = `Smoke-${randomBytes(12).toString("hex")}!`;
-  try {
-    await cognito.send(new AdminCreateUserCommand({ UserPoolId: out.UserPoolId, Username: username, MessageAction: "SUPPRESS" }));
-  } catch (e) {
-    if ((e as Error).name !== "UsernameExistsException") throw e;
-  }
-  await cognito.send(new AdminSetUserPasswordCommand({ UserPoolId: out.UserPoolId, Username: username, Password: password, Permanent: true }));
-  const auth = await cognito.send(
-    new AdminInitiateAuthCommand({
-      UserPoolId: out.UserPoolId,
-      ClientId: out.TestClientId,
-      AuthFlow: "ADMIN_USER_PASSWORD_AUTH",
-      AuthParameters: { USERNAME: username, PASSWORD: password },
-    }),
-  );
-  return auth.AuthenticationResult!.IdToken!;
-}
-
-type Gql = { data?: Record<string, any>; errors?: { message: string; errorType?: string }[] };
-async function gql(token: string, query: string, variables: Record<string, unknown> = {}): Promise<Gql> {
-  const res = await fetch(out.GraphqlUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: token },
-    body: JSON.stringify({ query, variables }),
-  });
-  return res.json() as Promise<Gql>;
-}
-const must = (r: Gql, what: string) => {
-  if (r.errors?.length) throw new Error(`${what}: ${JSON.stringify(r.errors)}`);
-  return r.data!;
-};
-const rejected = (r: Gql) => Boolean(r.errors?.some((e) => /unauthori[sz]ed/i.test(`${e.errorType} ${e.message}`)));
+import { cognito, gql, must, out, rejected, signIn } from "./dev.ts";
 
 const LIVE_FIELDS = "groupId uid workout exercise setIndex setCount loadLb reps seconds rpe state startedAt updatedAt";
 
@@ -142,6 +97,19 @@ pass("non-member C can't read or write the group");
 
 subB.close();
 subC.close();
+
+// FIT-58/59: creator-only invite revocation and member removal.
+if (!rejected(await gql(b, `mutation($g: ID!) { rotateInvite(groupId: $g) }`, { g: groupId }))) throw new Error("B rotated A's invite");
+const newCode = must(await gql(a, `mutation($g: ID!) { rotateInvite(groupId: $g) }`, { g: groupId }), "rotateInvite").rotateInvite as string;
+const stale = await gql(c, `mutation($c: String!) { joinGroup(inviteCode: $c) { groupId } }`, { c: created.inviteCode });
+if (!stale.errors?.length) throw new Error("the revoked invite code still joins");
+created.inviteCode = newCode;
+pass("only the creator can revoke the invite; the old code stops working");
+if (!rejected(await gql(b, `mutation($g: ID!, $u: ID!) { removeMember(groupId: $g, uid: $u) }`, { g: groupId, u: "anyone" }))) throw new Error("B removed a member");
+const bUid = JSON.parse(Buffer.from(b.split(".")[1], "base64url").toString()).sub;
+must(await gql(a, `mutation($g: ID!, $u: ID!) { removeMember(groupId: $g, uid: $u) }`, { g: groupId, u: bUid }), "removeMember");
+if (!rejected(await gql(b, `query($g: ID!) { group(groupId: $g) { name } }`, { g: groupId }))) throw new Error("B can still read after removal");
+pass("only the creator can remove a member, who then loses access");
 
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);

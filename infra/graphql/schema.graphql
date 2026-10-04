@@ -101,6 +101,10 @@ type Mutation {
   createGroup(name: String!): GroupSummary
   joinGroup(inviteCode: String!): GroupSummary
   leaveGroup(groupId: ID!): Boolean
+  # Creator only (FIT-59).
+  removeMember(groupId: ID!, uid: ID!): Boolean
+  # Creator only (FIT-58): revokes the invite code and returns its replacement.
+  rotateInvite(groupId: ID!): String
   setShareLive(groupId: ID!, shareLive: Boolean!): Member
   addGroupGoal(groupId: ID!, metric: String!, target: Float!, deadline: AWSDate, mode: String!): GroupGoal
   publishProgress(groupId: ID!, goalId: ID!, baseline: Float, value: Float, pct: Float, onPace: Boolean): Progress

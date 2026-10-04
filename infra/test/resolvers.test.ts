@@ -9,6 +9,8 @@ import * as createGroup from "../resolvers/createGroup.js";
 import * as joinGroup from "../resolvers/joinGroup.js";
 import * as groupDetail from "../resolvers/groupDetail.js";
 import * as subscription from "../resolvers/subscription.js";
+import * as removeMember from "../resolvers/removeMember.js";
+import * as rotateInvite from "../resolvers/rotateInvite.js";
 
 const ME = "user-a";
 const OTHER = "user-b";
@@ -122,5 +124,31 @@ describe("subscriptions", () => {
   it("filter events to the subscribed group", () => {
     subscription.response(ctx({ args: { groupId: "g1" } }));
     expect(subscriptionFilters.at(-1)).toEqual({ filter: { groupId: { eq: "g1" } } });
+  });
+});
+
+describe("creator-only operations", () => {
+  const meta = { createdBy: ME, name: "Family", inviteCode: "OLDCODE1" };
+
+  it("removeMember: only the creator, and never themselves", () => {
+    expect(() => removeMember.request(ctx({ identity: { sub: OTHER }, args: { groupId: "g1", uid: ME }, stash: { meta } }))).toThrow(Unauthorized);
+    expect(() => removeMember.request(ctx({ args: { groupId: "g1", uid: ME }, stash: { meta } }))).toThrow(ResolverError);
+    const keys = removeMember.request(ctx({ args: { groupId: "g1", uid: OTHER }, stash: { meta } })).transactItems.map((t: any) => t.key);
+    expect(keys).toEqual([
+      { PK: "GROUP#g1", SK: `MEMBER#${OTHER}` },
+      { PK: "GROUP#g1", SK: `LIVE#${OTHER}` },
+    ]);
+  });
+
+  it("rotateInvite: only the creator; deletes the old code and writes a new one", () => {
+    expect(() => rotateInvite.request(ctx({ identity: { sub: OTHER }, args: { groupId: "g1" }, stash: { meta } }))).toThrow(Unauthorized);
+    const c = ctx({ args: { groupId: "g1" }, stash: { meta } });
+    const [update, del, put] = rotateInvite.request(c).transactItems;
+    expect(update.key).toEqual({ PK: "GROUP#g1", SK: "META" });
+    expect(update.update.expressionValues[":c"]).toBe("11111111");
+    expect(del.key).toEqual({ PK: "INVITE#OLDCODE1", SK: "META" });
+    expect(put.key).toEqual({ PK: "INVITE#11111111", SK: "META" });
+    expect(put.attributeValues).toMatchObject({ groupId: "g1", groupName: "Family" });
+    expect(rotateInvite.response(c)).toBe("11111111");
   });
 });

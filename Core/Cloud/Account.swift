@@ -25,6 +25,8 @@ final class Account {
     }
 
     struct User: Equatable {
+        /// Cognito's `sub`: the uid on every group item.
+        var uid: String
         var name: String?
         var email: String?
         var provider: Provider?
@@ -60,7 +62,7 @@ final class Account {
         }
         let attributes = (try? await Amplify.Auth.fetchUserAttributes()) ?? []
         let value = { (key: AuthUserAttributeKey) in attributes.first { $0.key == key }?.value }
-        user = User(name: value(.name), email: value(.email), provider: Provider(username: current.username))
+        user = User(uid: current.userId, name: value(.name), email: value(.email), provider: Provider(username: current.username))
     }
 
     /// Opens Cognito's hosted sign-in straight at the provider. Returns false if the user cancelled.

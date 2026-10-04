@@ -212,6 +212,10 @@ export class AICoachStack extends Stack {
     for (const field of ["leaveGroup", "setShareLive", "addGroupGoal", "publishProgress", "publishLiveSet", "endLiveSession", "postFeed"]) {
       pipeline("Mutation", field, ["requireMember", field]);
     }
+    // Creator-only: the step checks META.createdBy.
+    for (const field of ["removeMember", "rotateInvite"]) {
+      pipeline("Mutation", field, ["requireMember", "getGroupMeta", field]);
+    }
     for (const field of ["onLiveSet", "onProgress", "onFeed"]) {
       pipeline("Subscription", field, ["requireMember"], "subscription");
     }
