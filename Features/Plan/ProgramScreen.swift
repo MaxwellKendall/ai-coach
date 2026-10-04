@@ -12,7 +12,7 @@ struct ProgramScreen: View {
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
-    @State private var tab = Tab.program
+    @State private var tab: Tab
     @State private var selected: Int?
     @State private var goalIndex = 0
     @State private var nextWeek: [PlannedWorkout] = []
@@ -35,6 +35,8 @@ struct ProgramScreen: View {
     }
 
     enum Tab: String, CaseIterable { case program = "Program", goals = "Goals" }
+
+    init(tab: Tab = .program) { _tab = State(initialValue: tab) }
 
     var body: some View {
         NavigationStack {

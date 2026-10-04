@@ -5,12 +5,13 @@ struct YouScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(Account.self) private var account
     @State private var signingIn = false
+    @State private var goals = false
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    NavigationLink { GoalsScreen() } label: { Label("Goals", systemImage: "target") }
+                    Button { goals = true } label: { Label("Goals", systemImage: "target").foregroundStyle(.primary) }
                     NavigationLink { WinsScreen() } label: { Label("Wins", systemImage: "trophy") }
                     NavigationLink { CatalogScreen() } label: { Label("Library", systemImage: "books.vertical") }
                 }
@@ -35,6 +36,7 @@ struct YouScreen: View {
                 #endif
             }
             .sheet(isPresented: $signingIn) { SignInSheet() }
+            .sheet(isPresented: $goals) { ProgramScreen(tab: .goals) }
             .navigationTitle("You")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
