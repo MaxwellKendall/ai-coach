@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct AICoachApp: App {
     let container: ModelContainer
+    @State private var account = Account()
 
     init() {
         do {
@@ -17,6 +18,8 @@ struct AICoachApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(account)
+                .task { await account.refresh() }
         }
         .modelContainer(container)
     }
