@@ -38,24 +38,23 @@ struct SignInSheet: View {
         .interactiveDismissDisabled(working != nil)
     }
 
-    @ViewBuilder
     private func button(_ provider: Account.Provider) -> some View {
-        let label = HStack {
-            if working == provider { ProgressView() } else if provider == .apple { Image(systemName: "apple.logo") }
-            Text("Continue with \(provider.title)")
-        }
-        .font(.body.weight(.semibold))
-        .frame(maxWidth: .infinity, minHeight: 34)
-
-        Group {
-            if provider == .apple {
-                Button { signIn(provider) } label: { label }.buttonStyle(.borderedProminent)
-            } else {
-                Button { signIn(provider) } label: { label }.buttonStyle(.bordered)
+        Button { signIn(provider) } label: {
+            HStack(spacing: 12) {
+                if working == provider {
+                    ProgressView()
+                } else if provider == .apple {
+                    Image(systemName: "apple.logo").font(.title3)
+                } else {
+                    Image("GoogleG").resizable().frame(width: 20, height: 20)
+                }
+                Text("Continue with \(provider.title)")
             }
+            .font(.body.weight(.medium))
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 50)
         }
-        .buttonBorderShape(.capsule)
-        .controlSize(.large)
+        .buttonStyle(BrandButtonStyle(provider: provider))
         .disabled(working != nil)
     }
 
@@ -70,5 +69,36 @@ struct SignInSheet: View {
                 failure = "Couldn't sign in with \(provider.title). Try again."
             }
         }
+    }
+}
+
+/// Each provider's own button rules, not the app's tint.
+/// Apple HIG "Sign in with Apple": black in light mode, white in dark mode.
+/// Google sign-in branding guidelines: light theme #FFFFFF with a 1px #747775 stroke, dark theme #131314
+/// with #8E918F, the standard colour "G", 16 pt padding on iOS. SF stands in for Google Sans, which isn't licensed for apps.
+private struct BrandButtonStyle: ButtonStyle {
+    let provider: Account.Provider
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let dark = scheme == .dark
+        let (fill, text, stroke): (Color, Color, Color?) = switch provider {
+        case .apple: dark ? (.white, .black, nil) : (.black, .white, nil)
+        case .google: dark
+            ? (Color(hex: 0x131314), Color(hex: 0xE3E3E3), Color(hex: 0x8E918F))
+            : (.white, Color(hex: 0x1F1F1F), Color(hex: 0x747775))
+        }
+        return configuration.label
+            .foregroundStyle(text)
+            .background(fill, in: .capsule)
+            .overlay { if let stroke { Capsule().strokeBorder(stroke, lineWidth: 1) } }
+            .opacity(configuration.isPressed ? 0.8 : isEnabled ? 1 : 0.6)
+    }
+}
+
+private extension Color {
+    init(hex: UInt32) {
+        self.init(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
     }
 }

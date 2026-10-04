@@ -38,6 +38,7 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Hold the mic to log meals, sleep and weight by voice.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Your voice is turned into text on this iPhone to fill in your log.
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
       configs:
         # The author's personal history is a dogfooding aid, never shipped.
         Release:
