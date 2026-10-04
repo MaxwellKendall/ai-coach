@@ -35,8 +35,9 @@ Each account is bootstrapped once: `npx cdk bootstrap --profile aicoach-dev`.
 | `aicoach/{stage}/apns` | `{ teamId, keyId, privateKey, bundleId }` | push (read at runtime) |
 
 A provider is only created when it's listed under `stages.{stage}.identityProviders` in `cdk.json`.
-Dev has Google (Cloud project `aicoach-dev-mnk`, Web client redirecting to the Cognito domain's
-`/oauth2/idpresponse`). Add `"apple"` once its secret exists.
+Dev has both. Google: Cloud project `aicoach-dev-mnk`, a Web client redirecting to the Cognito
+domain's `/oauth2/idpresponse`. Apple: Services ID `com.maxwellkendall.aicoach.signin` with the same
+return URL, and one `.p8` key (Sign in with Apple + APNs) shared by both Apple secrets.
 
 ## Commands
 

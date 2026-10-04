@@ -6,6 +6,7 @@
     "user_pool_client_id": "70i86o9evitk7cf6mr5ocgpovq",
     "oauth": {
       "identity_providers": [
+        "APPLE",
         "GOOGLE"
       ],
       "domain": "aicoach-dev.auth.us-east-1.amazoncognito.com",

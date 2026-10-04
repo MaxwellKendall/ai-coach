@@ -5,7 +5,7 @@
     "region": "us-east-1",
     "alertEmail": "maxwell.n.kendall@gmail.com",
     "stages": {
-      "dev": { "identityProviders": ["google"] },
+      "dev": { "identityProviders": ["apple", "google"] },
       "prod": { "identityProviders": ["apple", "google"] }
     }
   }
