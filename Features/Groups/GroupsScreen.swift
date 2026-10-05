@@ -51,12 +51,15 @@ struct GroupsScreen: View {
 
     @ViewBuilder private var content: some View {
         if account.user != nil, let groups, !groups.isEmpty {
+            // A direct link, not NavigationLink(value:): a value destination declared on this conditional list never
+            // registered next to the `opened` destination below, so tapping a row did nothing (2026-10-05).
             List(groups) { group in
-                NavigationLink(value: group) {
+                NavigationLink {
+                    GroupScreen(summary: group)
+                } label: {
                     Label(group.name, systemImage: "person.2")
                 }
             }
-            .navigationDestination(for: Cloud.GroupSummary.self) { GroupScreen(summary: $0) }
         } else if account.user != nil, groups == nil, failure == nil {
             ProgressView()
         } else {
