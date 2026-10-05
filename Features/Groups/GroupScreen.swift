@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// FIT-16, after Apple Fitness › Sharing: the shared goal and how far everyone is together, then each member's
-/// progress, then the group's wins to cheer. Invite and the rest are in the toolbar.
+/// FIT-16, after Apple Fitness › Sharing: the group's goals as cards to swipe, how far everyone is together, then
+/// each member's progress on the goal showing, then the group's wins to cheer. Invite and the rest are in the toolbar.
 struct GroupScreen: View {
     @Environment(Account.self) private var account
     @Environment(\.modelContext) private var context
@@ -14,6 +14,9 @@ struct GroupScreen: View {
     @State private var numbers = false
     @State private var confirmingLeave = false
     @State private var removing: Cloud.Member?
+    /// The goal card showing; the members' progress follows it.
+    @State private var goalId: String?
+    @State private var addingGoal = false
 
     private var me: String { account.user?.uid ?? "" }
 
@@ -39,6 +42,15 @@ struct GroupScreen: View {
         .task { await listenLive() }
         .task { await listen("onProgress") }
         .task { await listen("onFeed") }
+        .sheet(isPresented: $addingGoal) {
+            NavigationStack {
+                AddGoalSheet(groupId: summary.groupId, existing: group?.goals.map(\.metric) ?? []) { added in
+                    addingGoal = false
+                    goalId = added
+                    Task { await load(publish: true) }
+                }
+            }
+        }
         .confirmationDialog("Leave \(summary.name)?", isPresented: $confirmingLeave, titleVisibility: .visible) {
             Button("Leave Group", role: .destructive) { leave() }
         } message: {
@@ -79,39 +91,64 @@ struct GroupScreen: View {
         }
     }
 
+    private func goals(_ group: Cloud.Group) -> [Cloud.GroupGoal] { group.goals.sorted { $0.createdAt < $1.createdAt } }
+
+    private func shown(_ group: Cloud.Group) -> Cloud.GroupGoal? {
+        let goals = goals(group)
+        return goals.first { $0.goalId == goalId } ?? goals.first
+    }
+
+    /// One card per goal; swipe between them when there's more than one.
     @ViewBuilder private func header(_ group: Cloud.Group) -> some View {
-        if let goal = group.goals.first {
-            let pcts = group.progress.filter { $0.goalId == goal.goalId }.compactMap(\.pct)
+        let goals = goals(group)
+        if let goal = shown(group) {
             Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(goal.title).font(.title2.bold())
-                    if let deadline = goal.deadlineDate {
-                        let left = GroupProgress.daysLeft(until: deadline)
-                        Text("By \(deadline.formatted(.dateTime.month(.abbreviated).day())) · \(left) \(left == 1 ? "day" : "days") left")
-                            .foregroundStyle(.secondary)
+                if goals.count == 1 {
+                    goalCard(goal, in: group)
+                } else {
+                    TabView(selection: Binding(get: { goal.goalId }, set: { goalId = $0 })) {
+                        ForEach(goals) { goalCard($0, in: group).frame(maxHeight: .infinity, alignment: .top).tag($0.goalId) }
                     }
-                    if let together = GroupProgress.together(pcts) {
-                        Gauge(value: together, in: 0...100) {
-                            Text("Together")
-                        } currentValueLabel: {
-                            Text("\(Int(together))%")
-                        }
-                        .gaugeStyle(.linearCapacity)
-                        .padding(.top, 10)
-                    }
+                    .tabViewStyle(.page(indexDisplayMode: .always))
+                    .indexViewStyle(.page(backgroundDisplayMode: .always))
+                    .frame(height: 170)
                 }
-                .padding(.vertical, 6)
             } footer: {
                 let fresh = group.progress.filter { $0.goalId == goal.goalId && isThisWeek($0.updatedAt) }.count
                 if group.members.count > 1 {
                     Text("\(fresh) of \(group.members.count) moved forward this week")
                 }
             }
+        } else {
+            Section { Button("Add a Goal", systemImage: "plus") { addingGoal = true } }
         }
     }
 
+    private func goalCard(_ goal: Cloud.GroupGoal, in group: Cloud.Group) -> some View {
+        let pcts = group.progress.filter { $0.goalId == goal.goalId }.compactMap(\.pct)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(goal.title).font(.title2.bold())
+            if let deadline = goal.deadlineDate {
+                let left = GroupProgress.daysLeft(until: deadline)
+                Text("By \(deadline.formatted(.dateTime.month(.abbreviated).day())) · \(left) \(left == 1 ? "day" : "days") left")
+                    .foregroundStyle(.secondary)
+            }
+            if let together = GroupProgress.together(pcts) {
+                Gauge(value: together, in: 0...100) {
+                    Text("Together")
+                } currentValueLabel: {
+                    Text("\(Int(together))%")
+                }
+                .gaugeStyle(.linearCapacity)
+                .padding(.top, 10)
+            }
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func members(_ group: Cloud.Group) -> some View {
-        let goal = group.goals.first
+        let goal = shown(group)
         let sorted = group.members.sorted { ($0.uid == me ? 0 : 1, $0.name) < ($1.uid == me ? 0 : 1, $1.name) }
         return Section("Members") {
             ForEach(sorted) { member in
@@ -133,7 +170,9 @@ struct GroupScreen: View {
             Section("Activity") {
                 ForEach(items) { item in
                     let mine = cheers.filter { $0.fields["to"] as? String == item.id }
-                    FeedRow(item: item, who: group.members.first { $0.uid == item.uid }?.name ?? "Someone",
+                    // With more than one goal, a milestone says which.
+                    let goal = group.goals.count > 1 ? group.goals.first { $0.goalId == item.fields["goalId"] as? String }?.title : nil
+                    FeedRow(item: item, who: group.members.first { $0.uid == item.uid }?.name ?? "Someone", goal: goal,
                             isMine: item.uid == me, cheers: mine.count, cheered: mine.contains { $0.uid == me }) {
                         cheer(item, in: group)
                     }
@@ -157,6 +196,7 @@ struct GroupScreen: View {
                 if group.createdBy == me {
                     Button("New Invite Code", systemImage: "arrow.clockwise") { rotate(group) }
                 }
+                Button("Add Goal", systemImage: "plus") { addingGoal = true }
                 Divider()
                 Button("Leave Group", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { confirmingLeave = true }
             } label: {
@@ -304,6 +344,8 @@ private struct MemberRow: View {
 private struct FeedRow: View {
     let item: Cloud.FeedItem
     let who: String
+    /// The goal a milestone is for, when the group has several.
+    let goal: String?
     let isMine: Bool
     let cheers: Int
     let cheered: Bool
@@ -314,7 +356,8 @@ private struct FeedRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(text)
                 if let date = Cloud.date(item.createdAt) {
-                    Text(date, format: .relative(presentation: .named)).font(.caption).foregroundStyle(.secondary)
+                    Text("\(goal.map { "\($0) · " } ?? "")\(date.formatted(.relative(presentation: .named)))")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()

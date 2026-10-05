@@ -1,55 +1,75 @@
 import SwiftUI
 import SwiftData
 
-/// FIT-16: a group starts with its shared goal, relative so people at different weights compare ("lose 10 lb").
-struct NewGroupSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Goal.createdAt) private var goals: [Goal]
-    let done: (Cloud.GroupSummary) -> Void
+/// A relative group goal being set (FIT-16): what, how much, by when. "Lose 10 lb by Dec 5".
+struct GoalDraft: Equatable {
+    var option: GoalOption.ID
+    var amount: Double
+    var deadline: Date
 
-    @State private var name = ""
-    @State private var option: String?
-    @State private var amount: Double?
-    @State private var deadline = Calendar.current.date(byAdding: .month, value: 2, to: .now)!
-    @State private var you = YourName()
-    @State private var working = false
-    @State private var failure: String?
-
-    /// The goal you're already working on comes first.
-    private var picked: GoalOption {
-        option.flatMap(GoalOption.with(id:))
-            ?? goals.filter { $0.status == .active }.lazy.compactMap { goal in GoalOption.all.first { $0.metric == goal.metric } }.first
-            ?? GoalOption.all[0]
+    init(_ option: GoalOption, deadline: Date = Calendar.current.date(byAdding: .month, value: 2, to: .now)!) {
+        self.option = option.id
+        amount = Self.defaultAmount(option)
+        self.deadline = deadline
     }
 
+    var goal: GoalOption { GoalOption.with(id: option) ?? GoalOption.all[0] }
+
     /// Lose 10 lb, add 20 lb to a max, 5 more reps.
-    private static func defaultAmount(_ option: GoalOption) -> Double {
+    static func defaultAmount(_ option: GoalOption) -> Double {
         switch option.measure {
         case .body: -10
         case .load: 20
         case .reps: 5
         }
     }
+}
+
+/// The goal's three fields, shared by New Group and Add Goal.
+struct GoalFields: View {
+    @Binding var draft: GoalDraft
 
     var body: some View {
-        let option = picked
-        let amount = amount ?? Self.defaultAmount(option)
+        let goal = draft.goal
+        Section {
+            Picker("Goal", selection: Binding(get: { draft.option }, set: { draft = GoalDraft(GoalOption.with(id: $0)!, deadline: draft.deadline) })) {
+                ForEach(GoalOption.all) { Text($0.title).tag($0.id) }
+            }
+            Stepper(GroupProgress.title(metric: goal.metric, goal: draft.amount, mode: .relative),
+                    value: Binding(get: { abs(draft.amount) }, set: { draft.amount = goal.measure == .body ? -$0 : $0 }),
+                    in: goal.step...500, step: goal.measure == .load ? 5 : 1)
+            DatePicker("By", selection: $draft.deadline, in: Date.now..., displayedComponents: .date)
+        } footer: {
+            Text("Everyone's progress counts from where they are when they join.")
+        }
+    }
+}
+
+/// FIT-16: a group starts with its first goal, relative so people at different weights compare ("lose 10 lb").
+struct NewGroupSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Goal.createdAt) private var goals: [Goal]
+    let done: (Cloud.GroupSummary) -> Void
+
+    @State private var name = ""
+    @State private var goal: GoalDraft?
+    @State private var you = YourName()
+    @State private var working = false
+    @State private var failure: String?
+
+    /// The goal you're already working on comes first.
+    private var suggested: GoalDraft {
+        GoalDraft(goals.filter { $0.status == .active }.lazy.compactMap { goal in GoalOption.all.first { $0.metric == goal.metric } }.first
+                  ?? GoalOption.all[0])
+    }
+
+    var body: some View {
         Form {
             Section {
                 TextField("Group Name", text: $name, prompt: Text("Family"))
                     .textInputAutocapitalization(.words)
             }
-            Section {
-                Picker("Goal", selection: Binding(get: { option.id }, set: { self.option = $0; self.amount = nil })) {
-                    ForEach(GoalOption.all) { Text($0.title).tag($0.id) }
-                }
-                Stepper(GroupProgress.title(metric: option.metric, goal: amount, mode: .relative),
-                        value: Binding(get: { abs(amount) }, set: { self.amount = option.measure == .body ? -$0 : $0 }),
-                        in: option.step...500, step: option.measure == .load ? 5 : 1)
-                DatePicker("By", selection: $deadline, in: Date.now..., displayedComponents: .date)
-            } footer: {
-                Text("Everyone's progress counts from where they are when they join.")
-            }
+            GoalFields(draft: Binding(get: { goal ?? suggested }, set: { goal = $0 }))
             you.section
             if let failure { Section { Text(failure).foregroundStyle(.red) } }
         }
@@ -61,25 +81,71 @@ struct NewGroupSheet: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 if working { ProgressView() } else {
-                    Button("Create") { create(option, amount) }
+                    Button("Create") { create(goal ?? suggested) }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || !you.isReady)
                 }
             }
         }
     }
 
-    private func create(_ option: GoalOption, _ amount: Double) {
+    private func create(_ goal: GoalDraft) {
         working = true
         failure = nil
         Task {
             defer { working = false }
             do {
                 try await you.save()
-                let group = try await Cloud.createGroup(name: name.trimmingCharacters(in: .whitespaces), metric: option.metric,
-                                                        target: amount, deadline: deadline)
+                let group = try await Cloud.createGroup(name: name.trimmingCharacters(in: .whitespaces), metric: goal.goal.metric,
+                                                        target: goal.amount, deadline: goal.deadline)
                 done(group)
             } catch {
                 failure = "Couldn't create the group. Check your connection and try again."
+            }
+        }
+    }
+}
+
+/// FIT-16: any member can add another goal to the group.
+struct AddGoalSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let groupId: String
+    /// Metrics the group already has, so the suggestion is something new.
+    let existing: [String]
+    let done: (String) -> Void
+
+    @State private var goal: GoalDraft?
+    @State private var working = false
+    @State private var failure: String?
+
+    private var suggested: GoalDraft {
+        GoalDraft(GoalOption.all.first { !existing.contains($0.metric) } ?? GoalOption.all[0])
+    }
+
+    var body: some View {
+        Form {
+            GoalFields(draft: Binding(get: { goal ?? suggested }, set: { goal = $0 }))
+            if let failure { Section { Text(failure).foregroundStyle(.red) } }
+        }
+        .navigationTitle("Add Goal")
+        .navigationBarTitleDisplayMode(.inline)
+        .disabled(working)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                if working { ProgressView() } else { Button("Add") { add(goal ?? suggested) } }
+            }
+        }
+    }
+
+    private func add(_ goal: GoalDraft) {
+        working = true
+        failure = nil
+        Task {
+            defer { working = false }
+            do {
+                done(try await Cloud.addGoal(to: groupId, metric: goal.goal.metric, target: goal.amount, deadline: goal.deadline))
+            } catch {
+                failure = "Couldn't add the goal. Check your connection and try again."
             }
         }
     }

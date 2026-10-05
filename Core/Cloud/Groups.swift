@@ -154,18 +154,25 @@ enum Cloud {
         try await run("query($g: ID!) { group(groupId: $g) { \(groupFields) } }", ["g": id], at: "group", as: Group?.self, query: true)
     }
 
-    /// A group starts with its goal (FIT-16: one shared goal per group).
+    /// A group starts with its first goal; members can add more (FIT-16).
     @MainActor static func createGroup(name: String, metric: String, target: Double, deadline: Date?) async throws -> GroupSummary {
         let summary: GroupSummary = try await run("mutation($n: String!) { createGroup(name: $n) { groupId name role } }",
                                                   ["n": name], at: "createGroup")
-        var variables: [String: Any] = ["g": summary.groupId, "m": metric, "t": target, "mode": GroupProgress.Mode.relative.rawValue]
+        _ = try await addGoal(to: summary.groupId, metric: metric, target: target, deadline: deadline)
+        return summary
+    }
+
+    /// Relative only for now ("lose 10 lb"), so members at different starting points compare. Returns the goal's id.
+    @MainActor static func addGoal(to groupId: String, metric: String, target: Double, deadline: Date?) async throws -> String {
+        var variables: [String: Any] = ["g": groupId, "m": metric, "t": target, "mode": GroupProgress.Mode.relative.rawValue]
         if let deadline { variables["d"] = deadline.formatted(.iso8601.year().month().day()) }
-        _ = try await run("""
+        struct Added: Decodable, Sendable { var goalId: String }
+        let added: Added = try await run("""
             mutation($g: ID!, $m: String!, $t: Float!, $d: AWSDate, $mode: String!) {
               addGroupGoal(groupId: $g, metric: $m, target: $t, deadline: $d, mode: $mode) { goalId }
             }
-            """, variables, at: "addGroupGoal", as: AnyDecodable?.self)
-        return summary
+            """, variables, at: "addGroupGoal")
+        return added.goalId
     }
 
     @MainActor static func join(code: String) async throws -> GroupSummary {
