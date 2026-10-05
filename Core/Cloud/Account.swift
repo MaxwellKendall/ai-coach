@@ -33,6 +33,14 @@ final class Account {
     }
 
     private(set) var user: User?
+    /// FIT-57: chosen at build time, no settings screen. Debug builds talk to AICoach-dev; Release
+    /// (TestFlight and the App Store) to AICoach-prod. Each config bundles only its own file.
+    #if DEBUG
+    static let outputs = "amplify_outputs.dev"
+    #else
+    static let outputs = "amplify_outputs.prod"
+    #endif
+
     /// False when the backend config is missing or invalid; the app then hides account features.
     let isAvailable: Bool
 
@@ -46,7 +54,7 @@ final class Account {
         do {
             try Amplify.add(plugin: AWSCognitoAuthPlugin())
             try Amplify.add(plugin: AWSAPIPlugin())
-            try Amplify.configure(with: .amplifyOutputs)
+            try Amplify.configure(with: .resource(named: Self.outputs))
             isAvailable = true
         } catch {
             isAvailable = false

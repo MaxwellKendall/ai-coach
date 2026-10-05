@@ -45,9 +45,12 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
       configs:
+        # FIT-57: each build bundles only its own backend.
+        Debug:
+          EXCLUDED_SOURCE_FILE_NAMES: amplify_outputs.prod.json
         # The author's personal history is a dogfooding aid, never shipped.
         Release:
-          EXCLUDED_SOURCE_FILE_NAMES: history.json goals.json
+          EXCLUDED_SOURCE_FILE_NAMES: history.json goals.json amplify_outputs.dev.json
   AICoachTests:
     type: bundle.unit-test
     platform: iOS

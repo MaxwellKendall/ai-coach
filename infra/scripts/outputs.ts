@@ -1,4 +1,4 @@
-// Writes Resources/amplify_outputs.json for the iOS app (Amplify Swift's config format).
+// Writes Resources/amplify_outputs.{stage}.json for the iOS app (Amplify Swift's config format).
 // These IDs aren't secrets, so the file is committed.
 import { writeFileSync } from "node:fs";
 import { stackOutputs } from "./stack.ts";
@@ -33,6 +33,6 @@ const config = {
   },
 };
 
-const path = new URL("../../Resources/amplify_outputs.json", import.meta.url);
+const path = new URL(`../../Resources/amplify_outputs.${stage}.json`, import.meta.url);
 writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
 console.log(`Wrote ${path.pathname} for AICoach-${stage}`);
