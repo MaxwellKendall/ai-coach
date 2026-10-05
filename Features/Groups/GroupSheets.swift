@@ -57,6 +57,9 @@ struct NewGroupSheet: View {
     @State private var working = false
     @State private var failure: String?
 
+    /// Decision (author, 2026-10-05): live workouts are shared by default, so say so before joining.
+    static let sharing = "The group sees your progress on its goals, and your sets live while you train. Turn off live sharing in the group's ⋯ menu."
+
     /// The goal you're already working on comes first.
     private var suggested: GoalDraft {
         GoalDraft(goals.filter { $0.status == .active }.lazy.compactMap { goal in GoalOption.all.first { $0.metric == goal.metric } }.first
@@ -71,6 +74,7 @@ struct NewGroupSheet: View {
             }
             GoalFields(draft: Binding(get: { goal ?? suggested }, set: { goal = $0 }))
             you.section
+            Section {} footer: { Text(Self.sharing) }
             if let failure { Section { Text(failure).foregroundStyle(.red) } }
         }
         .navigationTitle("New Group")
@@ -174,6 +178,7 @@ struct JoinGroupSheet: View {
                 Text("The 8-letter code from your invite.")
             }
             you.section
+            Section {} footer: { Text(NewGroupSheet.sharing) }
             if let failure { Section { Text(failure).foregroundStyle(.red) } }
         }
         .navigationTitle("Join Group")

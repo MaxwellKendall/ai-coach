@@ -29,7 +29,8 @@ export function request(ctx) {
           groupName: name,
           displayName: ctx.stash.profile?.displayName ?? null,
           role: "member",
-          shareLive: false,
+          // Decision (author, 2026-10-05): live workouts are shared by default; the member can turn it off.
+          shareLive: true,
           joinedAt: now,
           GSI1PK: `USER#${uid}`,
           GSI1SK: `GROUP#${groupId}`,

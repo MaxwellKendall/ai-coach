@@ -73,8 +73,10 @@ const publish = `mutation($g: ID!, $s: AWSDateTime!) {
   publishLiveSet(groupId: $g, workout: "Push day", exercise: "Bench press", setIndex: 3, setCount: 5, loadLb: 185, reps: 5, state: "working", startedAt: $s) { ${LIVE_FIELDS} }
 }`;
 const startedAt = new Date().toISOString();
+// Live sharing is on by default (2026-10-05); a member who turns it off publishes nothing.
+must(await gql(a, `mutation($g: ID!) { setShareLive(groupId: $g, shareLive: false) { shareLive } }`, { g: groupId }), "setShareLive off");
 if (!rejected(await gql(a, publish, { g: groupId, s: startedAt }))) throw new Error("publishLiveSet allowed with shareLive=false");
-pass("publishLiveSet is rejected until the member opts in to live sharing");
+pass("publishLiveSet is rejected once a member turns live sharing off");
 must(await gql(a, `mutation($g: ID!) { setShareLive(groupId: $g, shareLive: true) { shareLive } }`, { g: groupId }), "setShareLive");
 
 const subB = subscribe(b, groupId);

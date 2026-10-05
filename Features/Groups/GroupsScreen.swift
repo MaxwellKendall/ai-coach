@@ -63,7 +63,7 @@ struct GroupsScreen: View {
             ContentUnavailableView {
                 Label("Train Together", systemImage: "person.2")
             } description: {
-                Text(failure ?? "Share a goal with family or friends and see each other's progress. Only your progress is shared, plus your workouts live if you turn that on.")
+                Text(failure ?? "Share a goal with family or friends and see each other's progress. You share your goal progress and, as you train, your sets. Never your logs, meals or notes.")
             } actions: {
                 Button("New Group") { open(.create) }
                     .buttonStyle(.borderedProminent)
@@ -92,8 +92,10 @@ struct GroupsScreen: View {
     private func load() async {
         guard account.user != nil else { groups = nil; return }
         do {
-            groups = try await Cloud.myGroups()
+            let loaded = try await Cloud.myGroups()
+            groups = loaded
             failure = nil
+            GroupCache.prefetch(loaded)
         } catch {
             failure = "Couldn't load your groups. Pull to try again."
         }

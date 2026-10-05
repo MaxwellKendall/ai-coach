@@ -75,7 +75,7 @@ describe("createGroup", () => {
     const [meta, member, invite] = req.transactItems;
     expect(meta.condition.expression).toBe("attribute_not_exists(PK)");
     expect(member.key.SK).toBe(`MEMBER#${ME}`);
-    expect(member.attributeValues).toMatchObject({ GSI1PK: `USER#${ME}`, displayName: "Max", shareLive: false });
+    expect(member.attributeValues).toMatchObject({ GSI1PK: `USER#${ME}`, displayName: "Max", shareLive: true });
     expect(invite.key.PK).toBe("INVITE#11111111");
     expect(invite.condition.expression).toBe("attribute_not_exists(PK)");
     expect(createGroup.response(c)).toEqual({ groupId: "11111111-2222-3333-4444-555555555555", inviteCode: "11111111", name: "Lose 10", role: "member" });

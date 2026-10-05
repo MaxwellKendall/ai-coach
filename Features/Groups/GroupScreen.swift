@@ -20,6 +20,12 @@ struct GroupScreen: View {
 
     private var me: String { account.user?.uid ?? "" }
 
+    init(summary: Cloud.GroupSummary) {
+        self.summary = summary
+        // Shown at once from the last load (Groups prefetches every group); the task refreshes it.
+        _group = State(initialValue: GroupCache.groups[summary.groupId])
+    }
+
     var body: some View {
         List {
             if let group {
@@ -31,9 +37,16 @@ struct GroupScreen: View {
                 Text(failure).foregroundStyle(.secondary)
             }
         }
-        .overlay { if group == nil && failure == nil { ProgressView() } }
+        .overlay {
+            if group == nil && failure == nil {
+                ProgressView("Loading \(summary.name.isEmpty ? "group" : summary.name)…").controlSize(.large)
+            }
+        }
         .navigationTitle(group?.name ?? summary.name)
         .toolbar { if let group { toolbar(group) } }
+        .onChange(of: group?.feed.count) { cache() }
+        .onChange(of: group?.progress.map(\.updatedAt)) { cache() }
+        .onChange(of: group?.live) { cache() }
         .refreshable { await load(publish: true) }
         .task {
             numbers = GroupSync.sharesNumbers(summary.groupId)
@@ -215,18 +228,26 @@ struct GroupScreen: View {
 
     // MARK: Actions
 
+    private func cache() {
+        if let group { GroupCache.groups[group.id] = group }
+    }
+
     private func load(publish: Bool) async {
         do {
             guard var loaded = try await Cloud.group(summary.groupId) else {
+                GroupCache.groups[summary.groupId] = nil
+                group = nil
                 failure = "This group no longer exists."
                 return
             }
             group = loaded
+            GroupCache.groups[loaded.id] = loaded
             failure = nil
             if publish, await GroupSync.publish(loaded, me: me, logs: GroupSync.Logs(context)),
                let fresh = try await Cloud.group(summary.groupId) {
                 loaded = fresh
                 group = loaded
+                GroupCache.groups[loaded.id] = loaded
             }
         } catch {
             if group == nil { failure = "Couldn't load the group. Pull to try again." }
@@ -294,6 +315,7 @@ struct GroupScreen: View {
         Task {
             do {
                 try await Cloud.leave(summary.groupId)
+                GroupCache.groups[summary.groupId] = nil
                 dismiss()
             } catch {
                 failure = "Couldn't leave the group. Try again."
@@ -303,6 +325,20 @@ struct GroupScreen: View {
 
     private func isThisWeek(_ string: String) -> Bool {
         Cloud.date(string).map { $0 > .now.addingTimeInterval(-7 * 86_400) } ?? false
+    }
+}
+
+/// The last loaded state of each group, so opening one is instant while it refreshes (2026-10-05: an empty
+/// page while loading felt broken). In memory only; it's a view of the server, never source data.
+@MainActor
+enum GroupCache {
+    static var groups: [String: Cloud.Group] = [:]
+
+    /// Groups loads every group in the background, so the first tap on one is instant too.
+    static func prefetch(_ summaries: [Cloud.GroupSummary]) {
+        for summary in summaries where groups[summary.groupId] == nil {
+            Task { if let group = try? await Cloud.group(summary.groupId) { groups[summary.groupId] = group } }
+        }
     }
 }
 
