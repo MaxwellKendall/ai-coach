@@ -21,8 +21,9 @@ export function startsSession(oldItem: Live | undefined, newItem: Live) {
   return !oldItem || oldItem.startedAt !== newItem.startedAt;
 }
 
-export function alertText(name: string | undefined, live: Live) {
-  return { title: "Live now", body: `${name ?? "Someone"} started ${live.workout ?? live.exercise ?? "a workout"}` };
+/** Titled with the group's name, so someone in several groups knows which one. */
+export function alertText(name: string | undefined, live: Live, groupName?: string) {
+  return { title: groupName ?? "Live now", body: `${name ?? "Someone"} started ${live.workout ?? live.exercise ?? "a workout"}` };
 }
 
 async function query(pk: string, prefix: string) {
@@ -55,7 +56,7 @@ export async function handler(event: DynamoDBStreamEvent) {
       process.env.APNS_HOST!,
       apnsKey!,
       devices.map((d) => d.token as string),
-      alertText(starter?.displayName, live),
+      alertText(starter?.displayName, live, starter?.groupName),
       { groupId: live.groupId },
     );
     // 410: the app was uninstalled or the token expired, so it will never work again.

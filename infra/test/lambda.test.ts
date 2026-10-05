@@ -14,6 +14,8 @@ describe("push: when does a live item start a session?", () => {
   it("names the workout when there is one", () => {
     expect(alertText("Dad", { ...live, workout: "Push day" }).body).toBe("Dad started Push day");
     expect(alertText(undefined, live).body).toBe("Someone started Bench press");
+    expect(alertText("Dad", live, "Family").title).toBe("Family");
+    expect(alertText("Dad", live).title).toBe("Live now");
   });
 });
 

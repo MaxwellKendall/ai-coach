@@ -32,12 +32,14 @@ enum GroupProgress {
         let start = baseline ?? value
         let done = GoalProgress.fraction(from: start, now: value, target: target(goal, mode: mode, baseline: start))
         return Mine(baseline: start, value: value, pct: (done * 100).rounded(),
-                    onPace: deadline.map { onPace(done: done, from: joined, to: $0, now: now) })
+                    onPace: deadline.flatMap { onPace(done: done, from: joined, to: $0, now: now) })
     }
 
     /// Straight-line expectation from joining to the deadline, with the program's 80% rule
-    /// (`GoalProgress.pace`): under 80% of where you'd expect to be is behind.
-    static func onPace(done: Double, from start: Date, to deadline: Date, now: Date) -> Bool {
+    /// (`GoalProgress.pace`): under 80% of where you'd expect to be is behind. Nil in the first week, like the
+    /// program's goals (`.starting`): too early to judge, and "Behind" minutes after joining is wrong.
+    static func onPace(done: Double, from start: Date, to deadline: Date, now: Date) -> Bool? {
+        guard now.timeIntervalSince(start) >= 7 * 86_400 || done >= 1 else { return nil }
         let total = deadline.timeIntervalSince(start)
         guard total > 0 else { return done >= 1 }
         let expected = min(1, max(0, now.timeIntervalSince(start) / total))

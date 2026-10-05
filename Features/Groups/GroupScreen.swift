@@ -134,13 +134,17 @@ struct GroupScreen: View {
                     .foregroundStyle(.secondary)
             }
             if let together = GroupProgress.together(pcts) {
-                Gauge(value: together, in: 0...100) {
-                    Text("Together")
-                } currentValueLabel: {
-                    Text("\(Int(together))%")
+                VStack(spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Together")
+                        Spacer()
+                        Text("\(Int(together))%").monospacedDigit().foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline)
+                    ProgressView(value: together, total: 100).tint(.primary)
                 }
-                .gaugeStyle(.linearCapacity)
-                .padding(.top, 10)
+                .padding(.top, 12)
+                .accessibilityElement(children: .combine)
             }
         }
         .padding(.vertical, 6)

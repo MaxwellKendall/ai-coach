@@ -43,10 +43,13 @@ struct GroupProgressTests {
 
     @Test func paceIsAStraightLineWithTheProgramsEightyPercentRule() {
         let deadline = start + 100 * day
-        #expect(GroupProgress.onPace(done: 0.4, from: start, to: deadline, now: start + 50 * day))
-        #expect(!GroupProgress.onPace(done: 0.39, from: start, to: deadline, now: start + 50 * day))
-        #expect(GroupProgress.onPace(done: 0, from: start, to: deadline, now: start))
-        #expect(!GroupProgress.onPace(done: 0.7, from: start, to: deadline, now: start + 200 * day))
+        #expect(GroupProgress.onPace(done: 0.4, from: start, to: deadline, now: start + 50 * day) == true)
+        #expect(GroupProgress.onPace(done: 0.39, from: start, to: deadline, now: start + 50 * day) == false)
+        // The first week is too early to judge.
+        #expect(GroupProgress.onPace(done: 0, from: start, to: deadline, now: start + 600) == nil)
+        #expect(GroupProgress.onPace(done: 0, from: start, to: deadline, now: start + 6 * day) == nil)
+        #expect(GroupProgress.onPace(done: 0, from: start, to: deadline, now: start + 8 * day) == false)
+        #expect(GroupProgress.onPace(done: 0.7, from: start, to: deadline, now: start + 200 * day) == false)
     }
 
     @Test func milestonesAreQuarterMarksCrossed() {
