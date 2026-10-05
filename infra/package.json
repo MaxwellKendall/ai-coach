@@ -9,7 +9,8 @@
     "deploy": "cdk deploy",
     "outputs": "tsx scripts/outputs.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "buddy": "tsx scripts/buddy.ts"
+    "buddy": "tsx scripts/buddy.ts",
+    "seed-review": "tsx scripts/seed-review.ts"
   },
   "devDependencies": {
     "@aws-appsync/utils": "^2.1.1",
