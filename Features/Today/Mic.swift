@@ -63,14 +63,25 @@ struct ListeningVeil: View {
     /// Set while what was said is being understood.
     let working: String?
     let prompt: String
+    /// FIT-64: the coach starts listening when opened, so offer the keyboard instead.
+    var typeInstead: (() -> Void)?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             Rectangle().fill(.regularMaterial).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 12) {
-                Button("Cancel") { _ = voice.stop() }
-                    .foregroundStyle(.secondary)
-                    .opacity(working == nil ? 1 : 0)
+                HStack {
+                    Button("Cancel") { _ = voice.stop() }
+                    Spacer()
+                    if let typeInstead {
+                        Button("Type Instead", systemImage: "keyboard") {
+                            _ = voice.stop()
+                            typeInstead()
+                        }
+                    }
+                }
+                .foregroundStyle(.secondary)
+                .opacity(working == nil ? 1 : 0)
                 Spacer().frame(height: 100)
                 Text(working == nil ? "LISTENING · ON THIS IPHONE" : "UNDERSTANDING · ON THIS IPHONE")
                     .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)

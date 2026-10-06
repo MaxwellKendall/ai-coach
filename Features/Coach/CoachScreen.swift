@@ -26,7 +26,8 @@ final class CoachInbox {
     }
 }
 
-/// FIT-64: the coach's page. One field to type into, a mic to talk, and suggestions for where you came from.
+/// FIT-64: the coach's page. Opening it starts listening (one tap to talk, author 2026-10-06), and it sends after a
+/// pause in speech. "Type Instead" gives the field and the suggestions for where you came from.
 /// Sending goes back to that screen, which acts on it there. Program changes go to Program, everything else to Today.
 struct CoachScreen: View {
     @Environment(\.modelContext) private var context
@@ -40,6 +41,8 @@ struct CoachScreen: View {
     @FocusState private var typing: Bool
     @State private var voice = VoiceCapture()
     @State private var message: String?
+    /// Listening started by opening the coach, not by the mic: if it can't, just offer the keyboard.
+    @State private var autoStarted = false
 
     private var target: AppTab { from == .program ? .program : .today }
 
@@ -64,13 +67,31 @@ struct CoachScreen: View {
                 }
             }
             .overlay {
-                if voice.listening { ListeningVeil(voice: voice, working: nil, prompt: prompt) }
+                if voice.listening {
+                    ListeningVeil(voice: voice, working: nil, prompt: prompt) { typing = true }
+                }
+            }
+            .onAppear {
+                autoStarted = true
+                Task { await voice.start() }
+            }
+            .onDisappear { if voice.listening { _ = voice.stop() } }
+            // Like the mic's tap mode: done after 1.6 s without new words.
+            .task(id: voice.transcript) {
+                guard voice.listening, !voice.transcript.isEmpty else { return }
+                try? await Task.sleep(for: .seconds(1.6))
+                if !Task.isCancelled, voice.listening { submit(voice.stop()) }
             }
             .animation(.snappy, value: voice.listening)
             .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK") {}
             } message: { Text(message ?? "") }
-            .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
+            .onChange(of: voice.problem) { _, problem in
+                guard let problem else { return }
+                if autoStarted { typing = true } else { message = problem }
+                autoStarted = false
+            }
+            .onChange(of: voice.listening) { _, listening in if listening { autoStarted = false } }
         }
     }
 
