@@ -1,18 +1,20 @@
 import SwiftUI
 import SwiftData
 
-/// The program (FIT-39, FIT-44): Program | Goals. The weeks as bars and a deck of week cards; this week and next
+/// The program (FIT-39, FIT-44), and since FIT-64 also the Progress tab (Goals | Wins). The weeks as bars and a deck of week cards; this week and next
 /// list their sessions, later weeks are a sketch of where each goal should be. The list button peeks at the whole
 /// program, where it can be changed.
 struct ProgramScreen: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(CoachInbox.self) private var coach
     @Query private var profiles: [Profile]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
     @State private var tab: Tab
+    /// The views this tab of the app offers; a picker when there's more than one.
+    let tabs: [Tab]
     @State private var selected: Int?
     @State private var goalIndex = 0
     @State private var nextWeek: [PlannedWorkout] = []
@@ -34,9 +36,12 @@ struct ProgramScreen: View {
         var days: [RegenerateSheet.Day]
     }
 
-    enum Tab: String, CaseIterable { case program = "Program", goals = "Goals" }
+    enum Tab: String, CaseIterable { case program = "Program", goals = "Goals", wins = "Wins" }
 
-    init(tab: Tab = .program) { _tab = State(initialValue: tab) }
+    init(tabs: [Tab]) {
+        self.tabs = tabs
+        _tab = State(initialValue: tabs[0])
+    }
 
     var body: some View {
         NavigationStack {
@@ -46,20 +51,15 @@ struct ProgramScreen: View {
                     switch tab {
                     case .program: program(weeks, start: start, current: current, profile: profile)
                     case .goals: goalList(weeks, start: start, current: current, profile: profile)
+                    case .wins: WinsScreen()
                     }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .bottom) {
-                VStack(spacing: 14) {
-                    ToastView(toast: $toast)
-                    if LanguageModel.isAvailable {
-                        MicButton(voice: voice, onHeard: heard)
-                        Text(voice.listening ? " " : "Say what changed").font(.footnote).foregroundStyle(.tertiary)
-                    }
-                }
-                .padding(.bottom, LanguageModel.isAvailable ? 4 : 14)
-            }
+            .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 14) }
+            // FIT-64: program changes said to the coach land here.
+            .onChange(of: coach.request) { takeFromCoach() }
+            .onAppear { takeFromCoach() }
             .overlay {
                 if voice.listening || working != nil {
                     ListeningVeil(voice: voice, working: working, prompt: "“I’m traveling November 9 to 20, hotel gym with dumbbells”")
@@ -77,14 +77,15 @@ struct ProgramScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Picker("Show", selection: $tab.animation(.snappy)) {
-                        ForEach(Tab.allCases, id: \.self) { Text($0.rawValue) }
+                    if tabs.count > 1 {
+                        Picker("Show", selection: $tab.animation(.snappy)) {
+                            ForEach(tabs, id: \.self) { Text($0.rawValue) }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 200)
+                    } else {
+                        Text(tab.rawValue).font(.headline)
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 200)
-                }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark") { dismiss() }
                 }
                 if tab == .program, let profile = profiles.first {
                     ToolbarItem(placement: .primaryAction) {
@@ -136,7 +137,7 @@ struct ProgramScreen: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
-            .padding(.bottom, LanguageModel.isAvailable ? 130 : 72)
+            .padding(.bottom, 20)
         }
     }
 
@@ -397,6 +398,10 @@ struct ProgramScreen: View {
     }
 
     /// A trip, read by code from the words: travel weeks are dumbbells and bodyweight, and the deload moves into them.
+    private func takeFromCoach() {
+        if let said = coach.take(for: .program) { heard(said) }
+    }
+
     private func heard(_ said: String) {
         guard let profile = profiles.first, let weeks = profile.program, let start = profile.programStart,
               let target = profile.targetDate else { return }
@@ -509,7 +514,7 @@ struct ProgramScreen: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 8)
-            .padding(.bottom, LanguageModel.isAvailable ? 130 : 72)
+            .padding(.bottom, 20)
         }
     }
 

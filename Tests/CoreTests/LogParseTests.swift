@@ -86,3 +86,24 @@ struct LogParseTests {
         #expect(Measurement(metric: "sleep_h", value: 6.5, unit: "h").display == "6.5 h")
     }
 }
+
+/// FIT-64: code drops what the model made up.
+struct LogParserKeepTests {
+    @Test func dropsItemsNobodyMentioned() {
+        let items = [ParsedLogItem(kind: .weight, weightLb: 203.4), ParsedLogItem(kind: .grocery, costUsd: 0)]
+        #expect(LogParser.keep(items, said: "Weighed 203.4") == [ParsedLogItem(kind: .weight, weightLb: 203.4)])
+    }
+
+    @Test func keepsSpendingThatWasSaid() {
+        let groceries = ParsedLogItem(kind: .grocery, costUsd: 84)
+        #expect(LogParser.keep([groceries], said: "spent 84 on groceries") == [groceries])
+        #expect(LogParser.keep([groceries], said: "$84 at Trader Joe's") == [groceries])
+        #expect(LogParser.keep([groceries], said: "weighed 184") == [])
+    }
+
+    @Test func dropsEmptyEntries() {
+        let items = [ParsedLogItem(kind: .sleep), ParsedLogItem(kind: .meal, name: " "), ParsedLogItem(kind: .meal, name: "eggs and toast"),
+                     ParsedLogItem(kind: .sleep, hours: 7.5)]
+        #expect(LogParser.keep(items, said: "eggs and toast, slept 7.5 hours").map(\.kind) == [.meal, .sleep])
+    }
+}

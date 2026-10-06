@@ -40,7 +40,24 @@ enum LogParser {
             stated. Never estimate calories, protein or any number.
             """)
         let draft = try await session.respond(to: text, generating: LogDraft.self).content
-        return draft.items.compactMap(ParsedLogItem.init)
+        return keep(draft.items.compactMap(ParsedLogItem.init), said: text)
+    }
+
+    /// Code decides (principle 4): the model sometimes adds an item nobody mentioned, e.g. "Groceries $0" for
+    /// "weighed 203.4" (FIT-64). An item without its number is dropped, and so is spending the words never mention.
+    static func keep(_ items: [ParsedLogItem], said: String) -> [ParsedLogItem] {
+        let words = SaidChecks.words(said)
+        let spending = said.contains("$") || [" spent ", " spend ", " groceries ", " grocery ", " shopping ", " bought ", " paid ", " dollars ", " bucks "]
+            .contains { words.contains($0) }
+        return items.filter { item in
+            switch item.kind {
+            case .weight: (item.weightLb ?? 0) > 0
+            case .sleep: (item.hours ?? 0) > 0
+            case .grocery: spending && (item.costUsd ?? 0) > 0
+            case .meal: !item.name.trimmingCharacters(in: .whitespaces).isEmpty
+            case .workout: true
+            }
+        }
     }
 }
 

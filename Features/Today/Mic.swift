@@ -4,6 +4,8 @@ import SwiftUI
 /// Hidden without Apple Intelligence; the parent keeps its manual paths.
 struct MicButton: View {
     let voice: VoiceCapture
+    /// FIT-64: a plain toolbar mic (the coach page) instead of the big black one.
+    var compact = false
     /// Called with what was said once listening ends; not called on cancel or silence.
     let onHeard: (String) -> Void
     @State private var pressedAt: Date?
@@ -12,13 +14,13 @@ struct MicButton: View {
     @State private var ending = false
 
     var body: some View {
-        Image(systemName: "mic")
-            .font(.system(size: 24, weight: .medium))
-            .frame(width: 68, height: 68)
-            .foregroundStyle(Color(.systemBackground))
-            .background(Color.primary, in: .circle)
-            .scaleEffect(voice.listening ? 1.12 : 1)
-            .shadow(color: .black.opacity(voice.listening ? 0 : 0.16), radius: 10, y: 6)
+        Image(systemName: compact ? (voice.listening ? "mic.fill" : "mic") : "mic")
+            .font(.system(size: compact ? 17 : 24, weight: .medium))
+            .frame(width: compact ? 36 : 68, height: compact ? 36 : 68)
+            .foregroundStyle(compact ? Color.primary : Color(.systemBackground))
+            .background(compact ? Color.clear : Color.primary, in: .circle)
+            .scaleEffect(voice.listening && !compact ? 1.12 : 1)
+            .shadow(color: .black.opacity(voice.listening || compact ? 0 : 0.16), radius: 10, y: 6)
             .animation(.snappy, value: voice.listening)
             .contentShape(.circle)
             .gesture(DragGesture(minimumDistance: 0)

@@ -5,6 +5,7 @@ import SwiftData
 /// and one mic. Planned days start a workout, done days show what happened, and the rest stays one tap away.
 struct TodayScreen: View {
     @Environment(\.modelContext) private var context
+    @Environment(CoachInbox.self) private var coach
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var plans: [Plan]
     @Query private var profiles: [Profile]
@@ -24,7 +25,6 @@ struct TodayScreen: View {
     @State private var sheet: Sheet?
     @State private var live: WorkoutDraft?
     @State private var you = false
-    @State private var showProgram = false
     @State private var review: WeekReport?
     @State private var sharing: WinItem?
 
@@ -74,7 +74,7 @@ struct TodayScreen: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 22)
-            .padding(.bottom, LanguageModel.isAvailable ? 126 : 24)
+            .padding(.bottom, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))
@@ -94,13 +94,13 @@ struct TodayScreen: View {
                     WorkingPill(said: said, step: step) { job?.cancel() }
                         .padding(.bottom, 26)
                         .transition(.scale(scale: 0.9).combined(with: .opacity))
-                } else if LanguageModel.isAvailable {
-                    MicButton(voice: voice, onHeard: heard)
-                    Text(voice.listening ? " " : "Hold to talk").font(.footnote).foregroundStyle(.tertiary)
                 }
             }
             .padding(.bottom, 4)
         }
+        // FIT-64: what's said to the coach about today lands here and is done in place.
+        .onChange(of: coach.request) { takeFromCoach() }
+        .onAppear { takeFromCoach() }
         .animation(.snappy, value: voice.listening)
         .animation(.snappy, value: working)
         .animation(.snappy, value: toast)
@@ -122,7 +122,6 @@ struct TodayScreen: View {
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen() }
-        .sheet(isPresented: $showProgram) { ProgramScreen() }
         .sheet(item: $sharing) { ShareWinSheet(win: $0) }
         .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
             if let review { WeeklyReviewScreen(report: review, profile: profiles.first) }
@@ -149,49 +148,31 @@ struct TodayScreen: View {
         }
         return HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
-                Text((date.formatted(.dateTime.weekday(.wide).month(.wide).day()) + (deload ? " · light week" : "")).uppercased())
+                Text((date.formatted(.dateTime.weekday(.wide).month(.wide).day()) + programWeek + (deload ? " · light week" : "")).uppercased())
                     .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
                 Text(title).font(.system(size: 34, weight: .bold)).tracking(-0.5)
                     .contentTransition(.numericText())
-                programPill.padding(.top, 4)
             }
             Spacer()
             Button { you = true } label: {
                 Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(.secondary)
                     .frame(width: 44, height: 44)
             }
-            .accessibilityLabel("Goals, progress and settings")
+            .accessibilityLabel("Account and library")
         }
         .padding(.leading, 22).padding(.trailing, 12).padding(.top, 8)
         .animation(.snappy, value: index)
     }
 
-    /// FIT-39: "Week 3 of 16 · Base ›", with how far through the program as a ring. Opens the program.
-    @ViewBuilder private var programPill: some View {
-        if let profile = profiles.first, let weeks = profile.program, let start = profile.programStart {
-            let index = ProgramPlan.week(of: .now, start: start)
-            if weeks.indices.contains(index) {
-                Button { showProgram = true } label: {
-                    HStack(spacing: 7) {
-                        ZStack {
-                            Circle().stroke(Color(.quaternaryLabel), lineWidth: 2.5)
-                            Circle().trim(from: 0, to: (Double(index) + 0.5) / Double(weeks.count))
-                                .stroke(Color.primary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                                .rotationEffect(.degrees(-90))
-                        }
-                        .frame(width: 14, height: 14)
-                        Text("Week \(index + 1) of \(weeks.count) · \(ProgramPlan.title(weeks[index]))")
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .padding(.horizontal, 12).frame(minHeight: 32)
-                    .background(Color(.secondarySystemBackground), in: .capsule)
-                    .contentShape(.capsule)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens your program")
-            }
-        }
+    /// FIT-39's "Week 3 of 16", in the date line since the program has its own tab (FIT-64).
+    private var programWeek: String {
+        guard let profile = profiles.first, let weeks = profile.program, let start = profile.programStart else { return "" }
+        let index = ProgramPlan.week(of: .now, start: start)
+        return weeks.indices.contains(index) ? " · Week \(index + 1) of \(weeks.count)" : ""
+    }
+
+    private func takeFromCoach() {
+        if let said = coach.take(for: .today) { heard(said) }
     }
 
     private func strip(_ week: [Date], cards: [DayCard], selected: Int) -> some View {
