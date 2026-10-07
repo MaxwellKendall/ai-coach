@@ -155,6 +155,9 @@ struct PlannedWorkout: Equatable, Sendable {
     var adjustedReason: String?
     /// Superset or circuit grouping from the editor; the generator doesn't make supersets yet.
     var group: Int? = nil
+    /// The session's main lift, which PlanGuard lets have 5 sets rather than 4 (FIT-71). Set by whoever proposes the
+    /// week; not stored.
+    var main = false
 
     func target(_ metric: String) -> Double? { targets.first { $0.metric == metric }?.value }
 }
@@ -187,7 +190,7 @@ enum TrainingGenerator {
         let tier = AgeTier.of(age: settings.age)
         let volume = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes)
         let deload = program?.light ?? (weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks))
-        let range = program.map { ProgramPlan.sessionSets(volume.setsPerSession, phase: $0.phase) } ?? volume.setsPerSession
+        let range = sessionRange(settings, program: program)
         let past = history.filter { $0.date < (asOf ?? monday) }
         let undertrained = undertrainedPatterns(past, before: monday, calendar: calendar)
         let recent = recentExercises(past, sessions: 2, calendar: calendar)
@@ -212,12 +215,20 @@ enum TrainingGenerator {
                               deload: deload, recent: recent, undertrained: undertrained, history: past, calendar: calendar,
                               warnings: &warnings)
         }
-        let week = TrainingWeek(workouts: workouts, deload: deload, warnings: warnings)
-        if week.totalSets > settings.maxWeeklySets {
-            return TrainingWeek(workouts: workouts, deload: deload, warnings: warnings
-                + ["\(week.totalSets) planned sets is over your \(settings.maxWeeklySets)-set weekly ceiling."])
+        if range.upperBound < volume.setsPerSession.lowerBound, !deload {
+            warnings.append("Sessions held to \(range.upperBound) sets to stay under your \(settings.maxWeeklySets)-set weekly ceiling.")
         }
-        return week
+        return TrainingWeek(workouts: workouts, deload: deload, warnings: warnings)
+    }
+
+    /// The working sets each session aims for: the volume table's range, a program phase's point in it, and no more
+    /// than the weekly ceiling allows each session. The ceiling is the user's own, and PlanGuard holds every week to it
+    /// (FIT-71), so the plan fits it rather than only flagging it (config.yaml `max_weekly_volume_sets`).
+    static func sessionRange(_ settings: TrainingSettings, program: ProgramWeek?) -> ClosedRange<Int> {
+        let volume = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes).setsPerSession
+        let range = program.map { ProgramPlan.sessionSets(volume, phase: $0.phase) } ?? volume
+        let most = settings.maxWeeklySets / max(1, min(settings.daysPerWeek, settings.trainingDays.count))
+        return min(range.lowerBound, most)...min(range.upperBound, most)
     }
 
     /// FIT-33: "make today a squat day" on a day with nothing planned. One more session today, built by the same
@@ -285,7 +296,7 @@ enum TrainingGenerator {
         return workouts
     }
 
-    private static func warmup(for item: PlannedWorkout, settings: TrainingSettings, tier: AgeTier) -> PlannedWorkout? {
+    static func warmup(for item: PlannedWorkout, settings: TrainingSettings, tier: AgeTier) -> PlannedWorkout? {
         guard settings.warmups || tier.mandatoryWarmup, let load = item.target("load_lb") else { return nil }
         return PlannedWorkout(date: item.date, session: item.session, exercise: item.exercise, targets: [
             Measurement(metric: "sets", value: 1, unit: "sets"),
@@ -302,7 +313,7 @@ enum TrainingGenerator {
                         calendar: Calendar = .current) -> [PlannedWorkout] {
         let tier = AgeTier.of(age: settings.age)
         let deload = weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks)
-        var range = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes).setsPerSession
+        var range = sessionRange(settings, program: nil)
         if let minutes, minutes < settings.sessionMinutes {
             let scale = Double(max(minutes, 10)) / Double(max(settings.sessionMinutes, 1))
             range = max(3, Int(Double(range.lowerBound) * scale)) ... max(3, Int(Double(range.upperBound) * scale))
@@ -464,7 +475,7 @@ enum TrainingGenerator {
             targets.append(Measurement(metric: "rpe", value: rpeCap, unit: "RPE"))
         }
         let tempo = main ? tier.tempo.map { "tempo \($0)" } : nil
-        return PlannedWorkout(date: date, session: session, exercise: exercise.slug, targets: targets, note: tempo)
+        return PlannedWorkout(date: date, session: session, exercise: exercise.slug, targets: targets, note: tempo, main: main)
     }
 
     /// Main lifts add 5 lb when the last session was at least 1 RPE under the tier cap; accessories hold.

@@ -70,7 +70,7 @@ enum Planner {
         PlannedActivity(kind: .workout, date: workout.date + TimeInterval(order), slot: workout.session,
                         templateRef: ids[workout.exercise],
                         targets: workout.targets, note: workout.note ?? "", adjustedReason: workout.adjustedReason,
-                        group: workout.group)
+                        group: workout.group, main: workout.main)
     }
 
     /// The plan's workouts as the adjust rules see them. Timestamps drop the ordering seconds.
@@ -80,7 +80,7 @@ enum Planner {
             PlannedWorkout(date: Date(timeIntervalSinceReferenceDate: ($0.date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60),
                            session: $0.slot ?? "", exercise: $0.templateRef.flatMap { slugs[$0] } ?? "",
                            targets: $0.targets, note: $0.note.isEmpty ? nil : $0.note, adjustedReason: $0.adjustedReason,
-                           group: $0.group)
+                           group: $0.group, main: $0.main)
         }
     }
 

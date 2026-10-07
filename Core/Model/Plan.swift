@@ -34,6 +34,8 @@ final class PlannedActivity {
     var adjustedReason: String?
     /// Rows sharing a group are one superset or circuit (FIT-21); nil is a block of its own.
     var group: Int?
+    /// The session's main lift, for PlanGuard's set caps (FIT-71).
+    var main = false
     /// Kept when the week is regenerated (FIT-40).
     var pinned = false
     var plan: Plan?
@@ -42,7 +44,7 @@ final class PlannedActivity {
 
     init(kind: ActivityKind, date: Date, slot: String? = nil, templateRef: UUID? = nil,
          targets: [Measurement] = [], note: String = "", adjustedReason: String? = nil, group: Int? = nil,
-         now: Date = .now) {
+         main: Bool = false, now: Date = .now) {
         self.id = UUID()
         self.kind = kind
         self.date = date
@@ -52,6 +54,7 @@ final class PlannedActivity {
         self.note = note
         self.adjustedReason = adjustedReason
         self.group = group
+        self.main = main
         self.createdAt = now
         self.updatedAt = now
     }

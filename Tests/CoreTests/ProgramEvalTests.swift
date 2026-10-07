@@ -243,8 +243,7 @@ struct ProgramEvalTests {
 
     /// The session's working-set range the volume table gives, as the generator reads it.
     private func range(_ settings: TrainingSettings, program: ProgramWeek?) -> ClosedRange<Int> {
-        let range = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes).setsPerSession
-        return program.map { ProgramPlan.sessionSets(range, phase: $0.phase) } ?? range
+        TrainingGenerator.sessionRange(settings, program: program)
     }
 
     private func check(_ scenario: Scenario) -> [String] {
@@ -266,8 +265,15 @@ struct ProgramEvalTests {
                 failures.append("\(session), \(scenario): \(render(rows))\n    " + problems.joined(separator: "\n    "))
             }
         }
-        if week.totalSets > settings.maxWeeklySets, !week.warnings.contains(where: { $0.contains("ceiling") }) {
-            failures.append("\(scenario): \(week.totalSets) weekly sets over \(settings.maxWeeklySets) with no warning")
+        // FIT-71: the guard finds nothing to repair; the generator keeps every rule the model is held to.
+        var guarded = settings
+        if scenario.program?.travel == true { guarded.equipment.formIntersection(ProgramPlan.travelEquipment) }
+        let repairs = PlanGuard.check(week.workouts, PlanGuard.Context(
+            settings: guarded, catalog: inputs.catalog, names: inputs.names,
+            history: scenario.withHistory ? inputs.history.filter { $0.date < scenario.monday } : [], light: light,
+            calendar: calendar)).repairs
+        if !repairs.isEmpty {
+            failures.append("\(scenario): PlanGuard repaired the generator\n    " + repairs.map { "\($0.text) ← guard: \($0.rule.rawValue)" }.joined(separator: "\n    "))
         }
         // A deload is about half the sets of the same week at full volume (plan.md step 4: −40–50%).
         if scenario.kind == .deload {
@@ -353,7 +359,8 @@ struct ProgramEvalTests {
         let push = scenario.week().workouts.filter { $0.session == "Push" && $0.note != TrainingGenerator.warmupNote }
         #expect(!push.isEmpty)
         #expect(push.allSatisfy { ($0.target("sets") ?? 0) <= Double(Self.maxSets.main) }, "\(render(push))")
-        #expect(push.reduce(0) { $0 + ($1.target("sets") ?? 0) } >= 16, "\(render(push))")
+        let range = TrainingGenerator.sessionRange(scenario.settings, program: nil)
+        #expect(push.reduce(0) { $0 + ($1.target("sets") ?? 0) } >= Double(range.lowerBound), "\(render(push))")
     }
 
     /// An empty slot: nothing but bench is allowed on Push day, so the session is short and says so. The author's

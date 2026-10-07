@@ -187,7 +187,7 @@ struct ProgramScreen: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(sketch(index, weeks: weeks), id: \.name) { goal in row(goal.name, goal.value + " " + goal.unit) }
-                    row("Weekly sets", "\(ProgramPlan.weeklySets(week, daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes))")
+                    row("Weekly sets", "\(ProgramPlan.weeklySets(week, daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes, maxWeeklySets: profile.maxWeeklySets))")
                 }
                 .padding(.top, 18)
                 Spacer(minLength: 12)
@@ -225,7 +225,7 @@ struct ProgramScreen: View {
             }
             else {
                 (sketch(index, weeks: weeks).map { "\($0.name.split(separator: " ").first ?? "") \($0.value)" }
-                 + ["\(ProgramPlan.weeklySets(weeks[index], daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes)) sets"])
+                 + ["\(ProgramPlan.weeklySets(weeks[index], daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes, maxWeeklySets: profile.maxWeeklySets)) sets"])
                     .joined(separator: " · ")
             }
         return rest.isEmpty ? dates : dates + " · " + rest
@@ -334,7 +334,7 @@ struct ProgramScreen: View {
         return PlannedWorkout(date: Date(timeIntervalSinceReferenceDate: (item.date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60),
                               session: item.slot ?? "Workout", exercise: item.templateRef.flatMap { slugs[$0] } ?? "",
                               targets: item.targets, note: item.note.isEmpty ? nil : item.note, adjustedReason: item.adjustedReason,
-                              group: item.group)
+                              group: item.group, main: item.main)
     }
 
     /// This week's sessions for the regenerate sheet: done, past and pinned ones are kept.

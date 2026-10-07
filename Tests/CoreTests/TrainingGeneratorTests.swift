@@ -163,15 +163,16 @@ struct TrainingGeneratorTests {
         #expect(week.workouts.first { $0.exercise == "farmer-carry" }?.target("distance_m") == 30)
     }
 
-    @Test func overTheWeeklyCeilingIsFlaggedNotTrimmed() {
+    /// FIT-71: the ceiling is the user's, so sessions shrink to fit it (and say so) rather than only flagging it.
+    @Test func sessionsFitTheWeeklyCeiling() {
         var settings = config
         settings.maxWeeklySets = 20
         let catalog = [exercise("back-squat", "squat"), exercise("bench", "push"), exercise("row", "pull"),
                        exercise("dl", "hinge"), exercise("carry", "carry"), exercise("plank", "core")]
         let week = TrainingGenerator.week(startingOn: date(7, 20, hour: 0), settings: settings, catalog: catalog,
                                           history: [], weeksSinceDeload: 0, calendar: calendar)
-        #expect(week.totalSets > 20)
-        #expect(week.warnings.contains { $0.contains("20-set weekly ceiling") })
+        #expect(week.totalSets <= 20)
+        #expect(week.warnings.contains { $0.contains("20-set weekly ceiling") }, "\(week.warnings)")
     }
 
     @Test func olderTiersGetWarmupsAndTempoEvenWhenWarmupsAreOff() {

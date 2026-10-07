@@ -88,9 +88,9 @@ enum ProgramPlan {
     }
 
     /// The working sets a sketched week will hold.
-    static func weeklySets(_ week: ProgramWeek, daysPerWeek: Int, sessionMinutes: Int) -> Int {
-        let sets = sessionSets(VolumePlan.of(daysPerWeek: daysPerWeek, sessionMinutes: sessionMinutes).setsPerSession,
-                               phase: week.phase).lowerBound * daysPerWeek
+    static func weeklySets(_ week: ProgramWeek, daysPerWeek: Int, sessionMinutes: Int, maxWeeklySets: Int = .max) -> Int {
+        let sets = min(sessionSets(VolumePlan.of(daysPerWeek: daysPerWeek, sessionMinutes: sessionMinutes).setsPerSession,
+                                   phase: week.phase).lowerBound, maxWeeklySets / max(1, daysPerWeek)) * daysPerWeek
         return week.light ? Int((Double(sets) * TrainingGenerator.deloadSets).rounded()) : sets
     }
 
