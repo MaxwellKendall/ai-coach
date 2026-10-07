@@ -39,7 +39,8 @@ enum WorkoutAgent {
             ("new_workout", ["\"make it a leg day\": new_workout(focus: \"lower body\"). \"mix it up\" or \"regenerate\": new_workout(focus: \"same kind\").",
                              "\"nothing for legs\": new_workout(focus: \"upper body\"). \"give me a workout\": new_workout(focus: \"full body\").",
                              "\"dumbbells only\": new_workout(focus: \"same kind\", equipment: \"dumbbells only\").",
-                             "Only call new_workout when they ask for a whole workout without naming exercises."]),
+                             "\"make it a leg day, I'd like front squats\": new_workout(focus: \"lower body\"); the exercises they name are added for you.",
+                             "Exercises named without a kind of day are only_these or add_exercise, never new_workout."]),
             ("harder_or_easier", ["\"make it harder\": harder_or_easier(direction: \"harder\")."]),
         ]
         var lines = ["You change the user's workout for today by calling tools, one call per change they ask for, even when they ask for several. When every change is made, reply with just: Done.",
@@ -242,12 +243,14 @@ enum WorkoutAgent {
              [.init(name: "exercises", schema: DynamicGenerationSchema(arrayOf: DynamicGenerationSchema(type: String.self), minimumElements: 1))]) { arguments, workout in
             workout.keepOnly(try arguments.value([String].self, forProperty: "exercises"))
         }
-        tool("new_workout", "Plan a whole new workout for today, only when they name no exercises: a different one, a kind of day, or limited equipment or time",
+        tool("new_workout", "Plan a whole new workout for today: a different one, a kind of day (with any exercises they name for it), or limited equipment or time",
              [choice("focus", "What it trains; same kind keeps today's kind of day", TodayWorkout.Focus.allCases.map(\.rawValue)),
               choice("equipment", "Equipment it may use", TodayWorkout.Equipment.allCases.map(\.rawValue), optional: true),
               number("minutes", "How long it should take, only if they said", 10...120)]) { arguments, workout in
             let named = SaidChecks.named(in: said(), library: workout.setup.names.values)
-            if !named.isEmpty {
+            // A kind of day and an exercise for it: the day, then the exercise, both by code.
+            let alsoAdd = SaidChecks.namesAKindOfDay(said()) ? named : []
+            if !named.isEmpty, alsoAdd.isEmpty {
                 return "They named \(WeeklyReview.list(named)), so don't plan a new workout: call only_these, add_exercise or swap_exercise."
             }
             if !SaidChecks.asksForAWorkout(said()) {
@@ -257,7 +260,9 @@ enum WorkoutAgent {
             // "Nothing for legs" asks for the opposite of a leg day.
             if SaidChecks.rulesOutLegs(said()), [.lower, .same, .full].contains(focus) { focus = .upper }
             let equipment = (try? arguments.value(String?.self, forProperty: "equipment")).flatMap { $0.flatMap(TodayWorkout.Equipment.init) }
-            return workout.regenerate(focus, equipment: equipment ?? .all, minutes: int(arguments, "minutes"))
+            if let problem = workout.regenerate(focus, equipment: equipment ?? .all, minutes: int(arguments, "minutes")) { return problem }
+            for name in alsoAdd { _ = workout.add(name) }
+            return nil
         }
         return tools
     }

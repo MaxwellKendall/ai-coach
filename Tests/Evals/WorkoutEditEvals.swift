@@ -92,6 +92,9 @@ struct WorkoutEditEvals {
              patterns: [["squat", "hinge"], ["push"], ["pull"]]),
         Case(said: "Give me a workout", day: .rest, open: true, size: 3...7, patterns: [["squat", "hinge"], ["push", "pull"]]),
         // On the author's phone, after the catalog grew to 700 (FIT-70): "let's" brought in the library, which overflowed.
+        // The author's phone: a kind of day plus a named exercise.
+        Case(said: "Let's make this a leg day and I'd like to perform a front squat", day: .full,
+             has: ["front-squat-clean-grip|front-squat"], open: true, lacksPatterns: ["push"]),
         Case(said: "Let's make this a push day", day: .full, open: true, size: 2...7, patterns: [["push"]], lacksPatterns: ["squat", "hinge"]),
         Case(said: "Plan me a pull day", day: .rest, open: true, size: 2...7, patterns: [["pull"]], lacksPatterns: ["push"]),
         Case(said: "Give me a 30 minute dumbbell workout", day: .rest, open: true, size: 3...6, equipment: ["dumbbells"]),

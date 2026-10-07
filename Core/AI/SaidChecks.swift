@@ -28,6 +28,13 @@ enum SaidChecks {
         return !cues.isDisjoint(with: words(said).split(separator: " ").map(String.init))
     }
 
+    /// A kind of day named outright, "a leg day", "push day", "upper body workout": asked for even when exercises are
+    /// named too ("make this a leg day and I'd like a front squat", FIT-78), unlike "give me squats and lunges".
+    static func namesAKindOfDay(_ said: String) -> Bool {
+        words(said).contains(#/\s(?:leg|legs|lower|upper|full|push|pull|core|arm|arms|chest|back|shoulder|shoulders)\s(?:body\s)?(?:day|workout|session)\s/#)
+            || words(said).contains(#/\s(?:upper|lower|full)\sbody\s/#)
+    }
+
     /// They meant the whole workout: "make everything 4 sets", "every exercise", "all".
     static func meansEvery(_ said: String) -> Bool {
         let said = words(said)

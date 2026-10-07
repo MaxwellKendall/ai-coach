@@ -145,3 +145,13 @@ extension SpokenNumbersTests {
         #expect(SpokenNumbers.minutes(in: text) == minutes)
     }
 }
+
+/// FIT-78: a kind of day named outright, even alongside exercises.
+struct KindOfDayTests {
+    @Test(arguments: ["Let's make this a leg day and I'd like to perform a front squat", "push day please", "make it an upper body workout",
+                      "lower body today with RDLs"])
+    func kindsOfDay(said: String) { #expect(SaidChecks.namesAKindOfDay(said)) }
+
+    @Test(arguments: ["Give me squats and split squat for today", "Add face pulls", "swap bench for push-ups", "dumbbells only today"])
+    func notKindsOfDay(said: String) { #expect(!SaidChecks.namesAKindOfDay(said)) }
+}
