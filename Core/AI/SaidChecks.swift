@@ -35,6 +35,36 @@ enum SaidChecks {
             || words(said).contains(#/\s(?:upper|lower|full)\sbody\s/#)
     }
 
+    /// What a request for a whole workout asks, from the words alone (FIT-79): what to train, with what, how long.
+    struct WorkoutRequest: Equatable, Sendable {
+        var focus: TodayWorkout.Focus
+        var equipment: TodayWorkout.Equipment = .all
+        var minutes: Int? = nil
+    }
+
+    /// nil when the words don't ask for a whole workout clearly enough for code to plan it without the model.
+    static func workoutRequest(_ said: String) -> WorkoutRequest? {
+        let words = words(said)
+        func has(_ pattern: Regex<Substring>) -> Bool { words.contains(pattern) }
+        var focus: TodayWorkout.Focus?
+        if rulesOutLegs(said) { focus = .upper }
+        else if has(#/\s(?:legs?|lower\s(?:body|day))\s/#) { focus = .lower }
+        else if has(#/\supper\s/#) { focus = .upper }
+        else if has(#/\sfull\sbody\s/#) { focus = .full }
+        // "push day", not "push-ups".
+        else if has(#/\spush\s(?:day|workout|session)\s/#) { focus = .push }
+        else if has(#/\spull\s(?:day|workout|session)\s/#) { focus = .pull }
+        else if has(#/\score\s(?:day|workout|session)\s/#) { focus = .core }
+        var equipment = TodayWorkout.Equipment.all
+        if has(#/\sno\sbarbell\s/#) { equipment = .noBarbell }
+        else if has(#/\sdumbbells?\s/#) { equipment = .dumbbells }
+        else if has(#/\s(?:bodyweight|body\sweight|no\sequipment)\s/#) { equipment = .bodyweight }
+        let minutes = SpokenNumbers.minutes(in: said)
+        let again = has(#/\s(?:regenerate|mix|different|another|new)\s/#)
+        guard focus != nil || equipment != .all || minutes != nil || again else { return nil }
+        return WorkoutRequest(focus: focus ?? .same, equipment: equipment, minutes: minutes)
+    }
+
     /// They meant the whole workout: "make everything 4 sets", "every exercise", "all".
     static func meansEvery(_ said: String) -> Bool {
         let said = words(said)

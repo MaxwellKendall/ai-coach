@@ -418,7 +418,7 @@ struct TodayScreen: View {
             } catch {
                 // What actually went wrong, for the console; the user gets a plain message.
                 print("Spoken request failed: \(said) → \(error)")
-                if !Task.isCancelled { message = "Couldn’t understand that. Try again." }
+                if !Task.isCancelled { message = "The coach couldn’t do that one. Try saying it another way." }
             }
         }
     }

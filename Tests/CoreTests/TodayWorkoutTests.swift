@@ -133,3 +133,46 @@ struct TodayWorkoutCatalogTests {
         #expect(workout.rows.last?.exercise == slug, "\(said) → \(workout.rows.map(\.exercise))")
     }
 }
+
+/// FIT-79: when the model fails, code plans what the words make plain; anything less clear is left alone.
+@MainActor
+struct WorkoutAgentFallbackTests {
+    private static let seeds = try! Seeder.decode([TemplateSeed].self, "exercises", .main)
+
+    private var setup: TodayWorkout.Setup {
+        let catalog = Self.seeds.compactMap { Exercise(slug: $0.slug, attributes: $0.attributes) }
+        let settings = TrainingSettings(age: 36, daysPerWeek: 3, sessionMinutes: 45, trainingDays: [0, 2, 4], workoutTime: 420,
+                                        equipment: ["barbell", "rack", "dumbbells", "pull_up_bar", "bench"], maxWeeklySets: 60)
+        return TodayWorkout.Setup(names: Dictionary(uniqueKeysWithValues: Self.seeds.map { ($0.slug, $0.name) }), catalog: catalog,
+                                  settings: settings, history: [], weeksSinceDeload: 1, date: .now, session: "Pull")
+    }
+
+    private var today: [PlannedWorkout] {
+        ["pull-up", "dumbbell-row", "dead-bug"].map {
+            PlannedWorkout(date: .now, session: "Pull", exercise: $0, targets: [Measurement(metric: "sets", value: 3, unit: "sets")])
+        }
+    }
+
+    private func patterns(_ outcome: WorkoutAgent.Outcome?) -> Set<String> {
+        Set((outcome?.workouts ?? []).compactMap { row in setup.catalog.first { $0.slug == row.exercise }?.pattern })
+    }
+
+    @Test func aLegDayWithAFrontSquat() throws {
+        let outcome = try #require(WorkoutAgent.fallback("Let's make this a leg day and I'd like to perform a front squat", today: today, setup: setup))
+        #expect(outcome.changed)
+        #expect(outcome.workouts.contains { $0.exercise == "front-squat-clean-grip" })
+        #expect(!patterns(outcome).isDisjoint(with: ["squat", "lunge", "hinge"]) && !patterns(outcome).contains("pull"))
+    }
+
+    @Test func aPushDayAndDumbbellsOnly() throws {
+        #expect(patterns(WorkoutAgent.fallback("Let's make this a push day", today: today, setup: setup)).contains("push"))
+        let dumbbells = try #require(WorkoutAgent.fallback("Dumbbells only today", today: today, setup: setup))
+        #expect(dumbbells.workouts.allSatisfy { row in
+            setup.catalog.first { $0.slug == row.exercise }!.equipment.isSubset(of: ["dumbbells"]) })
+    }
+
+    @Test func unclearRequestsAreLeftAlone() {
+        #expect(WorkoutAgent.fallback("Swap the rows for push-ups", today: today, setup: setup) == nil)
+        #expect(WorkoutAgent.fallback("Give me squats and split squat", today: today, setup: setup) == nil)
+    }
+}

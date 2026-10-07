@@ -155,3 +155,23 @@ struct KindOfDayTests {
     @Test(arguments: ["Give me squats and split squat for today", "Add face pulls", "swap bench for push-ups", "dumbbells only today"])
     func notKindsOfDay(said: String) { #expect(!SaidChecks.namesAKindOfDay(said)) }
 }
+
+/// FIT-79: a workout request read from the words alone, for when the model can't make the change.
+struct WorkoutRequestTests {
+    @Test func whatTheWordsAsk() {
+        typealias R = SaidChecks.WorkoutRequest
+        #expect(SaidChecks.workoutRequest("Let's make this a leg day and I'd like to perform a front squat") == R(focus: .lower))
+        #expect(SaidChecks.workoutRequest("Let's make this a push day") == R(focus: .push))
+        #expect(SaidChecks.workoutRequest("Plan me a pull day") == R(focus: .pull))
+        #expect(SaidChecks.workoutRequest("Upper body only today") == R(focus: .upper))
+        #expect(SaidChecks.workoutRequest("Nothing for legs today") == R(focus: .upper))
+        #expect(SaidChecks.workoutRequest("Regenerate today's workout") == R(focus: .same))
+        #expect(SaidChecks.workoutRequest("Mix it up, I'm bored of this one") == R(focus: .same))
+        #expect(SaidChecks.workoutRequest("Dumbbells only today") == R(focus: .same, equipment: .dumbbells))
+        #expect(SaidChecks.workoutRequest("Give me a 30 minute dumbbell workout") == R(focus: .same, equipment: .dumbbells, minutes: 30))
+        // Not a whole workout: these stay with the model.
+        #expect(SaidChecks.workoutRequest("Add 10 push-ups") == nil)
+        #expect(SaidChecks.workoutRequest("Swap the bench for push-ups") == nil)
+        #expect(SaidChecks.workoutRequest("Skip the bench press") == nil)
+    }
+}

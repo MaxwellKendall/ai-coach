@@ -251,8 +251,10 @@ struct WorkoutEditEvals {
         func done(_ failures: [String], _ output: String) -> Run {
             Run(failures: failures, output: output, seconds: Date.now.timeIntervalSince(start), routing: routing, agent: agent)
         }
+        var stage = "sorting"
         do {
             let request = try await TodayRequestParser.parse(test.said)
+            stage = "editing"
             routing = Date.now.timeIntervalSince(start)
             guard request?.kind == .edit else { return done(["routed to \(request.map { "\($0.kind)" } ?? "nothing")"], "") }
             let today = today(test.day)
@@ -265,7 +267,7 @@ struct WorkoutEditEvals {
             guard outcome.changed else { return done(["nothing changed"], output) }
             return done(failures(outcome.workouts, for: test, catalog: catalog, new: outcome.newExercises), output)
         } catch {
-            return done(["error: \(error)"], "")
+            return done(["error while \(stage): \(error)"], "")
         }
     }
 
@@ -277,11 +279,13 @@ struct WorkoutEditEvals {
         let selected = Self.cases.filter { filter.isEmpty || $0.said.lowercased().contains(filter) }
         let library = try Self.library()
         let history = try Self.history(library.patterns)
-        var report: [String] = [], passed = 0, total = 0, seconds = 0.0, routing = 0.0, agent = 0.0
+        var report: [String] = [], passed = 0, total = 0, seconds = 0.0, routing = 0.0, agent = 0.0, rescued = 0
         for test in selected {
             var results: [Run] = []
             for _ in 0..<runs { results.append(await Self.run(test, names: library.names, patterns: library.patterns, catalog: library.catalog, history: history)) }
             let good = results.filter(\.failures.isEmpty).count
+            // FIT-79: the model failed and code planned it from the words.
+            rescued += results.filter { $0.failures.isEmpty && $0.output.contains("fallback") }.count
             passed += good
             total += results.count
             seconds += results.reduce(0) { $0 + $1.seconds }
@@ -295,7 +299,8 @@ struct WorkoutEditEvals {
         let header = ["# Spoken workout edit evals", "",
                       "**\(passed)/\(total) runs pass (\(total == 0 ? 0 : passed * 100 / total)%)** · \(selected.count) cases × \(runs) runs · "
                           + "\(String(format: "%.1f", total == 0 ? 0 : seconds / Double(total))) s per run "
-                          + "(\(String(format: "%.1f", total == 0 ? 0 : routing / Double(total))) s sorting what was said, \(String(format: "%.1f", total == 0 ? 0 : agent / Double(total))) s making the edit)", "",
+                          + "(\(String(format: "%.1f", total == 0 ? 0 : routing / Double(total))) s sorting what was said, \(String(format: "%.1f", total == 0 ? 0 : agent / Double(total))) s making the edit)"
+                          + " · \(rescued) passed by code's fallback after the model failed", "",
                       "| Pass | Day | Said / why it failed |", "|---|---|---|"]
         for line in header + report { print("EVAL§ " + line) }
         // A score, not a gate: the run always passes so the report is always written.

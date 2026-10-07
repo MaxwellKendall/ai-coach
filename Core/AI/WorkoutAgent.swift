@@ -78,18 +78,41 @@ enum WorkoutAgent {
             tries += 1
             do {
                 let outcome = try await attempt(said, today: today, setup: setup, tools: tools, progress: progress)
-                if outcome.changed || tools.count == SaidChecks.all(hasToday).count { return outcome }
+                if outcome.changed { return outcome }
+                if tools.count == SaidChecks.all(hasToday).count { return fallback(said, today: today, setup: setup) ?? outcome }
                 if let progress { progress(Change(step: "Trying again", workouts: today, newExercises: [])) }
                 tools = SaidChecks.all(hasToday)
-            } catch let error as LanguageModelSession.GenerationError {
+            } catch {
                 // The on-device model now and then fails to decode a tool call; trying again from the start usually works.
-                if case .guardrailViolation = error { throw error }
-                if tries == 3 { throw error }
+                // It can arrive as a bridged NSError (com.apple.tokengeneration Code=10 under GenerationError -1) that
+                // doesn't match `as LanguageModelSession.GenerationError`, so every error but these is retried (FIT-79).
+                if error is CancellationError { throw error }
+                if let error = error as? LanguageModelSession.GenerationError, case .guardrailViolation = error { throw error }
+                if tries == 3 {
+                    if let outcome = fallback(said, today: today, setup: setup) { return outcome }
+                    throw error
+                }
                 if let progress { progress(Change(step: "Trying again", workouts: today, newExercises: [])) }
                 // The same request again can fail the same way; the full set is a different one.
                 tools = SaidChecks.all(hasToday)
             }
         }
+    }
+
+    /// FIT-79: when the model can't make the change (a tool call it fails to decode, three times), code does what the
+    /// words make plain: a kind of day, a different workout, an equipment or time limit, with any exercises named for
+    /// it. nil when the words aren't that clear, or name exercises without a kind of day.
+    static func fallback(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup) -> Outcome? {
+        guard let request = SaidChecks.workoutRequest(said) else { return nil }
+        let named = SaidChecks.named(in: said, library: setup.names.values)
+        guard named.isEmpty || SaidChecks.namesAKindOfDay(said) else { return nil }
+        var workout = TodayWorkout(today, setup: setup)
+        guard workout.regenerate(request.focus, equipment: request.equipment, minutes: request.minutes) == nil else { return nil }
+        for name in named { _ = workout.add(name) }
+        return Outcome(workouts: workout.rows, newExercises: workout.newExercises.filter { seed in workout.rows.contains { $0.exercise == seed.slug } },
+                       summary: workout.summary,
+                       calls: ["fallback new_workout {\"focus\": \"\(request.focus.rawValue)\", \"equipment\": \"\(request.equipment.rawValue)\"}"],
+                       changed: !workout.done.isEmpty)
     }
 
     private static func attempt(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup, tools names: [String],

@@ -1,6 +1,6 @@
 # Spoken workout edit evals
 
-**130/135 runs pass (96%)** · 45 cases × 3 runs · 3.5 s per run (0.4 s sorting what was said, 3.1 s making the edit)
+**135/135 runs pass (100%)** · 45 cases × 3 runs · 4.1 s per run (0.4 s sorting what was said, 3.7 s making the edit) · 0 passed by code's fallback after the model failed
 
 | Pass | Day | Said / why it failed |
 |---|---|---|
@@ -8,8 +8,7 @@
 | ✅ 3/3 | full | Swap deadlifts for RDLs |
 | ✅ 3/3 | full | RDLs instead of deadlifts today |
 | ✅ 3/3 | full | No bench today |
-| 🟡 2/3 | full | Skip the bench press |
-|  | run 1 | error: Error Domain=FoundationModels.LanguageModelSession.GenerationError Code=-1 "(null)" UserInfo={NSMultipleUnderlyingErrorsKey=(
+| ✅ 3/3 | full | Skip the bench press |
 | ✅ 3/3 | full | Just pull-ups and rows today |
 | ✅ 3/3 | full | Replace bench with push-ups |
 | ✅ 3/3 | full | Do dumbbell bench instead of barbell |
@@ -36,20 +35,16 @@
 | ✅ 3/3 | rest | I want to do pull-ups and push-ups |
 | ✅ 3/3 | rest | Deadlift 3 sets of 5 at 225 |
 | ✅ 3/3 | rest | Give me a quick core workout |
-| 🟡 1/3 | full | Regenerate today's workout |
-|  | run 2 | error: Error Domain=FoundationModels.LanguageModelSession.GenerationError Code=-1 "(null)" UserInfo={NSMultipleUnderlyingErrorsKey=(
-|  | run 3 | error: Error Domain=FoundationModels.LanguageModelSession.GenerationError Code=-1 "(null)" UserInfo={NSMultipleUnderlyingErrorsKey=(
+| ✅ 3/3 | full | Regenerate today's workout |
 | ✅ 3/3 | full | Give me a completely different workout today |
 | ✅ 3/3 | full | Mix it up, I'm bored of this one |
 | ✅ 3/3 | upper | Regenerate this workout |
 | ✅ 3/3 | full | Give me a harder workout |
 | ✅ 3/3 | full | Make it easier today |
 | ✅ 3/3 | full | Dumbbells only today |
-| 🟡 2/3 | full | Nothing for legs today |
-|  | run 2 | error: Error Domain=FoundationModels.LanguageModelSession.GenerationError Code=-1 "(null)" UserInfo={NSMultipleUnderlyingErrorsKey=(
+| ✅ 3/3 | full | Nothing for legs today |
 | ✅ 3/3 | upper | Give me a full body workout instead |
-| 🟡 2/3 | rest | Give me a workout |
-|  | run 1 | nothing for squat/hinge — `New upper body workout ⇐ new_workout {"focus": "upper body"}` |
+| ✅ 3/3 | rest | Give me a workout |
 | ✅ 3/3 | full | Let's make this a leg day and I'd like to perform a front squat |
 | ✅ 3/3 | full | Let's make this a push day |
 | ✅ 3/3 | rest | Plan me a pull day |
