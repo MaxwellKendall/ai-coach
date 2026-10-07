@@ -33,11 +33,18 @@ struct SessionPlan: Equatable, Sendable {
         func value(_ metric: String) -> Double? { targets.first { $0.metric == metric }?.value }
 
         /// The same set with one target changed, so it no longer merges with untouched neighbours.
+        /// The set with `metric` at `value`. A bodyweight set takes a load when one is added, and a load taken back
+        /// to 0 is bodyweight again.
         func with(_ metric: String, _ value: Double) -> PlannedSet {
             var set = self
-            guard let index = set.targets.firstIndex(where: { $0.metric == metric }), set.targets[index].value != value
-            else { return set }
-            set.targets[index].value = value
+            let load = ["load_lb", "load_lb_hand"].contains(metric)
+            if let index = set.targets.firstIndex(where: { $0.metric == metric }) {
+                guard set.targets[index].value != value else { return set }
+                if load && value <= 0 { set.targets.remove(at: index) } else { set.targets[index].value = value }
+            } else {
+                guard value > 0 else { return set }
+                set.targets.append(Measurement(metric: metric, value: value, unit: metric == "load_lb_hand" ? "lb/hand" : "lb"))
+            }
             set.adjustedReason = "edited"
             return set
         }
@@ -130,7 +137,11 @@ struct SessionPlan: Equatable, Sendable {
     mutating func swap(block: Int, movement: Int, to exercise: String) {
         guard blocks[block].movements[movement].exercise != exercise else { return }
         blocks[block].movements[movement].exercise = exercise
+        // FIT-81: the old lift's load and warm-up don't fit the new one ("Bodyweight Squat · 175 lb"); its sets and
+        // reps stay, and a load is added on the set.
+        blocks[block].movements[movement].sets.removeAll(where: \.isWarmup)
         for index in blocks[block].movements[movement].sets.indices {
+            blocks[block].movements[movement].sets[index].targets.removeAll { ["load_lb", "load_lb_hand"].contains($0.metric) }
             blocks[block].movements[movement].sets[index].adjustedReason = "edited"
         }
     }

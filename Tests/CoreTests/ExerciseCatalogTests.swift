@@ -136,4 +136,19 @@ struct ExerciseSearchTests {
         let excluded = ExerciseSearch.find("squat", in: catalog, names: names, settings: settings(Set(Profile.allEquipment)), excluding: ["back-squat"])
         #expect(!excluded.contains("back-squat"))
     }
+
+    /// FIT-81: Swap offers a short list for the movement, what the user can do, the same plane first.
+    @Test func swapAlternativesAreShortAndFit() {
+        let dumbbells = settings(["dumbbells", "bench", "pull_up_bar"])
+        let row = catalog.first { $0.slug == "dumbbell-row" }!
+        let rows = ExerciseSearch.alternatives(to: row, in: catalog, names: names, settings: dumbbells)
+        #expect(!rows.isEmpty && rows.count <= 12)
+        let found = rows.map { slug in catalog.first { $0.slug == slug }! }
+        #expect(found.allSatisfy { $0.pattern == "pull" && $0.equipment.isSubset(of: ["dumbbells", "bench", "pull_up_bar"]) })
+        #expect(found.first?.tags.contains("horizontal_pull") == true)
+        #expect(!rows.contains("dumbbell-row"))
+        // Nothing typed and nothing to replace: the cards and the staples, not 700.
+        let common = ExerciseSearch.suggestions(in: catalog, names: names, settings: settings(Set(Profile.allEquipment)))
+        #expect(common.count < 100 && common.contains("back-squat"))
+    }
 }

@@ -20,6 +20,19 @@ struct WorkoutDetailView: View {
     @State private var original: SessionPlan
     @State private var collapsed: Set<UUID> = []
     @State private var selected: Cell?
+    @State private var picking: Picking?
+
+    /// FIT-81: what the exercise picker is for.
+    enum Picking: Identifiable {
+        case swap(block: Int, movement: Int, exercise: String)
+        case add
+        var id: String {
+            switch self {
+            case .swap(let block, let movement, _): "swap \(block) \(movement)"
+            case .add: "add"
+            }
+        }
+    }
 
     /// The number being changed in the bottom stepper.
     struct Cell: Equatable {
@@ -47,16 +60,14 @@ struct WorkoutDetailView: View {
                     ForEach(Array(session.blocks.enumerated()), id: \.element.id) { index, block in
                         blockCard(index, block, names).id(block.id)
                     }
-                    Menu {
-                        ForEach(templates.filter { $0.kind == .exercise }) { template in
-                            Button(template.name) { withAnimation(.snappy) { session.add(template.slug) } }
-                        }
-                    } label: {
+                    Button { picking = .add } label: {
                         Label("Add exercise", systemImage: "plus")
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 52)
                             .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
+                            .contentShape(.rect)
                     }
+                    .buttonStyle(.plain)
                 }
                 .padding(16)
             }
@@ -75,6 +86,19 @@ struct WorkoutDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { bottom(names) }
+        .sheet(item: $picking) { picking in
+            let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
+            switch picking {
+            case .swap(let block, let movement, let exercise):
+                ExercisePicker(title: "Swap \(names[exercise] ?? exercise)", replacing: exercise, excluding: inSession) { slug in
+                    withAnimation(.snappy) { session.swap(block: block, movement: movement, to: slug) }
+                }
+            case .add:
+                ExercisePicker(title: "Add exercise", excluding: inSession) { slug in
+                    withAnimation(.snappy) { session.add(slug) }
+                }
+            }
+        }
     }
 
     // MARK: Header
@@ -139,6 +163,7 @@ struct WorkoutDetailView: View {
                     }
                     ForEach(Array(movement.sets.enumerated()), id: \.element.id) { s, set in
                         setRow(set, label: set.isWarmup ? "W" : "\(movement.sets[..<s].filter { !$0.isWarmup }.count + 1)",
+                               load: loadMetric(movement.exercise),
                                cell: { Cell(block: index, movement: m, set: s, metric: $0) })
                     }
                 }
@@ -149,7 +174,13 @@ struct WorkoutDetailView: View {
         .background(.background, in: .rect(cornerRadius: 20))
     }
 
-    private func setRow(_ set: SessionPlan.PlannedSet, label: String, cell: @escaping (String) -> Cell) -> some View {
+    /// The load a bodyweight exercise takes when one's added: each dumbbell or kettlebell, else pounds on the body.
+    private func loadMetric(_ slug: String) -> String {
+        let equipment = templates.first { $0.slug == slug }?.values("equipment") ?? []
+        return !Set(equipment).isDisjoint(with: ["dumbbells", "kettlebells"]) && !equipment.contains("barbell") ? "load_lb_hand" : "load_lb"
+    }
+
+    private func setRow(_ set: SessionPlan.PlannedSet, label: String, load: String, cell: @escaping (String) -> Cell) -> some View {
         let metrics = Self.editable(set)
         return HStack(spacing: 8) {
             Text(label).font(.subheadline.weight(.bold).monospacedDigit()).frame(width: 24)
@@ -169,7 +200,17 @@ struct WorkoutDetailView: View {
                 .buttonStyle(.plain)
             }
             if metrics.count == 1 {
-                Text("bodyweight").font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                // FIT-81: tap to add a load ("bodyweight" until one's set; back to 0 is bodyweight again).
+                let isSelected = selected == cell(load)
+                Button { withAnimation(.snappy) { selected = isSelected ? nil : cell(load) } } label: {
+                    Text(isSelected ? "0 \(SetRow.units[load] ?? "lb")" : "bodyweight").font(.subheadline).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(isSelected ? Color.primary.opacity(0.12) : .clear, in: .rect(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isSelected ? Color.primary : .clear, lineWidth: 2))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Adds a weight")
             }
         }
         .opacity(set.isWarmup ? 0.6 : 1)
@@ -177,7 +218,6 @@ struct WorkoutDetailView: View {
 
     /// Rest, then the block's edits: Swap, + Set and the rest in a menu.
     private func footer(_ index: Int, _ block: SessionPlan.Block, _ names: [String: String]) -> some View {
-        let exercises = templates.filter { $0.kind == .exercise }
         let restAfter = block.movements.last?.working.first.map { set in
             WorkoutDraft.rest(metric: ["duration_s", "distance_m"].first { set.value($0) != nil } ?? "reps", value: set.value("reps"))
         }
@@ -215,17 +255,18 @@ struct WorkoutDetailView: View {
                 Image(systemName: "ellipsis").frame(width: 44, height: 36)
                     .background(Color(.secondarySystemBackground), in: .capsule)
             }
-            Menu {
-                ForEach(Array(block.movements.enumerated()), id: \.element.id) { m, movement in
-                    Menu(block.isGroup ? "Swap \(names[movement.exercise] ?? movement.exercise)" : "Swap with") {
-                        ForEach(exercises) { template in
-                            Button(template.name) { session.swap(block: index, movement: m, to: template.slug) }
+            // FIT-81: a short list for the movement, and search, not the whole catalog.
+            if block.isGroup {
+                Menu {
+                    ForEach(Array(block.movements.enumerated()), id: \.element.id) { m, movement in
+                        Button("Swap \(names[movement.exercise] ?? movement.exercise)") {
+                            picking = .swap(block: index, movement: m, exercise: movement.exercise)
                         }
                     }
-                }
-            } label: {
-                Text("Swap").font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(height: 36)
-                    .background(Color(.secondarySystemBackground), in: .capsule)
+                } label: { swapLabel }
+            } else if let movement = block.movements.first {
+                Button { picking = .swap(block: index, movement: 0, exercise: movement.exercise) } label: { swapLabel }
+                    .buttonStyle(.plain)
             }
             Button {
                 withAnimation(.snappy) { session.addSet(block: index) }
@@ -239,6 +280,11 @@ struct WorkoutDetailView: View {
     }
 
     // MARK: Bottom
+
+    private var swapLabel: some View {
+        Text("Swap").font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(height: 36)
+            .background(Color(.secondarySystemBackground), in: .capsule)
+    }
 
     @ViewBuilder private func bottom(_ names: [String: String]) -> some View {
         if let cell = selected, session.blocks.indices.contains(cell.block),

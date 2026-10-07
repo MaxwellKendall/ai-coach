@@ -70,6 +70,11 @@ struct SessionPlanTests {
 
         plan.swap(block: 2, movement: 0, to: "cable-row")
         #expect(plan.items.last?.exercise == "cable-row" && plan.items.last?.adjustedReason == "edited")
+        // FIT-81: the old load doesn't carry over to the new exercise; the main lift's warm-up goes too.
+        #expect(plan.blocks[2].movements[0].sets.allSatisfy { $0.value("load_lb") == nil && $0.value("load_lb_hand") == nil })
+        var main = SessionPlan(generated)
+        main.swap(block: 0, movement: 0, to: "goblet-squat")
+        #expect(main.blocks[0].movements[0].sets.allSatisfy { !$0.isWarmup && $0.value("load_lb") == nil })
 
         plan.remove(block: 2, movement: 0)
         #expect(plan.blocks.count == 2)
@@ -104,5 +109,16 @@ struct SessionPlanTests {
         #expect(plan.blocks[0].isGroup)
         plan.move(block: 0, by: -1) // already first: no-op
         #expect(plan.blocks[0].isGroup)
+    }
+}
+
+/// FIT-81: a bodyweight set can take a load, and give it back.
+struct BodyweightLoadTests {
+    @Test func aLoadIsAddedAndRemoved() {
+        let set = SessionPlan.PlannedSet(targets: [Measurement(metric: "reps", value: 12, unit: "reps")])
+        let loaded = set.with("load_lb_hand", 5)
+        #expect(loaded.value("load_lb_hand") == 5 && loaded.adjustedReason == "edited")
+        #expect(loaded.with("load_lb_hand", 0).value("load_lb_hand") == nil)
+        #expect(set.with("load_lb", 0) == set)
     }
 }

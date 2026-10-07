@@ -18,6 +18,36 @@ enum ExerciseSearch {
         "adductors": ["adductors"], "abductors": ["abductors"],
     ]
 
+    /// What to swap an exercise for: the same movement, what the user can do, the same plane first (a row for a row),
+    /// then the author's cards, the staples, the same kind (compound or isolation), plain names before variations.
+    /// A short list, not the whole catalog (the author: "the library is way too excessive").
+    static func alternatives(to exercise: Exercise, in catalog: [Exercise], names: [String: String], settings: TrainingSettings,
+                             excluding: Set<String> = [], limit: Int = 12) -> [String] {
+        let planes: Set<String> = ["vertical_push", "horizontal_push", "vertical_pull", "horizontal_pull"]
+        let plane = exercise.tags.intersection(planes)
+        return catalog
+            .filter { $0.pattern == exercise.pattern && $0.slug != exercise.slug && !excluding.contains($0.slug)
+                && TrainingGenerator.allows($0, settings) }
+            .sorted { a, b in
+                func key(_ e: Exercise) -> [String] {
+                    let name = names[e.slug] ?? e.slug
+                    return [e.tags.intersection(planes) == plane ? "0" : "1", e.isCurated ? "0" : e.tags.contains("staple") ? "1" : "2",
+                            e.tags.contains("isolation") == exercise.tags.contains("isolation") ? "0" : "1",
+                            e.level == "expert" ? "1" : "0", String(format: "%02d", name.split { !$0.isLetter }.count), name]
+                }
+                return key(a).lexicographicallyPrecedes(key(b))
+            }
+            .prefix(limit).map(\.slug)
+    }
+
+    /// The exercises to offer before anything's typed: the author's cards and the staples the user can do.
+    static func suggestions(in catalog: [Exercise], names: [String: String], settings: TrainingSettings,
+                            excluding: Set<String> = []) -> [String] {
+        catalog.filter { ($0.isCurated || $0.tags.contains("staple")) && !excluding.contains($0.slug) && TrainingGenerator.allows($0, settings) }
+            .sorted { (names[$0.slug] ?? $0.slug) < (names[$1.slug] ?? $1.slug) }
+            .map(\.slug)
+    }
+
     /// Slugs, best first: what the user can do that matches, the author's cards first, then compound before isolation,
     /// then the staples (the well-known lifts), then the plainest: expert lifts last, and short names ("Barbell Squat") before variations ("Barbell Guillotine
     /// Bench Press") (FIT-72: the model takes what's listed first). `excluding` leaves out exercises already chosen.
