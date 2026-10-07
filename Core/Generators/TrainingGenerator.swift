@@ -237,18 +237,36 @@ enum TrainingGenerator {
                               recent: Set<String>, undertrained: Set<String>, history: [LoggedSet], calendar: Calendar,
                               warnings: inout [String]) -> [PlannedWorkout] {
         var picks: [(slot: Slot, exercise: Exercise, sets: Int)] = []
+        func warn(_ warning: String) { if !warnings.contains(warning) { warnings.append(warning) } }
         for slot in session.slots {
             let used = picks.map(\.exercise.slug)
             guard let exercise = pick(slot, from: prefer, excluding: used, recent: recent)
                     ?? pick(slot, from: allowed, excluding: used, recent: recent) else {
-                warnings.append("No allowed \(slot.pattern) exercise for \(session.name).")
+                warn("No allowed \(slot.pattern) exercise for \(session.name).")
                 continue
             }
             picks.append((slot, exercise, undertrained.contains(slot.pattern) ? 4 : 3))
         }
+        var sets = fit(picks.map { ($0.slot.main, $0.sets) }, to: range)
+        // FIT-68: short even with every exercise at its cap. Another exercise for the session's least-worked pattern,
+        // never more sets on one lift; the session's own patterns only, so a Push day stays a push day.
+        while sets.reduce(0, +) < range.lowerBound {
+            let patterns = session.slots.map(\.pattern).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+            let worked = { (pattern: String) in zip(picks, sets).filter { $0.0.exercise.pattern == pattern }.reduce(0) { $0 + $1.1 } }
+            let used = picks.map(\.exercise.slug)
+            guard let extra = patterns.sorted(by: { worked($0) < worked($1) }).lazy.compactMap({ pattern in
+                let slot = Slot(pattern: pattern, main: false)
+                // Only from `prefer`: a rebuilt session would rather be short than bring back what it was asked to avoid.
+                return pick(slot, from: prefer, excluding: used, recent: recent).map { (slot, $0) }
+            }).first else {
+                warn("\(session.name) is \(range.lowerBound - sets.reduce(0, +)) sets short: nothing else in your library fits it.")
+                break
+            }
+            picks.append((extra.0, extra.1, 3))
+            sets = fit(picks.map { ($0.slot.main, $0.sets) }, to: range)
+        }
         var workouts: [PlannedWorkout] = []
-        let sets = fit(picks.map { ($0.slot.main, $0.sets) }, to: range)
-        for (pick, count) in zip(picks, sets) {
+        for (pick, count) in zip(picks, sets) where count > 0 {
             let count = deload ? max(1, Int((Double(count) * deloadSets).rounded())) : count
             let item = workout(pick.exercise, main: pick.slot.main, sets: count, date: date, session: session.name,
                                settings: settings, tier: tier, deload: deload, history: history, calendar: calendar)
@@ -348,22 +366,45 @@ enum TrainingGenerator {
         return staleness.indices.min { staleness[$0] < staleness[$1] } ?? 0
     }
 
-    /// Bring a session's sets into the volume table's range: add to main lifts first, trim accessories first.
+    /// Sets per exercise, at most. General practice: fitness-planner's CLAUDE.md caps sets per session and week
+    /// ("Schedule → Volume Mapping"), not per exercise, and filling a session onto one lift gave 12 sets of bench (FIT-68).
+    static let maxSets = (main: 5, accessory: 4)
+    /// Fewer than this and the exercise is dropped instead: a coach doesn't write one working set.
+    static let minSets = 2
+
+    /// Bring a session's sets toward the volume table's range. Under it: main lifts grow first, then accessories,
+    /// none past its cap, so the session can stay short (the caller adds exercises). Over it: accessories shrink to
+    /// `minSets`, then drop out from the last; then main lifts shrink. 0 means dropped.
     static func fit(_ slots: [(main: Bool, sets: Int)], to range: ClosedRange<Int>) -> [Int] {
-        var sets = slots.map(\.sets)
+        func cap(_ index: Int) -> Int { slots[index].main ? maxSets.main : maxSets.accessory }
+        var sets = slots.indices.map { min(slots[$0].sets, cap($0)) }
         guard !sets.isEmpty else { return sets }
         let mains = slots.indices.filter { slots[$0].main }
-        let growable = mains.isEmpty ? Array(slots.indices) : mains
-        var next = 0
-        while sets.reduce(0, +) < range.lowerBound {
-            sets[growable[next % growable.count]] += 1
-            next += 1
+        let accessories = slots.indices.filter { !slots[$0].main }
+        for group in [mains, accessories] {
+            var next = 0
+            while sets.reduce(0, +) < range.lowerBound, let index = group.indices.lazy
+                .map({ group[(next + $0) % group.count] }).first(where: { sets[$0] < cap($0) }) {
+                sets[index] += 1
+                next = (group.firstIndex(of: index)! + 1) % group.count
+            }
         }
         while sets.reduce(0, +) > range.upperBound {
-            let accessories = slots.indices.filter { !slots[$0].main && sets[$0] > 1 }
-            guard let index = (accessories.isEmpty ? slots.indices.filter { sets[$0] > 1 } : accessories)
-                .max(by: { sets[$0] < sets[$1] }) else { break }
-            sets[index] -= 1
+            // Dropping an accessory mustn't take the session under the range while a main lift could give a set.
+            let spare = sets.reduce(0, +) - range.lowerBound
+            if let index = accessories.filter({ sets[$0] > minSets }).max(by: { sets[$0] < sets[$1] }) {
+                sets[index] -= 1
+            } else if let index = accessories.last(where: { sets[$0] > 0 && sets[$0] <= spare }) {
+                sets[index] = 0
+            } else if let index = mains.filter({ sets[$0] > minSets }).max(by: { sets[$0] < sets[$1] }) {
+                sets[index] -= 1
+            } else if let index = accessories.last(where: { sets[$0] > 0 }) {
+                sets[index] = 0
+            } else if let index = mains.filter({ sets[$0] > 1 }).max(by: { sets[$0] < sets[$1] }) {
+                sets[index] -= 1
+            } else {
+                break
+            }
         }
         return sets
     }
@@ -387,7 +428,16 @@ enum TrainingGenerator {
             targets.append(Measurement(metric: "reps", value: first?.reps ?? reps, unit: "reps"))
         }
         let daysOff = last.first.map { calendar.dateComponents([.day], from: calendar.startOfDay(for: $0.date), to: date).day ?? 0 }
-        if let load = lastValue("load_lb") {
+        if var load = lastValue("load_lb") {
+            // FIT-68: last time's top set was at other reps (a style change, main ↔ accessory): the same effort at the
+            // planned reps, by Brzycki (fitness-planner CLAUDE.md "1RM Estimation"), keeping the reps left in reserve
+            // (10 − RPE, 2 when unlogged) so a submaximal set isn't read as a max. 225×5 at RPE 7 is 200×8.
+            if !exercise.isTimed, exercise.pattern != "carry",
+               let lastReps = last.filter({ $0.value("load_lb") == load }).compactMap({ $0.value("reps") }).max(),
+               lastReps != reps {
+                let reserve = 10 - min(max(lastValue("rpe") ?? 8, 6), 10)
+                load = roundTo5(load * (37 - min(reps + reserve, 36)) / (37 - min(lastReps + reserve, 36)))
+            }
             targets.append(Measurement(metric: "load_lb", value: nextLoad(load, lastRPE: lastValue("rpe"), main: main,
                                                                           tier: tier, deload: deload, daysOff: daysOff),
                                        unit: "lb"))

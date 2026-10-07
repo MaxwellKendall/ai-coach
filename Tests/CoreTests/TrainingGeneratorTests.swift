@@ -119,10 +119,16 @@ struct TrainingGeneratorTests {
     @Test func setsFitTheVolumeRange() {
         // Too few: main lifts grow first.
         #expect(TrainingGenerator.fit([(true, 3), (false, 3), (false, 3), (false, 3)], to: 14...18) == [5, 3, 3, 3])
-        // Too many: accessories shrink first.
-        #expect(TrainingGenerator.fit([(true, 4), (false, 6), (false, 6), (false, 4)], to: 14...18) == [4, 5, 5, 4])
         #expect(TrainingGenerator.fit([(true, 3), (false, 3), (false, 3), (false, 3), (false, 3)], to: 14...18)
             == [3, 3, 3, 3, 3])
+        // FIT-68: no exercise past its cap (main 5, accessory 4); then accessories grow, and what's left stays short.
+        #expect(TrainingGenerator.fit([(true, 3), (false, 3), (false, 3)], to: 16...22) == [5, 4, 4])
+        #expect(TrainingGenerator.fit([(true, 3)], to: 16...22) == [5])
+        #expect(TrainingGenerator.fit([(true, 4), (false, 6), (false, 6), (false, 4)], to: 14...18) == [4, 4, 4, 4])
+        // Too many: accessories shrink to 2, then drop out from the last, before main lifts lose sets.
+        #expect(TrainingGenerator.fit([(true, 3), (false, 3), (false, 3), (false, 3), (false, 3)], to: 7...9) == [3, 2, 2, 2, 0])
+        // A drop that would leave it short waits until the main lifts have given what they can.
+        #expect(TrainingGenerator.fit([(true, 3), (false, 2), (false, 2)], to: 6...6) == [2, 2, 2])
     }
 
     @Test(arguments: [
