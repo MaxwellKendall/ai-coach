@@ -225,6 +225,7 @@ struct OnboardingView: View {
             // FIT-73: the week the model designed, at the loads the user confirmed.
             try? Planner.apply(FirstLoads.applying(loads, to: firstWeek.week.workouts), to: plan, templates: templates, in: context)
             plan.warnings = firstWeek.week.warnings
+            plan.designedBy = firstWeek.source.rawValue
             try? context.save()
         }
         onDone()

@@ -5,6 +5,52 @@ import SwiftData
 /// and writes adjustments back. The generators decide; this only reads and writes the store.
 @MainActor
 enum Planner {
+    /// FIT-74: the Mondays whose week the model is designing right now, for Today to say so.
+    @Observable final class Designing {
+        var weeks: Set<Date> = []
+    }
+    static let designing = Designing()
+
+    /// FIT-74: the on-device model designs the week (ProgramDesigner), off the main thread; TrainingGenerator's week
+    /// stands meanwhile, and when the model can't. Days done, pinned or past keep what they have. Once per week.
+    static func design(weekOf date: Date = .now, in context: ModelContext, calendar: Calendar = .current) async {
+        let monday = Week.monday(of: date, calendar: calendar)
+        guard LanguageModel.isAvailable, !designing.weeks.contains(monday),
+              let plan = try? plan(weekOf: monday, in: context), plan.designedBy == nil,
+              let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
+              let templates = try? context.fetch(FetchDescriptor<Template>()),
+              let entries = try? context.fetch(FetchDescriptor<LogEntry>()) else { return }
+        let history = loggedSets(entries, templates: templates)
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let goals = ((try? context.fetch(FetchDescriptor<Goal>())) ?? []).filter { $0.status == .active }.compactMap { goal -> String? in
+            guard let option = GoalOption.all.first(where: { $0.metric == goal.metric }) else { return nil }
+            return option.title(target: goal.target)
+                + (goal.deadline.map { " by \($0.formatted(.dateTime.month(.abbreviated).day()))" } ?? "")
+        }
+        let lastMonday = calendar.date(byAdding: .day, value: -7, to: monday)!
+        let program = profile.programWeek(of: monday, calendar: calendar)
+        let request = ProgramDesigner.Request(
+            monday: monday, settings: profile.trainingSettings, catalog: catalog(templates), names: names, history: history,
+            weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar), program: program?.week,
+            programIndex: program?.index, programWeeks: profile.program?.count, goals: goals,
+            lastWeek: (try? self.plan(weekOf: lastMonday, in: context)).flatMap { $0 }.map { workouts($0, templates: templates) } ?? [],
+            calendar: calendar)
+        designing.weeks.insert(monday)
+        defer { designing.weeks.remove(monday) }
+        let result = await ProgramDesigner.week(request)
+        // The week may have been planned again while the model worked; that plan gets its own turn.
+        guard let current = try? self.plan(weekOf: monday, in: context), current.id == plan.id, plan.designedBy == nil else { return }
+        if result.source == .model {
+            let done = Set(entries.filter { $0.kind == .workout }.map { calendar.startOfDay(for: $0.timestamp) })
+            let pinned = Set(plan.items.filter { $0.kind == .workout && $0.pinned }.map { calendar.startOfDay(for: $0.date) })
+            _ = try? replan(plan, with: result.week.workouts, keep: done.union(pinned), templates: templates, in: context,
+                            calendar: calendar)
+            plan.warnings = result.week.warnings
+        }
+        plan.designedBy = result.source.rawValue
+        try? context.save()
+    }
+
     static func plan(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) throws -> Plan? {
         let monday = Week.monday(of: date, calendar: calendar)
         return try context.fetch(FetchDescriptor<Plan>(predicate: #Predicate { $0.weekStart == monday })).first

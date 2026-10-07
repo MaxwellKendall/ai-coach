@@ -133,7 +133,10 @@ struct TodayScreen: View {
             }
         }
         // A new week, or a profile that just finished onboarding, gets a plan.
-        .task(id: profiles.first?.isComplete) { try? Planner.ensureWeek(in: context) }
+        .task(id: profiles.first?.isComplete) {
+            try? Planner.ensureWeek(in: context)
+            await Planner.design(in: context)
+        }
     }
 
     // MARK: Header and strip
@@ -152,6 +155,14 @@ struct TodayScreen: View {
                     .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
                 Text(title).font(.system(size: 34, weight: .bold)).tracking(-0.5)
                     .contentTransition(.numericText())
+                // FIT-74: the model's version of the week is on its way; this one stands until it arrives.
+                if Planner.designing.weeks.contains(Week.monday(of: date)) {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini)
+                        Text("Your coach is planning this week").font(.footnote).foregroundStyle(.secondary)
+                    }
+                    .transition(.opacity)
+                }
             }
             Spacer()
             Button { you = true } label: {
@@ -270,7 +281,10 @@ struct TodayScreen: View {
                     if let plan = thisWeeksPlan {
                         Button("Change this week", systemImage: "slider.horizontal.3") { sheet = .adjust(plan) }
                     }
-                    Button("Plan this week again", systemImage: "arrow.clockwise") { try? Planner.generate(weekOf: .now, in: context) }
+                    Button("Plan this week again", systemImage: "arrow.clockwise") {
+                        try? Planner.generate(weekOf: .now, in: context)
+                        Task { await Planner.design(in: context) }
+                    }
                 } label: {
                     Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
                         .frame(width: 32, height: 24)

@@ -10,6 +10,9 @@ final class Plan {
     var items: [PlannedActivity] = []
     /// Generator notices for the week, e.g. a deload or going over the weekly set ceiling.
     var warnings: [String] = []
+    /// FIT-74: who planned the week's training: "model" once the on-device model designed it, "fallback" when it
+    /// couldn't; nil while it's TrainingGenerator's week waiting for the model.
+    var designedBy: String?
     var createdAt: Date
     var updatedAt: Date
 
