@@ -416,6 +416,8 @@ struct TodayScreen: View {
                     message = "Couldn’t tell what to change. Try “I only have 30 minutes”, “my shoulder hurts” or “give me squats and lunges”."
                 }
             } catch {
+                // What actually went wrong, for the console; the user gets a plain message.
+                print("Spoken request failed: \(said) → \(error)")
                 if !Task.isCancelled { message = "Couldn’t understand that. Try again." }
             }
         }

@@ -28,17 +28,18 @@ enum WorkoutEdit {
         }
     }
 
-    /// The library exercise a name means: its name or slug, plural or not, else `closest`.
-    static func find(_ name: String, in library: [String: String], taken: Set<String> = []) -> String? {
+    /// The library exercise a name means: its name or slug, plural or not, else `closest`. `rank` orders a name
+    /// that fits several (lower first): with hundreds of exercises (FIT-70), "curls" fits a dozen.
+    static func find(_ name: String, in library: [String: String], taken: Set<String> = [], rank: [String: Int] = [:]) -> String? {
         let wanted = key(Slug.make(name))
         guard !wanted.isEmpty else { return nil }
         return library.keys.sorted().first { key($0) == wanted || key(Slug.make(library[$0]!)) == wanted }
-            ?? closest(name, library: library, taken: taken)
-            ?? acronym(wanted, library: library)
+            ?? closest(name, library: library, taken: taken, rank: rank)
+            ?? acronym(wanted, library: library, rank: rank)
     }
 
     /// "RDL" is (Dumbbell) Romanian Deadlift: each letter in order, every word but the equipment starting with one.
-    private static func acronym(_ said: String, library: [String: String]) -> String? {
+    private static func acronym(_ said: String, library: [String: String], rank: [String: Int]) -> String? {
         guard (2...4).contains(said.count), said.allSatisfy(\.isLetter) else { return nil }
         let equipment: Set<Substring> = ["dumbbell", "barbell", "kettlebell", "cable", "band", "machine"]
         func matches(_ name: String) -> Bool {
@@ -59,16 +60,21 @@ enum WorkoutEdit {
             return letters.isEmpty
         }
         let found = library.keys.sorted().filter { matches(library[$0]!) }
-        return found.count == 1 ? found[0] : nil
+        // Several: the best ranked, when one is.
+        let best = found.map { rank[$0] ?? Int.max }.min()
+        let top = found.filter { (rank[$0] ?? Int.max) == best }
+        return top.count == 1 ? top[0] : nil
     }
 
     /// A shortened library name ("Squat", "Romanian Deadlift"): the library exercise with all its words and the
     /// fewest others, preferring one not already in the workout.
-    private static func closest(_ name: String, library: [String: String], taken: Set<String>) -> String? {
+    private static func closest(_ name: String, library: [String: String], taken: Set<String>, rank: [String: Int]) -> String? {
         let words = Set(key(Slug.make(name)).split(separator: "-"))
         return library.filter { words.isSubset(of: Set(key(Slug.make($0.value)).split(separator: "-"))) }
             .min { a, b in
-                let order = { (slug: String, name: String) in (taken.contains(slug) ? 1 : 0, Slug.make(name).count, slug) }
+                let order = { (slug: String, name: String) in
+                    (taken.contains(slug) ? 1 : 0, rank[slug] ?? Int.max, Slug.make(name).count, slug)
+                }
                 return order(a.key, a.value) < order(b.key, b.value)
             }?.key
     }

@@ -44,7 +44,7 @@ struct WorkoutEditEvals {
 
     static let cases: [Case] = [
         // A full-body day: Deadlift (with warm-up), Bench Press, Goblet Squat, Dead Bug.
-        Case(said: "Give me squats and split squat for today", day: .full, has: ["back-squat|goblet-squat", "split-squat|bulgarian-split-squat"], only: true),
+        Case(said: "Give me squats and split squat for today", day: .full, has: ["back-squat|goblet-squat", "split-squat|bulgarian-split-squat|split-squat-with-dumbbell"], only: true),
         Case(said: "Swap deadlifts for RDLs", day: .full, has: ["dumbbell-romanian-deadlift"], lacks: ["deadlift"]),
         Case(said: "RDLs instead of deadlifts today", day: .full, has: ["dumbbell-romanian-deadlift"], lacks: ["deadlift"]),
         Case(said: "No bench today", day: .full, lacks: ["bench-press"]),
@@ -53,7 +53,7 @@ struct WorkoutEditEvals {
         Case(said: "Replace bench with push-ups", day: .full, has: ["push-up"], lacks: ["bench-press"]),
         Case(said: "Do dumbbell bench instead of barbell", day: .full, has: ["dumbbell-bench-press"], lacks: ["bench-press"]),
         Case(said: "Um can we do back squats instead of goblet squats", day: .full, has: ["back-squat"], lacks: ["goblet-squat"]),
-        Case(said: "Swap the goblet squat for lunges", day: .full, has: ["lunge|walking-lunge|dumbbell-lunge|reverse-lunge"], lacks: ["goblet-squat"]),
+        Case(said: "Swap the goblet squat for lunges", day: .full, has: ["lunge|walking-lunge|dumbbell-lunge|reverse-lunge|barbell-lunge|barbell-walking-lunge"], lacks: ["goblet-squat"]),
         Case(said: "Drop the dead bugs and add planks", day: .full, has: ["plank"], lacks: ["dead-bug"]),
         Case(said: "Add some curls at the end", day: .full, has: ["curl|bicep-curl|biceps-curl|dumbbell-curl|dumbbell-bicep-curl"]),
         Case(said: "Add farmer carries", day: .full, has: ["farmer-carry"]),
@@ -72,10 +72,10 @@ struct WorkoutEditEvals {
         Case(said: "Just bench and plank", day: .upper, has: ["bench-press", "plank"], only: true),
         Case(said: "Make the plank a minute", day: .upper, targets: ["plank": .init(seconds: 60)]),
         Case(said: "Add face pulls", day: .upper, has: ["face-pull|cable-face-pull|band-face-pull"]),
-        Case(said: "Add dips at the end", day: .upper, has: ["dip|tricep-dip|chest-dip|bench-dip"]),
+        Case(said: "Add dips at the end", day: .upper, has: ["dip|tricep-dip|chest-dip|bench-dip|dips-triceps-version|dips-chest-version"]),
         Case(said: "Bench 165 today", day: .upper, targets: ["bench-press": .init(pounds: 165)]),
         // A rest day: nothing planned.
-        Case(said: "Give me squats and split squat for today", day: .rest, has: ["back-squat|goblet-squat", "split-squat|bulgarian-split-squat"], only: true),
+        Case(said: "Give me squats and split squat for today", day: .rest, has: ["back-squat|goblet-squat", "split-squat|bulgarian-split-squat|split-squat-with-dumbbell"], only: true),
         Case(said: "I want to do pull-ups and push-ups", day: .rest, has: ["pull-up", "push-up"]),
         Case(said: "Deadlift 3 sets of 5 at 225", day: .rest, has: ["deadlift"], targets: ["deadlift": .init(sets: 3, reps: 5, pounds: 225)]),
         Case(said: "Give me a quick core workout", day: .rest, has: ["plank|dead-bug"], open: true),
@@ -91,6 +91,8 @@ struct WorkoutEditEvals {
         Case(said: "Give me a full body workout instead", day: .upper, open: true, size: 3...7,
              patterns: [["squat", "hinge"], ["push"], ["pull"]]),
         Case(said: "Give me a workout", day: .rest, open: true, size: 3...7, patterns: [["squat", "hinge"], ["push", "pull"]]),
+        // On the author's phone, after the catalog grew to 700 (FIT-70): "let's" brought in the library, which overflowed.
+        Case(said: "Let's make this a push day", day: .full, open: true, size: 2...7, patterns: [["push"]], lacksPatterns: ["squat", "hinge"]),
         Case(said: "Plan me a pull day", day: .rest, open: true, size: 2...7, patterns: [["pull"]], lacksPatterns: ["push"]),
         Case(said: "Give me a 30 minute dumbbell workout", day: .rest, open: true, size: 3...6, equipment: ["dumbbells"]),
     ]

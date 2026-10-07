@@ -197,7 +197,16 @@ struct TodayWorkout: Sendable {
             ?? WorkoutEdit.find(said, in: setup.names).flatMap { slugs.contains($0) ? $0 : nil }
     }
 
-    private func library(_ said: String) -> String? { WorkoutEdit.find(said, in: setup.names) }
+    /// The library exercise a name means: first among what the user can do (their equipment, no injury, not
+    /// avoided), the author's cards, then the well-known staples (FIT-70), so "dips" is Bench Dips rather than Ring
+    /// Dips; then the whole library.
+    private func library(_ said: String) -> String? {
+        let doable = Set(setup.catalog.filter { TrainingGenerator.allows($0, setup.settings) }.map(\.slug))
+        let rank = Dictionary(setup.catalog.map { ($0.slug, $0.isCurated ? 0 : $0.tags.contains("staple") ? 1 : 2) },
+                              uniquingKeysWith: { first, _ in first })
+        return WorkoutEdit.find(said, in: setup.names.filter { doable.contains($0.key) }, rank: rank)
+            ?? WorkoutEdit.find(said, in: setup.names, rank: rank)
+    }
 
     /// An exercise that isn't in the library, saved with the plan.
     private mutating func seed(_ said: String, pattern: String?) -> String? {

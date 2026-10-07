@@ -57,6 +57,16 @@ enum WorkoutAgent {
         return lines.joined(separator: "\n")
     }
 
+    /// The exercises named in the instructions: the author's cards and today's, with their movements. Not the whole
+    /// catalog: since FIT-70 that's 700 exercises, ~5,800 tokens, past the on-device model's 4,096-token context, and
+    /// every request that listed it failed. Any other name the model says is still found by code (`WorkoutEdit.find`).
+    static func library(_ setup: TodayWorkout.Setup, today: [PlannedWorkout]) -> [String] {
+        let todays = Set(today.map(\.exercise))
+        return setup.catalog.filter { $0.isCurated || todays.contains($0.slug) }.compactMap { exercise in
+            setup.names[exercise.slug].map { "\($0) (\(exercise.pattern))" }
+        }.sorted()
+    }
+
     /// The edit. The model is given only the tools the words point at; if that makes no change, it gets all of them.
     @MainActor static func run(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup,
                                progress: Progress? = nil) async throws -> Outcome {
@@ -85,12 +95,9 @@ enum WorkoutAgent {
                                 progress: Progress?) async throws -> Outcome {
         let state = State(TodayWorkout(today, setup: setup), progress: progress)
         state.said.withLock { $0 = said }
-        let library = setup.names.keys.sorted().map { slug in
-            "\(setup.names[slug]!) (\(setup.catalog.first { $0.slug == slug }?.pattern ?? "other"))"
-        }
         let session = LanguageModelSession(
             tools: tools(state).filter { names.contains($0.name) },
-            instructions: instructions(library: library, today: state.workout.withLock { $0.text }, tools: names))
+            instructions: instructions(library: library(setup, today: today), today: state.workout.withLock { $0.text }, tools: names))
         _ = try await session.respond(to: said)
         if state.calls.withLock({ $0.isEmpty }) {
             // The model sometimes answers in words without calling anything.

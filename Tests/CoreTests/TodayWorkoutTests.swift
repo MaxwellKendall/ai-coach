@@ -112,3 +112,24 @@ struct TodayWorkoutTests {
         #expect(workout.rows.allSatisfy { ["push", "pull", "core"].contains(patterns[$0.exercise]!) })
     }
 }
+
+/// Names said aloud, found in the full 700-exercise catalog (FIT-70) the way the phone has it: what the user can do,
+/// their cards and the staples first. With the 12 cards these were unambiguous; at 700 "dips" was Ring Dips.
+@MainActor
+struct TodayWorkoutCatalogTests {
+    private static let seeds = try! Seeder.decode([TemplateSeed].self, "exercises", .main)
+
+    @Test(arguments: [("dips", "bench-dips"), ("bicep curl", "dumbbell-bicep-curl"), ("split squat", "split-squat-with-dumbbells"),
+                      ("RDLs", "dumbbell-romanian-deadlift"), ("squats", "back-squat"), ("face pulls", "face-pull")])
+    func spokenNamesFindWhatTheUserCanDo(said: String, slug: String) {
+        let catalog = Self.seeds.compactMap { Exercise(slug: $0.slug, attributes: $0.attributes) }
+        let names = Dictionary(uniqueKeysWithValues: Self.seeds.map { ($0.slug, $0.name) })
+        let settings = TrainingSettings(age: 36, daysPerWeek: 3, sessionMinutes: 45, trainingDays: [0, 2, 4], workoutTime: 420,
+                                        equipment: ["barbell", "rack", "dumbbells", "pull_up_bar", "bench", "cable"], maxWeeklySets: 60)
+        let setup = TodayWorkout.Setup(names: names, catalog: catalog, settings: settings, history: [], weeksSinceDeload: 1,
+                                       date: .now, session: "Workout")
+        var workout = TodayWorkout([], setup: setup)
+        #expect(workout.add(said) == nil)
+        #expect(workout.rows.last?.exercise == slug, "\(said) → \(workout.rows.map(\.exercise))")
+    }
+}
