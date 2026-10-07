@@ -17,6 +17,19 @@ struct TodayWorkout: Sendable {
 
     enum Focus: String, CaseIterable, Sendable {
         case same = "same kind", full = "full body", upper = "upper body", lower = "lower body", push, pull, core
+
+        /// The session's name for this kind of day; nil keeps the one it has.
+        var title: String? {
+            switch self {
+            case .same: nil
+            case .full: "Full Body"
+            case .upper: "Upper"
+            case .lower: "Legs"
+            case .push: "Push"
+            case .pull: "Pull"
+            case .core: "Core"
+            }
+        }
     }
 
     enum Equipment: String, CaseIterable, Sendable {
@@ -29,10 +42,13 @@ struct TodayWorkout: Sendable {
     private(set) var newExercises: [TemplateSeed] = []
     /// What changed, for the toast: "Bench Press out".
     private(set) var done: [String] = []
+    /// The session's name, the title on Today: a new kind of day renames it ("Pull" made a leg day is "Legs").
+    private(set) var session: String
 
     init(_ today: [PlannedWorkout], setup: Setup) {
         self.setup = setup
         self.rows = today
+        self.session = today.first?.session ?? setup.session
     }
 
     /// Today's exercises by name, in order.
@@ -159,12 +175,15 @@ struct TodayWorkout: Sendable {
         case .noBarbell: settings.equipment.subtract(["barbell", "rack"])
         }
         let slots = slots(for: focus).filter { !patterns.contains($0.pattern) }
-        let session = TrainingGenerator.session(on: setup.date, slots: slots, name: setup.session,
+        // The same kind of day, or only less equipment or time, keeps its name.
+        let title = focus.title ?? session
+        let session = TrainingGenerator.session(on: setup.date, slots: slots, name: title,
                                                 avoiding: Set(rows.map(\.exercise)), minutes: minutes, settings: settings,
                                                 catalog: setup.catalog, history: setup.history,
                                                 weeksSinceDeload: setup.weeksSinceDeload, calendar: setup.calendar)
         guard !session.isEmpty else { return "No exercises in the library fit that." }
         rows = session
+        self.session = title
         newExercises = []
         let summary = switch focus {
         case .same, .full: "New workout"
@@ -228,12 +247,12 @@ struct TodayWorkout: Sendable {
 
     private func dosed(_ slug: String, main: Bool, sets: Int) -> [PlannedWorkout] {
         if let exercise = setup.catalog.first(where: { $0.slug == slug }) {
-            return TrainingGenerator.dose(exercise, main: main, sets: sets, date: setup.date, session: setup.session,
+            return TrainingGenerator.dose(exercise, main: main, sets: sets, date: setup.date, session: session,
                                           settings: setup.settings, history: setup.history,
                                           weeksSinceDeload: setup.weeksSinceDeload, calendar: setup.calendar)
                 .map { var row = $0; row.adjustedReason = "asked for"; return row }
         }
-        return [PlannedWorkout(date: setup.date, session: setup.session, exercise: slug, targets: [
+        return [PlannedWorkout(date: setup.date, session: session, exercise: slug, targets: [
             Measurement(metric: "sets", value: Double(sets), unit: "sets"),
             Measurement(metric: "reps", value: setup.settings.style.reps.accessory, unit: "reps"),
         ], adjustedReason: "asked for")]

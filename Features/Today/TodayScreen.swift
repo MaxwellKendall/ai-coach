@@ -291,9 +291,18 @@ struct TodayScreen: View {
                 }
                 .accessibilityLabel("More")
             }
-            Text(plan.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
-            Text(plan.coach).font(.subheadline).foregroundStyle(.secondary).lineSpacing(2).padding(.top, 10)
-                .fixedSize(horizontal: false, vertical: true)
+            // The title opens the session, as its exercises do.
+            Button { sheet = .details(plan.items) } label: {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(plan.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
+                    Text(plan.coach).font(.subheadline).foregroundStyle(.secondary).lineSpacing(2).padding(.top, 10)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the session")
             VStack(spacing: 0) {
                 ForEach(Self.keyed(plan.session.blocks), id: \.key) { index, key, block in
                     let new = isToday && block.movements.contains { fresh.contains($0.exercise) }

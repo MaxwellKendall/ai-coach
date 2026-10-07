@@ -162,6 +162,16 @@ struct WorkoutAgentFallbackTests {
         #expect(outcome.changed)
         #expect(outcome.workouts.contains { $0.exercise == "front-squat-clean-grip" })
         #expect(!patterns(outcome).isDisjoint(with: ["squat", "lunge", "hinge"]) && !patterns(outcome).contains("pull"))
+        // The Pull day is called what it now is, front squat included.
+        #expect(outcome.workouts.allSatisfy { $0.session == "Legs" })
+    }
+
+    @Test func theSameKindOfDayKeepsItsName() throws {
+        var workout = TodayWorkout(today, setup: setup)
+        #expect(workout.regenerate(.same, equipment: .dumbbells) == nil)
+        #expect(workout.rows.allSatisfy { $0.session == "Pull" })
+        #expect(workout.regenerate(.push) == nil)
+        #expect(workout.session == "Push" && workout.rows.allSatisfy { $0.session == "Push" })
     }
 
     @Test func aPushDayAndDumbbellsOnly() throws {
