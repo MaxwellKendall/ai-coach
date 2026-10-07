@@ -90,6 +90,23 @@ struct OnboardingAnswers: Sendable {
 
     static let weekRange = 4...52
 
+    /// The training settings these answers make, once the age is known (FIT-73: the first week is designed from
+    /// them before the program starts). Matches what `Profile.trainingSettings` will hold after Start.
+    func trainingSettings(workoutTime: Int = 7 * 60, maxWeeklySets: Int = 60) -> TrainingSettings? {
+        guard let age, !days.isEmpty else { return nil }
+        return TrainingSettings(age: age, daysPerWeek: days.count, sessionMinutes: minutes, trainingDays: days.sorted(),
+                                workoutTime: workoutTime, equipment: equipment, injuredAreas: BodyArea.muscles(for: hurts.sorted()),
+                                avoidExercises: avoid, maxWeeklySets: maxWeeklySets,
+                                starts: starts.values.sorted { $0.exercise < $1.exercise }, bodyWeight: weight)
+    }
+
+    /// The goals as the program designer reads them: "Bench 225 by Jan 25".
+    func goalLines(by end: Date) -> [String] {
+        goals.compactMap(GoalOption.with(id:)).compactMap { option in
+            target(option).map { "\(option.title(target: $0)) by \(end.formatted(.dateTime.month(.abbreviated).day()))" }
+        }
+    }
+
     /// Exercises you have the equipment for and haven't unticked.
     func available(_ catalog: [Exercise]) -> [Exercise] {
         catalog.filter { $0.equipment.isSubset(of: equipment) && !avoid.contains($0.slug) }

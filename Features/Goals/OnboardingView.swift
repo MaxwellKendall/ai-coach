@@ -16,6 +16,10 @@ struct OnboardingView: View {
     @State private var voice = VoiceCapture()
     @State private var working: String?
     @State private var message: String?
+    /// FIT-73: the first week the model designed from these answers, and the loads the user changed on it.
+    @State private var firstWeek: ProgramDesigner.Result?
+    @State private var designing = false
+    @State private var loads: [String: Double] = [:]
     var onDone: () -> Void
 
     private static let steps = [
@@ -40,7 +44,9 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         if index < 4 { header(index) }
                         OnboardingStepView(index: index, answers: $answers, open: $open, catalog: catalog, names: names,
-                                           history: history, go: { index in withAnimation(.snappy) { page = index } })
+                                           history: history, firstLoads: firstWeek.map { FirstLoads.items($0.week.workouts) },
+                                           designing: designing, loads: $loads,
+                                           go: { index in withAnimation(.snappy) { page = index } })
                     }
                     .padding(.horizontal, 22)
                     .padding(.bottom, 24)
@@ -62,6 +68,37 @@ struct OnboardingView: View {
         } message: { Text(message ?? "") }
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .onAppear(perform: prefill)
+        // The check step designs the first week, again whenever the answers it's built from change.
+        .task(id: page == 4 ? designKey : nil) { if page == 4 { await designFirstWeek() } }
+    }
+
+    /// What the first week is designed from.
+    private var designKey: String {
+        [answers.goals.joined(separator: ","), answers.targets.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","),
+         "\(answers.weeks)", answers.equipment.sorted().joined(separator: ","), answers.avoid.sorted().joined(separator: ","),
+         "\(answers.age ?? 0)", "\(answers.weight ?? 0)", answers.starts.values.map { "\($0)" }.sorted().joined(),
+         "\(answers.days)", "\(answers.minutes)", answers.hurts.sorted().joined(separator: ",")].joined(separator: "|")
+    }
+
+    private func designFirstWeek() async {
+        guard LanguageModel.isAvailable, let settings = answers.trainingSettings(workoutTime: profile.workoutTime,
+                                                                                 maxWeeklySets: profile.maxWeeklySets) else { return }
+        let monday = Week.monday(of: .now)
+        let weeks = ProgramPlan.weeks(count: answers.weeks, deloadEvery: AgeTier.of(age: settings.age).deloadEveryWeeks)
+        let end = Calendar.current.date(byAdding: .day, value: 7 * answers.weeks - 1, to: monday)!
+        let request = ProgramDesigner.Request(
+            monday: monday, settings: settings, catalog: catalog, names: names, history: history, weeksSinceDeload: 0,
+            program: weeks.first, programIndex: 0, programWeeks: weeks.count, goals: answers.goalLines(by: end))
+        designing = true
+        defer { designing = false }
+        let result = await ProgramDesigner.week(request)
+        guard !Task.isCancelled else { return }
+        withAnimation(.snappy) {
+            firstWeek = result.source == .model ? result : nil
+            // Loads the user set stay for the exercises still in the week.
+            let kept = Set(result.week.workouts.map(\.exercise))
+            loads = loads.filter { kept.contains($0.key) }
+        }
     }
 
     private static let prompts = ["“Get to 180 and do 10 pull-ups by the end of February”",
@@ -184,7 +221,12 @@ struct OnboardingView: View {
             goal.updatedAt = now
         }
         try? context.save()
-        try? Planner.generate(weekOf: now, in: context)
+        if let plan = try? Planner.generate(weekOf: now, in: context), let firstWeek {
+            // FIT-73: the week the model designed, at the loads the user confirmed.
+            try? Planner.apply(FirstLoads.applying(loads, to: firstWeek.week.workouts), to: plan, templates: templates, in: context)
+            plan.warnings = firstWeek.week.warnings
+            try? context.save()
+        }
         onDone()
     }
 }

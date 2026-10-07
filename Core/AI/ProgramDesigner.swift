@@ -82,6 +82,19 @@ enum ProgramDesigner {
     }
 
     @Generable
+    struct FirstLoads {
+        var loads: [Load]
+
+        @Generable
+        struct Load {
+            @Guide(description: "The exercise, as written")
+            var name: String
+            @Guide(description: "Bar total, or each dumbbell or kettlebell", .range(5...600))
+            var pounds: Int
+        }
+    }
+
+    @Generable
     struct Renames {
         var exercises: [Rename]
 
@@ -123,6 +136,7 @@ enum ProgramDesigner {
         do {
             var designed = try await design(request, settings: settings, tier: tier, light: light, log: log)
             try await rename(&designed, request, settings: settings, log: log)
+            try await fillLoads(&designed, request, settings: settings, log: log)
             let (workouts, why) = rows(designed, request, settings: settings, tier: tier)
             guard !workouts.isEmpty else { return fallback("the model planned nothing", calls: log.calls.withLock { $0 }) }
             let guarded = PlanGuard.check(workouts, context)
@@ -171,6 +185,8 @@ enum ProgramDesigner {
             push and a pull. Choose exercises from the menu below, or call find_exercises for more. Use only names \
             they give, written exactly.
             Give pounds for each weighted exercise from their recent sets and starting points; none for bodyweight ones. \
+            With neither, pick a light first load from a related lift: each dumbbell for a dumbbell bench is about 40% \
+            of the barbell bench, an overhead press about 65% of it, a row about 80%, a lunge about 60% of the squat. \
             Reps for lifts, seconds for holds and cardio, meters for carries; RPE for lifts only.
             Each week builds on the last: add a little load or a rep where the last top set was easy, hold where it was hard.
             The plan is checked against these rules, so keep to them: at most \(TrainingGenerator.maxSets.main) sets for a \
@@ -196,7 +212,7 @@ enum ProgramDesigner {
         let sets = low == high ? "about \(low)" : "\(low)–\(high)"
         lines.append("Training days: \(days.map { weekdays[$0 % 7] }.joined(separator: ", ")), \(settings.sessionMinutes) minutes each.")
         let reps = settings.style.reps
-        lines.append("Age \(settings.age). Style: \(settings.style.rawValue) (main lifts around \(Int(reps.main)) reps, the rest around \(Int(reps.accessory))).")
+        lines.append("Age \(settings.age)\(settings.bodyWeight.map { ", \(Coach.number($0)) lb" } ?? ""). Style: \(settings.style.rawValue) (main lifts around \(Int(reps.main)) reps, the rest around \(Int(reps.accessory))).")
         lines.append("Equipment: \(settings.equipment.isEmpty ? "none, bodyweight only" : settings.equipment.sorted().map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: ", ")).")
         if !settings.injuredAreas.isEmpty { lines.append("Injured: \(settings.injuredAreas.sorted().joined(separator: ", ")).") }
         if !settings.avoidExercises.isEmpty {
@@ -338,6 +354,45 @@ enum ProgramDesigner {
         }
     }
 
+    // MARK: First loads
+
+    /// The weighted exercises the model gave no load: the ones code can't dose without one. Those with a load in the
+    /// history or starting points aren't asked about; the model left them empty on purpose only if it forgot.
+    static func missingLoads(_ designed: DesignedWeek, _ request: Request) -> [String] {
+        let bySlug = Dictionary(request.catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
+        return designed.sessions.flatMap(\.exercises).filter { item in
+            guard item.pounds == nil, let exercise = PlanGuard.resolve(item.name, in: bySlug, names: request.names) else { return false }
+            return !exercise.isTimed && !exercise.equipment.isDisjoint(with: loadBearing)
+        }.map(\.name).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+    }
+
+    /// FIT-73: every weighted exercise starts with a load the model chose. One more ask for those it left empty, with
+    /// what's known to go on; PlanGuard then holds each to its ceiling.
+    private static func fillLoads(_ designed: inout DesignedWeek, _ request: Request, settings: TrainingSettings, log: Log) async throws {
+        let missing = missingLoads(designed, request)
+        guard !missing.isEmpty else { return }
+        log.calls.withLock { $0.append("first loads \(missing.joined(separator: ", "))") }
+        let known = [topSets(request), settings.starts.compactMap { start -> String? in
+            guard let name = request.names[start.exercise], let load = start.value("load_lb"), let reps = start.value("reps") else { return nil }
+            return "\(name) \(Coach.number(load)) lb × \(Coach.number(reps))"
+        }.joined(separator: "\n")].filter { !$0.isEmpty }.joined(separator: "\n")
+        let session = LanguageModelSession(instructions: """
+            You're a strength coach choosing a light first load for each exercise, from a related lift they know: each \
+            dumbbell for a dumbbell bench is about 40% of the barbell bench, an overhead press about 65% of it, a row \
+            about 80%, a lunge about 60% of the squat.
+            """)
+        let prompt = "Age \(settings.age)\(settings.bodyWeight.map { ", \(Coach.number($0)) lb" } ?? "").\n"
+            + (known.isEmpty ? "No lifts known yet.\n" : "What they lift:\n\(known)\n")
+            + "First loads for: \(missing.joined(separator: ", "))."
+        let loads = try await session.respond(to: prompt, generating: FirstLoads.self).content.loads
+        let byName = Dictionary(loads.filter { missing.contains($0.name) }.map { ($0.name, $0.pounds) }, uniquingKeysWith: { first, _ in first })
+        for s in designed.sessions.indices {
+            for e in designed.sessions[s].exercises.indices where designed.sessions[s].exercises[e].pounds == nil {
+                designed.sessions[s].exercises[e].pounds = byName[designed.sessions[s].exercises[e].name]
+            }
+        }
+    }
+
     // MARK: Rows
 
     static let loadBearing: Set<String> = ["barbell", "dumbbells", "kettlebells", "ez_bar", "trap_bar", "cable", "machine",
@@ -382,7 +437,8 @@ enum ProgramDesigner {
                 }
                 if !timed, !carry, let rpe = item.rpe { targets.append(Measurement(metric: "rpe", value: Double(rpe), unit: "RPE")) }
                 let row = PlannedWorkout(date: date, session: session.name, exercise: slug, targets: targets,
-                                         note: item.main ? tier.tempo.map { "tempo \($0)" } : nil, group: item.superset,
+                                         // Main lifts go in straight sets after their warm-up; supersets are for the rest.
+                                         note: item.main ? tier.tempo.map { "tempo \($0)" } : nil, group: item.main ? nil : item.superset,
                                          main: item.main)
                 if item.main, let warmup = TrainingGenerator.warmup(for: row, settings: settings, tier: tier) { workouts.append(warmup) }
                 workouts.append(row)

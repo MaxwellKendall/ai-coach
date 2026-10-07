@@ -19,6 +19,8 @@ struct TrainingSettings: Sendable {
     var deloadEveryWeeks: Int?
     /// Where each exercise starts when it has no history yet (FIT-36).
     var starts: [StartingSet] = []
+    /// Pounds. What a first load is held to when nothing else is known (FIT-73).
+    var bodyWeight: Double? = nil
 }
 
 enum TrainingStyle: String, Codable, CaseIterable, Sendable {

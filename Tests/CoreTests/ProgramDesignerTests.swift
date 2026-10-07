@@ -72,6 +72,11 @@ struct ProgramDesignerTests {
         #expect(rows.first { $0.exercise == "dumbbell-row" }?.target("load_lb_hand") == 60)
         let plank = rows.first { $0.exercise == "plank" }
         #expect(plank?.target("duration_s") == 45 && plank?.target("rpe") == nil && plank?.group == 1)
+        // A main lift isn't supersetted: its warm-up comes first, then straight sets.
+        let mainInSuperset = ProgramDesigner.DesignedWeek(sessions: [.init(name: "Full", why: "all", exercises: [
+            item("Bench Press", main: true, pounds: 135, superset: 1), item("Pull-up", superset: 1), item("Plank", superset: 1)])])
+        #expect(ProgramDesigner.rows(mainInSuperset, request, settings: request.settings, tier: .of(age: 36)).workouts
+            .filter { $0.exercise == "bench-press" }.allSatisfy { $0.group == nil })
         #expect(why == ["Upper: push and pull", "Lower: squat"])
     }
 
@@ -81,6 +86,14 @@ struct ProgramDesignerTests {
         let rows = ProgramDesigner.rows(designed, request, settings: request.settings, tier: .of(age: 55)).workouts
         #expect(rows.filter { $0.note == TrainingGenerator.warmupNote }.count == 3)
         #expect(rows.filter { $0.note == "tempo 3-1-1-1" }.count == 3)
+    }
+
+    /// FIT-73: weighted exercises without a load are asked about again; bodyweight and timed ones aren't.
+    @Test func weightedExercisesWithoutALoadAreFound() {
+        let designed = ProgramDesigner.DesignedWeek(sessions: [.init(name: "Full", why: "all", exercises: [
+            item("Bench Press", main: true, pounds: 135), item("Barbell Shoulder Press"), item("Pull-up"),
+            item("Plank", reps: nil, seconds: 45, rpe: nil), item("Dumbbell Row (Single-Arm)")])])
+        #expect(ProgramDesigner.missingLoads(designed, request()) == ["Barbell Shoulder Press", "Dumbbell Row (Single-Arm)"])
     }
 
     /// A name the model made up is kept for PlanGuard, which searches for it.

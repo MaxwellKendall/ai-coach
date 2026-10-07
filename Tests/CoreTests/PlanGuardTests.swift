@@ -139,6 +139,35 @@ struct PlanGuardTests {
         #expect(result.repairs.first?.text.contains("10%") == true)
     }
 
+    // FIT-73: nothing logged and no starting point for the exercise itself.
+
+    @Test func aFirstLoadIsHeldToWhatARelatedLiftSays() {
+        // 155×5 bench is a 174 max: an overhead press ≈ 65% of it as a variation (×0.9), 8 reps with 2 in reserve → 76.
+        let bench = StartingSet(exercise: "bench-press", measurements: [.init(metric: "load_lb", value: 155, unit: "lb"),
+                                                                         .init(metric: "reps", value: 5, unit: "reps")])
+        let press = check([row("barbell-shoulder-press", 3, 8, load: 225, main: true)], settings(starts: [bench]))
+        #expect(press.workouts.first?.target("load_lb") == 75)
+        #expect(press.repairs.first?.text.contains("155×5 bench press suggests") == true)
+        // Each dumbbell of a dumbbell bench ≈ 40% of the barbell's.
+        var dumbbells = row("dumbbell-bench-press", 3, 10)
+        dumbbells.targets.append(Measurement(metric: "load_lb_hand", value: 100, unit: "lb/hand"))
+        let perHand = check([dumbbells], settings(starts: [bench]))
+        #expect(perHand.workouts.first.flatMap { $0.target("load_lb_hand") }.map { $0 < 55 } == true)
+        // A light pick stands.
+        #expect(check([row("barbell-shoulder-press", 3, 8, load: 65, main: true)], settings(starts: [bench])).repairs.isEmpty)
+    }
+
+    @Test func withNothingKnownBodyWeightHoldsTheFirstLoad() {
+        var settings = settings()
+        settings.bodyWeight = 160
+        // A 160 lb novice's squat max ≈ 120; 5 reps with 2 in reserve → 100.
+        let result = check([row("back-squat", 3, 5, load: 315, main: true)], settings)
+        #expect(result.workouts.first?.target("load_lb") == 100)
+        #expect(result.repairs.first?.text.contains("body weight") == true)
+        // Without a body weight either, the model's choice stands.
+        #expect(check([row("back-squat", 3, 5, load: 315, main: true)], self.settings()).repairs.isEmpty)
+    }
+
     // MARK: Rule 4: plates
 
     @Test func barbellLoadsAreInFivePoundSteps() {

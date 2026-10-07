@@ -140,7 +140,7 @@ enum PlanGuard {
             // 3. Load ceilings.
             for metric in ["load_lb", "load_lb_hand"] {
                 guard let load = rows[index].target(metric),
-                      let ceiling = ceiling(row.exercise, metric: metric, reps: row.target("reps"), context),
+                      let ceiling = ceiling(row.exercise, exercise, metric: metric, reps: row.target("reps"), context),
                       load > ceiling.load else { continue }
                 let capped = barbell ? (ceiling.load / 5).rounded(.down) * 5 : ceiling.load.rounded(.down)
                 rows[index].set(metric, capped)
@@ -233,7 +233,7 @@ enum PlanGuard {
     /// The most `metric` may be for these reps: the rep max the best logged set gives (Brzycki, counting the reps left
     /// in reserve, 10 − RPE or 2 when unlogged, FIT-68) plus one 5 lb step, else the baseline's; and no more than
     /// the last top set + 10%.
-    private static func ceiling(_ slug: String, metric: String, reps: Double?, _ context: Context)
+    private static func ceiling(_ slug: String, _ exercise: Exercise?, metric: String, reps: Double?, _ context: Context)
         -> (load: Double, why: String)? {
         let sets = context.history.filter { $0.exercise == slug && $0.value(metric) != nil }
         var ceilings: [(load: Double, why: String)] = []
@@ -250,6 +250,10 @@ enum PlanGuard {
                                  "the most your \(best == nil ? "starting point" : "history") gives for \(Int(reps)) reps"))
             }
         }
+        if sets.isEmpty, ceilings.isEmpty, let exercise,
+           let related = related(exercise, metric: metric, reps: reps, context) {
+            ceilings.append(related)
+        }
         if let day = sets.map(\.date).max().map(context.calendar.startOfDay),
            let top = sets.filter({ context.calendar.startOfDay(for: $0.date) == day }).max(by: { $0.value(metric)! < $1.value(metric)! }) {
             // At the planned reps: 95×10 last time is 105×8 now, not a jump.
@@ -261,6 +265,50 @@ enum PlanGuard {
             ceilings.append((load * maxJump, "10% over your last top set"))
         }
         return ceilings.min { $0.load < $1.load }
+    }
+
+    /// FIT-73: the lift each movement is measured against, and the share of its max a first load may be. General
+    /// strength-standard ratios (fitness-planner has none): an overhead press is about 65% of a bench, a row about
+    /// 80%, a lunge about 60% of a squat; isolation work a third or less.
+    static let anchors: [String: (slug: String, share: Double)] = [
+        "squat": ("back-squat", 1), "lunge": ("back-squat", 0.6), "legs": ("back-squat", 0.5), "calves": ("back-squat", 0.8),
+        "hinge": ("deadlift", 1), "olympic": ("deadlift", 0.6), "carry": ("deadlift", 1),
+        "horizontal_push": ("bench-press", 1), "vertical_push": ("bench-press", 0.65), "horizontal_pull": ("bench-press", 0.8),
+        "vertical_pull": ("bench-press", 0.8), "arms": ("bench-press", 0.35), "shoulders": ("bench-press", 0.25),
+        "core": ("bench-press", 0.25),
+    ]
+    /// A max from body weight when the anchor lift has none either: about what an untrained adult lifts (general
+    /// strength standards, the low end).
+    static let bodyWeightShare = ["back-squat": 0.75, "deadlift": 1.0, "bench-press": 0.5]
+    /// Each dumbbell or kettlebell, as a share of the barbell load (a dumbbell bench is about 40% of a barbell bench
+    /// a hand); a variation of the anchor, as a share of the anchor.
+    static let perHandShare = 0.4, variationShare = 0.9
+
+    /// The most an exercise with no history and no starting point may start at: its movement's anchor lift, from the
+    /// history, the starting point or body weight, scaled by `anchors`, at two reps in reserve. nil when nothing's known.
+    private static func related(_ exercise: Exercise, metric: String, reps: Double?, _ context: Context)
+        -> (load: Double, why: String)? {
+        let key = exercise.tags.first { $0.hasSuffix("_push") || $0.hasSuffix("_pull") } ?? exercise.pattern
+        guard let anchor = anchors[key] else { return nil }
+        let best = context.history.filter { $0.exercise == anchor.slug }.compactMap { set -> Double? in
+            guard let load = set.value("load_lb"), let done = set.value("reps"), (1...10).contains(done) else { return nil }
+            return ProgramPlan.estimatedMax(load: load, reps: done + 10 - min(max(set.value("rpe") ?? 8, 6), 10))
+        }.max()
+        let start = context.settings.starts.first { $0.exercise == anchor.slug }
+        let baseline = start.flatMap { start in
+            start.value("load_lb").flatMap { load in start.value("reps").map { ProgramPlan.estimatedMax(load: load, reps: $0) } }
+        }
+        let body = context.settings.bodyWeight.map { $0 * (bodyWeightShare[anchor.slug] ?? 0.5) }
+        guard let max = best ?? baseline ?? body else { return nil }
+        let name = context.names[anchor.slug] ?? anchor.slug
+        let why = best != nil ? "about what your \(name.lowercased()) history suggests"
+            : baseline != nil ? "about what your \(Coach.number(start!.value("load_lb")!))×\(Coach.number(start!.value("reps")!)) \(name.lowercased()) suggests"
+            : "about what your body weight suggests for a first week"
+        var load = max * anchor.share * (exercise.slug == anchor.slug ? 1 : variationShare)
+        if metric == "load_lb_hand" { load *= perHandShare }
+        // An estimate, so never a max: two reps left in reserve (RPE 8). Carries are held, not lifted for reps.
+        if let reps, exercise.pattern != "carry" { load *= (37 - min(reps + 2, 36)) / 36 }
+        return (load, why)
     }
 
     // MARK: The week

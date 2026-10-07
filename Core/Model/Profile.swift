@@ -82,7 +82,7 @@ final class Profile {
                          trainingDays: trainingDays.sorted(), workoutTime: workoutTime, equipment: Set(equipment),
                          injuredAreas: BodyArea.muscles(for: injuredAreas), avoidExercises: Set(avoidExercises),
                          maxWeeklySets: maxWeeklySets, style: style, warmups: warmups, deloadEveryWeeks: deloadEveryWeeks,
-                         starts: starts)
+                         starts: starts, bodyWeight: weightLb)
     }
 
     /// The program's weeks, when there is one.

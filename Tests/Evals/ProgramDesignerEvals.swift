@@ -28,11 +28,12 @@ struct ProgramDesignerEvals {
     private static let gym: Set<String> = ["barbell", "rack", "dumbbells", "pull_up_bar", "bench"]
 
     private static func settings(age: Int, days: [Int], minutes: Int, equipment: Set<String>, style: TrainingStyle,
-                                 injured: [String] = [], starts: [StartingSet] = []) -> TrainingSettings {
+                                 injured: [String] = [], starts: [StartingSet] = [], bodyWeight: Double = 190) -> TrainingSettings {
         var settings = TrainingSettings(age: age, daysPerWeek: days.count, sessionMinutes: minutes, trainingDays: days,
                                         workoutTime: 7 * 60, equipment: equipment, maxWeeklySets: 60, style: style, warmups: true,
                                         starts: starts)
         settings.injuredAreas = BodyArea.muscles(for: injured)
+        settings.bodyWeight = bodyWeight
         return settings
     }
 
@@ -130,6 +131,15 @@ struct ProgramDesignerEvals {
         working(week).filter { ["conditioning", "carry"].contains(catalog[$0.exercise]?.pattern ?? "") || $0.group != nil }.count
     }
 
+    /// FIT-73: weighted exercises planned without a load.
+    private static func missingLoads(_ week: TrainingWeek, catalog: [String: Exercise]) -> [String] {
+        working(week).filter { row in
+            guard let exercise = catalog[row.exercise], !exercise.isTimed,
+                  !exercise.equipment.isDisjoint(with: ProgramDesigner.loadBearing) else { return false }
+            return row.target("load_lb") == nil && row.target("load_lb_hand") == nil
+        }.map(\.exercise)
+    }
+
     private static func summary(_ result: ProgramDesigner.Result) -> String {
         let rules = Dictionary(result.repairs.map { ($0.rule.rawValue, 1) }, uniquingKeysWith: +).sorted { $0.key < $1.key }
             .map { "\($0.value) \($0.key)" }.joined(separator: ", ")
@@ -151,7 +161,7 @@ struct ProgramDesignerEvals {
         var all: [ProgramDesigner.Result] = []
 
         // The grid: one week each.
-        var grid: [String] = [], fit: [String] = []
+        var grid: [String] = [], fit: [String] = [], firstLoads: [String] = []
         for profile in Self.profiles where filter.isEmpty || profile.name.lowercased().contains(filter) {
             let result = await ProgramDesigner.week(ProgramDesigner.Request(
                 monday: Self.monday, settings: profile.settings, catalog: inputs.catalog, names: inputs.names,
@@ -161,6 +171,9 @@ struct ProgramDesignerEvals {
             grid.append("### \(profile.name)\n\n\(Self.summary(result))\n")
             grid += Self.render(result.week, names: inputs.names).map { "- \($0)" }
             if !result.repairs.isEmpty { grid.append("\nRepairs: " + result.repairs.map(\.text).joined(separator: " · ")) }
+            let missing = Self.missingLoads(result.week, catalog: bySlug)
+            if !missing.isEmpty { grid.append("\nNo load: " + missing.map { inputs.names[$0] ?? $0 }.joined(separator: ", ")) }
+            firstLoads.append("| \(profile.name) | \(result.source.rawValue) | \(Self.working(result.week).filter { $0.target("load_lb") != nil || $0.target("load_lb_hand") != nil }.count) | \(missing.count) | \(result.repairs.filter { $0.rule == .load }.count) |")
             if !result.why.isEmpty { grid.append("\nWhy: " + result.why.prefix(6).joined(separator: " · ")) }
             grid.append("")
             let main = Self.median(Self.reps(result.week, main: true)), accessory = Self.median(Self.reps(result.week, main: false))
@@ -226,6 +239,11 @@ struct ProgramDesignerEvals {
             report += probe
         }
         if !grid.isEmpty {
+            report.append("## First loads\n")
+            report.append("| Profile | Source | Loaded sets | Weighted with no load | Loads cut to a ceiling |")
+            report.append("|---|---|---|---|---|")
+            report += firstLoads
+            report.append("")
             report.append("## Goal fit\n")
             report.append("| Profile | Goal | Main reps | Accessory reps | Conditioning, carries or supersets |")
             report.append("|---|---|---|---|---|")

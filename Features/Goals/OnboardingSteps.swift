@@ -8,6 +8,10 @@ struct OnboardingStepView: View {
     let catalog: [Exercise]
     let names: [String: String]
     let history: [LoggedSet]
+    /// FIT-73: the first week's loads the model chose, while it's choosing, and the ones the user changed.
+    var firstLoads: [FirstLoads.Item]? = nil
+    var designing = false
+    @Binding var loads: [String: Double]
     let go: (Int) -> Void
 
     var body: some View {
@@ -243,7 +247,7 @@ struct OnboardingStepView: View {
         return VStack(alignment: .leading, spacing: 0) {
             Eyebrow("Check it").padding(.top, 18)
             Text("Your program").font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
-            if !answers.unconfirmed.isEmpty || picked.contains(where: { answers.targets[$0.id] == nil }) {
+            if !answers.unconfirmed.isEmpty || picked.contains(where: { answers.targets[$0.id] == nil }) || !(firstLoads ?? []).isEmpty {
                 Text("Underlined values are what I heard or suggested. Tap one to change it.")
                     .font(.subheadline).foregroundStyle(.secondary).padding(.top, 6)
             }
@@ -258,9 +262,35 @@ struct OnboardingStepView: View {
             let startSummary = answers.startSummary(catalog, names: names)
             ValueRow(name: "Starting point", value: startSummary, muted: startSummary == "Found in week 1",
                      open: Binding(get: { false }, set: { _ in go(2) })) {}
+            firstWeek
             PhaseBars(weeks: weeks).padding(.top, 22)
             Text("Weeks 1–\(weeks.filter { $0.phase == .base }.count) build a base. Then the work climbs, the last weeks peak, and week \(weeks.count) tests your goals. A lighter deload comes every few weeks. Each week is planned when the one before ends, from how it went.")
                 .font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
+        }
+    }
+
+    /// FIT-73: the loads the model chose for week 1, dashed until the user touches one.
+    @ViewBuilder private var firstWeek: some View {
+        if designing {
+            Eyebrow("First week").padding(.top, 22)
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Choosing your first weights…").font(.subheadline).foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 12)
+        } else if let firstLoads, !firstLoads.isEmpty {
+            Eyebrow("First week").padding(.top, 22)
+            ForEach(firstLoads) { item in
+                let value = loads[item.exercise] ?? item.value
+                let perHand = item.metric == "load_lb_hand"
+                ValueRow(name: names[item.exercise] ?? item.exercise, detail: item.dose,
+                         value: "\(Coach.number(value)) lb\(perHand ? " each" : "")", dashed: loads[item.exercise] == nil,
+                         open: opened("load.\(item.exercise)")) {
+                    Nudge(label: "\(Coach.number(value)) lb", lessLabel: "Lighter", moreLabel: "Heavier",
+                          less: { loads[item.exercise] = max(perHand ? 2.5 : 5, value - (perHand ? 2.5 : 5)) },
+                          more: { loads[item.exercise] = value + (perHand ? 2.5 : 5) })
+                }
+            }
         }
     }
 
