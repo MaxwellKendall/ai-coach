@@ -28,6 +28,24 @@ enum ExerciseDBImporter {
         "Goblet Squat": "goblet-squat", "Plank": "plank", "Pullups": "pull-up", "Pushups": "push-up", "Dead Bug": "dead-bug",
     ]
 
+    /// The well-known lifts a coach reaches for first (general practice), so search lists them before variations:
+    /// FIT-72's model takes what's listed first, and "Iron Cross" came before "Barbell Shoulder Press".
+    static let staples: Set<String> = [
+        "Romanian Deadlift", "Sumo Deadlift", "Trap Bar Deadlift", "Front Squat (Clean Grip)", "Barbell Hip Thrust",
+        "Barbell Glute Bridge", "Good Morning", "Leg Press", "Hack Squat", "Leg Extensions", "Lying Leg Curls",
+        "Seated Leg Curl", "Barbell Lunge", "Dumbbell Lunges", "Bodyweight Walking Lunge", "Split Squat with Dumbbells",
+        "Dumbbell Step Ups", "Standing Calf Raises", "Seated Calf Raise", "Barbell Shoulder Press", "Standing Military Press",
+        "Dumbbell Shoulder Press", "Arnold Dumbbell Press", "Push Press", "Barbell Incline Bench Press - Medium Grip",
+        "Incline Dumbbell Press", "Dumbbell Flyes", "Dips - Chest Version", "Dips - Triceps Version", "Bent Over Barbell Row",
+        "Seated Cable Rows", "T-Bar Row with Handle", "Inverted Row", "Chin-Up", "Wide-Grip Lat Pulldown", "Face Pull",
+        "Reverse Flyes", "Side Lateral Raise", "Barbell Shrug", "Dumbbell Shrug", "Barbell Curl", "Dumbbell Bicep Curl",
+        "Hammer Curls", "EZ-Bar Curl", "Triceps Pushdown", "EZ-Bar Skullcrusher", "Lying Triceps Press", "Hanging Leg Raise",
+        "Crunches", "Russian Twist", "Pallof Press", "Mountain Climbers", "Hyperextensions (Back Extensions)",
+        "One-Arm Kettlebell Swings", "Rowing, Stationary", "Rope Jumping", "Bicycling, Stationary", "Running, Treadmill",
+        "Walking, Treadmill", "Elliptical Trainer", "Box Jump (Multiple Response)", "Power Clean", "Bodyweight Squat",
+        "Dumbbell Squat", "Side Bridge", "Bench Dips", "Band Pull Apart", "Glute Ham Raise", "Kettlebell Goblet Squat",
+    ]
+
     static func seeds(json: Data, merging cards: [TemplateSeed]) throws -> Import {
         let entries = try JSONDecoder().decode([Entry].self, from: json)
         var seeds = cards
@@ -76,6 +94,7 @@ enum ExerciseDBImporter {
         let compound = entry.mechanic == "compound" || (entry.mechanic == nil && pattern != "arms")
         var tags = [compound ? "compound" : "isolation"]
         if let plane = plane(entry, pattern: pattern) { tags.append(plane) }
+        if staples.contains(entry.name) { tags.append("staple") }
         if entry.force == "static" && (pattern == "core" || has("plank", "hold", "hang", "wall sit")) {
             tags.append("isometric")
         } else if entry.category == "cardio" || equipment.contains("jump_rope") {

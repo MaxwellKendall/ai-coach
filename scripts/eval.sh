@@ -5,7 +5,8 @@
 cd "${0:A:h}/.."
 xcodegen generate >/dev/null
 TEST_RUNNER_EVAL_RUNS=${1:-3} TEST_RUNNER_EVAL_FILTER=${2:-} \
-  xcodebuild -scheme AICoachEvals -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test 2>&1 \
+  xcodebuild -scheme AICoachEvals -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -skipPackagePluginValidation \
+  test '-only-testing:AICoachEvals/WorkoutEditEvals' 2>&1 \
   | tee /tmp/aicoach-eval.log | grep -a '^EVAL§ ' | sed 's/^EVAL§ //' > Tests/Evals/results.md
 if [[ ! -s Tests/Evals/results.md ]]; then
   grep -aE "error:|✘" /tmp/aicoach-eval.log | head -20

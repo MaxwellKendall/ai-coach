@@ -50,6 +50,10 @@ struct Exercise: Sendable {
     /// One of the author's fitness-planner cards rather than a free-exercise-db entry (FIT-70): the well-known lifts
     /// onboarding lists.
     var isCurated: Bool
+    /// free-exercise-db's beginner, intermediate or expert; nil for the author's cards.
+    var level: String?
+    /// Other names it goes by: free-exercise-db's name for one of the author's cards ("Barbell Deadlift").
+    var aliases: [String]
 
     init?(slug: String, attributes: [TemplateAttribute]) {
         func values(_ key: String) -> [String] { attributes.first { $0.key == key }?.values ?? [] }
@@ -67,6 +71,8 @@ struct Exercise: Sendable {
         self.isTimed = tags.contains("isometric") || tags.contains("timed")
         self.fatigueCost = Int(values("fatigue_cost").first ?? "") ?? 0
         self.isCurated = values("source").isEmpty
+        self.level = values("level").first
+        self.aliases = values("aliases")
     }
 }
 
@@ -196,13 +202,7 @@ enum TrainingGenerator {
         let recent = recentExercises(past, sessions: 2, calendar: calendar)
         let allowed = catalog.filter { allows($0, settings) }
 
-        var warnings: [String] = []
-        if program?.kind == .test {
-            warnings.append("Test week: light sessions, then see where your goals are.")
-        } else if deload {
-            warnings.append("Deload week: about half the sets, loads down ~13%, RPE capped at 6.")
-        }
-        if program?.travel == true { warnings.append("Travel week: dumbbells and bodyweight only.") }
+        var warnings = weekWarnings(program: program, deload: deload)
 
         let rotation = volume.split.rotation
         let start = rotationStart ?? Self.rotationStart(rotation, history: past)
@@ -219,6 +219,18 @@ enum TrainingGenerator {
             warnings.append("Sessions held to \(range.upperBound) sets to stay under your \(settings.maxWeeklySets)-set weekly ceiling.")
         }
         return TrainingWeek(workouts: workouts, deload: deload, warnings: warnings)
+    }
+
+    /// What kind of week it is, said once at the top.
+    static func weekWarnings(program: ProgramWeek?, deload: Bool) -> [String] {
+        var warnings: [String] = []
+        if program?.kind == .test {
+            warnings.append("Test week: light sessions, then see where your goals are.")
+        } else if deload {
+            warnings.append("Deload week: about half the sets, loads down ~13%, RPE capped at 6.")
+        }
+        if program?.travel == true { warnings.append("Travel week: dumbbells and bodyweight only.") }
+        return warnings
     }
 
     /// The working sets each session aims for: the volume table's range, a program phase's point in it, and no more

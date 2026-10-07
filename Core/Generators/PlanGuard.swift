@@ -85,7 +85,7 @@ enum PlanGuard {
                 continue
             }
             // 1. Allowed exercises only.
-            let exercise = resolve(row.exercise, session)
+            let exercise = resolve(row.exercise, in: session.bySlug, names: context.names)
             if exercise == nil || !TrainingGenerator.allows(exercise!, settings) {
                 let used = Set(rows.map(\.exercise))
                 guard let swap = exercise.map({ nearest($0, session, excluding: used) })
@@ -148,6 +148,15 @@ enum PlanGuard {
             }
         }
 
+        // 2. A session's sets within the volume table's top for its length (fitness-planner CLAUDE.md "Schedule →
+        // Volume Mapping"), so 22 exercises don't land in 30 minutes.
+        let sessionMost = TrainingGenerator.sessionRange(settings, program: nil).upperBound
+        let sessionTotal = rows.reduce(0) { $0 + Int($1.target("sets") ?? 0) }
+        if !context.light, sessionTotal > sessionMost {
+            trim(&rows, by: sessionTotal - sessionMost, least: least)
+            repair(.sets, "\(sessionTotal) sets in one session → \(rows.reduce(0) { $0 + Int($1.target("sets") ?? 0) }), the most for \(settings.sessionMinutes) minutes.")
+        }
+
         // 6. A light week's session is about half the sets.
         if context.light {
             let most = Int((Double(VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes)
@@ -170,26 +179,31 @@ enum PlanGuard {
         return result
     }
 
-    /// By slug, else by name ("Barbell Bench Press - Medium Grip"), case aside.
-    private static func resolve(_ text: String, _ session: Session) -> Exercise? {
-        if let exercise = session.bySlug[text] { return exercise }
-        let wanted = text.lowercased()
-        return session.context.names.first { $0.value.lowercased() == wanted }.flatMap { session.bySlug[$0.key] }
-            ?? session.bySlug[Slug.make(text)]
+    /// By slug, else by name or another name it goes by ("Barbell Bench Press - Medium Grip"), case aside.
+    static func resolve(_ text: String, in bySlug: [String: Exercise], names: [String: String]) -> Exercise? {
+        if let exercise = bySlug[text] { return exercise }
+        let wanted = text.lowercased().trimmingCharacters(in: .whitespaces)
+        return names.first { $0.value.lowercased() == wanted }.flatMap { bySlug[$0.key] } ?? bySlug[Slug.make(text)]
+            ?? bySlug.values.first { $0.aliases.contains { $0.lowercased() == wanted } }
     }
 
     /// A name the catalog doesn't have, searched for by its words, then fewer of them: "Hamstring Curl Deluxe" finds
     /// a hamstring curl.
     private static func search(_ text: String, _ session: Session, excluding used: Set<String>) -> Exercise? {
+        search(text, in: session.context.catalog, names: session.context.names, settings: session.context.settings,
+               excluding: used, limit: 1).first.flatMap { session.bySlug[$0] }
+    }
+
+    /// Slugs for a name the catalog doesn't have: its words, then fewer of them.
+    static func search(_ text: String, in catalog: [Exercise], names: [String: String], settings: TrainingSettings,
+                       excluding used: Set<String> = [], limit: Int) -> [String] {
         let words = text.split { !$0.isLetter }
         for count in stride(from: words.count, to: 0, by: -1) {
-            if let slug = ExerciseSearch.find(words.prefix(count).joined(separator: " "), in: session.context.catalog,
-                                              names: session.context.names, settings: session.context.settings,
-                                              excluding: used, limit: 1).first {
-                return session.bySlug[slug]
-            }
+            let found = ExerciseSearch.find(words.prefix(count).joined(separator: " "), in: catalog, names: names,
+                                            settings: settings, excluding: used, limit: limit)
+            if !found.isEmpty { return found }
         }
-        return nil
+        return []
     }
 
     /// The closest allowed exercise for the same movement: the card's own substitutes first, then the same plane
@@ -258,18 +272,39 @@ enum PlanGuard {
         guard total > context.settings.maxWeeklySets else { return }
         var items = working.map { rows[$0] }
         trim(&items, by: total - context.settings.maxWeeklySets, least: context.light ? 1 : TrainingGenerator.minSets)
-        for (index, item) in zip(working, items) { rows[index] = item }
+        // Dropped exercises go, with their warm-ups.
+        let kept = Set(items.map { "\($0.date.timeIntervalSinceReferenceDate) \($0.exercise)" })
+        rows = rows.filter { kept.contains("\($0.date.timeIntervalSinceReferenceDate) \($0.exercise)") }
+        rows = rows.map { row in items.first { $0.date == row.date && $0.exercise == row.exercise && row.note != TrainingGenerator.warmupNote } ?? row }
         repairs.append(Repair(rule: .weeklySets, text: "\(total) sets this week → \(items.reduce(0) { $0 + Int($1.target("sets") ?? 0) }), your weekly ceiling."))
     }
 
-    /// Take `excess` sets away, a set at a time from the exercise with the most: accessories before main lifts, none
-    /// under `least`.
+    /// Take `excess` sets away, as TrainingGenerator.fit does: accessories a set at a time (the one with the most
+    /// first) down to `least`, then whole accessories (the last of the fullest session); then main lifts the same way.
+    /// A session keeps one exercise.
     private static func trim(_ rows: inout [PlannedWorkout], by excess: Int, least: Int) {
-        for _ in 0..<excess {
-            let sets = rows.map { Int($0.target("sets") ?? 0) }
-            guard let index = rows.indices.filter({ sets[$0] > least })
-                .max(by: { (rows[$0].main ? 0 : 1, sets[$0]) < (rows[$1].main ? 0 : 1, sets[$1]) }) else { return }
-            rows[index].set("sets", Double(sets[index] - 1))
+        var excess = excess
+        func sets(_ row: PlannedWorkout) -> Int { Int(row.target("sets") ?? 0) }
+        while excess > 0 {
+            let counts = Dictionary(rows.map { ($0.date, 1) }, uniquingKeysWith: +)
+            let totals = Dictionary(rows.map { ($0.date, sets($0)) }, uniquingKeysWith: +)
+            var acted = false
+            for main in [false, true] {
+                if let index = rows.indices.filter({ rows[$0].main == main && sets(rows[$0]) > least })
+                    .max(by: { sets(rows[$0]) < sets(rows[$1]) }) {
+                    rows[index].set("sets", Double(sets(rows[index]) - 1))
+                    excess -= 1
+                } else if let index = rows.indices.filter({ rows[$0].main == main && counts[rows[$0].date]! > 1 })
+                    .max(by: { (totals[rows[$0].date]!, $0) < (totals[rows[$1].date]!, $1) }) {
+                    excess -= sets(rows[index])
+                    rows.remove(at: index)
+                } else {
+                    continue
+                }
+                acted = true
+                break
+            }
+            if !acted { return }
         }
     }
 }

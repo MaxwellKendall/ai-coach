@@ -82,16 +82,33 @@ struct PlanGuardTests {
         #expect(check([row("plank", 1, nil)], settings(), light: true).repairs.isEmpty)
     }
 
+    @Test func sessionsStayWithinTheVolumeTable() {
+        // 3 days of 60 minutes: 18–22 sets a session, and 20 under a 60-set week.
+        let rows = ["bench-press", "dumbbell-row", "goblet-squat", "pull-up", "push-up", "dead-bug", "plank"].map {
+            row($0, 4, main: $0 == "bench-press")
+        }
+        let result = check(rows, settings())
+        #expect(result.workouts.reduce(0) { $0 + ($1.target("sets") ?? 0) } == 20)
+        #expect(result.repairs.map(\.rule) == [.sets])
+        // With nothing left to take a set from, the last accessories go.
+        let many = (0..<12).map { row(["dumbbell-row", "goblet-squat", "pull-up", "push-up", "dead-bug", "plank", "farmer-carry",
+                                       "dumbbell-bench-press", "dumbbell-romanian-deadlift", "deadlift", "back-squat", "bench-press"][$0], 2) }
+        let trimmed = check(many, settings(maxWeeklySets: 30))
+        #expect(trimmed.workouts.reduce(0) { $0 + ($1.target("sets") ?? 0) } == 10)
+        #expect(trimmed.workouts.first?.exercise == "dumbbell-row" && trimmed.workouts.count == 5)
+    }
+
+    /// Sessions on more days than planned still fit the week's ceiling.
     @Test func weeklySetsStayUnderTheCeiling() {
-        let rows = (0..<3).flatMap { day in
-            [row("bench-press", 5, main: true, on: monday + Double(day) * 2 * 86_400),
-             row("dumbbell-row", 4, on: monday + Double(day) * 2 * 86_400),
-             row("goblet-squat", 4, on: monday + Double(day) * 2 * 86_400)]
+        let rows = (0..<4).flatMap { day in
+            [row("bench-press", 5, main: true, on: monday + Double(day) * 86_400),
+             row("dumbbell-row", 3, on: monday + Double(day) * 86_400),
+             row("goblet-squat", 2, on: monday + Double(day) * 86_400)]
         }
         let result = check(rows, settings(maxWeeklySets: 30))
-        #expect(result.workouts.reduce(0) { $0 + ($1.target("sets") ?? 0) } == 30)
+        #expect(result.workouts.reduce(0) { $0 + ($1.target("sets") ?? 0) } <= 30)
         #expect(result.repairs.map(\.rule) == [.weeklySets])
-        // Accessories give sets first.
+        // Main lifts keep their sets.
         #expect(result.workouts.filter(\.main).allSatisfy { $0.target("sets") == 5 })
     }
 

@@ -2057,7 +2057,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "vertical_push"
+          "vertical_push",
+          "staple"
         ]
       },
       {
@@ -2550,7 +2551,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -2766,7 +2768,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -2931,7 +2934,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -3104,7 +3108,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -3163,7 +3168,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_push"
+          "horizontal_push",
+          "staple"
         ]
       },
       {
@@ -3277,7 +3283,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -3501,7 +3508,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "vertical_push"
+          "vertical_push",
+          "staple"
         ]
       },
       {
@@ -3551,7 +3559,8 @@
         "key" : "tags",
         "values" : [
           "isolation",
-          "horizontal_pull"
+          "horizontal_pull",
+          "staple"
         ]
       },
       {
@@ -3953,7 +3962,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_push"
+          "horizontal_push",
+          "staple"
         ]
       },
       {
@@ -4404,7 +4414,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_pull"
+          "horizontal_pull",
+          "staple"
         ]
       },
       {
@@ -4918,6 +4929,7 @@
         "key" : "tags",
         "values" : [
           "compound",
+          "staple",
           "timed"
         ]
       },
@@ -5178,7 +5190,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -5229,7 +5242,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -5436,7 +5450,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -7801,7 +7816,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "vertical_pull"
+          "vertical_pull",
+          "staple"
         ]
       },
       {
@@ -9103,7 +9119,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -10010,7 +10027,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_push"
+          "horizontal_push",
+          "staple"
         ]
       },
       {
@@ -10067,7 +10085,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_push"
+          "horizontal_push",
+          "staple"
         ]
       },
       {
@@ -10741,7 +10760,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -10909,7 +10929,8 @@
         "key" : "tags",
         "values" : [
           "isolation",
-          "horizontal_push"
+          "horizontal_push",
+          "staple"
         ]
       },
       {
@@ -11082,7 +11103,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -11831,7 +11853,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "vertical_push"
+          "vertical_push",
+          "staple"
         ]
       },
       {
@@ -11881,7 +11904,8 @@
         "key" : "tags",
         "values" : [
           "isolation",
-          "horizontal_pull"
+          "horizontal_pull",
+          "staple"
         ]
       },
       {
@@ -11988,7 +12012,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -12104,7 +12129,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -12202,7 +12228,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -12257,7 +12284,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -12471,6 +12499,7 @@
         "key" : "tags",
         "values" : [
           "compound",
+          "staple",
           "timed"
         ]
       },
@@ -12828,7 +12857,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -13980,7 +14010,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -14256,7 +14287,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -14362,7 +14394,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -14532,7 +14565,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -14581,7 +14615,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -15042,7 +15077,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -15469,7 +15505,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -16032,7 +16069,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_push"
+          "horizontal_push",
+          "staple"
         ]
       },
       {
@@ -16546,7 +16584,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_pull"
+          "horizontal_pull",
+          "staple"
         ]
       },
       {
@@ -19108,7 +19147,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -19214,7 +19254,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -20450,7 +20491,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -20764,7 +20806,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -21400,7 +21443,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -22778,7 +22822,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -23939,7 +23984,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -24694,7 +24740,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -25527,7 +25574,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -26532,7 +26580,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -27178,7 +27227,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -27342,6 +27392,7 @@
         "key" : "tags",
         "values" : [
           "compound",
+          "staple",
           "timed"
         ]
       },
@@ -27453,6 +27504,7 @@
         "key" : "tags",
         "values" : [
           "compound",
+          "staple",
           "timed"
         ]
       },
@@ -27511,6 +27563,7 @@
         "key" : "tags",
         "values" : [
           "compound",
+          "staple",
           "timed"
         ]
       },
@@ -27560,7 +27613,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -28032,7 +28086,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_pull"
+          "horizontal_pull",
+          "staple"
         ]
       },
       {
@@ -28137,7 +28192,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -28598,7 +28654,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -29268,6 +29325,7 @@
         "key" : "tags",
         "values" : [
           "compound",
+          "staple",
           "isometric"
         ]
       },
@@ -29412,7 +29470,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -32599,7 +32658,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -33425,7 +33485,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -34161,7 +34222,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "vertical_push"
+          "vertical_push",
+          "staple"
         ]
       },
       {
@@ -35398,7 +35460,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -35965,7 +36028,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "horizontal_pull"
+          "horizontal_pull",
+          "staple"
         ]
       },
       {
@@ -36240,7 +36304,8 @@
       {
         "key" : "tags",
         "values" : [
-          "compound"
+          "compound",
+          "staple"
         ]
       },
       {
@@ -36387,7 +36452,8 @@
       {
         "key" : "tags",
         "values" : [
-          "isolation"
+          "isolation",
+          "staple"
         ]
       },
       {
@@ -37264,6 +37330,7 @@
         "key" : "tags",
         "values" : [
           "compound",
+          "staple",
           "timed"
         ]
       },
@@ -37983,7 +38050,8 @@
         "key" : "tags",
         "values" : [
           "compound",
-          "vertical_pull"
+          "vertical_pull",
+          "staple"
         ]
       },
       {
