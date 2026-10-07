@@ -17,6 +17,8 @@ enum PlanGuard {
         case mainLifts, repeats
         /// 6. RPE caps; light weeks at about half the sets.
         case rpe, lightWeek
+        /// 7. A full week trains a squat or lunge, a hinge, a push and a pull (FIT-76).
+        case movements
     }
 
     struct Repair: Equatable, Sendable, CustomStringConvertible {
@@ -35,6 +37,9 @@ enum PlanGuard {
         /// A deload or test week.
         var light: Bool
         var calendar: Calendar = .current
+        /// The rows are a whole week, so rule 7 (every main movement) applies; a single session or part of a week
+        /// isn't held to it.
+        var wholeWeek = false
     }
 
     /// Fewer sets than this in a light week's session, as a share of the volume table's top: plan.md step 4 (sets
@@ -51,8 +56,58 @@ enum PlanGuard {
             else { sessions.append([row]) }
         }
         var result = sessions.flatMap { session(Session(rows: $0, context: context), &repairs) }
+        movements(&result, context, &repairs)
         weeklyCeiling(&result, context, &repairs)
         return (result, repairs)
+    }
+
+    // MARK: Movements
+
+    /// The movements every full week trains (general practice; fitness-planner's rotations always cover them).
+    static let movements: [(name: String, patterns: [String])] = [
+        ("a squat or lunge", ["squat", "lunge"]), ("a hinge", ["hinge"]), ("a push", ["push"]), ("a pull", ["pull"]),
+    ]
+
+    /// The movements a week leaves out that the user could do: not in a light week, and not one their equipment,
+    /// injuries or avoids rule out.
+    static func missingMovements(_ workouts: [PlannedWorkout], _ context: Context) -> [(name: String, patterns: [String])] {
+        guard context.wholeWeek, !context.light else { return [] }
+        let bySlug = Dictionary(context.catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
+        let trained = Set(workouts.filter { $0.note != TrainingGenerator.warmupNote }.compactMap { bySlug[$0.exercise]?.pattern })
+        return movements.filter { movement in
+            trained.isDisjoint(with: movement.patterns)
+                && context.catalog.contains { movement.patterns.contains($0.pattern) && TrainingGenerator.allows($0, context.settings) }
+        }
+    }
+
+    /// 7. A missing movement takes the place of an accessory, the last of the fullest session whose own movement the
+    /// week trains elsewhere; the replacement is dosed as TrainingGenerator would, at the accessory's sets.
+    private static func movements(_ rows: inout [PlannedWorkout], _ context: Context, _ repairs: inout [Repair]) {
+        let bySlug = Dictionary(context.catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
+        for movement in missingMovements(rows, context) {
+            let working = rows.indices.filter { rows[$0].note != TrainingGenerator.warmupNote }
+            let totals = Dictionary(working.map { (rows[$0].date, Int(rows[$0].target("sets") ?? 0)) }, uniquingKeysWith: +)
+            func needed(_ index: Int) -> Bool {
+                guard let pattern = bySlug[rows[index].exercise]?.pattern,
+                      let group = movements.first(where: { $0.patterns.contains(pattern) }) else { return false }
+                return working.filter { bySlug[rows[$0].exercise].map { group.patterns.contains($0.pattern) } ?? false }.count == 1
+            }
+            guard let index = working.filter({ !rows[$0].main && !needed($0) })
+                .max(by: { (totals[rows[$0].date]!, $0) < (totals[rows[$1].date]!, $1) }) else { continue }
+            let old = rows[index]
+            let used = rows.filter { $0.date == old.date }.map(\.exercise)
+            let allowed = context.catalog.filter { TrainingGenerator.allows($0, context.settings) }
+            guard let exercise = movement.patterns.lazy.compactMap({
+                TrainingGenerator.pick(Slot(pattern: $0, main: false), from: allowed, excluding: used, recent: [])
+            }).first else { continue }
+            var row = TrainingGenerator.dose(exercise, main: false, sets: Int(old.target("sets") ?? 3), date: old.date,
+                                             session: old.session, settings: context.settings, history: context.history,
+                                             weeksSinceDeload: 0, calendar: context.calendar).last!
+            row.group = old.group
+            rows[index] = row
+            let name = { (slug: String) in context.names[slug] ?? slug }
+            repairs.append(Repair(rule: .movements, text: "\(old.session): the week had no \(movement.name.dropFirst(2)); \(name(exercise.slug)) instead of \(name(old.exercise))."))
+        }
     }
 
     // MARK: One session

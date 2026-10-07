@@ -211,6 +211,35 @@ struct PlanGuardTests {
         #expect(Set(result.repairs.map(\.rule)) == [.rpe, .lightWeek])
     }
 
+    // MARK: Rule 7: movements (FIT-76)
+
+    @Test func aWeekWithoutLegsGetsThemInPlaceOfAccessories() {
+        let tuesdayRows = [row("bench-press", 4, 5, main: true, on: monday), row("pull-up", 3, on: monday),
+                           row("barbell-curl", 3, on: monday), row("push-up", 3, on: monday),
+                           row("dumbbell-row", 4, 5, main: true, on: tuesday), row("dumbbell-bench-press", 3, on: tuesday),
+                           row("plank", 3, nil, on: tuesday)]
+        var context = PlanGuard.Context(settings: settings(), catalog: catalog, names: names, history: [], light: false,
+                                        wholeWeek: true)
+        let result = PlanGuard.check(tuesdayRows, context)
+        #expect(result.repairs.map(\.rule) == [.movements, .movements])
+        let patterns = Set(result.workouts.compactMap { row in catalog.first { $0.slug == row.exercise }?.pattern })
+        #expect(patterns.contains("hinge") && !patterns.isDisjoint(with: ["squat", "lunge"]))
+        // Main lifts stay, and so does the only push or pull.
+        #expect(result.workouts.filter(\.main).map(\.exercise) == ["bench-press", "dumbbell-row"])
+        // Not in a light week, and not part of a week.
+        context.light = true
+        #expect(PlanGuard.check(tuesdayRows, context).repairs.allSatisfy { $0.rule != .movements })
+        #expect(check(tuesdayRows, settings()).repairs.isEmpty)
+    }
+
+    @Test func aMovementTheUserCantDoIsntRequired() {
+        // Nothing they can do squats or lunges: the week isn't held to it, but still to a hinge.
+        let rows = [row("bench-press", 4, 5, main: true), row("pull-up", 3), row("push-up", 3)]
+        let context = PlanGuard.Context(settings: settings(), catalog: catalog.filter { !["squat", "lunge"].contains($0.pattern) },
+                                        names: names, history: [], light: false, wholeWeek: true)
+        #expect(PlanGuard.missingMovements(rows, context).map(\.name) == ["a hinge"])
+    }
+
     // MARK: A bad model-shaped week
 
     /// What a model left unchecked might write: bench 12×8 at 400 on a 155 bench, a cable row with no cable, squat

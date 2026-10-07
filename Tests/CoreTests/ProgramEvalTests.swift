@@ -271,7 +271,7 @@ struct ProgramEvalTests {
         let repairs = PlanGuard.check(week.workouts, PlanGuard.Context(
             settings: guarded, catalog: inputs.catalog, names: inputs.names,
             history: scenario.withHistory ? inputs.history.filter { $0.date < scenario.monday } : [], light: light,
-            calendar: calendar)).repairs
+            calendar: calendar, wholeWeek: true)).repairs
         if !repairs.isEmpty {
             failures.append("\(scenario): PlanGuard repaired the generator\n    " + repairs.map { "\($0.text) ← guard: \($0.rule.rawValue)" }.joined(separator: "\n    "))
         }

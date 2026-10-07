@@ -117,7 +117,7 @@ enum ProgramDesigner {
         let light = request.program?.light ?? (request.weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks))
         let past = request.history.filter { $0.date < request.monday }
         let context = PlanGuard.Context(settings: settings, catalog: request.catalog, names: request.names, history: past,
-                                        light: light, calendar: request.calendar)
+                                        light: light, calendar: request.calendar, wholeWeek: true)
         func seconds() -> Double {
             let elapsed = ContinuousClock.now - clock
             return Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
@@ -135,6 +135,19 @@ enum ProgramDesigner {
         let log = Log()
         do {
             var designed = try await design(request, settings: settings, tier: tier, light: light, log: log)
+            // FIT-76: a week short of sessions, or leaving out a main movement, goes back once, saying what's missing.
+            let days = settings.trainingDays.prefix(settings.daysPerWeek).count
+            let missing = PlanGuard.missingMovements(rows(designed, request, settings: settings, tier: tier).workouts, context)
+            if designed.sessions.count < days || !missing.isEmpty {
+                var problems: [String] = []
+                if designed.sessions.count < days { problems.append("only \(designed.sessions.count) sessions for \(days) days") }
+                if !missing.isEmpty { problems.append("no " + missing.map { String($0.name.dropFirst(2)) }.joined(separator: " and no ")) }
+                log.calls.withLock { $0.append("again: \(problems.joined(separator: ", "))") }
+                designed = try await design(request, settings: settings, tier: tier, light: light, log: log, note: """
+                    A first try had \(problems.joined(separator: " and ")). Design \(days) different sessions that \
+                    together train a squat or lunge, a hinge, a push and a pull.
+                    """)
+            }
             try await rename(&designed, request, settings: settings, log: log)
             try await fillLoads(&designed, request, settings: settings, log: log)
             let (workouts, why) = rows(designed, request, settings: settings, tier: tier)
@@ -152,15 +165,15 @@ enum ProgramDesigner {
     /// The on-device model now and then fails a generation it gets right the next time (FIT-49 saw the same with tool
     /// calls); one more try, from the start. A week that ran out of context (searches fill it) tries again from the
     /// menu alone.
-    private static func design(_ request: Request, settings: TrainingSettings, tier: AgeTier, light: Bool, log: Log)
-        async throws -> DesignedWeek {
+    private static func design(_ request: Request, settings: TrainingSettings, tier: AgeTier, light: Bool, log: Log,
+                               note: String? = nil) async throws -> DesignedWeek {
         var tries = 0, tools = true
         while true {
             tries += 1
             do {
                 let session = LanguageModelSession(tools: tools ? [FindExercises(request: request, settings: settings, log: log)] : [],
                                                    instructions: instructions(settings, tier: tier, light: light))
-                return try await session.respond(to: prompt(request, settings: settings, light: light),
+                return try await session.respond(to: prompt(request, settings: settings, light: light) + (note.map { "\n" + $0 } ?? ""),
                                                  generating: DesignedWeek.self).content
             } catch let error as LanguageModelSession.GenerationError {
                 if case .guardrailViolation = error { throw error }
