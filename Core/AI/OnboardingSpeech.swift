@@ -186,14 +186,26 @@ extension OnboardingAnswers {
     static let hurtAreas = ["lower back", "knees", "shoulders", "wrists"]
 
     static let equipmentNames = ["barbell": "Barbell", "rack": "Rack", "bench": "Bench", "dumbbells": "Dumbbells",
-                                 "pull_up_bar": "Pull-up bar"]
+                                 "pull_up_bar": "Pull-up bar", "kettlebells": "Kettlebells", "cable": "Cable machine",
+                                 "machine": "Weight machines", "bands": "Bands", "ez_bar": "EZ bar", "trap_bar": "Trap bar",
+                                 "dip_station": "Dip bars", "suspension": "Rings or TRX", "box": "Plyo box",
+                                 "medicine_ball": "Medicine ball", "exercise_ball": "Exercise ball", "sled": "Sled",
+                                 "bike": "Bike", "rower": "Rower", "treadmill": "Treadmill", "jump_rope": "Jump rope"]
 
     /// Equipment said on its own: "a barbell", "dumbbells", "pull-up bar". "Bench press" is an exercise.
     static func equipment(named name: String) -> String? {
         let words = Self.words(name).subtracting(["a", "the", "no", "my", "any", "some", "have", "only"])
         if words.contains("bar"), words.contains("pull") || words.contains("chin") { return "pull_up_bar" }
+        let pairs: [(Set<String>, String)] = [(["trap", "bar"], "trap_bar"), (["hex", "bar"], "trap_bar"), (["ez", "bar"], "ez_bar"),
+                                              (["dip"], "dip_station"), (["medicine", "ball"], "medicine_ball"),
+                                              (["exercise", "ball"], "exercise_ball"), (["swiss", "ball"], "exercise_ball"),
+                                              (["stability", "ball"], "exercise_ball"), (["jump", "rope"], "jump_rope"),
+                                              (["cable"], "cable"), (["weight", "machine"], "machine")]
+        if let pair = pairs.first(where: { $0.0.isSubset(of: words) }) { return pair.1 }
         guard words.count == 1, let word = words.first else { return nil }
-        return ["barbell": "barbell", "rack": "rack", "bench": "bench", "dumbbell": "dumbbells"][word]
+        return ["barbell": "barbell", "rack": "rack", "bench": "bench", "dumbbell": "dumbbells", "kettlebell": "kettlebells",
+                "machine": "machine", "band": "bands", "box": "box", "ring": "suspension", "trx": "suspension",
+                "sled": "sled", "bike": "bike", "rower": "rower", "treadmill": "treadmill"][word]
     }
 
     /// Every exercise whose name holds all the words said: "squats" → every squat, "Romanian deadlifts" → the

@@ -32,7 +32,7 @@ struct ProfileEditor: View {
             }
             Section("Equipment") {
                 ForEach(Profile.allEquipment, id: \.self) { item in
-                    Toggle(item.replacingOccurrences(of: "_", with: " ").capitalized, isOn: contains(item, in: $profile.equipment))
+                    Toggle(OnboardingAnswers.equipmentNames[item] ?? item, isOn: contains(item, in: $profile.equipment))
                 }
             }
             Section {

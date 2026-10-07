@@ -89,17 +89,14 @@ struct OnboardingStepView: View {
     private var exercises: some View {
         VStack(alignment: .leading, spacing: 10) {
             Eyebrow("You have")
-            Flow {
-                ForEach(Profile.allEquipment, id: \.self) { item in
-                    Chip(title: OnboardingAnswers.equipmentNames[item] ?? item, on: answers.equipment.contains(item)) {
-                        if answers.equipment.contains(item) { answers.equipment.remove(item) } else { answers.equipment.insert(item) }
-                    }
-                }
+            EquipmentChips(have: answers.equipment) { item in
+                if answers.equipment.contains(item) { answers.equipment.remove(item) } else { answers.equipment.insert(item) }
             }
             ForEach(Self.groups, id: \.0) { group in
                 Eyebrow(group.0).padding(.top, 14)
                 Flow {
-                    ForEach(catalog.filter { group.1.contains($0.pattern) }, id: \.slug) { exercise in
+                    // The well-known lifts only: the full catalog is hundreds (FIT-70); saying "no deadlifts" reaches all of it.
+                    ForEach(catalog.filter { group.1.contains($0.pattern) && $0.isCurated }, id: \.slug) { exercise in
                         let missing = exercise.equipment.subtracting(answers.equipment)
                         let on = missing.isEmpty && !answers.avoid.contains(exercise.slug)
                         let name = names[exercise.slug] ?? exercise.slug

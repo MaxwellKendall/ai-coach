@@ -356,14 +356,15 @@ struct ProgramEvalTests {
         #expect(push.reduce(0) { $0 + ($1.target("sets") ?? 0) } >= 16, "\(render(push))")
     }
 
-    /// An empty slot: nothing but bench is allowed on Push day, so the session is short and says so.
+    /// An empty slot: nothing but bench is allowed on Push day, so the session is short and says so. The author's
+    /// 12 cards only: the full catalog always has another push exercise.
     @Test func aSessionWithNothingToFillItIsShortWithAWarning() {
         var scenario = Scenario(days: 5, minutes: 60, style: .powerbuilding, age: 36, gear: .gym, limit: .none, kind: nil,
                                 withHistory: true)
         scenario.limit = .none
         var settings = scenario.settings
         settings.avoidExercises = ["dumbbell-bench-press", "push-up", "plank", "dead-bug"]
-        let week = TrainingGenerator.week(startingOn: scenario.monday, settings: settings, catalog: inputs.catalog,
+        let week = TrainingGenerator.week(startingOn: scenario.monday, settings: settings, catalog: inputs.catalog.filter(\.isCurated),
                                           history: inputs.history, weeksSinceDeload: 0, calendar: calendar)
         let push = week.workouts.filter { $0.session == "Push" && $0.note != TrainingGenerator.warmupNote }
         #expect(push.map(\.exercise) == ["bench-press"])

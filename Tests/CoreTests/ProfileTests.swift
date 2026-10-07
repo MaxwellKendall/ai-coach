@@ -41,7 +41,7 @@ struct ProfileTests {
         #expect(settings.daysPerWeek == 3)
         #expect(settings.trainingDays == [0, 2, 4])
         #expect(settings.workoutTime == 420)
-        #expect(settings.equipment == Set(Profile.allEquipment))
+        #expect(settings.equipment == Set(Profile.commonEquipment))
         #expect(settings.injuredAreas == ["spinal_erectors"])
         #expect(settings.deloadEveryWeeks == nil)
     }

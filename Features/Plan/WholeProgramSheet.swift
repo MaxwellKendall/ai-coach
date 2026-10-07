@@ -158,14 +158,10 @@ struct WholeProgramSheet: View {
         let have = Profile.allEquipment.filter(profile.equipment.contains).map { OnboardingAnswers.equipmentNames[$0] ?? $0 }
         let value = have.isEmpty ? "Bodyweight" : have.count > 2 ? have.prefix(2).joined(separator: ", ") + " +\(have.count - 2)" : have.joined(separator: ", ")
         return ValueRow(name: "Equipment", value: value, note: have.isEmpty ? nil : "\(have.count) things", open: opened("equipment")) {
-            Flow {
-                ForEach(Profile.allEquipment, id: \.self) { item in
-                    Chip(title: OnboardingAnswers.equipmentNames[item] ?? item, on: profile.equipment.contains(item)) {
-                        profile.equipment = profile.equipment.contains(item) ? profile.equipment.filter { $0 != item }
-                            : Profile.allEquipment.filter { profile.equipment.contains($0) || $0 == item }
-                        touched()
-                    }
-                }
+            EquipmentChips(have: Set(profile.equipment)) { item in
+                profile.equipment = profile.equipment.contains(item) ? profile.equipment.filter { $0 != item }
+                    : Profile.allEquipment.filter { profile.equipment.contains($0) || $0 == item }
+                touched()
             }
         }
     }

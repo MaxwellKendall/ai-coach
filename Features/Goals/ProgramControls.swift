@@ -288,3 +288,22 @@ struct DayCircles: View {
         }
     }
 }
+
+/// FIT-70: equipment as chips: the common ones and whatever you have, then the rest behind More.
+struct EquipmentChips: View {
+    let have: Set<String>
+    let toggle: (String) -> Void
+    @State private var all = false
+
+    var body: some View {
+        let shown = Profile.allEquipment.filter { all || Profile.commonEquipment.contains($0) || have.contains($0) }
+        Flow {
+            ForEach(shown, id: \.self) { item in
+                Chip(title: OnboardingAnswers.equipmentNames[item] ?? item, on: have.contains(item)) { toggle(item) }
+            }
+            if shown.count < Profile.allEquipment.count {
+                Chip(title: "More…", on: false) { all = true }
+            }
+        }
+    }
+}

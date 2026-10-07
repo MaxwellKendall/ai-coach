@@ -44,7 +44,7 @@ final class Profile {
     /// Defaults are a 3-day, 45-minute full-gym week (fitness-planner's starting config).
     init(age: Int, weightLb: Double, targetWeightLb: Double? = nil, daysPerWeek: Int = 3, sessionMinutes: Int = 45,
          trainingDays: [Int] = [0, 2, 4], workoutTime: Int = 7 * 60,
-         equipment: [String] = Profile.allEquipment, injuredAreas: [String] = [], avoidExercises: [String] = [],
+         equipment: [String] = Profile.commonEquipment, injuredAreas: [String] = [], avoidExercises: [String] = [],
          maxWeeklySets: Int = 60, style: TrainingStyle = .powerbuilding, warmups: Bool = true,
          deloadEveryWeeks: Int? = nil, cookWindows: [CookWindow] = [], groceryDay: Int? = nil,
          weeklyBudgetUSD: Double? = nil, now: Date = .now) {
@@ -70,7 +70,12 @@ final class Profile {
         self.updatedAt = now
     }
 
-    static let allEquipment = ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"]
+    /// FIT-70: what the catalog's exercises can need, most common first.
+    static let allEquipment = ["barbell", "rack", "bench", "dumbbells", "pull_up_bar", "kettlebells", "cable", "machine",
+                               "bands", "ez_bar", "trap_bar", "dip_station", "suspension", "box", "medicine_ball",
+                               "exercise_ball", "sled", "bike", "rower", "treadmill", "jump_rope"]
+    /// A barbell home gym: what onboarding starts with, and the first chips shown.
+    static let commonEquipment = Array(allEquipment.prefix(5))
 
     var trainingSettings: TrainingSettings {
         TrainingSettings(age: age, daysPerWeek: trainingDays.count, sessionMinutes: sessionMinutes,

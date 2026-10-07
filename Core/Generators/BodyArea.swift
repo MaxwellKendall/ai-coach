@@ -7,13 +7,14 @@ enum BodyArea {
         "chest": ["pectorals"],
         "upper_back": ["lats", "rhomboids", "mid_trapezius", "traps", "upper_back"],
         "lower_back": ["spinal_erectors"],
-        "neck": ["traps"],
+        "neck": ["traps", "neck"],
         "elbows": ["biceps", "triceps"],
         "wrists": ["forearms"],
-        "hips": ["glutes", "adductors"],
+        "hips": ["glutes", "adductors", "abductors"],
         "knees": ["quads"],
         "hamstrings": ["hamstrings"],
         "abs": ["core", "rectus_abdominis", "transverse_abdominis", "obliques"],
+        "calves": ["calves"],
     ]
 
     /// "Lower back" → spinal_erectors. Anything unknown is taken as a muscle name already.

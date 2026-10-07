@@ -41,10 +41,15 @@ struct Exercise: Sendable {
     var pattern: String
     var equipment: Set<String>
     var muscles: Set<String>
+    var primaryMuscles: Set<String>
+    var tags: Set<String>
     var substitutes: [String]
     var isGoalLift: Bool
     var isTimed: Bool
     var fatigueCost: Int
+    /// One of the author's fitness-planner cards rather than a free-exercise-db entry (FIT-70): the well-known lifts
+    /// onboarding lists.
+    var isCurated: Bool
 
     init?(slug: String, attributes: [TemplateAttribute]) {
         func values(_ key: String) -> [String] { attributes.first { $0.key == key }?.values ?? [] }
@@ -54,10 +59,14 @@ struct Exercise: Sendable {
         self.pattern = pattern
         self.equipment = Set(values("equipment"))
         self.muscles = Set(values("muscles_primary") + values("muscles_secondary"))
+        self.primaryMuscles = Set(values("muscles_primary"))
+        self.tags = tags
         self.substitutes = values("substitutes")
         self.isGoalLift = tags.contains("goal_lift")
-        self.isTimed = tags.contains("isometric")
+        // Holds and cardio are dosed in seconds.
+        self.isTimed = tags.contains("isometric") || tags.contains("timed")
         self.fatigueCost = Int(values("fatigue_cost").first ?? "") ?? 0
+        self.isCurated = values("source").isEmpty
     }
 }
 
@@ -329,14 +338,17 @@ enum TrainingGenerator {
 
     /// Main slots take a goal lift (heaviest first); accessories prefer the rest. Both deprioritize
     /// exercises from the last 2 sessions (plan.md step 6), so main lifts only rotate when there's no other goal lift.
+    /// The author's cards come before free-exercise-db's hundreds (FIT-70): this is the fallback without the model,
+    /// and the catalog's order past the cards is alphabetical, not a choice.
     static func pick(_ slot: Slot, from catalog: [Exercise], excluding used: [String], recent: Set<String>) -> Exercise? {
         let candidates = catalog.enumerated().filter { $0.element.pattern == slot.pattern && !used.contains($0.element.slug) }
         return candidates.min { a, b in
             func key(_ item: (offset: Int, element: Exercise)) -> [Int] {
                 let e = item.element
+                let curated = e.isCurated ? 0 : 1
                 return slot.main
-                    ? [e.isGoalLift ? 0 : 1, -e.fatigueCost, recent.contains(e.slug) ? 1 : 0, item.offset]
-                    : [recent.contains(e.slug) ? 1 : 0, e.isGoalLift ? 1 : 0, item.offset]
+                    ? [curated, e.isGoalLift ? 0 : 1, -e.fatigueCost, recent.contains(e.slug) ? 1 : 0, item.offset]
+                    : [curated, recent.contains(e.slug) ? 1 : 0, e.isGoalLift ? 1 : 0, item.offset]
             }
             return key(a).lexicographicallyPrecedes(key(b))
         }?.element

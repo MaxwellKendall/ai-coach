@@ -10,19 +10,30 @@ private let repoRoot = URL(filePath: #filePath).deletingLastPathComponent().dele
 struct SeederTests {
     @Test func seedsBundledCatalogOnceIntoEmptyStore() throws {
         let context = ModelContext(try AppSchema.container(inMemory: true))
-        try Seeder.seedIfEmpty(context)
+        try Seeder.seed(context)
         let templates = try context.fetch(FetchDescriptor<Template>())
-        #expect(templates.filter { $0.kind == .exercise }.count == 12)
+        #expect(templates.filter { $0.kind == .exercise }.count == 700)
         #expect(templates.filter { $0.kind == .recipe }.count == 185)
         #expect(try context.fetchCount(FetchDescriptor<PantryItem>()) > 0)
 
-        try Seeder.seedIfEmpty(context)
+        try Seeder.seed(context)
         #expect(try context.fetchCount(FetchDescriptor<Template>()) == templates.count)
+    }
+
+    /// FIT-70: a store seeded with the old 12 exercises gets the rest, and keeps its own edits.
+    @Test func addsNewCatalogExercisesToAnExistingStore() throws {
+        let context = ModelContext(try AppSchema.container(inMemory: true))
+        context.insert(Template(kind: .exercise, name: "Bench (mine)", slug: "bench-press", attributes: []))
+        try context.save()
+        try Seeder.seed(context)
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        #expect(templates.filter { $0.kind == .exercise }.count == 700)
+        #expect(templates.filter { $0.slug == "bench-press" }.map(\.name) == ["Bench (mine)"])
     }
 }
 
 /// Regenerates Resources/Seed from the sibling repos (CLAUDE.md §6). Off by default:
-/// `TEST_RUNNER_REGENERATE_SEED=1 xcodebuild … test -only-testing:AICoachTests/SeedGenerator`
+/// `TEST_RUNNER_REGENERATE_SEED=1 xcodebuild … test '-only-testing:AICoachTests/SeedGenerator/writeSeed()'`
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["REGENERATE_SEED"] == "1"))
 struct SeedGenerator {
     let dev = repoRoot.deletingLastPathComponent()
@@ -43,7 +54,13 @@ struct SeedGenerator {
         let pantry = CatalogImporter.pantry(
             yaml: try String(contentsOf: dev.appending(path: "grocery-planner/pantry.yaml"), encoding: .utf8))
 
-        try write(exercises + HistoryImporter.extraExercises, "exercises")
+        // FIT-70: the author's cards, then free-exercise-db (Tests/Fixtures, public domain).
+        let catalog = try ExerciseDBImporter.seeds(
+            json: Data(contentsOf: repoRoot.appending(path: "Tests/Fixtures/free-exercise-db.json")),
+            merging: exercises + HistoryImporter.extraExercises)
+        print("free-exercise-db: \(catalog.seeds.count) exercises, skipped \(catalog.skipped.count):\n"
+              + catalog.skipped.joined(separator: "\n"))
+        try write(catalog.seeds, "exercises")
         try write(recipes, "recipes")
         try write(pantry, "pantry")
         print("Seed: \(exercises.count) exercises, \(recipes.count) recipes, \(pantry.count) pantry items, skipped \(skipped)")

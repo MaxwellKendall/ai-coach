@@ -1,16 +1,17 @@
 import Foundation
 import SwiftData
 
-/// Loads the bundled catalog and pantry into an empty store. Never touches existing data.
+/// Adds the bundled catalog templates the store lacks, and the pantry into an empty store. Never changes existing data.
 /// Debug builds also load the author's fitness-planner history and goals, which Release builds don't bundle.
 enum Seeder {
     @MainActor
-    static func seedIfEmpty(_ context: ModelContext, bundle: Bundle = .main) throws {
-        if try context.fetchCount(FetchDescriptor<Template>()) == 0 {
-            for file in ["exercises", "recipes"] {
-                for seed in try decode([TemplateSeed].self, file, bundle) {
-                    context.insert(Template(kind: seed.kind, name: seed.name, slug: seed.slug, attributes: seed.attributes))
-                }
+    static func seed(_ context: ModelContext, bundle: Bundle = .main) throws {
+        // Bundled templates the store doesn't have yet (FIT-70: the catalog grows with app updates). Ones it has, and
+        // anything the user made, are left alone.
+        let have = Set(try context.fetch(FetchDescriptor<Template>()).map(\.slug))
+        for file in ["exercises", "recipes"] {
+            for seed in try decode([TemplateSeed].self, file, bundle) where !have.contains(seed.slug) {
+                context.insert(Template(kind: seed.kind, name: seed.name, slug: seed.slug, attributes: seed.attributes))
             }
         }
         if try context.fetchCount(FetchDescriptor<PantryItem>()) == 0 {

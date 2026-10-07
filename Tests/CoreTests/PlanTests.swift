@@ -52,7 +52,7 @@ struct PlannerTests {
 
     private func store() throws -> ModelContext {
         let context = container.mainContext
-        try Seeder.seedIfEmpty(context)
+        try Seeder.seed(context)
         return context
     }
 
