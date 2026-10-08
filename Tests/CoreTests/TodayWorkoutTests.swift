@@ -186,3 +186,41 @@ struct WorkoutAgentFallbackTests {
         #expect(WorkoutAgent.fallback("Give me squats and split squat", today: today, setup: setup) == nil)
     }
 }
+
+/// FIT-34: a new workout that trains a main movement within 48 h of another session says so; nothing moves.
+@MainActor
+struct TooSoonTests {
+    private static let seeds = try! Seeder.decode([TemplateSeed].self, "exercises", .main)
+
+    @Test func aLegDayTheDayAfterSquatsSaysSo() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let wednesday = calendar.date(from: DateComponents(year: 2026, month: 10, day: 7, hour: 7))!
+        let tuesday = calendar.date(byAdding: .day, value: -1, to: wednesday)!
+        let catalog = Self.seeds.compactMap { Exercise(slug: $0.slug, attributes: $0.attributes) }
+        let settings = TrainingSettings(age: 36, daysPerWeek: 3, sessionMinutes: 45, trainingDays: [0, 2, 4], workoutTime: 420,
+                                        equipment: ["barbell", "rack", "dumbbells", "pull_up_bar", "bench"], maxWeeklySets: 60)
+        let history = [LoggedSet(date: tuesday, exercise: "back-squat", pattern: "squat",
+                                 measurements: [.init(metric: "load_lb", value: 185, unit: "lb"), .init(metric: "reps", value: 5, unit: "reps")])]
+        let setup = TodayWorkout.Setup(names: Dictionary(uniqueKeysWithValues: Self.seeds.map { ($0.slug, $0.name) }), catalog: catalog,
+                                       settings: settings, history: history, weeksSinceDeload: 1, date: wednesday, session: "Pull",
+                                       calendar: calendar)
+        var workout = TodayWorkout([], setup: setup)
+        #expect(workout.regenerate(.lower) == nil)
+        #expect(workout.summary.contains("Squats were also yesterday, under 48 h apart"), "\(workout.summary)")
+        // An upper day doesn't clash with Tuesday's squats.
+        var upper = TodayWorkout([], setup: setup)
+        #expect(upper.regenerate(.upper) == nil)
+        #expect(!upper.summary.contains("48 h"))
+    }
+
+    @Test func aPlannedSessionTomorrowCounts() {
+        let pattern: (String) -> String? = { ["back-squat": "squat", "bench-press": "push"][$0] }
+        let day = Date(timeIntervalSinceReferenceDate: 812_000_000)
+        let today = [PlannedWorkout(date: day, session: "Legs", exercise: "back-squat", targets: [], main: true)]
+        let tomorrow = [PlannedWorkout(date: day + 86_400, session: "Lower", exercise: "back-squat", targets: [], main: true)]
+        let inThreeDays = [PlannedWorkout(date: day + 3 * 86_400, session: "Lower", exercise: "back-squat", targets: [], main: true)]
+        #expect(TrainingAdjuster.tooSoon(today, on: day, history: [], planned: tomorrow, patternOf: pattern)?.pattern == "squat")
+        #expect(TrainingAdjuster.tooSoon(today, on: day, history: [], planned: inThreeDays, patternOf: pattern) == nil)
+    }
+}

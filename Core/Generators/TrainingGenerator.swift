@@ -245,26 +245,6 @@ enum TrainingGenerator {
         return min(range.lowerBound, most)...min(range.upperBound, most)
     }
 
-    /// FIT-33: "make today a squat day" on a day with nothing planned. One more session today, built by the same
-    /// rules from history up to today: the rotation's sessions are tried in the order the plan would reach them, and
-    /// the first one with an exercise asked for is it. nil when none has one.
-    static func session(on date: Date, wanting wanted: Set<String>, settings: TrainingSettings, catalog: [Exercise],
-                        history: [LoggedSet], weeksSinceDeload: Int, calendar: Calendar = .current) -> [PlannedWorkout]? {
-        let monday = Week.start(of: date, calendar: calendar)
-        let day = calendar.startOfDay(for: date)
-        var today = settings
-        today.trainingDays = [Week.day(of: day, calendar: calendar)]
-        let rotation = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes).split.rotation
-        let natural = Self.rotationStart(rotation, history: history.filter { $0.date < day })
-        for offset in rotation.indices {
-            let workouts = week(startingOn: monday, settings: today, catalog: catalog, history: history,
-                                weeksSinceDeload: weeksSinceDeload, asOf: day, rotationStart: (natural + offset) % rotation.count,
-                                calendar: calendar).workouts
-            if workouts.contains(where: { wanted.contains($0.exercise) }) { return workouts }
-        }
-        return nil
-    }
-
     /// One session's exercises picked, set and dosed: picks come from `prefer` when it has one for the slot.
     private static func build(_ session: SessionTemplate, on date: Date, prefer: [Exercise], allowed: [Exercise],
                               range: ClosedRange<Int>, settings: TrainingSettings, tier: AgeTier, deload: Bool,

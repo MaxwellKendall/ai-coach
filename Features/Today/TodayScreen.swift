@@ -530,7 +530,8 @@ struct TodayScreen: View {
         let setup = TodayWorkout.Setup(names: names, catalog: Planner.catalog(templates), settings: profile.trainingSettings,
                                        history: history,
                                        weeksSinceDeload: Training.weeksSinceDeload(history, before: plan.weekStart, calendar: calendar),
-                                       date: date, session: todays.first?.session ?? "Workout", calendar: calendar)
+                                       date: date, session: todays.first?.session ?? "Workout", calendar: calendar,
+                                       planned: Planner.workouts(plan, templates: templates).filter { !calendar.isDate($0.date, inSameDayAs: date) })
         // FIT-50: each tool's change is shown in place as it's made, so the ~8 s of work is visible. Cancel or a
         // failure puts today back as it was.
         let base = templates, others = all.filter { !calendar.isDateInToday($0.date) }

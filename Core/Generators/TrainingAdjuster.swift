@@ -104,6 +104,24 @@ enum TrainingAdjuster {
         return result
     }
 
+    /// Step 3's rule for a session made for one day (FIT-34): the first main movement of `session` trained (logged) or
+    /// planned less than 48 h before or after it, and when. nil when there's none.
+    static func tooSoon(_ session: [PlannedWorkout], on date: Date, history: [LoggedSet], planned: [PlannedWorkout],
+                        patternOf: (String) -> String?, calendar: Calendar = .current) -> (pattern: String, date: Date)? {
+        let mains = session.filter { $0.main && $0.note != TrainingGenerator.warmupNote }.compactMap { patternOf($0.exercise) }
+        let day = calendar.startOfDay(for: date)
+        func near(_ other: Date) -> Bool {
+            !calendar.isDate(other, inSameDayAs: day) && abs(calendar.startOfDay(for: other).timeIntervalSince(day)) < 48 * 3600
+        }
+        for pattern in mains {
+            if let logged = history.filter({ $0.pattern == pattern && near($0.date) }).map(\.date).max() { return (pattern, logged) }
+            if let next = planned.filter({ $0.main && patternOf($0.exercise) == pattern && near($0.date) }).map(\.date).min() {
+                return (pattern, next)
+            }
+        }
+        return nil
+    }
+
     private static func scaleSets(_ workout: PlannedWorkout, by factor: Double) -> PlannedWorkout {
         guard let sets = workout.target("sets") else { return workout }
         return setSets(workout, to: max(1, Int((sets * factor).rounded())))

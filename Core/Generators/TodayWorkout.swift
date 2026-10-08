@@ -13,6 +13,8 @@ struct TodayWorkout: Sendable {
         var date: Date
         var session: String
         var calendar: Calendar = .current
+        /// The week's other planned workouts, for the 48-hour rule (FIT-34).
+        var planned: [PlannedWorkout] = []
     }
 
     enum Focus: String, CaseIterable, Sendable {
@@ -51,15 +53,33 @@ struct TodayWorkout: Sendable {
         self.session = today.first?.session ?? setup.session
     }
 
+    /// "Squats were also yesterday", "Pulling is also tomorrow", "Hinges are also on Friday".
+    static func tooSoonText(_ pattern: String, _ date: Date, today: Date, calendar: Calendar) -> String {
+        let name = ["squat": "Squats", "lunge": "Lunges", "hinge": "Hinges", "push": "Pushing", "pull": "Pulling",
+                    "carry": "Carries", "core": "Core"][pattern] ?? pattern.capitalized
+        let plural = !["Pushing", "Pulling", "Core"].contains(name)
+        let past = date < calendar.startOfDay(for: today)
+        let when = calendar.isDateInYesterday(date) || calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: today)!) ? "yesterday"
+            : calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: 1, to: today)!) ? "tomorrow"
+            : "on \(date.formatted(.dateTime.weekday(.wide)))"
+        let verb = past ? (plural ? "were" : "was") : (plural ? "are" : "is")
+        return "\(name) \(verb) also \(when), under 48 h apart"
+    }
+
     /// Today's exercises by name, in order.
     var names: [String] { order(working.map(\.exercise)).map(name) }
 
+    /// A new workout that trains a main movement within 48 h of another session (FIT-34, adjust.md step 3):
+    /// "Squats were also yesterday", said with the change, not prevented.
+    private(set) var warning: String?
+
     var summary: String {
-        switch done.count {
+        let changes = switch done.count {
         case 0: ""
         case 1, 2: done.joined(separator: ", ")
         default: "\(done[0]) and \(done.count - 1) more changes"
         }
+        return [changes, warning].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: ". ")
     }
 
     /// The workout as the model reads it after each tool.
@@ -184,6 +204,10 @@ struct TodayWorkout: Sendable {
         guard !session.isEmpty else { return "No exercises in the library fit that." }
         rows = session
         self.session = title
+        warning = TrainingAdjuster.tooSoon(rows, on: setup.date, history: setup.history,
+                                           planned: setup.planned.filter { !setup.calendar.isDate($0.date, inSameDayAs: setup.date) },
+                                           patternOf: { slug in setup.catalog.first { $0.slug == slug }?.pattern }, calendar: setup.calendar)
+            .map { Self.tooSoonText($0.pattern, $0.date, today: setup.date, calendar: setup.calendar) }
         newExercises = []
         let summary = switch focus {
         case .same, .full: "New workout"
