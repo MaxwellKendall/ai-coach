@@ -39,6 +39,12 @@ struct RootView: View {
         }
         .environment(coach)
         .onChange(of: tab) { _, new in if new != .coach { lastTab = new } }
+        // FIT-65: Talk to Coach opens the coach, which starts listening; without Apple Intelligence, Today.
+        .onChange(of: navigator.coach, initial: true) { _, wanted in
+            guard wanted else { return }
+            tab = LanguageModel.isAvailable ? .coach : .today
+            navigator.coach = false
+        }
         // The group's name and whether anyone's live: a minute is soon enough, and push says when a workout starts.
         .task(id: account.user?.uid) {
             guard account.isAvailable else { return }

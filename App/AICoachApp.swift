@@ -10,7 +10,7 @@ struct AICoachApp: App {
 
     init() {
         do {
-            container = try AppSchema.container()
+            container = AppSchema.shared
             try Seeder.seed(container.mainContext)
             // FIT-82: plans made when weeks began on Monday.
             try Planner.rekeyWeeks(in: container.mainContext)

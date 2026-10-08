@@ -26,6 +26,8 @@ enum Push {
 final class Navigator {
     static let shared = Navigator()
     var group: Cloud.GroupSummary?
+    /// FIT-65: Talk to Coach (Action button, Siri) asks for the coach.
+    var coach = false
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
