@@ -13,13 +13,12 @@ enum Planner {
 
     /// FIT-74: the on-device model designs the week (ProgramDesigner), off the main thread; TrainingGenerator's week
     /// stands meanwhile, and when the model can't. Days done, pinned or past keep what they have. Once per week.
-    static func design(weekOf date: Date = .now, in context: ModelContext, calendar: Calendar = .current) async {
+    /// What the designer is told about a week: the profile, catalog, history, goals, program week and last week's plan.
+    static func designRequest(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) -> ProgramDesigner.Request? {
         let monday = Week.start(of: date, calendar: calendar)
-        guard LanguageModel.isAvailable, !designing.weeks.contains(monday),
-              let plan = try? plan(weekOf: monday, in: context), plan.designedBy == nil,
-              let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
+        guard let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
               let templates = try? context.fetch(FetchDescriptor<Template>()),
-              let entries = try? context.fetch(FetchDescriptor<LogEntry>()) else { return }
+              let entries = try? context.fetch(FetchDescriptor<LogEntry>()) else { return nil }
         let history = loggedSets(entries, templates: templates)
         let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
         let goals = ((try? context.fetch(FetchDescriptor<Goal>())) ?? []).filter { $0.status == .active }.compactMap { goal -> String? in
@@ -29,12 +28,22 @@ enum Planner {
         }
         let lastMonday = calendar.date(byAdding: .day, value: -7, to: monday)!
         let program = profile.programWeek(of: monday, calendar: calendar)
-        let request = ProgramDesigner.Request(
+        return ProgramDesigner.Request(
             monday: monday, settings: profile.trainingSettings, catalog: catalog(templates), names: names, history: history,
             weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar), program: program?.week,
             programIndex: program?.index, programWeeks: profile.program?.count, goals: goals,
             lastWeek: (try? self.plan(weekOf: lastMonday, in: context)).flatMap { $0 }.map { workouts($0, templates: templates) } ?? [],
             calendar: calendar)
+    }
+
+    static func design(weekOf date: Date = .now, in context: ModelContext, calendar: Calendar = .current) async {
+        let monday = Week.start(of: date, calendar: calendar)
+        guard LanguageModel.isAvailable, !designing.weeks.contains(monday),
+              let plan = try? plan(weekOf: monday, in: context), plan.designedBy == nil,
+              let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
+              let templates = try? context.fetch(FetchDescriptor<Template>()),
+              let entries = try? context.fetch(FetchDescriptor<LogEntry>()),
+              let request = designRequest(weekOf: monday, in: context, calendar: calendar) else { return }
         designing.weeks.insert(monday)
         defer { designing.weeks.remove(monday) }
         let result = await ProgramDesigner.week(request)

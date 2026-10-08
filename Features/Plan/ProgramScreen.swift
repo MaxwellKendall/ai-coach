@@ -101,7 +101,11 @@ struct ProgramScreen: View {
             if let profile = profiles.first {
                 RegenerateSheet(week: request.week, days: request.days, catalog: Planner.catalog(templates),
                                 settings: profile.trainingSettings, history: Planner.loggedSets(entries, templates: templates),
-                                names: names) { changes in apply(changes, week: request.week) }
+                                names: names,
+                                request: LanguageModel.isAvailable
+                                    ? request.days.first.flatMap { Planner.designRequest(weekOf: $0.date, in: context) } : nil) { changes in
+                    apply(changes, week: request.week)
+                }
             }
         }
         .sheet(isPresented: $peeking, onDismiss: replanned) {

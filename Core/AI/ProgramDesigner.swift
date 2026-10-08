@@ -23,6 +23,9 @@ enum ProgramDesigner {
         var goals: [String] = []
         /// What was planned the week before, for the progression.
         var lastWeek: [PlannedWorkout] = []
+        /// FIT-77: a version of this week to differ from ("Try another"): its sessions are shown, and the model asked
+        /// for different exercises.
+        var differentFrom: [PlannedWorkout] = []
         var calendar: Calendar = .current
     }
 
@@ -233,6 +236,11 @@ enum ProgramDesigner {
         }
         let last = lastWeek(request)
         if !last.isEmpty { lines.append("Last week's plan:\n" + last) }
+        if !request.differentFrom.isEmpty {
+            var other = request
+            other.lastWeek = request.differentFrom
+            lines.append("Make it different from this version, with other exercises where you can:\n" + lastWeek(other))
+        }
         let top = topSets(request)
         if !top.isEmpty { lines.append("Recent top sets:\n" + top) }
         let starts = settings.starts.compactMap { start -> String? in
