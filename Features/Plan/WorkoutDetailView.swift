@@ -21,6 +21,7 @@ struct WorkoutDetailView: View {
     @State private var collapsed: Set<UUID> = []
     @State private var selected: Cell?
     @State private var picking: Picking?
+    @State private var howTo: String?
 
     /// FIT-81: what the exercise picker is for.
     enum Picking: Identifiable {
@@ -86,6 +87,10 @@ struct WorkoutDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { bottom(names) }
+        .sheet(item: Binding(get: { howTo.map(HowToID.init) }, set: { howTo = $0?.id })) { item in
+            let template = templates.first { $0.slug == item.id }
+            HowToSheet(name: template?.name ?? item.id, steps: template?.values("instructions") ?? [])
+        }
         .sheet(item: $picking) { picking in
             let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
             switch picking {
@@ -243,6 +248,13 @@ struct WorkoutDetailView: View {
                 if block.rounds > 1 {
                     Button(block.isGroup ? "Remove last round" : "Remove last set", systemImage: "minus") {
                         withAnimation(.snappy) { selected = nil; session.removeSet(block: index) }
+                    }
+                }
+                // FIT-75: how to do it, for exercises the model picked that you may not know.
+                ForEach(block.movements, id: \.id) { movement in
+                    if !(templates.first { $0.slug == movement.exercise }?.values("instructions") ?? []).isEmpty {
+                        Button(block.isGroup ? "How to Do \(names[movement.exercise] ?? movement.exercise)" : "How to Do It",
+                               systemImage: "questionmark.circle") { howTo = movement.exercise }
                     }
                 }
                 Divider()
@@ -425,4 +437,8 @@ struct BlockBadge: View {
             .frame(width: size, height: size)
             .background(Color(red: 0.08, green: 0.09, blue: 0.11), in: .rect(cornerRadius: size * 0.3))
     }
+}
+
+private struct HowToID: Identifiable {
+    var id: String
 }

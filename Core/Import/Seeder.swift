@@ -1,17 +1,26 @@
 import Foundation
 import SwiftData
 
-/// Adds the bundled catalog templates the store lacks, and the pantry into an empty store. Never changes existing data.
+/// Adds the bundled catalog templates the store lacks, and the pantry into an empty store. Existing templates only gain
+/// how-to steps they lack (FIT-75); nothing else on them changes.
 /// Debug builds also load the author's fitness-planner history and goals, which Release builds don't bundle.
 enum Seeder {
     @MainActor
     static func seed(_ context: ModelContext, bundle: Bundle = .main) throws {
         // Bundled templates the store doesn't have yet (FIT-70: the catalog grows with app updates). Ones it has, and
         // anything the user made, are left alone.
-        let have = Set(try context.fetch(FetchDescriptor<Template>()).map(\.slug))
+        let existing = Dictionary(try context.fetch(FetchDescriptor<Template>()).map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
         for file in ["exercises", "recipes"] {
-            for seed in try decode([TemplateSeed].self, file, bundle) where !have.contains(seed.slug) {
-                context.insert(Template(kind: seed.kind, name: seed.name, slug: seed.slug, attributes: seed.attributes))
+            for seed in try decode([TemplateSeed].self, file, bundle) {
+                guard let template = existing[seed.slug] else {
+                    context.insert(Template(kind: seed.kind, name: seed.name, slug: seed.slug, attributes: seed.attributes))
+                    continue
+                }
+                // FIT-75: how-to steps reach exercises already in the store; nothing else on them changes.
+                if let steps = seed.attributes.first(where: { $0.key == "instructions" }),
+                   !template.attributes.contains(where: { $0.key == "instructions" }) {
+                    template.attributes.append(steps)
+                }
             }
         }
         if try context.fetchCount(FetchDescriptor<PantryItem>()) == 0 {

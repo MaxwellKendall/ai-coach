@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 @testable import AICoach
 
@@ -150,5 +151,27 @@ struct ExerciseSearchTests {
         // Nothing typed and nothing to replace: the cards and the staples, not 700.
         let common = ExerciseSearch.suggestions(in: catalog, names: names, settings: settings(Set(Profile.allEquipment)))
         #expect(common.count < 100 && common.contains("back-squat"))
+    }
+}
+
+/// FIT-75: how-to steps come with the catalog, and reach exercises already in a store.
+@MainActor
+struct HowToTests {
+    @Test func catalogCarriesSteps() throws {
+        let seeds = try Seeder.decode([TemplateSeed].self, "exercises", .main)
+        let pallof = try #require(seeds.first { $0.name == "Pallof Press" })
+        #expect((pallof.attributes.first { $0.key == "instructions" }?.values.count ?? 0) >= 3)
+        // The author's cards gain the dataset's steps too.
+        #expect(seeds.first { $0.slug == "bench-press" }?.attributes.contains { $0.key == "instructions" } == true)
+    }
+
+    @Test func existingExercisesGainSteps() throws {
+        let context = ModelContext(try AppSchema.container(inMemory: true))
+        context.insert(Template(kind: .exercise, name: "Bench (mine)", slug: "bench-press", attributes: []))
+        try context.save()
+        try Seeder.seed(context)
+        let bench = try #require(try context.fetch(FetchDescriptor<Template>()).first { $0.slug == "bench-press" })
+        #expect(bench.name == "Bench (mine)")
+        #expect(!bench.values("instructions").isEmpty)
     }
 }

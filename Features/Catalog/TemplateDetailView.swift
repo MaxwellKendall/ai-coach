@@ -5,10 +5,20 @@ struct TemplateDetailView: View {
     let template: Template
 
     private var details: [TemplateAttribute] { template.attributes.filter(AttributeText.isShort) }
-    private var lists: [TemplateAttribute] { template.attributes.filter { !AttributeText.isShort($0) } }
+    private var lists: [TemplateAttribute] {
+        template.attributes.filter { !AttributeText.isShort($0) && $0.key != "instructions" }
+    }
+    private var steps: [String] { template.values("instructions") }
+    @State private var showSteps = false
 
     var body: some View {
         List {
+            // FIT-75: collapsed until asked for.
+            if !steps.isEmpty {
+                Section {
+                    DisclosureGroup("How to do it", isExpanded: $showSteps) { HowToSteps(steps: steps) }
+                }
+            }
             if !details.isEmpty {
                 Section {
                     ForEach(details, id: \.key) { attr in

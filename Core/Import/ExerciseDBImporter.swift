@@ -13,6 +13,8 @@ enum ExerciseDBImporter {
         var primaryMuscles: [String]
         var secondaryMuscles: [String]
         var category: String
+        /// Step-by-step how-to (FIT-75).
+        var instructions: [String]? = nil
     }
 
     struct Import {
@@ -110,6 +112,7 @@ enum ExerciseDBImporter {
             TemplateAttribute(key: "source", values: ["free-exercise-db"]),
         ]
         if let level = entry.level { attributes.append(TemplateAttribute(key: "level", values: [level])) }
+        if let steps = entry.instructions, !steps.isEmpty { attributes.append(TemplateAttribute(key: "instructions", values: steps)) }
         return .success(TemplateSeed(kind: .exercise, name: entry.name, slug: Slug.make(entry.name),
                                      attributes: attributes.filter { !$0.values.isEmpty }))
     }
