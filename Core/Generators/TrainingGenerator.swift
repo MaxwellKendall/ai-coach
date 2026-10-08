@@ -464,7 +464,10 @@ enum TrainingGenerator {
         } else {
             targets.append(Measurement(metric: "reps", value: first?.reps ?? reps, unit: "reps"))
         }
-        let daysOff = last.first.map { calendar.dateComponents([.day], from: calendar.startOfDay(for: $0.date), to: date).day ?? 0 }
+        // FIT-69: from the week's start, not the session's day, so a lift has one load across the week (Friday's bench
+        // was held at 16 days off while Monday's progressed at 12).
+        let weekStart = Week.start(of: date, calendar: calendar)
+        let daysOff = last.first.map { max(0, calendar.dateComponents([.day], from: calendar.startOfDay(for: $0.date), to: weekStart).day ?? 0) }
         if var load = lastValue("load_lb") {
             // FIT-68: last time's top set was at other reps (a style change, main ↔ accessory): the same effort at the
             // planned reps, by Brzycki (fitness-planner CLAUDE.md "1RM Estimation"), keeping the reps left in reserve

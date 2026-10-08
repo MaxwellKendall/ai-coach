@@ -258,3 +258,29 @@ private extension Array where Element: Hashable {
         return filter { seen.insert($0).inserted }
     }
 }
+
+struct WeekLoadTests {
+    /// FIT-69: days off are counted to the week's start, so a lift has one load all week. Last bench Mon Jul 6; Upper
+    /// on Mon Jul 20 (14 days) and Thu Jul 23 (17 days) used to split between +5 and "prove it first".
+    @Test func oneLoadForALiftAcrossTheWeek() {
+        var settings = config
+        settings.daysPerWeek = 4
+        settings.trainingDays = Week.ordered([0, 1, 3, 4])
+        let catalog = [exercise("back-squat", "squat", equipment: ["barbell", "rack"], tags: ["goal_lift"]),
+                       exercise("bench-press", "push", equipment: ["barbell", "bench"], tags: ["goal_lift"]),
+                       exercise("deadlift", "hinge", equipment: ["barbell"], tags: ["goal_lift"]),
+                       exercise("pull-up", "pull", equipment: ["pull_up_bar"]), exercise("push-up", "push"),
+                       exercise("dumbbell-row", "pull", equipment: ["dumbbells"]), exercise("plank", "core", tags: ["isometric"]),
+                       exercise("farmer-carry", "carry", equipment: ["dumbbells"])]
+        let history = (0..<3).map { _ in
+            LoggedSet(date: date(7, 6), exercise: "bench-press", pattern: "push",
+                      measurements: [.init(metric: "load_lb", value: 155, unit: "lb"), .init(metric: "reps", value: 5, unit: "reps"),
+                                     .init(metric: "rpe", value: 7, unit: "RPE")])
+        }
+        let week = TrainingGenerator.week(startingOn: date(7, 19, hour: 0), settings: settings, catalog: catalog, history: history,
+                                          weeksSinceDeload: 0, calendar: calendar)
+        let bench = week.workouts.filter { $0.exercise == "bench-press" && $0.note != TrainingGenerator.warmupNote }
+        #expect(Set(bench.map(\.date)).count == 2)
+        #expect(Set(bench.compactMap { $0.target("load_lb") }) == [160])
+    }
+}
