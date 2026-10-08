@@ -18,7 +18,7 @@ final class Plan {
 
     init(weekContaining date: Date, calendar: Calendar = .current, now: Date = .now) {
         self.id = UUID()
-        self.weekStart = Week.monday(of: date, calendar: calendar)
+        self.weekStart = Week.start(of: date, calendar: calendar)
         self.createdAt = now
         self.updatedAt = now
     }

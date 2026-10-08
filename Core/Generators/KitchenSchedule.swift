@@ -14,7 +14,7 @@ enum KitchenSchedule {
     static func week(startingOn monday: Date, cookWindows: [CookWindow], groceryDay: Int?,
                      calendar: Calendar = .current) -> [KitchenBlock] {
         func at(_ day: Int, _ hour: Int) -> Date {
-            calendar.date(byAdding: .hour, value: hour, to: calendar.date(byAdding: .day, value: day, to: monday)!)!
+            calendar.date(byAdding: .hour, value: hour, to: Week.date(day, in: monday, calendar: calendar))!
         }
         var blocks = cookWindows.map {
             KitchenBlock(kind: .cook, date: at($0.day, $0.day == groceryDay ? 13 : 18), label: $0.label, hours: $0.hours)

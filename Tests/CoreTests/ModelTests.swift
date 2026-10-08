@@ -63,12 +63,13 @@ struct WeekTests {
         calendar.date(from: DateComponents(year: y, month: m, day: d, hour: hour))!
     }
 
+    /// FIT-82: weeks run Sunday to Saturday.
     @Test(arguments: [
         (2026, 10, 2),  // Friday
-        (2026, 9, 28),  // Monday itself
-        (2026, 10, 4),  // Sunday belongs to the week that started the Monday before
+        (2026, 9, 27),  // Sunday itself
+        (2026, 10, 3),  // Saturday is the week's last day
     ])
-    func mondayOfWeek(y: Int, m: Int, d: Int) {
-        #expect(Week.monday(of: date(y, m, d), calendar: calendar) == date(2026, 9, 28, hour: 0))
+    func startOfWeek(y: Int, m: Int, d: Int) {
+        #expect(Week.start(of: date(y, m, d), calendar: calendar) == date(2026, 9, 27, hour: 0))
     }
 }

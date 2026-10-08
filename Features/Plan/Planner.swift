@@ -14,7 +14,7 @@ enum Planner {
     /// FIT-74: the on-device model designs the week (ProgramDesigner), off the main thread; TrainingGenerator's week
     /// stands meanwhile, and when the model can't. Days done, pinned or past keep what they have. Once per week.
     static func design(weekOf date: Date = .now, in context: ModelContext, calendar: Calendar = .current) async {
-        let monday = Week.monday(of: date, calendar: calendar)
+        let monday = Week.start(of: date, calendar: calendar)
         guard LanguageModel.isAvailable, !designing.weeks.contains(monday),
               let plan = try? plan(weekOf: monday, in: context), plan.designedBy == nil,
               let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
@@ -51,8 +51,56 @@ enum Planner {
         try? context.save()
     }
 
+    /// FIT-82: weeks began on Monday until they moved to Sunday. Each plan keyed by a Monday is keyed by the Sunday
+    /// before it, and an item that now falls in another week (a Sunday, the old week's last day) moves to that week's
+    /// plan; a plan made for it is planned again when its week starts. Does nothing once every plan starts on a Sunday.
+    static func rekeyWeeks(in context: ModelContext, calendar: Calendar = .current) throws {
+        // A program from Monday to a Sunday keeps its length: Sunday to Saturday.
+        for profile in try context.fetch(FetchDescriptor<Profile>()) {
+            guard let start = profile.programStart, Week.day(of: start, calendar: calendar) == 0 else { continue }
+            profile.programStart = calendar.date(byAdding: .day, value: -1, to: start)
+            if let target = profile.targetDate, Week.day(of: target, calendar: calendar) == 6 {
+                profile.targetDate = calendar.date(byAdding: .day, value: -1, to: target)
+            }
+        }
+        let plans = try context.fetch(FetchDescriptor<Plan>())
+        guard plans.contains(where: { $0.weekStart != Week.start(of: $0.weekStart, calendar: calendar) }) else {
+            try context.save()
+            return
+        }
+        var byStart: [Date: Plan] = [:]
+        for plan in plans.sorted(by: { $0.weekStart < $1.weekStart }) {
+            let start = Week.start(of: plan.weekStart, calendar: calendar)
+            if let kept = byStart[start] {
+                let items = plan.items
+                plan.items = []
+                kept.items += items
+                context.delete(plan)
+            } else {
+                plan.weekStart = start
+                byStart[start] = plan
+            }
+        }
+        for plan in Array(byStart.values) {
+            let leaving = plan.items.filter { Week.start(of: $0.date, calendar: calendar) != plan.weekStart }
+            guard !leaving.isEmpty else { continue }
+            plan.items.removeAll { item in leaving.contains { $0.id == item.id } }
+            for item in leaving {
+                let start = Week.start(of: item.date, calendar: calendar)
+                let target = byStart[start] ?? {
+                    let new = Plan(weekContaining: start, calendar: calendar, now: .distantPast)
+                    context.insert(new)
+                    byStart[start] = new
+                    return new
+                }()
+                target.items.append(item)
+            }
+        }
+        try context.save()
+    }
+
     static func plan(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) throws -> Plan? {
-        let monday = Week.monday(of: date, calendar: calendar)
+        let monday = Week.start(of: date, calendar: calendar)
         return try context.fetch(FetchDescriptor<Plan>(predicate: #Predicate { $0.weekStart == monday })).first
     }
 
@@ -75,7 +123,7 @@ enum Planner {
     @discardableResult
     static func generate(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) throws -> Plan? {
         guard let profile = try context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete else { return nil }
-        let monday = Week.monday(of: date, calendar: calendar)
+        let monday = Week.start(of: date, calendar: calendar)
         let templates = try context.fetch(FetchDescriptor<Template>())
         let history = loggedSets(try context.fetch(FetchDescriptor<LogEntry>()), templates: templates)
         let week = TrainingGenerator.week(
@@ -102,7 +150,7 @@ enum Planner {
     /// never saved: it's planned for real when it starts, from how this week went.
     static func preview(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) throws -> [PlannedWorkout] {
         guard let profile = try context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete else { return [] }
-        let monday = Week.monday(of: date, calendar: calendar)
+        let monday = Week.start(of: date, calendar: calendar)
         let templates = try context.fetch(FetchDescriptor<Template>())
         let history = loggedSets(try context.fetch(FetchDescriptor<LogEntry>()), templates: templates)
         return TrainingGenerator.week(

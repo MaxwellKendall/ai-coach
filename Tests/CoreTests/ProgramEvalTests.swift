@@ -106,7 +106,7 @@ struct ProgramEvalTests {
 
         /// The week after the imported history ends, or the week onboarding finishes.
         var monday: Date {
-            Week.monday(of: calendar.date(from: DateComponents(year: 2026, month: withHistory ? 7 : 10,
+            Week.start(of: calendar.date(from: DateComponents(year: 2026, month: withHistory ? 7 : 10,
                                                                                 day: withHistory ? 20 : 5))!,
                         calendar: calendar)
         }

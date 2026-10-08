@@ -37,14 +37,14 @@ enum ProgramPlan {
 
     /// Which week of the program a date falls in; negative before the start.
     static func week(of date: Date, start: Date, calendar: Calendar = .current) -> Int {
-        let days = calendar.dateComponents([.day], from: Week.monday(of: start, calendar: calendar),
-                                           to: Week.monday(of: date, calendar: calendar)).day ?? 0
+        let days = calendar.dateComponents([.day], from: Week.start(of: start, calendar: calendar),
+                                           to: Week.start(of: date, calendar: calendar)).day ?? 0
         return Int((Double(days) / 7).rounded(.down))
     }
 
     /// The Monday of week `index`.
     static func monday(_ index: Int, start: Date, calendar: Calendar = .current) -> Date {
-        calendar.date(byAdding: .day, value: 7 * index, to: Week.monday(of: start, calendar: calendar))!
+        calendar.date(byAdding: .day, value: 7 * index, to: Week.start(of: start, calendar: calendar))!
     }
 
     /// Base for the first 35% of weeks, build to 75%, then peak; the last week tests the goals. A deload every
@@ -117,7 +117,7 @@ enum ProgramPlan {
         let from = calendar.startOfDay(for: first), to = calendar.startOfDay(for: last)
         return Set((0..<count).filter { week in
             trainingDays.contains { day in
-                let date = calendar.date(byAdding: .day, value: day, to: monday(week, start: start, calendar: calendar))!
+                let date = Week.date(day, in: monday(week, start: start, calendar: calendar), calendar: calendar)
                 return date >= from && date <= to
             }
         })

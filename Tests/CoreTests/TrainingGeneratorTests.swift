@@ -152,7 +152,7 @@ struct TrainingGeneratorTests {
                        exercise("push-up", "push", tags: ["goal_lift"]),
                        exercise("farmer-carry", "carry", equipment: ["dumbbells"]),
                        exercise("plank", "core", tags: ["isometric"])]
-        let week = TrainingGenerator.week(startingOn: date(7, 20, hour: 0), settings: config, catalog: catalog,
+        let week = TrainingGenerator.week(startingOn: date(7, 19, hour: 0), settings: config, catalog: catalog,
                                           history: [], weeksSinceDeload: 0, calendar: calendar)
         #expect(Set(week.workouts.map { calendar.component(.weekday, from: $0.date) }) == [2, 4, 6]) // Mon, Wed, Fri
         #expect(week.workouts.first?.date == date(7, 20, hour: 7))
@@ -169,7 +169,7 @@ struct TrainingGeneratorTests {
         settings.maxWeeklySets = 20
         let catalog = [exercise("back-squat", "squat"), exercise("bench", "push"), exercise("row", "pull"),
                        exercise("dl", "hinge"), exercise("carry", "carry"), exercise("plank", "core")]
-        let week = TrainingGenerator.week(startingOn: date(7, 20, hour: 0), settings: settings, catalog: catalog,
+        let week = TrainingGenerator.week(startingOn: date(7, 19, hour: 0), settings: settings, catalog: catalog,
                                           history: [], weeksSinceDeload: 0, calendar: calendar)
         #expect(week.totalSets <= 20)
         #expect(week.warnings.contains { $0.contains("20-set weekly ceiling") }, "\(week.warnings)")
@@ -181,7 +181,7 @@ struct TrainingGeneratorTests {
         settings.warmups = false
         let catalog = [exercise("back-squat", "squat", tags: ["goal_lift"]), exercise("plank", "core")]
         let history = [logged("back-squat", "squat", 7, 10, [("load_lb", 135), ("reps", 5), ("rpe", 6)])]
-        let week = TrainingGenerator.week(startingOn: date(7, 20, hour: 0), settings: settings, catalog: catalog,
+        let week = TrainingGenerator.week(startingOn: date(7, 19, hour: 0), settings: settings, catalog: catalog,
                                           history: history, weeksSinceDeload: 0, calendar: calendar)
         let squats = week.workouts.filter { $0.exercise == "back-squat" }
         #expect(squats.first?.note == TrainingGenerator.warmupNote)
@@ -214,7 +214,7 @@ struct TrainingGeneratorAcceptanceTests {
 
     @Test func deloadWeekMatchesTheRealPlan() throws {
         let (catalog, history) = try inputs()
-        let monday = Week.monday(of: date(7, 20), calendar: calendar)
+        let monday = Week.start(of: date(7, 20), calendar: calendar)
         // profile.json (2026-07-12): 8 weeks since the last deload, against a 6-week setting.
         let week = TrainingGenerator.week(startingOn: monday, settings: config, catalog: catalog, history: history,
                                           weeksSinceDeload: 8, calendar: calendar)
@@ -234,7 +234,7 @@ struct TrainingGeneratorAcceptanceTests {
 
     @Test func normalWeekProgressesAndFitsTheVolumeTable() throws {
         let (catalog, history) = try inputs()
-        let monday = Week.monday(of: date(7, 20), calendar: calendar)
+        let monday = Week.start(of: date(7, 20), calendar: calendar)
         let week = TrainingGenerator.week(startingOn: monday, settings: config, catalog: catalog, history: history,
                                           weeksSinceDeload: 0, calendar: calendar)
         #expect(!week.deload)

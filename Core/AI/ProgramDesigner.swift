@@ -423,7 +423,7 @@ enum ProgramDesigner {
             let session = sessions[index % sessions.count]
             if index < sessions.count { why.append("\(session.name): \(session.why)") }
             let date = request.calendar.date(byAdding: .minute, value: settings.workoutTime,
-                                             to: request.calendar.date(byAdding: .day, value: day, to: request.monday)!)!
+                                             to: Week.date(day, in: request.monday, calendar: request.calendar))!
             for item in session.exercises {
                 let exercise = PlanGuard.resolve(item.name, in: bySlug, names: request.names)
                 let slug = exercise?.slug ?? item.name

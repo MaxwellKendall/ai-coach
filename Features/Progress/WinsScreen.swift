@@ -14,7 +14,7 @@ struct WinsScreen: View {
 
     var body: some View {
         let wins = WinFeed.wins(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
-        let thisWeek = Week.monday(of: .now)
+        let thisWeek = Week.start(of: .now)
         let groups = Self.groups(wins, thisWeek: thisWeek)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {

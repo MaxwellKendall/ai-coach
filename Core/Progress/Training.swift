@@ -59,11 +59,12 @@ enum Training {
         }
     }
 
-    /// Consecutive full training weeks before `monday`. A week with less than 60% of the median training
+    /// Consecutive full training weeks before the week of `date`. A week with less than 60% of the median training
     /// week's sets (a deload, a missed week or a layoff) resets the count. Derived, so imported history works.
-    static func weeksSinceDeload(_ sets: [LoggedSet], before monday: Date, calendar: Calendar = .current) -> Int {
+    static func weeksSinceDeload(_ sets: [LoggedSet], before date: Date, calendar: Calendar = .current) -> Int {
+        let monday = Week.start(of: date, calendar: calendar)
         var perWeek: [Date: Int] = [:]
-        for set in sets where set.date < monday { perWeek[Week.monday(of: set.date, calendar: calendar), default: 0] += 1 }
+        for set in sets where set.date < monday { perWeek[Week.start(of: set.date, calendar: calendar), default: 0] += 1 }
         let volumes = perWeek.values.sorted()
         guard !volumes.isEmpty else { return 0 }
         let threshold = Double(volumes[volumes.count / 2]) * 0.6

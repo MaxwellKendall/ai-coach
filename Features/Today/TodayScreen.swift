@@ -54,7 +54,7 @@ struct TodayScreen: View {
     }
 
     private var week: [Date] {
-        (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.monday(of: .now))! }
+        (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.start(of: .now))! }
     }
 
     private var todayIndex: Int { week.firstIndex { Calendar.current.isDateInToday($0) } ?? 0 }
@@ -156,7 +156,7 @@ struct TodayScreen: View {
                 Text(title).font(.system(size: 34, weight: .bold)).tracking(-0.5)
                     .contentTransition(.numericText())
                 // FIT-74: the model's version of the week is on its way; this one stands until it arrives.
-                if Planner.designing.weeks.contains(Week.monday(of: date)) {
+                if Planner.designing.weeks.contains(Week.start(of: date)) {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini)
                         Text("Your coach is planning this week").font(.footnote).foregroundStyle(.secondary)
@@ -465,7 +465,7 @@ struct TodayScreen: View {
             case .move(let weekday):
                 let time = calendar.dateComponents([.hour, .minute], from: day)
                 let target = calendar.date(byAdding: DateComponents(day: weekday, hour: time.hour, minute: time.minute),
-                                           to: Week.monday(of: day))!
+                                           to: Week.start(of: day))!
                 moveTo = target
                 return TrainingAdjuster.reschedule(week, from: day, to: target) { bySlug[$0]?.pattern }
             }

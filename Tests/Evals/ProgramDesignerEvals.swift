@@ -95,7 +95,7 @@ struct ProgramDesignerEvals {
     }
 
     /// The week after the imported history ends.
-    private static let monday = Week.monday(of: calendar.date(from: DateComponents(year: 2026, month: 7, day: 20))!, calendar: calendar)
+    private static let monday = Week.start(of: calendar.date(from: DateComponents(year: 2026, month: 7, day: 20))!, calendar: calendar)
 
     // MARK: Reading a week
 

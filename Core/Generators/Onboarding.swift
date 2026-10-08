@@ -94,7 +94,7 @@ struct OnboardingAnswers: Sendable {
     /// them before the program starts). Matches what `Profile.trainingSettings` will hold after Start.
     func trainingSettings(workoutTime: Int = 7 * 60, maxWeeklySets: Int = 60) -> TrainingSettings? {
         guard let age, !days.isEmpty else { return nil }
-        return TrainingSettings(age: age, daysPerWeek: days.count, sessionMinutes: minutes, trainingDays: days.sorted(),
+        return TrainingSettings(age: age, daysPerWeek: days.count, sessionMinutes: minutes, trainingDays: Week.ordered(days),
                                 workoutTime: workoutTime, equipment: equipment, injuredAreas: BodyArea.muscles(for: hurts.sorted()),
                                 avoidExercises: avoid, maxWeeklySets: maxWeeklySets,
                                 starts: starts.values.sorted { $0.exercise < $1.exercise }, bodyWeight: weight)

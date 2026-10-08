@@ -43,7 +43,7 @@ struct AdjustSheet: View {
                 if reason == .time { Stepper("\(minutes) minutes available", value: $minutes, in: 10...90, step: 5) }
                 if reason == .move {
                     Picker("To", selection: $moveTo) {
-                        ForEach(0..<7, id: \.self) { Text(ProfileEditor.weekdays[$0]).tag($0) }
+                        ForEach(Week.order, id: \.self) { Text(ProfileEditor.weekdays[$0]).tag($0) }
                     }
                 }
             }
@@ -96,9 +96,9 @@ struct AdjustSheet: View {
             case .move:
                 guard let day else { return nil }
                 let calendar = Calendar.current
-                let monday = Week.monday(of: day)
+                let monday = Week.start(of: day)
                 let time = calendar.dateComponents([.hour, .minute], from: day)
-                let target = calendar.date(byAdding: DateComponents(day: moveTo, hour: time.hour, minute: time.minute), to: monday)!
+                let target = calendar.date(byAdding: DateComponents(day: Week.offset(moveTo), hour: time.hour, minute: time.minute), to: monday)!
                 return TrainingAdjuster.reschedule(week, from: day, to: target) { bySlug[$0]?.pattern }
             }
         }

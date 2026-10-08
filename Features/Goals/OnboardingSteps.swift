@@ -70,7 +70,7 @@ struct OnboardingStepView: View {
     }
 
     private var targetDate: some View {
-        let start = Week.monday(of: .now)
+        let start = Week.start(of: .now)
         let end = Calendar.current.date(byAdding: .day, value: 7 * answers.weeks - 1, to: start)!
         return ValueRow(name: "Target date", value: end.formatted(.dateTime.month(.abbreviated).day().year()),
                         note: "\(answers.weeks) weeks from \(start.formatted(.dateTime.month(.abbreviated).day()))",
@@ -313,7 +313,7 @@ struct OnboardingStepView: View {
 extension OnboardingAnswers {
     /// "Mon Wed Fri · 45 min".
     var training: String {
-        days.sorted().map { String(ProfileEditor.weekdays[$0].prefix(3)) }.joined(separator: " ") + " · \(minutes) min"
+        Week.ordered(days).map { String(ProfileEditor.weekdays[$0].prefix(3)) }.joined(separator: " ") + " · \(minutes) min"
     }
 
     /// "Bench ≈185 · Squat ≈225", or "Found in week 1".

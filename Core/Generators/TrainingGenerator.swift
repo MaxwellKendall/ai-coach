@@ -5,7 +5,7 @@ struct TrainingSettings: Sendable {
     var age: Int
     var daysPerWeek: Int
     var sessionMinutes: Int
-    /// Days to train, 0 = Monday.
+    /// Days to train, 0 = Monday, in the order the week runs (Sunday first, `Week.ordered`).
     var trainingDays: [Int]
     /// Minutes after midnight.
     var workoutTime: Int
@@ -212,7 +212,7 @@ enum TrainingGenerator {
         for (index, day) in settings.trainingDays.prefix(settings.daysPerWeek).enumerated() {
             let session = rotation[(start + index) % rotation.count]
             let date = calendar.date(byAdding: .minute, value: settings.workoutTime,
-                                     to: calendar.date(byAdding: .day, value: day, to: monday)!)!
+                                     to: Week.date(day, in: monday, calendar: calendar))!
             workouts += build(session, on: date, prefer: allowed, allowed: allowed, range: range, settings: settings, tier: tier,
                               deload: deload, recent: recent, undertrained: undertrained, history: past, calendar: calendar,
                               warnings: &warnings)
@@ -250,10 +250,10 @@ enum TrainingGenerator {
     /// the first one with an exercise asked for is it. nil when none has one.
     static func session(on date: Date, wanting wanted: Set<String>, settings: TrainingSettings, catalog: [Exercise],
                         history: [LoggedSet], weeksSinceDeload: Int, calendar: Calendar = .current) -> [PlannedWorkout]? {
-        let monday = Week.monday(of: date, calendar: calendar)
+        let monday = Week.start(of: date, calendar: calendar)
         let day = calendar.startOfDay(for: date)
         var today = settings
-        today.trainingDays = [calendar.dateComponents([.day], from: monday, to: day).day ?? 0]
+        today.trainingDays = [Week.day(of: day, calendar: calendar)]
         let rotation = VolumePlan.of(daysPerWeek: settings.daysPerWeek, sessionMinutes: settings.sessionMinutes).split.rotation
         let natural = Self.rotationStart(rotation, history: history.filter { $0.date < day })
         for offset in rotation.indices {

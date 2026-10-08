@@ -12,6 +12,8 @@ struct AICoachApp: App {
         do {
             container = try AppSchema.container()
             try Seeder.seed(container.mainContext)
+            // FIT-82: plans made when weeks began on Monday.
+            try Planner.rekeyWeeks(in: container.mainContext)
         } catch {
             fatalError("Could not open the data store: \(error)")
         }

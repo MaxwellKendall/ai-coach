@@ -60,7 +60,7 @@ struct ProfileEditor: View {
                 ForEach($profile.cookWindows, id: \.self) { $window in
                     HStack {
                         Picker("", selection: $window.day) {
-                            ForEach(0..<7, id: \.self) { Text(Self.weekdays[$0]).tag($0) }
+                            ForEach(Week.order, id: \.self) { Text(Self.weekdays[$0]).tag($0) }
                         }
                         .labelsHidden()
                         TextField("Label", text: $window.label)
@@ -73,7 +73,7 @@ struct ProfileEditor: View {
                 }
                 Picker("Grocery day", selection: $profile.groceryDay) {
                     Text("None").tag(Int?.none)
-                    ForEach(0..<7, id: \.self) { Text(Self.weekdays[$0]).tag(Int?.some($0)) }
+                    ForEach(Week.order, id: \.self) { Text(Self.weekdays[$0]).tag(Int?.some($0)) }
                 }
                 LabeledContent("Weekly grocery budget ($)") {
                     TextField("Optional", value: $profile.weeklyBudgetUSD, format: .number).keyboardType(.decimalPad).focused($typing)
@@ -134,16 +134,16 @@ struct ProfileEditor: View {
     }
 }
 
-/// Seven toggles, Monday first.
+/// Seven toggles, Sunday first.
 private struct DayPicker: View {
     @Binding var days: [Int]
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(0..<7, id: \.self) { day in
+            ForEach(Week.order, id: \.self) { day in
                 let on = days.contains(day)
                 Button(String(ProfileEditor.weekdays[day].prefix(1))) {
-                    if on { days.removeAll { $0 == day } } else { days = (days + [day]).sorted() }
+                    if on { days.removeAll { $0 == day } } else { days = Week.ordered(days + [day]) }
                 }
                 .frame(maxWidth: .infinity, minHeight: 36)
                 .background(on ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.secondary.opacity(0.15)), in: .circle)

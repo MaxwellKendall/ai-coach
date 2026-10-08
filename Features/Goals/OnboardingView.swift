@@ -83,7 +83,7 @@ struct OnboardingView: View {
     private func designFirstWeek() async {
         guard LanguageModel.isAvailable, let settings = answers.trainingSettings(workoutTime: profile.workoutTime,
                                                                                  maxWeeklySets: profile.maxWeeklySets) else { return }
-        let monday = Week.monday(of: .now)
+        let monday = Week.start(of: .now)
         let weeks = ProgramPlan.weeks(count: answers.weeks, deloadEvery: AgeTier.of(age: settings.age).deloadEveryWeeks)
         let end = Calendar.current.date(byAdding: .day, value: 7 * answers.weeks - 1, to: monday)!
         let request = ProgramDesigner.Request(
@@ -193,7 +193,7 @@ struct OnboardingView: View {
     private func start() {
         guard let age = answers.age, let weight = answers.weight else { return }
         let now = Date.now
-        let monday = Week.monday(of: now)
+        let monday = Week.start(of: now)
         profile.age = age
         profile.weightLb = weight
         profile.trainingDays = answers.days.sorted()

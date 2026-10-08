@@ -252,7 +252,7 @@ private struct PhaseLabels: Layout {
     }
 }
 
-/// Seven day circles, Monday first; at least one stays on.
+/// Seven day circles, Sunday first; at least one stays on.
 struct DayCircles: View {
     @Binding var days: [Int]
     var dashed = false
@@ -260,11 +260,11 @@ struct DayCircles: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(0..<7, id: \.self) { day in
+            ForEach(Week.order, id: \.self) { day in
                 let on = days.contains(day)
                 Button {
                     withAnimation(.snappy) {
-                        if on { if days.count > minimum { days.removeAll { $0 == day } } } else { days = (days + [day]).sorted() }
+                        if on { if days.count > minimum { days.removeAll { $0 == day } } } else { days = Week.ordered(days + [day]) }
                     }
                 } label: {
                     ZStack {

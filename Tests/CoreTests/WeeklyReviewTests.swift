@@ -14,15 +14,15 @@ private func date(_ month: Int, _ day: Int, hour: Int = 12) -> Date {
 
 private func value(_ month: Int, _ day: Int, _ value: Double) -> DatedValue { DatedValue(date: date(month, day), value: value) }
 
-/// The prototype's week: Monday Sep 28 to Sunday Oct 4, sessions Monday, Wednesday and Friday.
+/// The prototype's week, in Sunday weeks (FIT-82): Sunday Sep 27 to Saturday Oct 3, sessions Monday, Wednesday and Friday.
 struct WeeklyReviewTests {
-    let week = WeeklyReview.days(of: date(10, 4), calendar: calendar)
+    let week = WeeklyReview.days(of: date(10, 3), calendar: calendar)
     let sessions = [date(9, 28), date(9, 30), date(10, 2)]
 
-    @Test func weekIsMondayToSunday() {
-        #expect(week.lowerBound == calendar.startOfDay(for: date(9, 28)))
-        #expect(week.contains(date(10, 4, hour: 23)))
-        #expect(!week.contains(date(10, 5, hour: 0)))
+    @Test func weekIsSundayToSaturday() {
+        #expect(week.lowerBound == calendar.startOfDay(for: date(9, 27)))
+        #expect(week.contains(date(10, 3, hour: 23)))
+        #expect(!week.contains(date(10, 4, hour: 0)))
     }
 
     @Test func numbers() {
@@ -32,7 +32,7 @@ struct WeeklyReviewTests {
         let sets = [set(28, "squat"), set(28, "pull"), set(30, "push"), set(30, "pull"), set(2, "pull"), set(21, "push")]
         let numbers = WeeklyReview.numbers(week: week, workoutDays: sessions, sets: sets,
                                            protein: [value(9, 28, 130), value(9, 29, 146)], kcal: [], sleep: [value(9, 30, 7)],
-                                           weighIns: [value(9, 27, 195.2), value(10, 1, 195), value(10, 3, 194.6)], calendar: calendar)
+                                           weighIns: [value(9, 26, 195.2), value(10, 1, 195), value(10, 3, 194.6)], calendar: calendar)
         #expect(numbers.workoutsDone == 3 && numbers.workoutsPlanned == 3 && numbers.sets == 5)
         #expect(numbers.protein == 138 && numbers.kcal == nil && numbers.sleep == 7)
         #expect(numbers.weight == 194.6)

@@ -48,7 +48,7 @@ enum WeeklyReview {
 
     /// The days this review covers: Monday to Sunday of `date`'s week.
     static func days(of date: Date, calendar: Calendar = .current) -> Range<Date> {
-        let monday = Week.monday(of: date, calendar: calendar)
+        let monday = Week.start(of: date, calendar: calendar)
         return monday..<calendar.date(byAdding: .day, value: 7, to: monday)!
     }
 

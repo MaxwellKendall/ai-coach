@@ -392,7 +392,7 @@ struct ProgramScreen: View {
     @discardableResult
     private func replanWeek(_ workouts: [PlannedWorkout]?) -> [PlannedWorkout] {
         guard let plan = try? Planner.plan(weekOf: .now, in: context) else { return [] }
-        let keep = Set(regenerateDays(Week.monday(of: .now)).filter { $0.kept != nil }.map(\.date))
+        let keep = Set(regenerateDays(Week.start(of: .now)).filter { $0.kept != nil }.map(\.date))
         let workouts = workouts ?? (try? Planner.preview(weekOf: .now, in: context)) ?? []
         return (try? Planner.replan(plan, with: workouts, keep: keep, templates: templates, in: context)) ?? []
     }

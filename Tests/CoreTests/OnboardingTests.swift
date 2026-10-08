@@ -113,7 +113,8 @@ struct OnboardingTests {
                            now: date(2026, 10, 3), calendar: calendar)
         #expect(answers.goals == ["weight", "pullups", "squat"])
         #expect(answers.targets == ["weight": 180, "pullups": 10])
-        #expect(answers.weeks == 22)
+        // Sun Sep 27 through the week holding Sun Feb 28 (FIT-82: weeks start on Sunday).
+        #expect(answers.weeks == 23)
         #expect(answers.unconfirmed == ["goals", "target.weight", "target.pullups", "weeks"])
     }
 

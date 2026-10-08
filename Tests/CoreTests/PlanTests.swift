@@ -36,7 +36,7 @@ struct PlanRulesTests {
 
     @Test func kitchenBlocksFollowTheGroceryRun() {
         let blocks = KitchenSchedule.week(
-            startingOn: date(7, 20), cookWindows: [CookWindow(day: 5, hours: 2, label: "Bulk cook"),
+            startingOn: date(7, 19), cookWindows: [CookWindow(day: 5, hours: 2, label: "Bulk cook"),
                                                    CookWindow(day: 2, hours: 1, label: "Midweek refresh")],
             groceryDay: 5, calendar: calendar)
         #expect(blocks.map(\.label) == ["Midweek refresh", "Grocery run", "Bulk cook"])

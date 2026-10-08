@@ -77,7 +77,8 @@ struct WinsTests {
         // Weeks 1–2 are 2 in a row; after the miss, weeks 4–7 reach 2 and then 4.
         #expect(wins.map(\.key) == ["streak:4", "streak:2", "streak:2"])
         #expect(wins.map(\.workouts) == [8, 4, 4])
-        #expect(wins.map(\.date) == [day(9, 27), day(9, 13), day(8, 23)])
+        // Dated the last day of the week: a Saturday (FIT-82).
+        #expect(wins.map(\.date) == [day(9, 26), day(9, 12), day(8, 22)])
         // The week in progress doesn't count yet.
         #expect(detect([], planned: weeks.flatMap(\.planned), done: weeks.flatMap(\.done), today: date(8, 20)).filter { $0.kind == .streak }.isEmpty)
         // A week with nothing planned neither adds nor breaks.

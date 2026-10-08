@@ -13,13 +13,14 @@ private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
 }
 
 struct ProgramPlanTests {
-    /// The prototype's program: Monday Sep 14 2026 to Sunday Jan 3 2027 is 16 weeks; "the end of February" is 25.
+    /// The prototype's program, in Sunday weeks (FIT-82): Sunday Sep 13 2026 to Saturday Jan 2 2027 is 16 weeks;
+    /// "the end of February" is 25.
     @Test func weekCountFromTargetDate() {
-        #expect(ProgramPlan.weekCount(start: date(2026, 9, 14), target: date(2027, 1, 3), calendar: calendar) == 16)
-        #expect(ProgramPlan.weekCount(start: date(2026, 9, 16), target: date(2027, 1, 3), calendar: calendar) == 16)
-        #expect(ProgramPlan.weekCount(start: date(2026, 9, 14), target: date(2027, 3, 1), calendar: calendar) == 25)
-        #expect(ProgramPlan.weekCount(start: date(2026, 9, 14), target: date(2026, 9, 1), calendar: calendar) == 1)
-        #expect(ProgramPlan.week(of: date(2026, 9, 13), start: date(2026, 9, 14), calendar: calendar) == -1)
+        #expect(ProgramPlan.weekCount(start: date(2026, 9, 13), target: date(2027, 1, 2), calendar: calendar) == 16)
+        #expect(ProgramPlan.weekCount(start: date(2026, 9, 16), target: date(2027, 1, 2), calendar: calendar) == 16)
+        #expect(ProgramPlan.weekCount(start: date(2026, 9, 13), target: date(2027, 3, 1), calendar: calendar) == 25)
+        #expect(ProgramPlan.weekCount(start: date(2026, 9, 13), target: date(2026, 9, 1), calendar: calendar) == 1)
+        #expect(ProgramPlan.week(of: date(2026, 9, 12), start: date(2026, 9, 13), calendar: calendar) == -1)
     }
 
     @Test func phasesDeloadsAndTest() {
