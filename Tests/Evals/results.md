@@ -1,6 +1,6 @@
 # Spoken workout edit evals
 
-**134/135 runs pass (99%)** · 45 cases × 3 runs · 4.2 s per run (0.4 s sorting what was said, 3.8 s making the edit) · 0 passed by code's fallback after the model failed
+**135/135 runs pass (100%)** · 45 cases × 3 runs · 3.7 s per run (0.4 s sorting what was said, 3.3 s making the edit) · 0 passed by code's fallback after the model failed
 
 | Pass | Day | Said / why it failed |
 |---|---|---|
@@ -44,8 +44,7 @@
 | ✅ 3/3 | full | Dumbbells only today |
 | ✅ 3/3 | full | Nothing for legs today |
 | ✅ 3/3 | upper | Give me a full body workout instead |
-| 🟡 2/3 | rest | Give me a workout |
-|  | run 3 | nothing for squat/hinge — `New upper body workout ⇐ new_workout {"focus": "upper body"}` |
+| ✅ 3/3 | rest | Give me a workout |
 | ✅ 3/3 | full | Let's make this a leg day and I'd like to perform a front squat |
 | ✅ 3/3 | full | Let's make this a push day |
 | ✅ 3/3 | rest | Plan me a pull day |

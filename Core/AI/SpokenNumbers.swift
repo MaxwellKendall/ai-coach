@@ -12,6 +12,8 @@ enum SpokenNumbers {
     static func values(in text: String) -> Set<Double> {
         let words = text.lowercased().replacingOccurrences(of: "-", with: " ").split { !$0.isLetter && !$0.isNumber }.map(String.init)
         var found = Set(words.compactMap(Double.init))
+        // Decimals written as digits: "203.4" (the split above takes it apart).
+        for match in text.matches(of: #/\d+\.\d+/#) { if let value = Double(match.output) { found.insert(value) } }
         // Runs of number words: "thirty five" is 35; "two thirty five" is 235 (said like a weight).
         var run: [Int] = []
         func close() {
@@ -41,6 +43,17 @@ enum SpokenNumbers {
             } else { close() }
         }
         close()
+        // FIT-26: "187 point 2" is 187.2 and "six and a half" 6.5, as weights and hours are said.
+        func single(_ word: String) -> Double? { Double(word) ?? (units[word] ?? tens[word]).map(Double.init) }
+        for (index, word) in words.enumerated() {
+            if word == "point", index > 0, index + 1 < words.count, let whole = single(words[index - 1]),
+               let digit = Int(words[index + 1]) ?? units[words[index + 1]], digit < 10 {
+                found.insert(whole + Double(digit) / 10)
+            }
+            if word == "half", index >= 3, words[index - 1] == "a", words[index - 2] == "and", let whole = single(words[index - 3]) {
+                found.insert(whole + 0.5)
+            }
+        }
         return found
     }
 

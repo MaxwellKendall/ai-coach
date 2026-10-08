@@ -98,12 +98,58 @@ struct LogParserKeepTests {
         let groceries = ParsedLogItem(kind: .grocery, costUsd: 84)
         #expect(LogParser.keep([groceries], said: "spent 84 on groceries") == [groceries])
         #expect(LogParser.keep([groceries], said: "$84 at Trader Joe's") == [groceries])
-        #expect(LogParser.keep([groceries], said: "weighed 184") == [])
+        // Spending nobody mentioned goes; the weigh-in the words do say is kept (FIT-26).
+        #expect(LogParser.keep([groceries], said: "weighed 184") == [ParsedLogItem(kind: .weight, weightLb: 184)])
     }
 
     @Test func dropsEmptyEntries() {
         let items = [ParsedLogItem(kind: .sleep), ParsedLogItem(kind: .meal, name: " "), ParsedLogItem(kind: .meal, name: "eggs and toast"),
                      ParsedLogItem(kind: .sleep, hours: 7.5)]
         #expect(LogParser.keep(items, said: "eggs and toast, slept 7.5 hours").map(\.kind) == [.meal, .sleep])
+    }
+}
+
+/// FIT-26: what code keeps of a parse: numbers only when said, workouts only when described, macros from the words.
+struct LogKeepTests {
+    @Test func spokenDecimals() {
+        #expect(SpokenNumbers.values(in: "weighed in at 187 point 2").contains(187.2))
+        #expect(SpokenNumbers.values(in: "about six and a half hours").contains(6.5))
+        #expect(SpokenNumbers.values(in: "scale said one ninety-five").contains(195))
+    }
+
+    @Test func phantomItemsAreDropped() {
+        let items = [ParsedLogItem(kind: .sleep, hours: 7), ParsedLogItem(kind: .workout, name: "kind workout"),
+                     ParsedLogItem(kind: .weight, name: "unknown", weightLb: 180), ParsedLogItem(kind: .meal, name: "felt great")]
+        #expect(LogParser.keep(items, said: "Slept 7 hours, felt great") == [ParsedLogItem(kind: .sleep, hours: 7)])
+        // A workout described is kept, once.
+        let workout = [ParsedLogItem(kind: .workout), ParsedLogItem(kind: .workout)]
+        #expect(LogParser.keep(workout, said: "Did bench 3 sets of 5").count == 1)
+    }
+
+    @Test func macrosComeFromTheWords() {
+        let shake = ParsedLogItem(kind: .meal, name: "protein shake")
+        #expect(LogParser.keep([shake], said: "Had a protein shake with 40 grams of protein").first?.proteinG == 40)
+        let bowl = ParsedLogItem(kind: .meal, name: "burrito bowl", kcal: 900)
+        // A number nobody said is dropped; the said one is read.
+        #expect(LogParser.keep([bowl], said: "Ate a burrito bowl, about 750 calories").first?.kcal == 750)
+        // Two of the same meal are one.
+        #expect(LogParser.keep([shake, shake], said: "protein shake").count == 1)
+    }
+}
+
+/// FIT-26: what the words plainly say is kept even when the model misses it; a question logs nothing.
+struct LogRecoveryTests {
+    @Test func plainFactsAreRecovered() {
+        #expect(LogParser.keep([], said: "Weighed 203.4") == [ParsedLogItem(kind: .weight, weightLb: 203.4)])
+        #expect(LogParser.keep([], said: "Forgot to log yesterday's weight, it was 202").first?.when == .yesterday)
+        #expect(LogParser.keep([], said: "Slept 7 hours") == [ParsedLogItem(kind: .sleep, hours: 7)])
+        #expect(LogParser.keep([ParsedLogItem(kind: .workout, name: "grocery run")], said: "Grocery run was $112.50")
+            == [ParsedLogItem(kind: .grocery, costUsd: 112.5)])
+        let salmon = ParsedLogItem(kind: .meal, name: "salmon, potatoes and broccoli")
+        #expect(LogParser.keep([salmon], said: "For dinner I had salmon, potatoes and broccoli").first?.when == .dinner)
+    }
+
+    @Test func aQuestionLogsNothing() {
+        #expect(LogParser.keep([ParsedLogItem(kind: .meal, name: "What should I eat tonight?")], said: "What should I eat tonight?").isEmpty)
     }
 }

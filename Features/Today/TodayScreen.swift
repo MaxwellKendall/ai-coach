@@ -420,7 +420,15 @@ struct TodayScreen: View {
                 case .didWorkout(let differences)?: logSpoken(differences, said: said)
                 case .log?:
                     let result = LogResolver.resolve(try await LogParser.parse(said), recipes: templates.filter { $0.kind == .recipe })
-                    if !result.entries.isEmpty { sheet = .check(result.entries) } else { message = "Couldn’t find anything to log in that." }
+                    if !result.entries.isEmpty {
+                        sheet = .check(result.entries)
+                    } else if result.mentionedWorkout, let session = nextSession, let first = session.first,
+                              Calendar.current.isDateInToday(first.date) {
+                        // FIT-26: a workout is logged from its session, so open today's.
+                        sheet = .details(session)
+                    } else {
+                        message = "Couldn’t find anything to log in that."
+                    }
                 case nil:
                     message = "Couldn’t tell what to change. Try “I only have 30 minutes”, “my shoulder hurts” or “give me squats and lunges”."
                 }
