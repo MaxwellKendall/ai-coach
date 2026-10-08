@@ -24,6 +24,8 @@ final class Profile {
     var workoutTime: Int
     var equipment: [String]
     var injuredAreas: [String]
+    /// FIT-54: areas the user said are fine after a pain alert, and when; only later notes bring the alert back.
+    var fineAreas: [String: Date] = [:]
     var avoidExercises: [String]
     var maxWeeklySets: Int
     var style: TrainingStyle

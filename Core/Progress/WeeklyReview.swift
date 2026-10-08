@@ -74,7 +74,7 @@ enum WeeklyReview {
     /// Pain is counted in notes from the 4 weeks to the week's end, for areas not already marked injured.
     static func alerts(week: Range<Date>, workoutDays: [Date], protein: [DatedValue], kcal: [DatedValue],
                        sleep: [DatedValue], notes: [(date: Date, text: String)], injured: [String],
-                       calendar: Calendar = .current) -> [Alert] {
+                       fine: [String: Date] = [:], sets: [LoggedSet] = [], calendar: Calendar = .current) -> [Alert] {
         let sessions = Set(workoutDays.filter(week.contains).map(calendar.startOfDay)).sorted()
         func day(_ date: Date) -> String { date.formatted(.dateTime.weekday(.wide)) }
         func on(_ values: [DatedValue], _ date: Date) -> Double? {
@@ -110,7 +110,10 @@ enum WeeklyReview {
         var byArea: [String: [Date]] = [:]
         for note in notes where note.date >= since && note.date < week.upperBound && hurts(note.text) {
             let words = note.text.lowercased().components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
-            if let area = BodyArea.mentioned(in: words) { byArea[area, default: []].append(note.date) }
+            // FIT-54: "It's fine" holds until the area comes up again.
+            if let area = BodyArea.mentioned(in: words), note.date > (fine[area] ?? .distantPast) {
+                byArea[area, default: []].append(note.date)
+            }
         }
         let known = BodyArea.muscles(for: injured)
         for (area, dates) in byArea.sorted(by: { $0.key < $1.key })
@@ -118,6 +121,18 @@ enum WeeklyReview {
             let days = list(dates.sorted().map { $0.formatted(.dateTime.month(.abbreviated).day()) })
             alerts.append(Alert(title: "\(area.prefix(1).uppercased() + area.dropFirst()) came up in \(dates.count) notes",
                                 detail: "\(days). Plans can go easier on it until you say it’s fine.", area: area))
+        }
+
+        // FIT-54, review.md step 3: a main movement with no sets in 28 days, while training.
+        let lastDay = calendar.date(byAdding: .day, value: -1, to: week.upperBound)!
+        let volume = Training.setsByPattern(sets, endingOn: lastDay, calendar: calendar)
+        if !volume.isEmpty {
+            let names = ["squat": "squats", "hinge": "hinges", "push": "pushing", "pull": "pulling"]
+            let missing = ["squat", "hinge", "push", "pull"].filter { (volume[$0] ?? 0) == 0 && (volume["lunge"] == nil || $0 != "squat") }
+            if !missing.isEmpty {
+                alerts.append(Alert(title: "No \(list(missing.map { names[$0]! })) in 4 weeks",
+                                    detail: "Balanced training keeps every main movement in. Ask for some in a session, or regenerate the week."))
+            }
         }
         return alerts
     }

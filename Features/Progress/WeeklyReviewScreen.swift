@@ -158,7 +158,12 @@ struct WeeklyReviewScreen: View {
                         profile.updatedAt = .now
                     })
                 }
-                choice(alert.title, "It’s fine", primary: false) { ("Okay, nothing changes.", nil) }
+                choice(alert.title, "It’s fine", primary: false) {
+                    // FIT-54: remembered, so the alert only returns if later notes name the area again.
+                    profile?.fineAreas[area] = .now
+                    profile?.updatedAt = .now
+                    return ("Okay, nothing changes.", nil)
+                }
             }
         }
     }

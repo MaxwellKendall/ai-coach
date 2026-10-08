@@ -49,7 +49,8 @@ struct WeekReport {
             return seen.insert(key).inserted ? (entry.timestamp, entry.note) : nil
         }
         let alerts = WeeklyReview.alerts(week: days, workoutDays: workoutDays, protein: protein, kcal: kcal, sleep: sleep,
-                                         notes: notes, injured: profile?.injuredAreas ?? [])
+                                         notes: notes, injured: profile?.injuredAreas ?? [], fine: profile?.fineAreas ?? [:],
+                                         sets: sets)
 
         var rows: [GoalRow] = []
         var report = WeekReport(days: days, numbers: numbers, goals: [], alerts: alerts)

@@ -79,3 +79,35 @@ struct WeeklyReviewTests {
         #expect(WeeklyReview.checkIn(from: 201, now: 194.6, target: 180, pace: .onPace, forecast: 181, step: 5, week: 7, weeks: 16) == nil)
     }
 }
+
+/// FIT-54: "It's fine" holds until the area comes up again; a main movement with no sets in 4 weeks is flagged.
+struct WeeklyReviewFIT54Tests {
+    private let week = WeeklyReview.days(of: date(10, 3), calendar: calendar)
+    private let notes = [(date(9, 21), "left knee a bit sore"), (date(9, 30), "knee pain on squats"), (date(10, 3), "knee tight again")]
+
+    @Test func itsFineIsRemembered() {
+        let before = WeeklyReview.alerts(week: week, workoutDays: [], protein: [], kcal: [], sleep: [], notes: notes, injured: [],
+                                         calendar: calendar)
+        #expect(before.contains { $0.area == "knee" || $0.area == "knees" })
+        // Said fine on Oct 1: only Oct 3's note counts after it, short of 3.
+        let after = WeeklyReview.alerts(week: week, workoutDays: [], protein: [], kcal: [], sleep: [], notes: notes, injured: [],
+                                        fine: ["knee": date(10, 1), "knees": date(10, 1)], calendar: calendar)
+        #expect(!after.contains { $0.area != nil })
+    }
+
+    @Test func aMissingMovementIsFlagged() {
+        func sets(_ pattern: String, on day: Date) -> [LoggedSet] {
+            (0..<3).map { _ in LoggedSet(date: day, exercise: pattern, pattern: pattern, measurements: []) }
+        }
+        let history = sets("squat", on: date(9, 22)) + sets("push", on: date(9, 24)) + sets("pull", on: date(9, 30))
+        let alerts = WeeklyReview.alerts(week: week, workoutDays: [], protein: [], kcal: [], sleep: [], notes: [], injured: [],
+                                         sets: history, calendar: calendar)
+        #expect(alerts.map(\.title).contains("No hinges in 4 weeks"), "\(alerts.map(\.title))")
+        // Lunges count for squats; nothing logged at all says nothing.
+        let lunges = sets("lunge", on: date(9, 22)) + sets("hinge", on: date(9, 23)) + sets("push", on: date(9, 24)) + sets("pull", on: date(9, 30))
+        #expect(WeeklyReview.alerts(week: week, workoutDays: [], protein: [], kcal: [], sleep: [], notes: [], injured: [],
+                                    sets: lunges, calendar: calendar).isEmpty)
+        #expect(WeeklyReview.alerts(week: week, workoutDays: [], protein: [], kcal: [], sleep: [], notes: [], injured: [],
+                                    sets: [], calendar: calendar).isEmpty)
+    }
+}
