@@ -73,3 +73,12 @@ struct WeekTests {
         #expect(Week.start(of: date(y, m, d), calendar: calendar) == date(2026, 9, 27, hour: 0))
     }
 }
+
+/// FIT-64: the Groups tab is named for your group when you're in exactly one.
+struct GroupsTabTitleTests {
+    @Test func title() {
+        #expect(GroupsTab.title(for: []) == "Groups")
+        #expect(GroupsTab.title(for: ["Kendall Family"]) == "Kendall Family")
+        #expect(GroupsTab.title(for: ["A", "B"]) == "Groups")
+    }
+}

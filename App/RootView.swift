@@ -12,6 +12,7 @@ struct RootView: View {
     /// The tab the coach was opened from, so what's said goes back there.
     @State private var lastTab: AppTab = .today
     @State private var coach = CoachInbox()
+    @State private var groupsTab = GroupsTab()
 
     /// Graphite (FIT-27): monochrome, the label colour is the only accent.
     static let accent = Color.primary
@@ -23,7 +24,8 @@ struct RootView: View {
             Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
             Tab("Progress", systemImage: "chart.bar", value: AppTab.progress) { ProgramScreen(tabs: [.goals, .wins]) }
             if account.isAvailable {
-                Tab("Groups", systemImage: "person.2", value: AppTab.groups) { NavigationStack { GroupsScreen() } }
+                Tab(groupsTab.title, systemImage: "person.2", value: AppTab.groups) { NavigationStack { GroupsScreen() } }
+                    .badge(groupsTab.live ? Text("Live") : nil)
             }
             // Principle 5: without Apple Intelligence there's no coach; every manual path stays.
             if LanguageModel.isAvailable {
@@ -37,6 +39,14 @@ struct RootView: View {
         }
         .environment(coach)
         .onChange(of: tab) { _, new in if new != .coach { lastTab = new } }
+        // The group's name and whether anyone's live: a minute is soon enough, and push says when a workout starts.
+        .task(id: account.user?.uid) {
+            guard account.isAvailable else { return }
+            while !Task.isCancelled {
+                await groupsTab.refresh(me: account.user?.uid)
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
         .tint(Self.accent)
         // Onboarding (FIT-38): until there's a program. The profile is inserted up front so edits are observed,
         // and an unfinished one resumes on the next launch.
