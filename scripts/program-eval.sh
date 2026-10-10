@@ -5,6 +5,7 @@
 #   EVAL_THINKING=<tokens> adds Claude's thinking.
 #   EVAL_PROBE=author,strength: the profiles to plan a whole program for (default: the author).
 #   EVAL_BRIEF_MODEL=<model>: the model that writes the program brief (default: the same model).
+#   EVAL_SIMULATOR=<name>: run on another simulator, with its own build folder, beside a run on the default one.
 # Writes Tests/Evals/program-results-<model>.md, then Tests/Evals/program-compare.md from every model's latest results.
 cd "${0:A:h}/.."
 # API keys, gitignored.
@@ -12,15 +13,20 @@ cd "${0:A:h}/.."
 model=${1:-on-device}
 out=Tests/Evals/program-results-$model${EVAL_THINKING:+-thinking-$EVAL_THINKING}${EVAL_BRIEF_MODEL:+-brief-$EVAL_BRIEF_MODEL}.md
 xcodegen generate >/dev/null
+sim=${EVAL_SIMULATOR:-iPhone 17 Pro}
+log=/tmp/aicoach-program-eval-$model.log
+# A second simulator builds in its own folder, so two runs don't share Xcode's build lock.
+build=()
+[[ -n $EVAL_SIMULATOR ]] && build=(-derivedDataPath /tmp/aicoach-evals-${EVAL_SIMULATOR// /-})
 TEST_RUNNER_EVAL_MODEL=$model TEST_RUNNER_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-} TEST_RUNNER_EVAL_THINKING=${EVAL_THINKING:-} \
 TEST_RUNNER_OPENAI_API_KEY=${OPENAI_API_KEY:-${OPEN_AI_API_KEY:-}} TEST_RUNNER_GEMINI_API_KEY=${GEMINI_API_KEY:-} \
 TEST_RUNNER_EVAL_WEEKS=${2:-12} TEST_RUNNER_EVAL_FILTER=${3:-} TEST_RUNNER_EVAL_PROBE=${EVAL_PROBE:-} TEST_RUNNER_EVAL_BRIEF_MODEL=${EVAL_BRIEF_MODEL:-} \
-  xcodebuild -scheme AICoachEvals -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -skipPackagePluginValidation \
+  xcodebuild -scheme AICoachEvals -destination "platform=iOS Simulator,name=$sim" -skipPackagePluginValidation $build \
   test '-only-testing:AICoachEvals/ProgramDesignerEvals/designedWeeks()' 2>&1 \
-  | tee /tmp/aicoach-program-eval.log | grep -a '^PROGRAM§ ' | sed 's/^PROGRAM§ //' > $out
+  | tee $log | grep -a '^PROGRAM§ ' | sed 's/^PROGRAM§ //' > $out
 if [[ ! -s $out ]]; then
   rm -f $out
-  grep -aE "error:|✘|Expectation failed|isn't available|No ANTHROPIC" /tmp/aicoach-program-eval.log | head -20
+  grep -aE "error:|✘|Expectation failed|isn't available|No [A-Z_]+_API_KEY" $log | head -20
   exit 1
 fi
 sed -n 3,7p $out
