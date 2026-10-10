@@ -80,9 +80,10 @@ enum Planner {
         return brief
     }
 
-    static func design(weekOf date: Date = .now, in context: ModelContext, calendar: Calendar = .current) async {
+    static func design(weekOf date: Date = .now, in context: ModelContext, model: any AIModel = OnDeviceModel(),
+                       calendar: Calendar = .current) async {
         let monday = Week.start(of: date, calendar: calendar)
-        guard LanguageModel.isAvailable, !designing.weeks.contains(monday),
+        guard model.isAvailable, !designing.weeks.contains(monday),
               let plan = try? plan(weekOf: monday, in: context), plan.designedBy == nil,
               let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
               let templates = try? context.fetch(FetchDescriptor<Template>()),
@@ -91,11 +92,11 @@ enum Planner {
         designing.weeks.insert(monday)
         defer { designing.weeks.remove(monday) }
         if request.brief == nil, let program = profile.programWeek(of: monday, calendar: calendar) {
-            request.brief = await writeBrief(for: request, profile: profile)?.phase(program.week.phase)
+            request.brief = await writeBrief(for: request, profile: profile, model: model)?.phase(program.week.phase)
         }
         // FIT-101: each main lift's top set decided by the rule table first; the model designs the week around them.
         request.progression = await Progression.decided(request, by: Progression.Rules(tier: AgeTier.of(age: profile.age)))
-        let result = await ProgramDesigner.week(request)
+        let result = await ProgramDesigner.week(request, model: model)
         // The week may have been planned again while the model worked; that plan gets its own turn.
         guard let current = try? self.plan(weekOf: monday, in: context), current.id == plan.id, plan.designedBy == nil else { return }
         if result.source == .model {

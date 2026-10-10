@@ -230,6 +230,16 @@ export class AICoachStack extends Stack {
       fieldName: "deleteAccount",
     });
 
+    // ---- FIT-102: Claude for the app, with the key kept here ----
+    const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(this, "AnthropicSecret", `aicoach/${stage}/anthropic`);
+    const aiProxy = fn("aiProxy", { ANTHROPIC_SECRET: anthropicSecret.secretName });
+    table.grant(aiProxy, "dynamodb:UpdateItem");
+    anthropicSecret.grantRead(aiProxy);
+    api.addLambdaDataSource("AiProxySource", aiProxy).createResolver("AiMessages", {
+      typeName: "Mutation",
+      fieldName: "aiMessages",
+    });
+
     // ---- Push: stream → Lambda → APNs ----
     const apnsSecret = secretsmanager.Secret.fromSecretNameV2(this, "ApnsSecret", `aicoach/${stage}/apns`);
     const push = fn("push", {

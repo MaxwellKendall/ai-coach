@@ -124,7 +124,7 @@ describe("resolvers", () => {
         "Query.me", "Query.myGroups", "Query.group", "Group.feed",
         "Mutation.updateProfile", "Mutation.createGroup", "Mutation.joinGroup", "Mutation.leaveGroup",
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
-        "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount",
+        "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -174,6 +174,9 @@ describe("least privilege", () => {
     expect(actionsOf(dev, /^push/)).toContain("secretsmanager:GetSecretValue");
     expect(actionsOf(dev, /^groupCleanup/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem"]));
     expect(actionsOf(dev, /^groupCleanup/)).not.toContain("dynamodb:PutItem");
+    // FIT-102: the AI proxy counts each user's requests and reads the Anthropic key; nothing else.
+    expect(actionsOf(dev, /^aiProxy/).filter((a) => a.startsWith("dynamodb:"))).toEqual(["dynamodb:UpdateItem"]);
+    expect(actionsOf(dev, /^aiProxy/)).toContain("secretsmanager:GetSecretValue");
   });
 });
 

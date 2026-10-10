@@ -5,6 +5,8 @@ import SwiftData
 /// middle; the last swipe shows the program to check and start. What's heard fills the card on screen, dashed.
 struct OnboardingView: View {
     @Environment(\.modelContext) private var context
+    /// FIT-102: signed in, program design uses Claude through our server.
+    @Environment(Account.self) private var account
     @Bindable var profile: Profile
     @Query private var templates: [Template]
     @Query private var goals: [Goal]
@@ -20,6 +22,7 @@ struct OnboardingView: View {
     @State private var firstWeek: ProgramDesigner.Result?
     /// FIT-95: the program brief written with week 1, and the model that wrote it.
     @State private var brief: ProgramBrief?
+    @State private var briefModel = OnDeviceModel().name
     @State private var designing = false
     @State private var loads: [String: Double] = [:]
     var onDone: () -> Void
@@ -83,7 +86,8 @@ struct OnboardingView: View {
     }
 
     private func designFirstWeek() async {
-        guard LanguageModel.isAvailable, let settings = answers.trainingSettings(workoutTime: profile.workoutTime,
+        let model = LanguageModel.programs(signedIn: account.user != nil)
+        guard model.isAvailable, let settings = answers.trainingSettings(workoutTime: profile.workoutTime,
                                                                                  maxWeeklySets: profile.maxWeeklySets) else { return }
         let monday = Week.start(of: .now)
         let weeks = ProgramPlan.weeks(count: answers.weeks, deloadEvery: AgeTier.of(age: settings.age).deloadEveryWeeks)
@@ -98,14 +102,15 @@ struct OnboardingView: View {
         defer { designing = false }
         // FIT-95: the program's plan first, then week 1 within it.
         let brief = await ProgramBrief.write(ProgramBrief.Request(settings: settings, catalog: catalog, names: names, goals: goals,
-                                                                  goalLifts: lifts, weeks: weeks))
+                                                                  goalLifts: lifts, weeks: weeks), model: model)
         guard !Task.isCancelled else { return }
         self.brief = brief
+        briefModel = model.name
         let request = ProgramDesigner.Request(
             monday: monday, settings: settings, catalog: catalog, names: names, history: history, weeksSinceDeload: 0,
             program: weeks.first, programIndex: 0, programWeeks: weeks.count, goals: goals,
             brief: weeks.first.flatMap { brief?.phase($0.phase) }, goalLifts: lifts, programPlan: weeks)
-        let result = await ProgramDesigner.week(request)
+        let result = await ProgramDesigner.week(request, model: model)
         guard !Task.isCancelled else { return }
         withAnimation(.snappy) {
             firstWeek = result.source == .model ? result : nil
@@ -239,7 +244,7 @@ struct OnboardingView: View {
         let saved = (try? context.fetch(FetchDescriptor<Goal>())) ?? []
         profile.brief = brief.map { brief in
             ProgramBrief.Stored(brief: brief, key: ProgramBrief.key(goals: Planner.goalLines(saved), settings: profile.trainingSettings,
-                                                                    weeks: profile.program ?? []), model: OnDeviceModel().name)
+                                                                    weeks: profile.program ?? []), model: briefModel)
         }
         try? context.save()
         if let plan = try? Planner.generate(weekOf: now, in: context), let firstWeek {

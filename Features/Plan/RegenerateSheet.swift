@@ -19,6 +19,8 @@ struct RegenerateSheet: View {
     let names: [String: String]
     /// The week as the designer reads it; nil without Apple Intelligence.
     var request: ProgramDesigner.Request?
+    /// FIT-102: the model that designs the new version.
+    var model: any AIModel = OnDeviceModel()
     let apply: ([(items: [PlannedActivity], workouts: [PlannedWorkout])]) -> Void
     @State private var variant = 0
     /// The model's version, by day, and each session's aim.
@@ -123,7 +125,7 @@ struct RegenerateSheet: View {
         request.differentFrom = current.filter { $0.note != TrainingGenerator.warmupNote }
         designing = true
         defer { designing = false }
-        let result = await ProgramDesigner.week(request)
+        let result = await ProgramDesigner.week(request, model: model)
         guard result.source == .model else { return }
         let calendar = Calendar.current
         withAnimation(.snappy) {

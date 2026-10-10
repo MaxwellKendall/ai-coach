@@ -6,6 +6,8 @@ import SwiftData
 /// program, where it can be changed.
 struct ProgramScreen: View {
     @Environment(\.modelContext) private var context
+    /// FIT-102: signed in, program design uses Claude through our server.
+    @Environment(Account.self) private var account
     @Environment(CoachInbox.self) private var coach
     @Environment(Pro.self) private var pro
     @Query private var profiles: [Profile]
@@ -103,8 +105,9 @@ struct ProgramScreen: View {
                 RegenerateSheet(week: request.week, days: request.days, catalog: Planner.catalog(templates),
                                 settings: profile.trainingSettings, history: Planner.loggedSets(entries, templates: templates),
                                 names: names,
-                                request: LanguageModel.isAvailable
-                                    ? request.days.first.flatMap { Planner.designRequest(weekOf: $0.date, in: context) } : nil) { changes in
+                                request: LanguageModel.programs(signedIn: account.user != nil).isAvailable
+                                    ? request.days.first.flatMap { Planner.designRequest(weekOf: $0.date, in: context) } : nil,
+                                model: LanguageModel.programs(signedIn: account.user != nil)) { changes in
                     apply(changes, week: request.week)
                 }
             }

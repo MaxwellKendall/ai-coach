@@ -1,0 +1,95 @@
+import { DynamoDBClient, ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
+
+/**
+ * FIT-102: the app's one way to Claude. The app runs the conversation (the same code the evals run, `ClaudeModel`)
+ * and sends each Messages API request here; this adds the key, which never ships in the app, and passes on only
+ * what the app needs: Haiku, a capped answer, a capped prompt, and a daily allowance per signed-in user.
+ */
+
+const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const secrets = new SecretsManagerClient({});
+const TABLE = process.env.TABLE!;
+const SECRET = process.env.ANTHROPIC_SECRET!;
+
+export const limits = {
+  models: ["claude-haiku-5-5"],
+  maxTokens: 8_000,
+  /** The whole request as JSON; a 12-week program's week design is about 15k characters. */
+  maxRequestChars: 60_000,
+  /** Requests a user can send a day: a week's design is 2 to 6, so this leaves room for redesigns and the coach. */
+  dailyRequests: 300,
+};
+
+type Request = Record<string, unknown>;
+
+/** The request with only the fields the Messages API needs from the app, or why it can't go. */
+export function allowedRequest(raw: string): { body: Request } | { error: string } {
+  if (raw.length > limits.maxRequestChars) return { error: "The request is too long." };
+  let request: Request;
+  try {
+    request = JSON.parse(raw);
+  } catch {
+    return { error: "The request isn't JSON." };
+  }
+  if (typeof request !== "object" || request === null || Array.isArray(request)) return { error: "The request isn't an object." };
+  if (!limits.models.includes(request.model as string)) return { error: `Only ${limits.models.join(", ")} is available.` };
+  if (!Array.isArray(request.messages) || request.messages.length === 0) return { error: "The request has no messages." };
+  const body: Request = {
+    model: request.model,
+    max_tokens: Math.min(Number(request.max_tokens) || limits.maxTokens, limits.maxTokens),
+    messages: request.messages,
+  };
+  if (typeof request.system === "string") body.system = request.system;
+  if (Array.isArray(request.tools)) body.tools = request.tools;
+  return { body };
+}
+
+/** "2026-10-10": a user's allowance resets each UTC day. */
+export const day = (now: Date) => now.toISOString().slice(0, 10);
+
+/** Counts one request against the user's allowance; false when it's used up. */
+async function allowance(uid: string, now: Date): Promise<boolean> {
+  try {
+    await db.send(new UpdateCommand({
+      TableName: TABLE,
+      Key: { PK: `USER#${uid}`, SK: `AIUSE#${day(now)}` },
+      UpdateExpression: "ADD #n :one SET #expiresAt = :expiresAt",
+      ConditionExpression: "attribute_not_exists(#n) OR #n < :limit",
+      ExpressionAttributeNames: { "#n": "count", "#expiresAt": "expiresAt" },
+      ExpressionAttributeValues: { ":one": 1, ":limit": limits.dailyRequests, ":expiresAt": Math.floor(now.getTime() / 1000) + 3 * 86_400 },
+    }));
+    return true;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) return false;
+    throw error;
+  }
+}
+
+let key: string | undefined;
+async function apiKey() {
+  if (!key) {
+    const secret = await secrets.send(new GetSecretValueCommand({ SecretId: SECRET }));
+    key = JSON.parse(secret.SecretString ?? "{}").apiKey;
+    if (!key) throw new Error("The Anthropic secret has no apiKey.");
+  }
+  return key;
+}
+
+export async function handler(event: AppSyncResolverEvent<{ request: string }>) {
+  const uid = (event.identity as AppSyncIdentityCognito | null)?.sub;
+  if (!uid) throw new Error("Sign in to use the coach.");
+  const allowed = allowedRequest(event.arguments.request);
+  if ("error" in allowed) throw new Error(allowed.error);
+  if (!(await allowance(uid, new Date()))) throw new Error("You've reached today's limit for the coach. It resets tomorrow.");
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": await apiKey(), "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify(allowed.body),
+  });
+  const text = await response.text();
+  // The app reads Claude's own errors (a prompt too long, overload) as it does when it calls Claude directly.
+  return JSON.stringify({ status: response.status, body: JSON.parse(text || "{}") });
+}

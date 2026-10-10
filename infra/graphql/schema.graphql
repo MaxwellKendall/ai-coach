@@ -127,6 +127,8 @@ type Mutation {
   postFeed(groupId: ID!, kind: String!, measurements: AWSJSON): FeedItem
   registerDevice(token: String!, platform: String!): Boolean
   deleteAccount: Boolean
+  # FIT-102: one Messages API request to Claude, sent on by the aiProxy Lambda with the key. Signed-in users only.
+  aiMessages(request: AWSJSON!): AWSJSON
 }
 
 type Subscription {

@@ -5,6 +5,8 @@ import SwiftData
 /// and one mic. Planned days start a workout, done days show what happened, and the rest stays one tap away.
 struct TodayScreen: View {
     @Environment(\.modelContext) private var context
+    /// FIT-102: signed in, program design uses Claude through our server.
+    @Environment(Account.self) private var account
     @Environment(CoachInbox.self) private var coach
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var plans: [Plan]
@@ -135,7 +137,7 @@ struct TodayScreen: View {
         // A new week, or a profile that just finished onboarding, gets a plan.
         .task(id: profiles.first?.isComplete) {
             try? Planner.ensureWeek(in: context)
-            await Planner.design(in: context)
+            await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
         }
     }
 
@@ -283,7 +285,7 @@ struct TodayScreen: View {
                     }
                     Button("Plan this week again", systemImage: "arrow.clockwise") {
                         try? Planner.generate(weekOf: .now, in: context)
-                        Task { await Planner.design(in: context) }
+                        Task { await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil)) }
                     }
                 } label: {
                     Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)

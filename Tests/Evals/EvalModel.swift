@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 @testable import AICoach
 
 /// FIT-90: the model an eval run scores, from `EVAL_MODEL`: "on-device" (the default) or a Claude model id, with the
@@ -22,7 +21,7 @@ enum EvalModel {
         let environment = ProcessInfo.processInfo.environment
         let key = { (names: [String]) in names.lazy.compactMap { environment[$0] }.first { !$0.isEmpty } ?? "" }
         if name.hasPrefix("claude") {
-            return ClaudeModel(model: name, key: key(["ANTHROPIC_API_KEY"]), thinking: environment["EVAL_THINKING"].flatMap { Int($0) })
+            return ClaudeModel(model: name, transport: ClaudeAPI(key: key(["ANTHROPIC_API_KEY"])), thinking: environment["EVAL_THINKING"].flatMap { Int($0) })
         }
         // "o3", "o4-mini": OpenAI's o-series; not "on-device".
         if name.hasPrefix("gpt") || (name.first == "o" && name.dropFirst().first?.isNumber == true) { return OpenAIModel(model: name, key: key(["OPENAI_API_KEY", "OPEN_AI_API_KEY"])) }
@@ -87,16 +86,4 @@ enum EvalModel {
 protocol MeteredModel: AIModel {
     var model: String { get }
     var usage: TokenUsage { get }
-}
-
-final class TokenUsage: Sendable {
-    let tokens = Mutex<(input: Int, output: Int, requests: Int)>((0, 0, 0))
-
-    func add(input: Double?, output: Double?) {
-        tokens.withLock {
-            $0.input += Int(input ?? 0)
-            $0.output += Int(output ?? 0)
-            $0.requests += 1
-        }
-    }
 }
