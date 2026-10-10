@@ -48,10 +48,11 @@ struct ProgramBriefTests {
 
     @Test func checkingKeepsTheProgramsPhasesInOrderAndOnlyLiftsTheCatalogHas() {
         let written = ProgramBrief(phases: [phase("peak", lifts: ["Bench Press", "Back Squat"], reps: 3),
-                                            phase("base", lifts: ["bench press", "Moon Press", "Back Squat", "Back Squat"]),
+                                            { var base = phase("base", lifts: ["bench press", "Moon Press", "Back Squat", "Back Squat"]); base.focus = "base work."; return base }(),
                                             phase("build", lifts: ["Bench Press"])])
         let checked = ProgramBrief.checked(written, request)
         #expect(checked.phases.map(\.phase) == ["base", "build", "peak"])
+        #expect(checked.phases[0].focus == "base work")
         // Names resolve to the catalog's own; unknown ones and repeats go.
         #expect(checked.phases[0].mainLifts == ["Bench Press", "Back Squat"])
         // A program without a peak has no peak line.

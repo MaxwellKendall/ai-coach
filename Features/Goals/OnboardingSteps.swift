@@ -11,6 +11,8 @@ struct OnboardingStepView: View {
     /// FIT-73: the first week's loads the model chose, while it's choosing, and the ones the user changed.
     var firstLoads: [FirstLoads.Item]? = nil
     var designing = false
+    /// FIT-99: the program brief the model wrote with week 1, when it could.
+    var brief: ProgramBrief? = nil
     @Binding var loads: [String: Double]
     let go: (Int) -> Void
 
@@ -264,6 +266,29 @@ struct OnboardingStepView: View {
                      open: Binding(get: { false }, set: { _ in go(2) })) {}
             firstWeek
             PhaseBars(weeks: weeks).padding(.top, 22)
+            phases(weeks)
+        }
+    }
+
+    /// FIT-99: what each phase is for, from the brief; its main lifts and reps one tap away.
+    @ViewBuilder private func phases(_ weeks: [ProgramWeek]) -> some View {
+        if let brief, !brief.phases.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(brief.phases, id: \.phase) { line in
+                    let span = weeks.indices.filter { weeks[$0].phase.rawValue == line.phase }
+                    ValueRow(name: line.phase.capitalized, detail: span.first.map { first in
+                                 first == span.last ? "Week \(first + 1)" : "Weeks \(first + 1)–\(span.last! + 1)" },
+                             value: line.focus.prefix(1).uppercased() + line.focus.dropFirst(), open: opened("phase.\(line.phase)")) {
+                        Text("\(line.mainLifts.joined(separator: ", ")) · around \(line.mainReps) reps")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 12)
+                    }
+                }
+            }
+            .padding(.top, 12)
+            Text("A lighter deload comes every few weeks, and week \(weeks.count) tests your goals. Each week is planned when the one before ends, from how it went.")
+                .font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
+        } else {
             Text("Weeks 1–\(weeks.filter { $0.phase == .base }.count) build a base. Then the work climbs, the last weeks peak, and week \(weeks.count) tests your goals. A lighter deload comes every few weeks. Each week is planned when the one before ends, from how it went.")
                 .font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
         }
@@ -275,7 +300,7 @@ struct OnboardingStepView: View {
             Eyebrow("First week").padding(.top, 22)
             HStack(spacing: 10) {
                 ProgressView()
-                Text("Choosing your first weights…").font(.subheadline).foregroundStyle(.secondary)
+                Text(brief == nil ? "Planning your program…" : "Choosing your first weights…").font(.subheadline).foregroundStyle(.secondary)
             }
             .padding(.vertical, 12)
         } else if let firstLoads, !firstLoads.isEmpty {

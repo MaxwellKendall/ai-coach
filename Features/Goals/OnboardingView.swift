@@ -47,7 +47,7 @@ struct OnboardingView: View {
                         if index < 4 { header(index) }
                         OnboardingStepView(index: index, answers: $answers, open: $open, catalog: catalog, names: names,
                                            history: history, firstLoads: firstWeek.map { FirstLoads.items($0.week.workouts) },
-                                           designing: designing, loads: $loads,
+                                           designing: designing, brief: brief, loads: $loads,
                                            go: { index in withAnimation(.snappy) { page = index } })
                     }
                     .padding(.horizontal, 22)

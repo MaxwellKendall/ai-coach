@@ -139,6 +139,7 @@ struct ProgramBrief: Codable, Equatable, Sendable {
         let bySlug = Dictionary(request.catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
         let phases = phases(request.weeks).compactMap { phase -> Phase? in
             guard var line = brief.phase(phase) else { return nil }
+            line.focus = line.focus.trimmingCharacters(in: CharacterSet(charactersIn: ". \n"))
             line.mainLifts = line.mainLifts.compactMap { PlanGuard.resolve($0, in: bySlug, names: request.names) }
                 .map { request.names[$0.slug] ?? $0.slug }
                 .reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
