@@ -13,8 +13,11 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
+    # Signing team for device builds and App Store archives.
+    DEVELOPMENT_TEAM: 7GZKY29XJH
+    CODE_SIGN_STYLE: Automatic
 targets:
   AICoach:
     type: application
@@ -43,7 +46,8 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Hold the mic to log meals, sleep and weight by voice.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Your voice is turned into text on this iPhone to fill in your log.
         TARGETED_DEVICE_FAMILY: "1"
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
       configs:
         # FIT-57: each build bundles only its own backend.
         Debug:
