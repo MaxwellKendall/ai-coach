@@ -193,11 +193,9 @@ struct ProgramDesignerEvals {
                 catalog: inputs.catalog, names: inputs.names, history: history, weeksSinceDeload: 1, program: week,
                 programIndex: index, programWeeks: count, goals: profile.goals, lastWeek: last,
                 brief: brief?.phase(week.phase), goalLifts: lifts, programPlan: program, calendar: calendar)
-            // FIT-100: hard weeks' main lifts decided first; a decider that fails leaves them to the designer.
-            if let decider, !week.light {
-                let candidates = Progression.lifts(request)
-                let decided = (try? await decider.decide(candidates, context: Progression.context(request))) ?? [:]
-                request.progression = candidates.compactMap { decided[$0.exercise] }
+            // FIT-100: hard weeks' main lifts decided first, as `Planner.design` does (FIT-101).
+            if let decider {
+                request.progression = await Progression.decided(request, by: decider)
                 decisions += request.progression
             }
             let result = await ProgramDesigner.week(request, model: model)

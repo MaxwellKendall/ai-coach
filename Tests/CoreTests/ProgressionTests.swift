@@ -115,6 +115,21 @@ struct ProgressionTests {
         #expect(lifts.first.flatMap { Progression.decision($0, step: .add) }?.load == 190)
     }
 
+    @Test func hardWeeksAreDecidedAndLightOnesAreNot() async {
+        let weeks = ProgramPlan.weeks(count: 12, deloadEvery: 6)
+        let planned = [PlannedWorkout(date: day(6), session: "Upper", exercise: "bench-press",
+                                      targets: [.init(metric: "sets", value: 3, unit: "sets"), .init(metric: "reps", value: 5, unit: "reps"),
+                                                .init(metric: "load_lb", value: 185, unit: "lb")], main: true)]
+        var request = ProgramDesigner.Request(
+            monday: monday, settings: settings, catalog: [], names: names, history: sets(6, reps: [5, 5, 5], rpe: 8), weeksSinceDeload: 1,
+            program: weeks[1], programIndex: 1, programWeeks: 12, lastWeek: planned, programPlan: weeks, calendar: calendar)
+        let decided = await Progression.decided(request, by: rules)
+        #expect(decided.map(\.step) == [.add])
+        #expect(decided.first?.load == 190)
+        request.program = ProgramWeek(phase: .build, kind: .deload)
+        #expect(await Progression.decided(request, by: rules).isEmpty)
+    }
+
     @Test func theWeekIsToldTheDecidedTopSetsAndTheGoalKeepsItsAim() {
         let weeks = ProgramPlan.weeks(count: 12, deloadEvery: 6)
         var request = ProgramDesigner.Request(

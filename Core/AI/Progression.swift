@@ -128,6 +128,15 @@ enum Progression {
         return lines.joined(separator: "\n")
     }
 
+    /// FIT-101: a hard week's main lifts decided, in the order they were gathered: what `Planner.design` and the evals
+    /// give the week's designer. Light weeks aren't decided; a decider that fails leaves the lifts to the designer.
+    static func decided(_ request: ProgramDesigner.Request, by decider: any ProgressionDecider) async -> [Decision] {
+        guard request.program?.light != true else { return [] }
+        let lifts = lifts(request)
+        guard !lifts.isEmpty, let decided = try? await decider.decide(lifts, context: context(request)) else { return [] }
+        return lifts.compactMap { decided[$0.exercise] }
+    }
+
     // MARK: Turning a step into the top set
 
     /// The step as an estimated max, from last time's top set: add puts 5 lb on it (2.5 a hand, as

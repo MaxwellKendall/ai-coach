@@ -93,6 +93,8 @@ enum Planner {
         if request.brief == nil, let program = profile.programWeek(of: monday, calendar: calendar) {
             request.brief = await writeBrief(for: request, profile: profile)?.phase(program.week.phase)
         }
+        // FIT-101: each main lift's top set decided by the rule table first; the model designs the week around them.
+        request.progression = await Progression.decided(request, by: Progression.Rules(tier: AgeTier.of(age: profile.age)))
         let result = await ProgramDesigner.week(request)
         // The week may have been planned again while the model worked; that plan gets its own turn.
         guard let current = try? self.plan(weekOf: monday, in: context), current.id == plan.id, plan.designedBy == nil else { return }
