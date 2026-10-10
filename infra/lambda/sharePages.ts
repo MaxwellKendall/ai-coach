@@ -1,0 +1,510 @@
+/**
+ * FIT-105: the page behind every shared link. A shared win, recap or program, or a group invite, opens here when
+ * the viewer doesn't have the app (with the app, the universal link opens it instead). Every page leads one way:
+ * get the app, then join the sharer's group or start their program.
+ *
+ * Pure: a path and a store in, a response out. `npm run web` serves it locally from fixtures; a Lambda behind
+ * CloudFront will serve it from what the app saved.
+ */
+
+export type CardStyle = "dark" | "paper";
+
+export interface Win {
+  kind: "pr" | "milestone" | "streak";
+  name: string;
+  /** ISO date. */
+  date: string;
+  metric: string;
+  unit: string;
+  /** The new best, the value when the milestone was crossed, or the streak in weeks. */
+  value: number;
+  previous?: number;
+  target?: number;
+  /** Milestone: 25, 50, 75 or 100. */
+  percent?: number;
+  /** Personal best: the best so far, oldest first. */
+  trend?: number[];
+  /** The sharer's choice: without it, only changes and percents appear (the app's "Show weights"). */
+  showNumbers: boolean;
+  style: CardStyle;
+  /** The sharer's group, when they attached its invite. */
+  invite?: string;
+  /** The sharer's program, when they attached it. */
+  program?: string;
+}
+
+export interface Recap {
+  name: string;
+  week: number;
+  weeks: number;
+  phase: string;
+  sessions: { done: number; planned: number };
+  lifts: { metric: string; from: number; to: number; unit: string }[];
+  bests: number;
+  showNumbers: boolean;
+  invite?: string;
+  program?: string;
+}
+
+export interface Program {
+  name: string;
+  by: string;
+  weeks: number;
+  days: number;
+  equipment: string;
+  goals: string[];
+  phases: { phase: string; from: number; to: number; focus: string; mainLifts: string[]; mainReps: number }[];
+  sampleWeek: { day: string; title: string; items: string[] }[];
+  invite?: string;
+}
+
+export interface Invite {
+  group: string;
+  by: string;
+  members: string[];
+  /** The group's latest wins, already worded ("Jo hit a squat best"). */
+  recent: string[];
+}
+
+export interface Store {
+  win(id: string): Promise<Win | undefined>;
+  recap(id: string): Promise<Recap | undefined>;
+  program(id: string): Promise<Program | undefined>;
+  invite(code: string): Promise<Invite | undefined>;
+}
+
+export interface Site {
+  appName: string;
+  /** "https://repandrecipe.com", for link previews. */
+  origin: string;
+  /** Until the app is on the App Store, the buttons lead to the waitlist anchor instead. */
+  appStoreUrl?: string;
+  /** Team ID and bundle ID, for Apple's app-site-association file. */
+  appId: string;
+}
+
+export interface Page {
+  status: number;
+  type: string;
+  body: string;
+}
+
+/** The paths the app opens itself when it's installed. */
+export const appPaths = ["/join/*", "/w/*", "/r/*", "/p/*"];
+
+export async function route(path: string, store: Store, site: Site): Promise<Page> {
+  if (path === "/.well-known/apple-app-site-association") {
+    return { status: 200, type: "application/json", body: JSON.stringify(associationFile(site)) };
+  }
+  const [, kind, id = ""] = path.split("/");
+  const valid = /^[A-Za-z0-9_-]{1,40}$/.test(id);
+  if (kind === "w" && valid) {
+    const win = await store.win(id);
+    if (win) return html(winPage(win, path, site));
+  }
+  if (kind === "r" && valid) {
+    const recap = await store.recap(id);
+    if (recap) return html(recapPage(recap, path, site));
+  }
+  if (kind === "p" && valid) {
+    const program = await store.program(id);
+    if (program) return html(programPage(program, path, site));
+  }
+  if (kind === "join" && valid) {
+    const invite = await store.invite(id.toUpperCase());
+    if (invite) return html(invitePage(invite, id.toUpperCase(), path, site));
+  }
+  if (path === "/") return html(homePage(site));
+  return { ...html(missingPage(site)), status: 404 };
+}
+
+export function associationFile(site: Site) {
+  return {
+    applinks: { details: [{ appIDs: [site.appId], components: appPaths.map((p) => ({ "/": p })) }] },
+  };
+}
+
+const html = (body: string): Page => ({ status: 200, type: "text/html; charset=utf-8", body });
+
+/** Everything a user typed (names, group names) goes through this. */
+export const esc = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+const first = (name: string) => name.trim().split(/\s+/)[0] || name;
+const date = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const round = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(1));
+
+// MARK: The win card, as the app draws it (Features/Progress/ShareCard.swift).
+
+export function winWords(win: Win) {
+  const change = win.previous ? win.value - win.previous : undefined;
+  const percent = win.previous ? Math.round(((win.value - win.previous) / win.previous) * 100) : undefined;
+  switch (win.kind) {
+    case "pr":
+      return {
+        tag: "PERSONAL BEST",
+        heading: win.metric,
+        big: win.showNumbers ? round(win.value) : percent !== undefined ? `+${percent}` : "New",
+        unit: win.showNumbers ? win.unit : percent !== undefined ? "%" : "best",
+        sub: win.showNumbers && win.previous ? `Up from ${round(win.previous)} ${win.unit}` : change ? "Over the last best" : "A first best",
+        title: `${first(win.name)} set a ${win.metric.toLowerCase()} best`,
+      };
+    case "milestone":
+      return {
+        tag: "GOAL",
+        heading: win.metric,
+        big: `${win.percent ?? 0}%`,
+        unit: "of the way",
+        sub: win.showNumbers && win.target ? `${round(win.value)} of ${round(win.target)} ${win.unit}` : "Toward the goal",
+        title: `${first(win.name)} is ${win.percent ?? 0}% of the way to a ${win.metric.toLowerCase()} goal`,
+      };
+    case "streak":
+      return {
+        tag: "STREAK",
+        heading: "Every week trained",
+        big: round(win.value),
+        unit: win.value === 1 ? "week" : "weeks",
+        sub: "Not one planned week missed",
+        title: `${first(win.name)} trained ${round(win.value)} weeks straight`,
+      };
+  }
+}
+
+function sparkline(values: number[]) {
+  if (values.length < 2) return "";
+  const min = Math.min(...values), max = Math.max(...values), span = max - min || 1;
+  const points = values.map((v, i) => `${(i / (values.length - 1)) * 258},${62 - ((v - min) / span) * 54 + 4}`);
+  const last = points[points.length - 1].split(",");
+  return `<svg class="spark" viewBox="0 0 258 70" aria-hidden="true">
+    <polyline points="${points.join(" ")}" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="5" fill="currentColor"/></svg>`;
+}
+
+function ring(percent: number) {
+  const c = 2 * Math.PI * 80;
+  return `<svg class="ring" viewBox="0 0 180 180" aria-hidden="true">
+    <circle cx="90" cy="90" r="80" fill="none" class="track" stroke-width="11"/>
+    <circle cx="90" cy="90" r="80" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round"
+      stroke-dasharray="${(c * percent) / 100} ${c}" transform="rotate(-90 90 90)"/></svg>`;
+}
+
+export function winCard(win: Win, site: Site) {
+  const w = winWords(win);
+  const figure =
+    win.kind === "milestone"
+      ? `<div class="ringwrap">${ring(win.percent ?? 0)}<div class="ringtext"><b>${esc(w.big)}</b><span>${esc(w.unit)}</span></div></div>
+         <p class="sub center">${esc(w.sub)}</p>`
+      : `<p class="big"><b>${esc(w.big)}</b><span>${esc(w.unit)}</span></p>
+         <p class="sub">${esc(w.sub)}</p>
+         <div class="grow"></div>
+         ${win.kind === "pr" ? sparkline(win.trend ?? []) : `<div class="weeks">${"<i></i>".repeat(Math.min(win.value, 8))}</div>`}`;
+  return `<figure class="card ${win.style}" aria-label="${esc(w.title)}">
+    <p class="tag">${w.tag}</p><p class="heading">${esc(w.heading)}</p>
+    ${figure}
+    <footer><span>${date(win.date)}</span><span class="mark">${logo}${esc(site.appName)}</span></footer>
+  </figure>`;
+}
+
+// MARK: Pages
+
+function winPage(win: Win, path: string, site: Site) {
+  const w = winWords(win);
+  const who = first(win.name);
+  return layout(site, {
+    title: w.title,
+    description: `${who} is training with ${site.appName}: a 12-week program written for their goals, and a coach that keeps it on track.`,
+    path,
+    body: `
+      <section class="hero">
+        ${winCard(win, site)}
+        <h1>${esc(w.title)}</h1>
+        <p class="lede">${esc(who)} trains with ${esc(site.appName)}. It writes a program around your goals, sets every weight, and moves it along as you log.</p>
+        ${actions(site, [
+          win.invite && { href: `/join/${encodeURIComponent(win.invite)}`, label: `Train with ${who}` },
+          win.program && { href: `/p/${encodeURIComponent(win.program)}`, label: `See ${who}'s program` },
+        ])}
+      </section>
+      ${how(site)}`,
+  });
+}
+
+function recapPage(recap: Recap, path: string, site: Site) {
+  const who = first(recap.name);
+  const done = recap.week >= recap.weeks;
+  const title = done ? `${who} finished a ${recap.weeks}-week program` : `${who}'s week ${recap.week} of ${recap.weeks}`;
+  const lift = (l: Recap["lifts"][number]) => {
+    const up = l.to - l.from;
+    const change = recap.showNumbers ? `${up >= 0 ? "+" : "−"}${round(Math.abs(up))} ${l.unit}` : `${up >= 0 ? "+" : "−"}${Math.round((Math.abs(up) / l.from) * 100)}%`;
+    return `<li><span>${esc(l.metric)}</span><b class="${up >= 0 ? "up" : ""}">${change}</b>${recap.showNumbers ? `<small>${round(l.from)} → ${round(l.to)}</small>` : ""}</li>`;
+  };
+  return layout(site, {
+    title,
+    description: `${recap.sessions.done} of ${recap.sessions.planned} sessions, ${recap.bests} new ${recap.bests === 1 ? "best" : "bests"}. Training with ${site.appName}.`,
+    path,
+    body: `
+      <section class="hero">
+        <article class="recap">
+          <p class="tag">${done ? "PROGRAM DONE" : `${esc(recap.phase.toUpperCase())} PHASE`}</p>
+          <p class="recap-week"><b>${done ? recap.weeks : recap.week}</b><span>${done ? "weeks, done" : `of ${recap.weeks} weeks`}</span></p>
+          <div class="bar" role="img" aria-label="${recap.week} of ${recap.weeks} weeks"><i style="width:${Math.min(100, (recap.week / recap.weeks) * 100)}%"></i></div>
+          <div class="tiles">
+            <div><b>${recap.sessions.done}/${recap.sessions.planned}</b><span>sessions</span></div>
+            <div><b>${recap.bests}</b><span>new ${recap.bests === 1 ? "best" : "bests"}</span></div>
+          </div>
+          <ul class="lifts">${recap.lifts.map(lift).join("")}</ul>
+          <footer><span>${esc(recap.name)}</span><span class="mark">${logo}${esc(site.appName)}</span></footer>
+        </article>
+        <h1>${esc(title)}</h1>
+        <p class="lede">Every week, ${esc(site.appName)} looks at what ${esc(who)} logged and sets the next week's weights.</p>
+        ${actions(site, [
+          recap.invite && { href: `/join/${encodeURIComponent(recap.invite)}`, label: `Train with ${who}` },
+          recap.program && { href: `/p/${encodeURIComponent(recap.program)}`, label: `See ${who}'s program` },
+        ])}
+      </section>
+      ${how(site)}`,
+  });
+}
+
+function programPage(program: Program, path: string, site: Site) {
+  const who = first(program.by);
+  return layout(site, {
+    title: `${program.name}, by ${who}`,
+    description: `${program.weeks} weeks, ${program.days} days a week, ${program.equipment}. Start it with your own weights in ${site.appName}.`,
+    path,
+    body: `
+      <section class="hero left">
+        <p class="eyebrow">${esc(who)}'s program</p>
+        <h1>${esc(program.name)}</h1>
+        <div class="chips"><span>${program.weeks} weeks</span><span>${program.days} days a week</span><span>${esc(program.equipment)}</span></div>
+        ${program.goals.length ? `<p class="goals">Built for ${program.goals.map((g) => `<b>${esc(g)}</b>`).join(" and ")}</p>` : ""}
+        ${actions(site, [program.invite && { href: `/join/${encodeURIComponent(program.invite)}`, label: `Train alongside ${who}` }], "Start this program")}
+        <p class="fine">Your weights come from your own numbers, not ${esc(who)}'s.</p>
+      </section>
+      <section class="block">
+        <h2>The plan</h2>
+        <ol class="phases">${program.phases
+          .map(
+            (p) => `<li><div class="weeks-label">Weeks ${p.from}${p.to > p.from ? `–${p.to}` : ""}</div>
+              <h3>${esc(p.phase[0].toUpperCase() + p.phase.slice(1))}</h3><p>${esc(p.focus)}</p>
+              <p class="lifts-line">${p.mainLifts.map(esc).join(" · ")} <span>× ${p.mainReps}</span></p></li>`,
+          )
+          .join("")}</ol>
+      </section>
+      <section class="block">
+        <h2>A week of it</h2>
+        <div class="days">${program.sampleWeek
+          .map((d) => `<article><p class="day">${esc(d.day)}</p><h3>${esc(d.title)}</h3><ul>${d.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul></article>`)
+          .join("")}</div>
+      </section>
+      ${how(site)}`,
+  });
+}
+
+function invitePage(invite: Invite, code: string, path: string, site: Site) {
+  const who = first(invite.by);
+  const shown = invite.members.slice(0, 5);
+  return layout(site, {
+    title: `Join ${invite.group}`,
+    description: `${who} invited you to train together in ${site.appName}.`,
+    path,
+    body: `
+      <section class="hero">
+        <div class="faces" aria-hidden="true">${shown.map((m) => `<span>${esc(m.trim()[0]?.toUpperCase() ?? "?")}</span>`).join("")}${
+          invite.members.length > shown.length ? `<span class="more">+${invite.members.length - shown.length}</span>` : ""
+        }</div>
+        <p class="eyebrow">${esc(who)} invited you</p>
+        <h1>Join ${esc(invite.group)}</h1>
+        <p class="lede">${invite.members.length} ${invite.members.length === 1 ? "person trains" : "people train"} here. See each other's wins, and work out together live.</p>
+        ${invite.recent.length ? `<ul class="feed">${invite.recent.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+        <ol class="steps">
+          <li><b>Get ${esc(site.appName)}</b><span>Free on the App Store.</span></li>
+          <li><b>Tap Join with code</b><span>In You, then Groups.</span></li>
+          <li><b>Enter the code</b>
+            <button class="code" type="button" data-copy="${esc(code)}" aria-label="Copy the code ${esc(code)}">${esc(code)}<small>Copy</small></button></li>
+        </ol>
+        ${actions(site, [])}
+        <p class="fine">Already have the app? Open this link on your iPhone and it goes straight to the group.</p>
+      </section>`,
+  });
+}
+
+function homePage(site: Site) {
+  return layout(site, {
+    title: `${site.appName}: your training, written for you`,
+    description: `A 12-week program written around your goals, every weight set for you, and a coach that keeps it on track.`,
+    path: "/",
+    body: `<section class="hero"><h1>Your training, written for you</h1>
+      <p class="lede">Tell ${esc(site.appName)} what you're training for. It writes the program, sets every weight, and moves it along as you log.</p>
+      ${actions(site, [])}</section>${how(site)}`,
+  });
+}
+
+function missingPage(site: Site) {
+  return layout(site, {
+    title: "This link has expired",
+    description: site.appName,
+    path: "/",
+    body: `<section class="hero"><h1>This link has expired</h1>
+      <p class="lede">Whoever shared it may have stopped sharing. You can still start your own program.</p>${actions(site, [])}</section>`,
+  });
+}
+
+type Action = { href: string; label: string } | undefined | "" | false;
+
+function actions(site: Site, more: Action[], primary = `Get ${site.appName}`) {
+  const store = site.appStoreUrl ?? "#soon";
+  const secondary = more.filter((a): a is { href: string; label: string } => !!a);
+  return `<div class="actions">
+    <a class="button primary" href="${esc(store)}">${esc(primary)}</a>
+    ${secondary.map((a) => `<a class="button" href="${esc(a.href)}">${esc(a.label)}</a>`).join("")}
+    ${site.appStoreUrl ? "" : `<p class="fine" id="soon">Coming to the App Store soon. Free to download.</p>`}
+  </div>`;
+}
+
+function how(site: Site) {
+  return `<section class="block how">
+    <h2>How ${esc(site.appName)} works</h2>
+    <ol>
+      <li><b>Say what you're training for</b><span>A bench number by December, your first pull-up, a leaner fall.</span></li>
+      <li><b>Get a program built for it</b><span>Phases, days and every weight, from your own starting numbers.</span></li>
+      <li><b>Log by voice, watch it climb</b><span>Each week's weights follow what you actually lifted.</span></li>
+    </ol>
+  </section>`;
+}
+
+const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.5"/><rect x="9.5" y="8.5" width="5" height="12.5" rx="1.5"/><rect x="16" y="3" width="5" height="18" rx="1.5"/></svg>`;
+
+function layout(site: Site, page: { title: string; description: string; path: string; body: string }) {
+  const url = `${site.origin}${page.path}`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>${esc(page.title)}</title>
+<meta name="description" content="${esc(page.description)}">
+<meta property="og:site_name" content="${esc(site.appName)}">
+<meta property="og:title" content="${esc(page.title)}">
+<meta property="og:description" content="${esc(page.description)}">
+<meta property="og:url" content="${esc(url)}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<style>${css}</style>
+</head>
+<body>
+<header class="top"><a href="/" class="brand">${logo}${esc(site.appName)}</a></header>
+<main>${page.body}</main>
+<footer class="foot">© ${new Date().getUTCFullYear()} ${esc(site.appName)}</footer>
+<script>
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-copy]");
+  if (!b) return;
+  try { await navigator.clipboard.writeText(b.dataset.copy); b.querySelector("small").textContent = "Copied"; }
+  catch { getSelection().selectAllChildren(b); }
+});
+</script>
+</body>
+</html>`;
+}
+
+const css = `
+:root{--bg:#f6f6f4;--surface:#fff;--text:#111;--muted:#5e5e59;--line:#e3e3df;--accent:#e2475a;--button:#111;--button-text:#fff;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans)}
+@media (prefers-color-scheme:dark){:root{--bg:#0b0b0b;--surface:#171717;--text:#f2f2f0;--muted:#a3a39e;--line:#2a2a2a;--button:#f2f2f0;--button-text:#111}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:17px/1.45 var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;flex-direction:column}
+main{flex:1;width:100%;max-width:560px;margin:0 auto;padding:0 16px}
+a{color:inherit}
+.top{padding:16px 20px;max-width:560px;margin:0 auto;width:100%}
+.brand{display:inline-flex;align-items:center;gap:8px;font-weight:650;text-decoration:none;font-size:16px}
+.brand .logo{width:22px;height:22px;fill:var(--accent)}
+.hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:16px 0 40px}
+.hero.left{align-items:flex-start;text-align:left}
+h1{font-size:30px;line-height:1.12;letter-spacing:-.02em;font-weight:750;margin-top:28px;text-wrap:balance}
+.hero.left h1{margin-top:6px}
+h2{font-size:21px;letter-spacing:-.01em;margin-bottom:16px}
+h3{font-size:17px}
+.lede{color:var(--muted);margin-top:12px;max-width:30em;text-wrap:pretty}
+.eyebrow{color:var(--muted);font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-top:20px}
+.fine{color:var(--muted);font-size:14px;margin-top:12px}
+.actions{display:flex;flex-direction:column;gap:10px;width:100%;max-width:360px;margin-top:28px}
+.hero.left .actions{max-width:none}
+.button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:54px;border-radius:999px;font-weight:650;text-decoration:none;
+  border:1px solid var(--line);background:var(--surface)}
+.button.primary{background:var(--button);color:var(--button-text);border-color:var(--button)}
+.button:active{transform:scale(.98)}
+.block{padding:32px 0;border-top:1px solid var(--line)}
+.how ol,.steps,.phases{list-style:none;display:grid;gap:18px;counter-reset:n}
+.how li,.steps li{display:grid;grid-template-columns:32px 1fr;column-gap:12px;counter-increment:n;text-align:left}
+.how li::before,.steps li::before{content:counter(n);grid-row:span 2;width:28px;height:28px;border-radius:50%;background:var(--surface);
+  border:1px solid var(--line);display:grid;place-items:center;font-size:14px;font-weight:650}
+.how span,.steps span{color:var(--muted);font-size:15px}
+.foot{color:var(--muted);font-size:13px;text-align:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom))}
+
+/* The win card: fixed colors, as in the app. */
+.card{--c-bg:#111;--c-text:#fff;--c-muted:#b5b5b0;--c-soft:#d6d6d1;--c-track:#3a3a3d;
+  width:min(100%,340px);aspect-ratio:306/382;border-radius:22px;padding:26px 26px 22px;background:var(--c-bg);color:var(--c-text);
+  display:flex;flex-direction:column;text-align:left;box-shadow:0 10px 30px rgba(0,0,0,.16)}
+@media (prefers-color-scheme:dark){.card:not(.paper),.recap{border:1px solid #2c2c2e}}
+.card.paper{--c-bg:#f6f6f4;--c-text:#111;--c-muted:#5e5e59;--c-soft:#40403d;--c-track:#dbdbd9;border:1px solid var(--c-track)}
+.card .tag,.recap .tag{font-size:11px;font-weight:650;letter-spacing:.11em;color:var(--c-muted,var(--muted))}
+.card .heading{font-size:19px;font-weight:650;margin-top:4px}
+.card .big{display:flex;align-items:baseline;gap:6px;margin-top:26px}
+.card .big b{font:700 84px/1 var(--round);letter-spacing:-.03em}
+.card .big span{font-size:22px;font-weight:600;color:var(--c-muted)}
+.card .sub{color:var(--c-soft);font-size:15px;margin-top:8px}
+.card .sub.center{text-align:center}
+.card .grow{flex:1}
+.card .spark{width:100%;height:70px;color:var(--c-text)}
+.card .weeks{display:flex;gap:6px}.card .weeks i{flex:1;height:36px;border-radius:8px;background:var(--c-text)}
+.card .ringwrap{position:relative;width:170px;height:170px;margin:auto}
+.card .ring{width:100%;height:100%;color:var(--c-text)}.card .ring .track{stroke:var(--c-track)}
+.card .ringtext{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.card .ringtext b{font:700 40px/1 var(--round);letter-spacing:-.02em}.card .ringtext span{font-size:13px;color:var(--c-muted)}
+.card footer,.recap footer{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--c-muted,var(--muted));margin-top:14px}
+.mark{display:inline-flex;align-items:center;gap:5px;font-weight:650}.mark .logo{width:13px;height:13px;fill:currentColor}
+
+/* The recap card. */
+.recap{width:min(100%,360px);border-radius:22px;padding:24px;background:#111;color:#fff;text-align:left;box-shadow:0 10px 30px rgba(0,0,0,.16);--c-muted:#b5b5b0}
+.recap-week{display:flex;align-items:baseline;gap:8px;margin-top:10px}
+.recap-week b{font:700 72px/1 var(--round);letter-spacing:-.03em}.recap-week span{color:#b5b5b0;font-size:18px;font-weight:600}
+.bar{height:8px;border-radius:4px;background:#3a3a3d;margin-top:16px;overflow:hidden}.bar i{display:block;height:100%;background:#fff;border-radius:4px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.tiles div{background:#1f1f21;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column}
+.tiles b{font:700 26px/1.1 var(--round)}.tiles span{color:#b5b5b0;font-size:13px}
+.lifts{list-style:none;margin-top:14px;display:grid;gap:2px}
+.lifts li{display:grid;grid-template-columns:1fr auto;padding:10px 0;border-bottom:1px solid #2a2a2c}
+.lifts li:last-child{border-bottom:0}
+.lifts b{font:650 17px var(--round)}.lifts b.up{color:#8fe3a8}
+.lifts small{grid-column:1/-1;color:#b5b5b0;font-size:13px}
+
+/* The program. */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chips span{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:14px;font-weight:550}
+.goals{margin-top:16px;color:var(--muted)}.goals b{color:var(--text)}
+.phases li{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px 18px;border-left:4px solid var(--accent)}
+.phases p{color:var(--muted);font-size:15px;margin-top:2px}
+.weeks-label{font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.phases .lifts-line{color:var(--text);font-weight:550;margin-top:8px}.phases .lifts-line span{color:var(--muted)}
+.days{display:grid;gap:12px}
+.days article{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px 18px}
+.days .day{font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.days ul{list-style:none;margin-top:8px;display:grid;gap:4px;color:var(--muted);font-size:15px}
+
+/* The invite. */
+.faces{display:flex;margin-top:12px}
+.faces span{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:20px;
+  background:var(--surface);border:3px solid var(--bg);margin-left:-12px;box-shadow:0 0 0 1px var(--line)}
+.faces span:first-child{margin-left:0;background:var(--accent);color:#fff}
+.faces .more{font-size:15px;color:var(--muted)}
+.feed{list-style:none;margin-top:20px;width:100%;max-width:360px;display:grid;gap:8px}
+.feed li{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-size:15px;text-align:left}
+.feed li::before{content:"🏆 "}
+.steps{margin-top:28px;width:100%;max-width:360px}
+.code{grid-column:2;margin-top:8px;display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;
+  font:700 26px var(--round);letter-spacing:.18em;color:var(--text);background:var(--surface);border:1.5px dashed var(--muted);border-radius:14px;cursor:pointer}
+.code small{font:600 14px var(--sans);letter-spacing:0;color:var(--accent)}
+@media (min-width:700px){h1{font-size:38px}.days{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
+`;

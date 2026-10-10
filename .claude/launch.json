@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "share-pages",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "infra", "run", "web"],
+      "port": 8787
+    }
+  ]
+}
