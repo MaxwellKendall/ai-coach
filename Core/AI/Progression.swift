@@ -6,7 +6,8 @@ import Foundation
 /// designer still chooses everything else. Light weeks aren't decided; the program lightens them.
 enum Progression {
     enum Step: String, CaseIterable, Sendable {
-        case add, hold, backOff = "back_off"
+        /// Add more is twice the usual step, for a lift behind its goal's line whose last session went to plan.
+        case addMore = "add_more", add, hold, backOff = "back_off"
     }
 
     /// What's known about one lift going into the week: the evidence a decider reads.
@@ -23,6 +24,22 @@ enum Progression {
         /// A goal's estimated max now and where it should be by the end of this week, for a goal lift.
         var now: Double?
         var aim: Double?
+        /// This week's reps for main lifts, from the program brief's phase; nil keeps the last reps.
+        var reps: Double? = nil
+
+        /// Behind its goal's line by more than 2.5%.
+        var behind: Bool {
+            guard let aim, let now = now ?? lastMax else { return false }
+            return now < aim * 0.975
+        }
+
+        /// The last session's best set as an estimated max.
+        var lastMax: Double? {
+            sessions.first?.compactMap { set -> Double? in
+                guard let load = set.value("load_lb") ?? set.value("load_lb_hand"), let reps = set.value("reps") else { return nil }
+                return ProgramPlan.estimatedMax(load: load, reps: reps)
+            }.max()
+        }
     }
 
     /// A step turned into the week's top set for the lift.
@@ -31,6 +48,8 @@ enum Progression {
         var step: Step
         var load: Double
         var reps: Double
+        /// The estimated max the top set shows: what the step aims for.
+        var estimatedMax: Double
         var perHand: Bool
         /// How sure the decider was, 0 to 1; 1 for the rule table.
         var confidence: Double
@@ -63,7 +82,7 @@ enum Progression {
                         plannedLoad: planned.flatMap { $0.target("load_lb") ?? $0.target("load_lb_hand") }, plannedReps: planned?.target("reps"),
                         sessions: sessions, daysOff: calendar.dateComponents([.day], from: last, to: request.monday).day,
                         now: goal.flatMap { _ in GoalProgress.current("\(slug).1rm_lb", sets: past, weighIns: [], since: since) } ?? goal?.start,
-                        aim: aim)
+                        aim: aim, reps: request.brief.map { Double($0.mainReps) })
         }
     }
 
@@ -107,24 +126,31 @@ enum Progression {
 
     // MARK: Turning a step into the top set
 
-    /// Add: 5 lb on the bar, 2.5 a hand (`TrainingGenerator.nextLoad`). Hold: the same. Back off: 10% off, as after
-    /// time away (plan.md "returning athlete").
+    /// The step as an estimated max, from last time's top set: add puts 5 lb on it (2.5 a hand, as
+    /// `TrainingGenerator.nextLoad`), add more 10 (5), hold keeps it, back off takes 10% off (plan.md "returning
+    /// athlete"). The top set is that max at this week's reps, so a phase that moves to triples goes heavier, not lighter.
     static func decision(_ lift: Lift, step: Step, confidence: Double = 1) -> Decision? {
         let top = lift.sessions.first?.max { ($0.value("load_lb") ?? $0.value("load_lb_hand") ?? 0) < ($1.value("load_lb") ?? $1.value("load_lb_hand") ?? 0) }
         let perHand = top?.value("load_lb_hand") != nil
         guard let base = lift.plannedLoad ?? top.flatMap({ $0.value("load_lb") ?? $0.value("load_lb_hand") }),
-              let reps = lift.plannedReps ?? top?.value("reps") else { return nil }
-        let load = switch step {
-        case .add: base + (perHand ? 2.5 : 5)
+              let baseReps = lift.plannedReps ?? top?.value("reps") else { return nil }
+        let increment = perHand ? 2.5 : 5.0
+        let from = switch step {
+        case .addMore: base + 2 * increment
+        case .add: base + increment
         case .hold: base
-        case .backOff: perHand ? (base * 0.9 / 2.5).rounded() * 2.5 : TrainingGenerator.roundTo5(base * 0.9)
+        case .backOff: base * 0.9
         }
-        return Decision(exercise: lift.exercise, step: step, load: load, reps: reps, perHand: perHand, confidence: confidence)
+        let max = ProgramPlan.estimatedMax(load: from, reps: baseReps)
+        let reps = lift.reps ?? baseReps
+        let exact = max * (37 - min(reps, 36)) / 36
+        let load = perHand ? (exact / 2.5).rounded() * 2.5 : TrainingGenerator.roundTo5(exact)
+        return Decision(exercise: lift.exercise, step: step, load: load, reps: reps, estimatedMax: max, perHand: perHand, confidence: confidence)
     }
 
     /// "Bench Press: add → top set 190 × 5."
     static func line(_ decision: Decision, names: [String: String]) -> String {
-        let step = switch decision.step { case .add: "add"; case .hold: "hold"; case .backOff: "back off" }
+        let step = switch decision.step { case .addMore: "add more"; case .add: "add"; case .hold: "hold"; case .backOff: "back off" }
         return "\(names[decision.exercise] ?? decision.exercise): \(step) → top set \(Coach.number(decision.load))\(decision.perHand ? " each" : "") × \(Coach.number(decision.reps))."
     }
 
@@ -132,7 +158,8 @@ enum Progression {
 
     /// The step from the rules: more than 4 weeks off backs off, more than 2 holds (`TrainingGenerator.nextLoad`);
     /// missed reps twice running backs off, once holds; RPE over the tier's cap, or 9+, holds; otherwise, every rep done
-    /// at or under the cap, add. (`nextLoad` only adds at 1 under the cap; planned at the cap, nothing would ever go up.)
+    /// at or under the cap, add, or add more when the lift is behind its goal's line. (`nextLoad` only adds at 1 under the
+    /// cap; planned at the cap, nothing would ever go up.)
     struct Rules: ProgressionDecider {
         var tier: AgeTier
         var name: String { "rules" }
@@ -151,7 +178,7 @@ enum Progression {
                 return before.map { Progression.short($0, planned: lift.plannedReps) } == true ? .backOff : .hold
             }
             if let rpe = last.compactMap({ $0.value("rpe") }).max(), rpe >= 9 || rpe > tier.topRPE { return .hold }
-            return .add
+            return lift.behind ? .addMore : .add
         }
     }
 }

@@ -80,7 +80,7 @@ struct OpenAIDecisionsTests {
         let question = body["questions"]?.array?.first
         #expect(question?["type"]?.string == "choice")
         #expect(question?["name"]?.string == "bench-press")
-        #expect(question?["choices"]?.array?.compactMap { $0["value"]?.string } == ["add", "hold", "back_off"])
+        #expect(question?["choices"]?.array?.compactMap { $0["value"]?.string } == ["add_more", "add", "hold", "back_off"])
     }
 
     @Test func answersBecomeDecisionsAndARefusalLeavesTheLift() {

@@ -45,6 +45,13 @@ struct ProgressionTests {
         #expect(rules.step(lift([sets(35, reps: [5, 5, 5])], daysOff: 35)) == .backOff)
         // Nothing to go on: hold.
         #expect(rules.step(lift([])) == .hold)
+        // All reps at the cap and behind the goal's line: add more.
+        var behind = lift([sets(6, reps: [5, 5, 5], rpe: 8)])
+        behind.now = 200
+        behind.aim = 215
+        #expect(rules.step(behind) == .addMore)
+        behind.now = 212
+        #expect(rules.step(behind) == .add)
     }
 
     @Test func aStepBecomesTheTopSet() {
@@ -52,7 +59,15 @@ struct ProgressionTests {
         #expect(Progression.decision(bench, step: .add)?.load == 190)
         #expect(Progression.decision(bench, step: .hold)?.load == 185)
         #expect(Progression.decision(bench, step: .backOff)?.load == 165)
+        #expect(Progression.decision(bench, step: .addMore)?.load == 195)
         #expect(Progression.decision(bench, step: .add)?.reps == 5)
+        #expect(Progression.decision(bench, step: .add)?.estimatedMax == ProgramPlan.estimatedMax(load: 190, reps: 5))
+        // A phase on triples: the same estimated max at 3 reps, so heavier, not lighter.
+        var triples = bench
+        triples.reps = 3
+        let held = Progression.decision(triples, step: .hold)
+        #expect(held?.reps == 3)
+        #expect(held?.load == 195)
         // Dumbbells go up 2.5 a hand.
         let row = Progression.Lift(exercise: "dumbbell-row", name: "Dumbbell Row", plannedLoad: nil, plannedReps: nil,
                                    sessions: [sets(6, "dumbbell-row", load: 50, reps: [10, 10], perHand: true)], daysOff: 6, now: nil, aim: nil)
@@ -89,7 +104,8 @@ struct ProgressionTests {
             program: weeks[4], programIndex: 4, programWeeks: 12,
             goalLifts: [GoalLift(exercise: "bench-press", measure: "1rm_lb", start: 190, target: 225, deadline: nil)],
             programPlan: weeks, calendar: calendar)
-        request.progression = [Progression.Decision(exercise: "bench-press", step: .add, load: 190, reps: 5, perHand: false, confidence: 0.9)]
+        request.progression = [Progression.Decision(exercise: "bench-press", step: .add, load: 190, reps: 5, estimatedMax: 214,
+                                                    perHand: false, confidence: 0.9)]
         let prompt = ProgramDesigner.prompt(request, settings: settings, light: false)
         #expect(prompt.contains("Main lifts' top sets this week, decided from how they went; keep to them:\nBench Press: add → top set 190 × 5."))
         #expect(prompt.contains("Bench Press is a goal (225 lb): aim for an estimated max of about"))

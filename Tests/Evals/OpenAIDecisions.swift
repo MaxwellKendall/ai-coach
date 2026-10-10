@@ -23,6 +23,7 @@ struct OpenAIDecisions: ProgressionDecider {
     }
 
     static let choices: [(Progression.Step, String)] = [
+        (.addMore, "Add more load, about twice the usual step: the lift is behind its goal's line and the last session's reps were all done at or under the target effort."),
         (.add, "Add load: the last session's reps were all done at or under the target effort, with no sign of strain."),
         (.hold, "Keep the same load: a rep was missed once, the effort was very high, or recovery looks short (skipped sessions, poor sleep)."),
         (.backOff, "Reduce the load about 10%: reps were missed in two sessions running, or there's been a long break."),
