@@ -25,15 +25,18 @@ export const limits = {
 
 type Request = Record<string, unknown>;
 
-/** The request with only the fields the Messages API needs from the app, or why it can't go. */
-export function allowedRequest(raw: string): { body: Request } | { error: string } {
-  if (raw.length > limits.maxRequestChars) return { error: "The request is too long." };
+/**
+ * The request with only the fields the Messages API needs from the app, or why it can't go.
+ * AppSync hands a Lambda an AWSJSON argument already parsed; a string is parsed here.
+ */
+export function allowedRequest(raw: unknown): { body: Request } | { error: string } {
   let request: Request;
   try {
-    request = JSON.parse(raw);
+    request = typeof raw === "string" ? JSON.parse(raw) : (raw as Request);
   } catch {
     return { error: "The request isn't JSON." };
   }
+  if (JSON.stringify(request ?? null).length > limits.maxRequestChars) return { error: "The request is too long." };
   if (typeof request !== "object" || request === null || Array.isArray(request)) return { error: "The request isn't an object." };
   if (!limits.models.includes(request.model as string)) return { error: `Only ${limits.models.join(", ")} is available.` };
   if (!Array.isArray(request.messages) || request.messages.length === 0) return { error: "The request has no messages." };
@@ -78,7 +81,7 @@ async function apiKey() {
   return key;
 }
 
-export async function handler(event: AppSyncResolverEvent<{ request: string }>) {
+export async function handler(event: AppSyncResolverEvent<{ request: unknown }>) {
   const uid = (event.identity as AppSyncIdentityCognito | null)?.sub;
   if (!uid) throw new Error("Sign in to use the coach.");
   const allowed = allowedRequest(event.arguments.request);
@@ -91,5 +94,6 @@ export async function handler(event: AppSyncResolverEvent<{ request: string }>) 
   });
   const text = await response.text();
   // The app reads Claude's own errors (a prompt too long, overload) as it does when it calls Claude directly.
-  return JSON.stringify({ status: response.status, body: JSON.parse(text || "{}") });
+  // An object, not a string: AppSync encodes an AWSJSON result itself, so a string would arrive encoded twice.
+  return { status: response.status, body: JSON.parse(text || "{}") };
 }

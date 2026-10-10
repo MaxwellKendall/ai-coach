@@ -19,8 +19,14 @@ describe("aiProxy: the request it sends on", () => {
     expect("body" in allowed && allowed.body.max_tokens).toBe(limits.maxTokens);
   });
 
+  it("takes the request AppSync has already parsed", () => {
+    expect(allowedRequest(request)).toEqual(allowedRequest(JSON.stringify(request)));
+    expect("body" in allowedRequest(request)).toBe(true);
+  });
+
   it("refuses a request that's too long, isn't JSON, or has no messages", () => {
-    expect(allowedRequest("x".repeat(limits.maxRequestChars + 1))).toEqual({ error: "The request is too long." });
+    const long = [{ role: "user", content: "x".repeat(limits.maxRequestChars) }];
+    expect(allowedRequest(JSON.stringify({ ...request, messages: long }))).toEqual({ error: "The request is too long." });
     expect(allowedRequest("{nope")).toEqual({ error: "The request isn't JSON." });
     expect(allowedRequest(JSON.stringify({ ...request, messages: [] }))).toEqual({ error: "The request has no messages." });
   });

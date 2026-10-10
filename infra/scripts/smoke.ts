@@ -113,6 +113,23 @@ must(await gql(a, `mutation($g: ID!, $u: ID!) { removeMember(groupId: $g, uid: $
 if (!rejected(await gql(b, `query($g: ID!) { group(groupId: $g) { name } }`, { g: groupId }))) throw new Error("B can still read after removal");
 pass("only the creator can remove a member, who then loses access");
 
+const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: out.Region }));
+
+// FIT-102: the Claude proxy answers with Haiku, refuses any other model, and counts the user's day.
+const ai = (model: string) => gql(a, `mutation($r: AWSJSON!) { aiMessages(request: $r) }`, {
+  r: JSON.stringify({ model, max_tokens: 20, messages: [{ role: "user", content: "Reply with the word ok." }] }),
+});
+const aUid = JSON.parse(Buffer.from(a.split(".")[1], "base64url").toString()).sub;
+const useKey = { PK: `USER#${aUid}`, SK: `AIUSE#${new Date().toISOString().slice(0, 10)}` };
+const used = async () => ((await db.send(new GetCommand({ TableName: "AICoach-dev", Key: useKey }))).Item?.count as number) ?? 0;
+const usedBefore = await used();
+const reply = JSON.parse(must(await ai("claude-haiku-5-5"), "aiMessages").aiMessages);
+if (reply.status !== 200 || reply.body.content?.[0]?.type !== "text") throw new Error(`aiMessages: ${JSON.stringify(reply)}`);
+const opus = await ai("claude-opus-5-5");
+if (!opus.errors?.some((e) => e.message.startsWith("Only claude-haiku"))) throw new Error(`the proxy passed on another model: ${JSON.stringify(opus)}`);
+if ((await used()) !== usedBefore + 1) throw new Error(`A's AI use went from ${usedBefore} to ${await used()}, not up by 1`);
+pass(`aiMessages answers with Haiku (${reply.body.usage?.output_tokens} tokens), refuses other models, and counts the day`);
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {
@@ -125,7 +142,6 @@ for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as 
 pass("deleteAccount removes all three test users");
 
 // FIT-61: the stream-triggered cleanup removes the now-empty group and its invite.
-const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: out.Region }));
 const leftovers = async () => {
   const group = await db.send(new QueryCommand({ TableName: "AICoach-dev", KeyConditionExpression: "PK = :pk", ExpressionAttributeValues: { ":pk": `GROUP#${groupId}` } }));
   const invite = await db.send(new GetCommand({ TableName: "AICoach-dev", Key: { PK: `INVITE#${created.inviteCode}`, SK: "META" } }));
