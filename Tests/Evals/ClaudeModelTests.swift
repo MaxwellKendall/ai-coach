@@ -40,3 +40,25 @@ struct ClaudeModelTests {
         #expect(try ClaudeModel.encoded(.object(["sets": .number(3), "rpe": .number(7.5)])).contains("\"sets\":3"))
     }
 }
+
+/// FIT-98: what OpenAIModel and GeminiModel send, and which model a name picks, without the network.
+struct OtherModelsTests {
+    @Test func openAIFunctionsAndGeminiDeclarationsCarryThePlainSchema() throws {
+        let schema = try ClaudeModel.inputSchema(ProgramDesigner.DesignedWeek.generationSchema)
+        let function = OpenAIModel.function("answer", "Give your answer.", schema)
+        #expect(function["type"]?.string == "function")
+        #expect(function["parameters"] == schema)
+        let declaration = GeminiModel.declaration("answer", "Give your answer.", schema)
+        #expect(declaration["parametersJsonSchema"] == schema)
+    }
+
+    @Test func everyModelHasAPrice() {
+        for name in ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "gpt-6-luna", "gpt-6.1-sol", "gemini-3.8-flash", "gemini-3.1-pro-preview"] {
+            #expect(EvalModel.prices[name] != nil, "\(name)")
+        }
+        let model = OpenAIModel(model: "gpt-6-luna", key: "test")
+        model.usage.add(input: 1_000_000, output: 1_000_000)
+        #expect(EvalModel.cost(model) == 0.6)
+        #expect(EvalModel.cost(OnDeviceModel()) == 0)
+    }
+}

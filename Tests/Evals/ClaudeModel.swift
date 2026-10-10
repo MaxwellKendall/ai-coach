@@ -8,24 +8,20 @@ import Synchronization
 ///
 /// The session's `Tool`s go to Claude with their `GenerationSchema` as JSON Schema; a structured answer is a call to
 /// one more tool, `answer`, whose input schema is the answer's, decoded back through `GeneratedContent(json:)`.
-struct ClaudeModel: AIModel {
+struct ClaudeModel: AIModel, MeteredModel {
     /// "claude-opus-5-5".
     let model: String
     let key: String
     /// Extended thinking's token budget; nil for none.
     var thinking: Int?
     /// Tokens used by every session of this model, for the report.
-    let usage = Usage()
+    let usage = TokenUsage()
 
     var name: String { thinking.map { "\(model)-thinking-\($0)" } ?? model }
     var isAvailable: Bool { !key.isEmpty }
 
     func session(tools: [any Tool], instructions: String) -> any AISession {
         Session(model: self, tools: tools, instructions: instructions)
-    }
-
-    final class Usage: Sendable {
-        let tokens = Mutex<(input: Int, output: Int, requests: Int)>((0, 0, 0))
     }
 
     // MARK: Session
@@ -69,8 +65,7 @@ struct ClaudeModel: AIModel {
             }
             append(user: [.object(["type": .string("text"), "text": .string(prompt)])])
             for _ in 0..<12 {
-                let response = try await model.send(system: instructions, messages: messages.withLock { $0 }, tools: definitions,
-                                                    mustCallTool: schema != nil)
+                let response = try await model.send(system: instructions, messages: messages.withLock { $0 }, tools: definitions)
                 let content = response["content"]?.array ?? []
                 messages.withLock { $0.append(.object(["role": .string("assistant"), "content": .array(content)])) }
                 switch response["stop_reason"]?.string {
@@ -121,16 +116,13 @@ struct ClaudeModel: AIModel {
 
     // MARK: Requests
 
-    private func send(system: String, messages: [JSON], tools: [JSON], mustCallTool: Bool) async throws -> JSON {
+    private func send(system: String, messages: [JSON], tools: [JSON]) async throws -> JSON {
         var body: [String: JSON] = ["model": .string(model), "max_tokens": .number(Double(8_000 + (thinking ?? 0))),
                                     "system": .string(system), "messages": .array(messages)]
         if !tools.isEmpty { body["tools"] = .array(tools) }
-        if let thinking {
-            // Thinking can't be combined with a forced tool call; the "Give your answer" turn does that job.
-            body["thinking"] = .object(["type": .string("enabled"), "budget_tokens": .number(Double(thinking))])
-        } else if mustCallTool {
-            body["tool_choice"] = .object(["type": .string("any")])
-        }
+        // No forced tool call: Sonnet and Opus 5.5 don't take one ("tool_choice: any … not supported"), so every model
+        // is asked the same way, and the "Give your answer" turn does that job.
+        if let thinking { body["thinking"] = .object(["type": .string("enabled"), "budget_tokens": .number(Double(thinking))]) }
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
         request.timeoutInterval = 600
@@ -145,11 +137,7 @@ struct ClaudeModel: AIModel {
             let json = try JSONDecoder().decode(JSON.self, from: data)
             if status == 200 {
                 if let used = json["usage"] {
-                    usage.tokens.withLock {
-                        $0.input += Int(used["input_tokens"]?.number ?? 0)
-                        $0.output += Int(used["output_tokens"]?.number ?? 0)
-                        $0.requests += 1
-                    }
+                    usage.add(input: used["input_tokens"]?.number, output: used["output_tokens"]?.number)
                 }
                 return json
             }
@@ -169,11 +157,11 @@ struct ClaudeModel: AIModel {
         var description: String
     }
 
-    private static func result(_ id: String, _ text: String, error: Bool = false) -> JSON {
+    static func result(_ id: String, _ text: String, error: Bool = false) -> JSON {
         .object(["type": .string("tool_result"), "tool_use_id": .string(id), "content": .string(text), "is_error": .bool(error)])
     }
 
-    private static func call<T: Tool>(_ tool: T, _ json: String) async throws -> String {
+    static func call<T: Tool>(_ tool: T, _ json: String) async throws -> String {
         let output = try await tool.call(arguments: T.Arguments(GeneratedContent(json: json)))
         return (output as? String) ?? String(describing: output)
     }

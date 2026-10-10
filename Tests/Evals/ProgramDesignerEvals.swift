@@ -362,6 +362,7 @@ struct ProgramDesignerEvals {
         let run = ProgramScore.Run(weeks: all.count, byModel: designed.count, repairsPerWeek: repairs, copies: copies.count, odd: odd.count,
                                    progression: ProgramScore.Progression(up: up, held: held, down: down), goalShares: shares, deloads: deloads)
         let weekFailures = probes.isEmpty ? ["no probe"] : ProgramScore.weekFailures(run)
+        if probes.isEmpty { briefProblems = ["no probe"] }
         func verdict(_ failures: [String]) -> String { failures.isEmpty ? "✅ passes" : "❌ " + failures.joined(separator: "; ") }
         report.insert(contentsOf: ["", "**Week design: \(verdict(weekFailures))**", "", "**Brief: \(verdict(briefProblems))**"], at: 3)
         let perWeek = weekCost.map { $0 / Double(max(1, all.count)) }, perBrief = briefCost.map { $0 / Double(max(1, probes.count)) }
