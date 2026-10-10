@@ -6,6 +6,8 @@ struct AICoachApp: App {
     let container: ModelContainer
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var account = Account()
+    /// FIT-83: whether this Apple ID has Pro.
+    @State private var pro = Pro()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -23,7 +25,9 @@ struct AICoachApp: App {
         WindowGroup {
             RootView()
                 .environment(account)
+                .environment(pro)
                 .task { await account.refresh() }
+                .task { await pro.refresh() }
         }
         .modelContainer(container)
         // FIT-16: coming back to the app shares what changed with your groups.

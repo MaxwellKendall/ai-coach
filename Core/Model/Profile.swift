@@ -42,6 +42,8 @@ final class Profile {
     var starts: [StartingSet] = []
     /// FIT-95: the program brief, with what it was written for; written again when that changes (`Planner.design`).
     var brief: ProgramBrief.Stored?
+    /// FIT-83: when free-plan redesigns of the week were used (`FreeLimits`).
+    var redesigns: [Date] = []
     var createdAt: Date
     var updatedAt: Date
 

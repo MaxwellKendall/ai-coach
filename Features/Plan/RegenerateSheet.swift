@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// FIT-40 (prototype board C): a new version of the week's sessions. Done, past and pinned ones stay; the rest show
 /// what changes and why. Try another for a different one; Use this writes it. FIT-77: with Apple Intelligence the
@@ -6,6 +7,10 @@ import SwiftUI
 /// is swapped as before (WeekRegenerator).
 struct RegenerateSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(Pro.self) private var pro
+    @Query private var profiles: [Profile]
+    /// FIT-83: Pro's paywall, from here: a sheet can't be shown over this one from the root.
+    @State private var paywall = false
     let week: Int
     let days: [Day]
     let catalog: [Exercise]
@@ -82,6 +87,7 @@ struct RegenerateSheet: View {
             .disabled(designing)
             if changing > 0 {
                 Button("Try another") {
+                    guard redesign() else { return }
                     if designed != nil { Task { await design(differentFrom: designed!.values.flatMap { $0 }) } }
                     else { withAnimation(.snappy) { variant += 1 } }
                 }
@@ -89,10 +95,26 @@ struct RegenerateSheet: View {
             }
         }
         .padding(EdgeInsets(top: 28, leading: 22, bottom: 12, trailing: 22))
-        .task { await design(differentFrom: days.flatMap(\.workouts)) }
+        .task {
+            // Opening it was the first redesign; ProgramScreen checked there was one left.
+            _ = redesign()
+            await design(differentFrom: days.flatMap(\.workouts))
+        }
+        .sheet(isPresented: $paywall) { PaywallView() }
         .presentationDetents([.fraction(0.66), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color(.systemBackground))
+    }
+
+    /// FIT-83: a new version uses one of the free plan's redesigns this month; with none left, Pro's paywall instead.
+    private func redesign() -> Bool {
+        guard !pro.active, let profile = profiles.first else { return true }
+        guard FreeLimits.redesignsLeft(profile.redesigns) > 0 else {
+            paywall = true
+            return false
+        }
+        profile.redesigns.append(.now)
+        return true
     }
 
     /// FIT-77: the model's version of the open days; nil stays nil when it can't (the swap is the fallback).

@@ -76,6 +76,9 @@ schemes:
       targets:
         AICoach: all
         AICoachTests: [test]
+    # FIT-83: Pro's products in the simulator and debug runs, before App Store Connect has them.
+    run:
+      storeKitConfiguration: AICoach.storekit
     test:
       targets: [AICoachTests]
   AICoachEvals:

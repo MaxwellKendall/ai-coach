@@ -8,6 +8,7 @@ struct RootView: View {
     @State private var onboarding: Profile?
     @Bindable private var navigator = Navigator.shared
     @Environment(Account.self) private var account
+    @Environment(Pro.self) private var pro
     @State private var tab: AppTab = .today
     /// The tab the coach was opened from, so what's said goes back there.
     @State private var lastTab: AppTab = .today
@@ -72,8 +73,13 @@ struct RootView: View {
             }
             .tint(Self.accent)
         }
+        .sheet(isPresented: Binding(get: { pro.paywall }, set: { pro.paywall = $0 })) { PaywallView() }
         .fullScreenCover(item: $onboarding) { profile in
-            OnboardingView(profile: profile) { onboarding = nil }
+            // FIT-83: Pro's trial is offered once the program has just been shown.
+            OnboardingView(profile: profile) {
+                onboarding = nil
+                if !pro.active { pro.paywall = true }
+            }
                 .interactiveDismissDisabled()
                 .tint(Self.accent)
         }

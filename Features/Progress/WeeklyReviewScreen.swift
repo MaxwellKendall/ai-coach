@@ -7,6 +7,9 @@ struct WeeklyReviewScreen: View {
     let report: WeekReport
     let profile: Profile?
     @Environment(\.dismiss) private var dismiss
+    @Environment(Pro.self) private var pro
+    /// FIT-83: Pro's paywall, from here, since this is a sheet.
+    @State private var paywall = false
     @State private var paragraph: String?
     @State private var writing = LanguageModel.isAvailable
     /// What was picked on an alert or check-in, by its title.
@@ -24,7 +27,14 @@ struct WeeklyReviewScreen: View {
             .animation(.snappy, value: picked)
             .animation(.easeOut, value: writing)
         }
-        .task { paragraph = await WeekSummary.write(report.facts); writing = false }
+        // FIT-83: the coach's paragraph is Pro; the numbers below it stay free.
+        .task(id: pro.active) {
+            guard pro.active else { writing = false; return }
+            writing = LanguageModel.isAvailable
+            paragraph = await WeekSummary.write(report.facts)
+            writing = false
+        }
+        .sheet(isPresented: $paywall) { PaywallView() }
     }
 
     // MARK: Sections
@@ -64,6 +74,19 @@ struct WeeklyReviewScreen: View {
             } else if let paragraph {
                 Text(paragraph).font(.body).lineSpacing(3).padding(.top, 10).transition(.opacity)
                 Text("Written on this iPhone from the numbers below.").font(.caption).foregroundStyle(.tertiary).padding(.top, 8)
+            } else if !pro.active && LanguageModel.isAvailable {
+                Button { paywall = true } label: {
+                    HStack {
+                        Text("Your coach's take on this week").font(.body)
+                        Spacer()
+                        Text("Pro").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 6)
             }
         }
         .padding(.horizontal, 8)

@@ -7,6 +7,7 @@ import SwiftData
 struct ProgramScreen: View {
     @Environment(\.modelContext) private var context
     @Environment(CoachInbox.self) private var coach
+    @Environment(Pro.self) private var pro
     @Query private var profiles: [Profile]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
@@ -174,6 +175,11 @@ struct ProgramScreen: View {
                         Spacer(minLength: 8)
                         if days.contains(where: { $0.kept == nil }) {
                             Button("Regenerate", systemImage: "arrow.triangle.2.circlepath") {
+                                // FIT-83: free includes a few redesigns a month; then Pro.
+                                guard pro.active || FreeLimits.redesignsLeft(profile.redesigns) > 0 else {
+                                    pro.paywall = true
+                                    return
+                                }
                                 regenerating = Regenerate(week: index + 1, days: days)
                             }
                             .font(.subheadline.weight(.semibold))
