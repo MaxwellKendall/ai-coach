@@ -97,6 +97,24 @@ struct ProgressionTests {
         #expect(rules.step(lifts[0]) == .hold)
     }
 
+    @Test func afterADeloadTheBaseIsTheHardWeekBeforeIt() {
+        // Week 7 follows week 6's deload: bench went 185 × 5 in week 5 and 120 × 5 in the deload.
+        let weeks = ProgramPlan.weeks(count: 12, deloadEvery: 6)
+        let index = weeks.firstIndex { $0.kind == .deload }! + 1
+        let deload = [PlannedWorkout(date: day(6), session: "Upper", exercise: "bench-press",
+                                     targets: [.init(metric: "sets", value: 2, unit: "sets"), .init(metric: "reps", value: 5, unit: "reps"),
+                                               .init(metric: "load_lb", value: 120, unit: "lb")], main: true)]
+        let request = ProgramDesigner.Request(
+            monday: monday, settings: settings, catalog: [], names: names,
+            history: sets(13, reps: [5, 5, 5]) + sets(6, load: 120, reps: [5, 5]), weeksSinceDeload: 0,
+            program: weeks[index], programIndex: index, programWeeks: 12, lastWeek: deload, programPlan: weeks, calendar: calendar)
+        let lifts = Progression.lifts(request)
+        #expect(lifts.first?.plannedLoad == nil)
+        #expect(lifts.first?.sessions.first?.first?.value("load_lb") == 185)
+        #expect(lifts.first?.daysOff == 6)
+        #expect(lifts.first.flatMap { Progression.decision($0, step: .add) }?.load == 190)
+    }
+
     @Test func theWeekIsToldTheDecidedTopSetsAndTheGoalKeepsItsAim() {
         let weeks = ProgramPlan.weeks(count: 12, deloadEvery: 6)
         var request = ProgramDesigner.Request(

@@ -57,11 +57,15 @@ enum Progression {
 
     // MARK: The evidence
 
-    /// The lifts to decide: last week's main lifts and the goal lifts, each with sessions to go on.
+    /// The lifts to decide: last week's main lifts and the goal lifts, each with sessions to go on. After a light week
+    /// (a deload), from the hard week before it: its loads were lightened on purpose, so they aren't the base.
     static func lifts(_ request: ProgramDesigner.Request) -> [Lift] {
         let calendar = request.calendar
-        let past = request.history.filter { $0.date < request.monday }
+        let afterLight = request.programIndex.map { $0 > 0 && request.programPlan.indices.contains($0 - 1) && request.programPlan[$0 - 1].light } ?? false
+        let cutoff = afterLight ? calendar.date(byAdding: .day, value: -7, to: request.monday)! : request.monday
+        let past = request.history.filter { $0.date < cutoff }
         let since = calendar.date(byAdding: .day, value: -56, to: request.monday)!
+        let lastWeek = afterLight ? [] : request.lastWeek
         let mains = request.lastWeek.filter { $0.main && $0.note != TrainingGenerator.warmupNote }.map(\.exercise)
         let slugs = (mains + request.goalLifts.filter { $0.measure == "1rm_lb" }.map(\.exercise))
             .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
@@ -70,7 +74,7 @@ enum Progression {
             let days = Set(sets.map { calendar.startOfDay(for: $0.date) }).sorted(by: >)
             guard let last = days.first else { return nil }
             let sessions = days.prefix(2).map { day in sets.filter { calendar.isDate($0.date, inSameDayAs: day) } }
-            let planned = request.lastWeek.filter { $0.exercise == slug }.max { ($0.target("load_lb") ?? $0.target("load_lb_hand") ?? 0) < ($1.target("load_lb") ?? $1.target("load_lb_hand") ?? 0) }
+            let planned = lastWeek.filter { $0.exercise == slug }.max { ($0.target("load_lb") ?? $0.target("load_lb_hand") ?? 0) < ($1.target("load_lb") ?? $1.target("load_lb_hand") ?? 0) }
             let goal = request.goalLifts.first { $0.exercise == slug && $0.measure == "1rm_lb" }
             let aim = goal.flatMap { goal in
                 request.programIndex.flatMap { index in
@@ -80,7 +84,7 @@ enum Progression {
             }
             return Lift(exercise: slug, name: request.names[slug] ?? slug,
                         plannedLoad: planned.flatMap { $0.target("load_lb") ?? $0.target("load_lb_hand") }, plannedReps: planned?.target("reps"),
-                        sessions: sessions, daysOff: calendar.dateComponents([.day], from: last, to: request.monday).day,
+                        sessions: sessions, daysOff: calendar.dateComponents([.day], from: last, to: cutoff).day,
                         now: goal.flatMap { _ in GoalProgress.current("\(slug).1rm_lb", sets: past, weighIns: [], since: since) } ?? goal?.start,
                         aim: aim, reps: request.brief.map { Double($0.mainReps) })
         }
