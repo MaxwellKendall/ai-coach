@@ -52,6 +52,14 @@ struct OtherModelsTests {
         #expect(declaration["parametersJsonSchema"] == schema)
     }
 
+    @Test func aNamePicksItsModel() {
+        #expect(EvalModel.model("on-device") is OnDeviceModel)
+        #expect(EvalModel.model("o3") is OpenAIModel)
+        #expect(EvalModel.model("gpt-6-luna") is OpenAIModel)
+        #expect(EvalModel.model("claude-haiku-5-5") is ClaudeModel)
+        #expect(EvalModel.model("gemini-3.8-flash") is GeminiModel)
+    }
+
     @Test func everyModelHasAPrice() {
         for name in ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "gpt-6-luna", "gpt-6.1-sol", "gemini-3.8-flash", "gemini-3.1-pro-preview"] {
             #expect(EvalModel.prices[name] != nil, "\(name)")

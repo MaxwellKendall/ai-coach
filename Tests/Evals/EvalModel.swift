@@ -15,13 +15,17 @@ enum EvalModel {
     /// "on-device", a Claude id ("claude-…"), an OpenAI id ("gpt-…", "o…") or a Gemini id ("gemini-…"), each with its
     /// key from the environment (`.env`, through scripts/program-eval.sh).
     private static func model(named variable: String) -> any AIModel {
+        model(ProcessInfo.processInfo.environment[variable].flatMap { $0.isEmpty ? nil : $0 } ?? "on-device")
+    }
+
+    static func model(_ name: String) -> any AIModel {
         let environment = ProcessInfo.processInfo.environment
-        let name = environment[variable].flatMap { $0.isEmpty ? nil : $0 } ?? "on-device"
         let key = { (names: [String]) in names.lazy.compactMap { environment[$0] }.first { !$0.isEmpty } ?? "" }
         if name.hasPrefix("claude") {
             return ClaudeModel(model: name, key: key(["ANTHROPIC_API_KEY"]), thinking: environment["EVAL_THINKING"].flatMap { Int($0) })
         }
-        if name.hasPrefix("gpt") || name.first == "o" { return OpenAIModel(model: name, key: key(["OPENAI_API_KEY", "OPEN_AI_API_KEY"])) }
+        // "o3", "o4-mini": OpenAI's o-series; not "on-device".
+        if name.hasPrefix("gpt") || (name.first == "o" && name.dropFirst().first?.isNumber == true) { return OpenAIModel(model: name, key: key(["OPENAI_API_KEY", "OPEN_AI_API_KEY"])) }
         if name.hasPrefix("gemini") { return GeminiModel(model: name, key: key(["GEMINI_API_KEY"])) }
         return OnDeviceModel()
     }

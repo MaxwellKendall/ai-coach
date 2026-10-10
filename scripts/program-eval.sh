@@ -6,16 +6,17 @@
 #   EVAL_PROBE=author,strength: the profiles to plan a whole program for (default: the author).
 #   EVAL_BRIEF_MODEL=<model>: the model that writes the program brief (default: the same model).
 #   EVAL_DECIDER=rules|openai: decide each main lift's next step before a week is designed (FIT-100).
+#   EVAL_RUN=<label>: a repeat run of the same setup, kept beside the others (program-results-…-run-<label>.md).
 #   EVAL_SIMULATOR=<name>: run on another simulator, with its own build folder, beside a run on the default one.
 # Writes Tests/Evals/program-results-<model>.md, then Tests/Evals/program-compare.md from every model's latest results.
 cd "${0:A:h}/.."
 # API keys, gitignored.
 [[ -f .env ]] && set -a && source .env && set +a
 model=${1:-on-device}
-out=Tests/Evals/program-results-$model${EVAL_THINKING:+-thinking-$EVAL_THINKING}${EVAL_BRIEF_MODEL:+-brief-$EVAL_BRIEF_MODEL}${EVAL_DECIDER:+-decide-$EVAL_DECIDER}.md
+out=Tests/Evals/program-results-$model${EVAL_THINKING:+-thinking-$EVAL_THINKING}${EVAL_BRIEF_MODEL:+-brief-$EVAL_BRIEF_MODEL}${EVAL_DECIDER:+-decide-$EVAL_DECIDER}${EVAL_RUN:+-run-$EVAL_RUN}.md
 xcodegen generate >/dev/null
 sim=${EVAL_SIMULATOR:-iPhone 17 Pro}
-log=/tmp/aicoach-program-eval-$model.log
+log=/tmp/aicoach-program-eval-$model${EVAL_SIMULATOR:+-${EVAL_SIMULATOR// /-}}.log
 # A second simulator builds in its own folder, so two runs don't share Xcode's build lock.
 build=()
 [[ -n $EVAL_SIMULATOR ]] && build=(-derivedDataPath /tmp/aicoach-evals-${EVAL_SIMULATOR// /-})
