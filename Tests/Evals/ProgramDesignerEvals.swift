@@ -21,6 +21,8 @@ struct ProgramDesignerEvals {
         var history: Bool
         /// Fat loss wants more reps and conditioning; strength wants heavy low-rep main lifts.
         var goal: Goal
+        /// FIT-92: the strength goals, for where the probe's program plans each lift to end up.
+        var targets: [ProgramScore.Target] = []
     }
 
     enum Goal: String, Sendable { case strength, fatLoss = "fat loss", general }
@@ -46,7 +48,7 @@ struct ProgramDesignerEvals {
         Profile(name: "The author: 3 days, gym, build week",
                 settings: settings(age: 36, days: [0, 2, 4], minutes: 45, equipment: gym, style: .powerbuilding),
                 goals: ["Bench Press 225 lb by Dec 1", "Back Squat 275 lb by Dec 1"], program: ProgramWeek(phase: .build, kind: .build),
-                history: true, goal: .strength),
+                history: true, goal: .strength, targets: [.init(exercise: "bench-press", pounds: 225), .init(exercise: "back-squat", pounds: 275)]),
         Profile(name: "The author, travelling",
                 settings: settings(age: 36, days: [0, 2, 4], minutes: 45, equipment: gym, style: .powerbuilding),
                 goals: ["Bench Press 225 lb by Dec 1"], program: ProgramWeek(phase: .base, kind: .base, travel: true),
@@ -64,7 +66,7 @@ struct ProgramDesignerEvals {
                 settings: settings(age: 45, days: [0, 1, 3, 4], minutes: 60, equipment: gym, style: .powerlifting,
                                    starts: [start("back-squat", 245, 5), start("bench-press", 185, 5), start("deadlift", 315, 5)]),
                 goals: ["Deadlift 405 lb by Feb 1"], program: ProgramWeek(phase: .peak, kind: .peak), history: false,
-                goal: .strength),
+                goal: .strength, targets: [.init(exercise: "deadlift", pounds: 405)]),
         Profile(name: "New, muscle: 5 days, full gym",
                 settings: settings(age: 25, days: [0, 1, 2, 3, 4], minutes: 60, equipment: Set(AICoach.Profile.allEquipment),
                                    style: .hypertrophy, starts: [start("bench-press", 135, 8), start("back-squat", 155, 8)]),
@@ -148,6 +150,51 @@ struct ProgramDesignerEvals {
             + "\(result.repairs.count) repairs\(rules.isEmpty ? "" : " (\(rules))") · \(result.calls.count) tool calls"
     }
 
+    // MARK: The probe
+
+    struct Probe {
+        var profile: Profile
+        var program: [ProgramWeek]
+        var results: [ProgramDesigner.Result]
+        var weeks: [TrainingWeek] { results.map(\.week) }
+        var light: [Bool] { program.map(\.light) }
+    }
+
+    /// A whole program for one profile: each week planned from the last one, and logged as planned.
+    private static func probe(_ profile: Profile, weeks count: Int, inputs: Inputs, model: any AIModel) async -> Probe {
+        let bySlug = Dictionary(inputs.catalog.map { ($0.slug, $0) }, uniquingKeysWith: { a, _ in a })
+        let tier = AgeTier.of(age: profile.settings.age)
+        let program = ProgramPlan.weeks(count: count, deloadEvery: profile.settings.deloadEveryWeeks ?? tier.deloadEveryWeeks)
+        var history = profile.history ? inputs.history : [], last: [PlannedWorkout] = [], results: [ProgramDesigner.Result] = []
+        for (index, week) in program.enumerated() {
+            let result = await ProgramDesigner.week(ProgramDesigner.Request(
+                monday: ProgramPlan.monday(index, start: monday, calendar: calendar), settings: profile.settings,
+                catalog: inputs.catalog, names: inputs.names, history: history, weeksSinceDeload: 1, program: week,
+                programIndex: index, programWeeks: count, goals: profile.goals, lastWeek: last, calendar: calendar), model: model)
+            results.append(result)
+            for row in working(result.week) {
+                for _ in 0..<Int(row.target("sets") ?? 0) {
+                    history.append(LoggedSet(date: row.date, exercise: row.exercise, pattern: bySlug[row.exercise]?.pattern,
+                                             measurements: row.targets.filter { $0.metric != "sets" }))
+                }
+            }
+            last = result.week.workouts
+        }
+        return Probe(profile: profile, program: program, results: results)
+    }
+
+    private static func percent(_ share: Double) -> String { "\(Int((share * 100).rounded()))%" }
+
+    /// "Bench Press 208 → 236 of 225 (105%)".
+    private static func tracks(_ probe: Probe, names: [String: String]) -> [String] {
+        probe.profile.targets.map { target in
+            let track = ProgramScore.track(probe.weeks, light: probe.light, target: target)
+            let name = names[target.exercise] ?? target.exercise
+            guard let end = track.end, let share = track.share else { return "\(name): not planned" }
+            return "\(name) \(track.start.map { Coach.number($0.rounded()) + " → " } ?? "")\(Coach.number(end.rounded())) of \(Coach.number(target.pounds)) (\(percent(share)))"
+        }
+    }
+
     // MARK: Runs
 
     @Test func designedWeeks() async throws {
@@ -182,34 +229,16 @@ struct ProgramDesignerEvals {
                        + "\(Self.conditioning(result.week, catalog: bySlug)) |")
         }
 
-        // The probe: the author's program, each week planned from the last one, logged as planned.
-        var probe: [String] = [], lineups: [String] = [], phases: [String: (main: [Double], accessory: [Double])] = [:]
-        let author = Self.profiles[0]
+        // The probe: a whole program for each of EVAL_PROBE's profiles (the author by default).
+        var probes: [Probe] = []
         if weeks > 0, filter.isEmpty || "probe".contains(filter) {
-            let program = ProgramPlan.weeks(count: weeks, deloadEvery: 6)
-            var history = inputs.history, last: [PlannedWorkout] = []
-            for (index, week) in program.enumerated() {
-                let monday = ProgramPlan.monday(index, start: Self.monday, calendar: Self.calendar)
-                let result = await ProgramDesigner.week(ProgramDesigner.Request(
-                    monday: monday, settings: author.settings, catalog: inputs.catalog, names: inputs.names, history: history,
-                    weeksSinceDeload: 1, program: week, programIndex: index, programWeeks: weeks, goals: author.goals,
-                    lastWeek: last, calendar: Self.calendar), model: model)
-                all.append(result)
-                lineups.append(Self.lineup(result.week))
-                let phase = week.light ? "light" : week.phase.rawValue
-                phases[phase, default: ([], [])].main += Self.reps(result.week, main: true)
-                phases[phase, default: ([], [])].accessory += Self.reps(result.week, main: false)
-                probe.append("**Week \(index + 1), \(ProgramPlan.title(week))** · \(Self.summary(result))")
-                probe += Self.render(result.week, names: inputs.names).map { "- \($0)" }
-                probe.append("")
-                // Done as planned.
-                for row in Self.working(result.week) {
-                    for _ in 0..<Int(row.target("sets") ?? 0) {
-                        history.append(LoggedSet(date: row.date, exercise: row.exercise, pattern: bySlug[row.exercise]?.pattern,
-                                                 measurements: row.targets.filter { $0.metric != "sets" }))
-                    }
-                }
-                last = result.week.workouts
+            let tokens = (environment["EVAL_PROBE"].flatMap { $0.isEmpty ? nil : $0 } ?? "author").lowercased()
+                .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            for token in tokens {
+                guard let profile = Self.profiles.first(where: { $0.name.lowercased().contains(token) }) else { continue }
+                let probe = await Self.probe(profile, weeks: weeks, inputs: inputs, model: model)
+                probes.append(probe)
+                all += probe.results
             }
         }
 
@@ -217,6 +246,8 @@ struct ProgramDesignerEvals {
         let seconds = designed.map(\.seconds)
         let repairs = designed.isEmpty ? 0 : Double(designed.reduce(0) { $0 + $1.repairs.count }) / Double(designed.count)
         let average = seconds.isEmpty ? 0 : seconds.reduce(0, +) / Double(seconds.count)
+        let copies = all.flatMap { ProgramScore.copiedSessions($0.week) }
+        let odd = all.flatMap { ProgramScore.oddItems($0.week, catalog: bySlug, names: inputs.names) }
         report.append("# Program designer evals: \(model.name)")
         report.append("")
         var headline = "**\(designed.count)/\(all.count) weeks designed by the model** · "
@@ -226,21 +257,56 @@ struct ProgramDesignerEvals {
         report.append(headline)
         let rules = Dictionary(designed.flatMap(\.repairs).map { ($0.rule.rawValue, 1) }, uniquingKeysWith: +).sorted { $0.value > $1.value }
         if !rules.isEmpty { report.append("\nRepairs by rule: " + rules.map { "\($0.key) \($0.value)" }.joined(separator: ", ")) }
-        if !lineups.isEmpty {
-            report.append("\n## 12-week probe\n")
-            report.append("\(Set(lineups).count) distinct lineups in \(lineups.count) weeks.\n")
-            report.append("| Phase | Main reps (median, range) | Accessory reps (median, range) |")
-            report.append("|---|---|---|")
-            for phase in ["base", "build", "peak", "light"] {
-                guard let reps = phases[phase] else { continue }
-                func describe(_ values: [Double]) -> String {
-                    guard let median = Self.median(values) else { return "–" }
-                    return "\(Coach.number(median)) (\(Coach.number(values.min()!))–\(Coach.number(values.max()!)))"
-                }
-                report.append("| \(phase) | \(describe(reps.main)) | \(describe(reps.accessory)) |")
+        report.append("\nCopied sessions: \(copies.isEmpty ? "none" : copies.joined(separator: ", ")) · "
+                      + "Odd items: \(odd.isEmpty ? "none" : odd.joined(separator: ", "))")
+
+        // FIT-92: the program as a whole.
+        var progressions: [ProgramScore.Progression] = [], goals: [String] = [], deloads = (lighter: 0, of: 0)
+        var changes: [String: [Double]] = [:]
+        if !probes.isEmpty {
+            report.append("\n## Programs\n")
+            report.append("| Profile | Distinct lineups | Main lifts up · held · dropped | Rises over 10% | Goals: planned estimate | Deloads lighter | Exercises changed between phases |")
+            report.append("|---|---|---|---|---|---|---|")
+            for probe in probes {
+                let progression = ProgramScore.progression(probe.weeks, light: probe.light, names: inputs.names)
+                let deload = ProgramScore.deloads(probe.weeks, light: probe.light)
+                let phase = ProgramScore.phaseChanges(probe.weeks, phases: probe.program.map(\.phase), light: probe.light)
+                let track = Self.tracks(probe, names: inputs.names)
+                progressions.append(progression)
+                goals += track
+                deloads = (deloads.lighter + deload.lighter, deloads.of + deload.of)
+                for (name, change) in phase { changes[name, default: []].append(change) }
+                report.append("| \(probe.profile.name) | \(Set(probe.weeks.map(Self.lineup)).count) of \(probe.weeks.count) | "
+                              + "\(progression.up) · \(progression.held) · \(progression.down) | "
+                              + "\(progression.jumps.isEmpty ? "none" : progression.jumps.joined(separator: ", ")) | "
+                              + "\(track.isEmpty ? "–" : track.joined(separator: "; ")) | \(deload.lighter) of \(deload.of) | "
+                              + "\(phase.isEmpty ? "–" : phase.map { "\($0.0) \(Self.percent($0.1))" }.joined(separator: ", ")) |")
             }
-            report.append("")
-            report += probe
+            for probe in probes {
+                report.append("\n## 12-week probe: \(probe.profile.name)\n")
+                var phases: [String: (main: [Double], accessory: [Double])] = [:]
+                for (week, result) in zip(probe.program, probe.results) {
+                    let phase = week.light ? "light" : week.phase.rawValue
+                    phases[phase, default: ([], [])].main += Self.reps(result.week, main: true)
+                    phases[phase, default: ([], [])].accessory += Self.reps(result.week, main: false)
+                }
+                report.append("| Phase | Main reps (median, range) | Accessory reps (median, range) |")
+                report.append("|---|---|---|")
+                for phase in ["base", "build", "peak", "light"] {
+                    guard let reps = phases[phase] else { continue }
+                    func describe(_ values: [Double]) -> String {
+                        guard let median = Self.median(values) else { return "–" }
+                        return "\(Coach.number(median)) (\(Coach.number(values.min()!))–\(Coach.number(values.max()!)))"
+                    }
+                    report.append("| \(phase) | \(describe(reps.main)) | \(describe(reps.accessory)) |")
+                }
+                report.append("")
+                for (index, (week, result)) in zip(probe.program, probe.results).enumerated() {
+                    report.append("**Week \(index + 1), \(ProgramPlan.title(week))** · \(Self.summary(result))")
+                    report += Self.render(result.week, names: inputs.names).map { "- \($0)" }
+                    report.append("")
+                }
+            }
         }
         if !grid.isEmpty {
             report.append("## First loads\n")
@@ -255,6 +321,18 @@ struct ProgramDesignerEvals {
             report.append("\n## Profiles\n")
             report += grid
         }
+
+        // One row for Tests/Evals/program-compare.md, which scripts/program-eval.sh builds from every model's results.
+        let up = progressions.reduce(0) { $0 + $1.up }, held = progressions.reduce(0) { $0 + $1.held }
+        let down = progressions.reduce(0) { $0 + $1.down }, jumps = progressions.reduce(0) { $0 + $1.jumps.count }
+        let changed = ["base→build", "build→peak"].compactMap { name in
+            changes[name].map { "\(name) \(Self.percent($0.reduce(0, +) / Double($0.count)))" }
+        }
+        let cells = [model.name, "\(designed.count)/\(all.count)", String(format: "%.1f", repairs), String(format: "%.0f s", average),
+                     "\(copies.count)", "\(odd.count)", probes.isEmpty ? "–" : "\(up) · \(held) · \(down)", probes.isEmpty ? "–" : "\(jumps)",
+                     goals.isEmpty ? "–" : goals.joined(separator: "; "), deloads.of == 0 ? "–" : "\(deloads.lighter) of \(deloads.of)",
+                     changed.isEmpty ? "–" : changed.joined(separator: ", "), EvalModel.usage(model) ?? "–"]
+        report.append("\n<!-- compare: | \(cells.joined(separator: " | ")) | -->")
         for line in report.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false) {
             print("PROGRAM§ " + line)
         }
