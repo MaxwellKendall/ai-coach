@@ -118,3 +118,73 @@ enum ProgramScore {
         }
     }
 }
+
+// MARK: The pass bar (FIT-98)
+
+extension ProgramScore {
+    /// What a run must reach for its model to be good enough for the job. Named here, so a model choice can point to
+    /// the line it passed or failed.
+    enum Bar {
+        static let modelShare = 0.95
+        static let oddPer10Weeks = 1.0
+        static let goalShare = 0.9
+        static let dropShare = 0.2
+        static let repairsPerWeek = 3.0
+    }
+
+    struct Run {
+        var weeks: Int
+        var byModel: Int
+        var repairsPerWeek: Double
+        var copies: Int
+        var odd: Int
+        var progression: Progression
+        var goalShares: [Double]
+        var deloads: (lighter: Int, of: Int)
+    }
+
+    /// Each line of the bar for designing weeks that the run missed, with what it had: empty when it passes.
+    static func weekFailures(_ run: Run) -> [String] {
+        var failed: [String] = []
+        let share = Double(run.byModel) / Double(max(1, run.weeks))
+        if share < Bar.modelShare { failed.append("model designed \(percent(share)) of weeks") }
+        if run.copies > 0 { failed.append("\(run.copies) copied sessions") }
+        let odd = Double(run.odd) / Double(max(1, run.weeks)) * 10
+        if odd > Bar.oddPer10Weeks { failed.append(String(format: "%.1f odd items per 10 weeks", odd)) }
+        let changes = run.progression.up + run.progression.held + run.progression.down
+        if changes > 0, Double(run.progression.down) / Double(changes) > Bar.dropShare {
+            failed.append("\(run.progression.down) of \(changes) main-lift changes were drops")
+        }
+        if run.deloads.lighter < run.deloads.of { failed.append("\(run.deloads.of - run.deloads.lighter) deloads not lighter") }
+        if run.repairsPerWeek > Bar.repairsPerWeek { failed.append(String(format: "%.1f repairs a week", run.repairsPerWeek)) }
+        if let low = run.goalShares.min(), low < Bar.goalShare { failed.append("a goal planned to end at \(percent(low))") }
+        return failed
+    }
+
+    /// What's wrong with a brief: a phase the program has that it doesn't plan, a goal lift missing from a phase's main
+    /// lifts, a lift the equipment rules out, or peak reps above base reps. Empty when it passes.
+    static func briefProblems(_ brief: ProgramBrief?, weeks: [ProgramWeek], goalLifts: [String], catalog: [String: Exercise],
+                              names: [String: String], equipment: Set<String>) -> [String] {
+        guard let brief else { return ["no brief"] }
+        var problems: [String] = []
+        let slugs = Dictionary(names.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
+        for phase in ProgramBrief.phases(weeks) {
+            guard let line = brief.phase(phase) else { problems.append("no \(phase.rawValue) phase"); continue }
+            for goal in goalLifts where !line.mainLifts.contains(names[goal] ?? goal) {
+                problems.append("\(names[goal] ?? goal) not a main lift in \(phase.rawValue)")
+            }
+            for lift in line.mainLifts {
+                guard let exercise = slugs[lift].flatMap({ catalog[$0] }) else { continue }
+                if !exercise.equipment.subtracting(["bodyweight"]).isSubset(of: equipment) {
+                    problems.append("\(lift) needs equipment they don't have")
+                }
+            }
+        }
+        if let base = brief.phase(.base)?.mainReps, let peak = brief.phase(.peak)?.mainReps, peak > base {
+            problems.append("peak reps (\(peak)) above base reps (\(base))")
+        }
+        return problems
+    }
+
+    static func percent(_ share: Double) -> String { "\(Int((share * 100).rounded()))%" }
+}

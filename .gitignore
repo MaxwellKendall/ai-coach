@@ -8,3 +8,4 @@ xcuserdata/
 
 # Private keys (Apple .p8 etc.) never belong in the repo
 *.p8
+.env
