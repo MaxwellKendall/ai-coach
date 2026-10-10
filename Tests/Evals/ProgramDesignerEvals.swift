@@ -5,7 +5,7 @@ import Testing
 
 /// FIT-72: weeks designed by the real on-device model, over a grid of profiles and a 12-week program probe. Scored,
 /// not gated: repairs PlanGuard made per week, distinct lineups, rep ranges by phase, goal fit and latency. Run with
-/// `scripts/program-eval.sh`, which writes Tests/Evals/program-results.md.
+/// `scripts/program-eval.sh [model]`, which writes Tests/Evals/program-results-<model>.md (FIT-92: any model).
 struct ProgramDesignerEvals {
     private static let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
@@ -151,7 +151,8 @@ struct ProgramDesignerEvals {
     // MARK: Runs
 
     @Test func designedWeeks() async throws {
-        try #require(SystemLanguageModel.default.isAvailable, "Apple Intelligence is off on this Mac")
+        let model = EvalModel.current()
+        try #require(model.isAvailable, Comment(rawValue: EvalModel.unavailable(model)))
         let environment = ProcessInfo.processInfo.environment
         let weeks = Int(environment["EVAL_WEEKS"] ?? "") ?? 12
         let filter = environment["EVAL_FILTER"].map { $0.lowercased() } ?? ""
@@ -166,7 +167,7 @@ struct ProgramDesignerEvals {
             let result = await ProgramDesigner.week(ProgramDesigner.Request(
                 monday: Self.monday, settings: profile.settings, catalog: inputs.catalog, names: inputs.names,
                 history: profile.history ? inputs.history : [], weeksSinceDeload: 1, program: profile.program,
-                goals: profile.goals, calendar: Self.calendar))
+                goals: profile.goals, calendar: Self.calendar), model: model)
             all.append(result)
             grid.append("### \(profile.name)\n\n\(Self.summary(result))\n")
             grid += Self.render(result.week, names: inputs.names).map { "- \($0)" }
@@ -192,7 +193,7 @@ struct ProgramDesignerEvals {
                 let result = await ProgramDesigner.week(ProgramDesigner.Request(
                     monday: monday, settings: author.settings, catalog: inputs.catalog, names: inputs.names, history: history,
                     weeksSinceDeload: 1, program: week, programIndex: index, programWeeks: weeks, goals: author.goals,
-                    lastWeek: last, calendar: Self.calendar))
+                    lastWeek: last, calendar: Self.calendar), model: model)
                 all.append(result)
                 lineups.append(Self.lineup(result.week))
                 let phase = week.light ? "light" : week.phase.rawValue
@@ -212,15 +213,18 @@ struct ProgramDesignerEvals {
             }
         }
 
-        let model = all.filter { $0.source == .model }
-        let seconds = model.map(\.seconds)
-        report.append("# Program designer evals")
+        let designed = all.filter { $0.source == .model }
+        let seconds = designed.map(\.seconds)
+        let repairs = designed.isEmpty ? 0 : Double(designed.reduce(0) { $0 + $1.repairs.count }) / Double(designed.count)
+        let average = seconds.isEmpty ? 0 : seconds.reduce(0, +) / Double(seconds.count)
+        report.append("# Program designer evals: \(model.name)")
         report.append("")
-        report.append("**\(model.count)/\(all.count) weeks designed by the model** · "
-                      + "\(String(format: "%.1f", model.isEmpty ? 0 : Double(model.reduce(0) { $0 + $1.repairs.count }) / Double(model.count))) repairs per week · "
-                      + "\(String(format: "%.0f", seconds.isEmpty ? 0 : seconds.reduce(0, +) / Double(seconds.count))) s per week "
-                      + "(slowest \(String(format: "%.0f", seconds.max() ?? 0)) s)")
-        let rules = Dictionary(model.flatMap(\.repairs).map { ($0.rule.rawValue, 1) }, uniquingKeysWith: +).sorted { $0.value > $1.value }
+        var headline = "**\(designed.count)/\(all.count) weeks designed by the model** · "
+        headline += "\(String(format: "%.1f", repairs)) repairs per week · \(String(format: "%.0f", average)) s per week "
+        headline += "(slowest \(String(format: "%.0f", seconds.max() ?? 0)) s)"
+        if let usage = EvalModel.usage(model) { headline += " · " + usage }
+        report.append(headline)
+        let rules = Dictionary(designed.flatMap(\.repairs).map { ($0.rule.rawValue, 1) }, uniquingKeysWith: +).sorted { $0.value > $1.value }
         if !rules.isEmpty { report.append("\nRepairs by rule: " + rules.map { "\($0.key) \($0.value)" }.joined(separator: ", ")) }
         if !lineups.isEmpty {
             report.append("\n## 12-week probe\n")
