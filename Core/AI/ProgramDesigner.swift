@@ -33,6 +33,8 @@ enum ProgramDesigner {
         var programPlan: [ProgramWeek] = []
         /// FIT-96: hours slept a night over the week before, on average, when logged.
         var sleepHours: Double?
+        /// FIT-100: main lifts' top sets, decided before the week from how they went.
+        var progression: [Progression.Decision] = []
         var calendar: Calendar = .current
     }
 
@@ -234,6 +236,10 @@ enum ProgramDesigner {
             lines.append("This phase's plan: \(brief.focus). Main lifts: \(brief.mainLifts.joined(separator: ", ")), around \(brief.mainReps) reps; the rest around \(brief.accessoryReps).")
         }
         if !light { lines += aims(request) }
+        if !request.progression.isEmpty {
+            lines.append("Main lifts' top sets this week, decided from how they went; keep to them:\n"
+                         + request.progression.map { Progression.line($0, names: request.names) }.joined(separator: "\n"))
+        }
         let low = light ? max(1, Int(Double(range.lowerBound) * TrainingGenerator.deloadSets)) : range.lowerBound
         let high = light ? max(1, Int(Double(range.upperBound) * TrainingGenerator.deloadSets)) : range.upperBound
         let sets = low == high ? "about \(low)" : "\(low)–\(high)"
@@ -286,6 +292,10 @@ enum ProgramDesigner {
             if lift.measure == "reps" {
                 return "\(name) is a goal (\(Coach.number(lift.target)) in a row\(by)): \(now.map { "\(Coach.number($0)) now; " } ?? "")"
                     + "aim for about \(Coach.number(aim.rounded())) in a row by the end of this week."
+            }
+            // A decided top set stands for the aim's.
+            if request.progression.contains(where: { $0.exercise == lift.exercise }) {
+                return "\(name) is a goal (\(Coach.number(lift.target)) lb\(by)): aim for an estimated max of about \(Coach.number(aim.rounded())) by the end of this week."
             }
             let reps = Double(request.brief?.mainReps ?? Int(request.settings.style.reps.main))
             return "\(name) is a goal (\(Coach.number(lift.target)) lb\(by)): estimated max about \(Coach.number((now ?? lift.start).rounded())) now; "
