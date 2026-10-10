@@ -33,13 +33,13 @@ struct LogDraft {
 
 enum LogParser {
     /// The LLM only structures what was said; the user checks every card before anything is saved.
-    static func parse(_ text: String) async throws -> [ParsedLogItem] {
-        let session = LanguageModelSession(instructions: """
+    static func parse(_ text: String, model: any AIModel = OnDeviceModel()) async throws -> [ParsedLogItem] {
+        let session = model.session(instructions: """
             Turn what the user says into log items: meals eaten, sleep, body weight, grocery spending.
             Add a workout item only if they describe a workout they did. Only include facts that were
             stated. Never estimate calories, protein or any number.
             """)
-        let draft = try await session.respond(to: text, generating: LogDraft.self).content
+        let draft = try await session.respond(to: text, generating: LogDraft.self)
         return keep(draft.items.compactMap(ParsedLogItem.init), said: text)
     }
 

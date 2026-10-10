@@ -25,12 +25,12 @@ enum TemplateParser {
     ]
 
     /// The LLM only structures the text; the user confirms and edits the result before saving.
-    static func parse(_ text: String, kind: TemplateKind) async throws -> TemplateSeed {
-        let session = LanguageModelSession(instructions: """
+    static func parse(_ text: String, kind: TemplateKind, model: any AIModel = OnDeviceModel()) async throws -> TemplateSeed {
+        let session = model.session(instructions: """
             Turn the user's \(kind.rawValue) into structured data. Use these keys where they apply: \(keys[kind] ?? "").
             Only include facts stated in the text. Do not invent quantities or nutrition.
             """)
-        let draft = try await session.respond(to: text, generating: TemplateDraft.self).content
+        let draft = try await session.respond(to: text, generating: TemplateDraft.self)
         return TemplateSeed(
             kind: kind, name: draft.name, slug: Slug.make(draft.name),
             attributes: draft.attributes

@@ -70,14 +70,14 @@ enum WorkoutAgent {
 
     /// The edit. The model is given only the tools the words point at; if that makes no change, it gets all of them.
     @MainActor static func run(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup,
-                               progress: Progress? = nil) async throws -> Outcome {
+                               progress: Progress? = nil, model: any AIModel = OnDeviceModel()) async throws -> Outcome {
         let hasToday = today.contains { $0.note != TrainingGenerator.warmupNote }
         var tools = SaidChecks.tools(for: said, today: hasToday)
         var tries = 0
         while true {
             tries += 1
             do {
-                let outcome = try await attempt(said, today: today, setup: setup, tools: tools, progress: progress)
+                let outcome = try await attempt(said, today: today, setup: setup, tools: tools, progress: progress, model: model)
                 if outcome.changed { return outcome }
                 if tools.count == SaidChecks.all(hasToday).count { return fallback(said, today: today, setup: setup) ?? outcome }
                 if let progress { progress(Change(step: "Trying again", workouts: today, newExercises: [])) }
@@ -87,7 +87,7 @@ enum WorkoutAgent {
                 // It can arrive as a bridged NSError (com.apple.tokengeneration Code=10 under GenerationError -1) that
                 // doesn't match `as LanguageModelSession.GenerationError`, so every error but these is retried (FIT-79).
                 if error is CancellationError { throw error }
-                if let error = error as? LanguageModelSession.GenerationError, case .guardrailViolation = error { throw error }
+                if AIFailure(error) == .guardrail { throw error }
                 if tries == 3 {
                     if let outcome = fallback(said, today: today, setup: setup) { return outcome }
                     throw error
@@ -116,10 +116,10 @@ enum WorkoutAgent {
     }
 
     private static func attempt(_ said: String, today: [PlannedWorkout], setup: TodayWorkout.Setup, tools names: [String],
-                                progress: Progress?) async throws -> Outcome {
+                                progress: Progress?, model: any AIModel) async throws -> Outcome {
         let state = State(TodayWorkout(today, setup: setup), progress: progress)
         state.said.withLock { $0 = said }
-        let session = LanguageModelSession(
+        let session = model.session(
             tools: tools(state).filter { names.contains($0.name) },
             instructions: instructions(library: library(setup, today: today), today: state.workout.withLock { $0.text }, tools: names))
         _ = try await session.respond(to: said)

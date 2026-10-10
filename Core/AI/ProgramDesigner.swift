@@ -112,7 +112,7 @@ enum ProgramDesigner {
 
     // MARK: The week
 
-    static func week(_ request: Request) async -> Result {
+    static func week(_ request: Request, model: any AIModel = OnDeviceModel()) async -> Result {
         let clock = ContinuousClock.now
         var settings = request.settings
         if request.program?.travel == true { settings.equipment.formIntersection(ProgramPlan.travelEquipment) }
@@ -133,11 +133,11 @@ enum ProgramDesigner {
             return Result(week: TrainingWeek(workouts: guarded.workouts, deload: week.deload, warnings: week.warnings),
                           repairs: guarded.repairs, source: .fallback, fallbackReason: reason, seconds: seconds(), calls: calls)
         }
-        guard LanguageModel.isAvailable else { return fallback("Apple Intelligence isn't available") }
+        guard model.isAvailable else { return fallback("the model isn't available") }
 
         let log = Log()
         do {
-            var designed = try await design(request, settings: settings, tier: tier, light: light, log: log)
+            var designed = try await design(request, settings: settings, tier: tier, light: light, log: log, model: model)
             // FIT-76: a week short of sessions, or leaving out a main movement, goes back once, saying what's missing.
             let days = settings.trainingDays.prefix(settings.daysPerWeek).count
             let missing = PlanGuard.missingMovements(rows(designed, request, settings: settings, tier: tier).workouts, context)
@@ -146,13 +146,13 @@ enum ProgramDesigner {
                 if designed.sessions.count < days { problems.append("only \(designed.sessions.count) sessions for \(days) days") }
                 if !missing.isEmpty { problems.append("no " + missing.map { String($0.name.dropFirst(2)) }.joined(separator: " and no ")) }
                 log.calls.withLock { $0.append("again: \(problems.joined(separator: ", "))") }
-                designed = try await design(request, settings: settings, tier: tier, light: light, log: log, note: """
+                designed = try await design(request, settings: settings, tier: tier, light: light, log: log, model: model, note: """
                     A first try had \(problems.joined(separator: " and ")). Design \(days) different sessions that \
                     together train a squat or lunge, a hinge, a push and a pull.
                     """)
             }
-            try await rename(&designed, request, settings: settings, log: log)
-            try await fillLoads(&designed, request, settings: settings, log: log)
+            try await rename(&designed, request, settings: settings, log: log, model: model)
+            try await fillLoads(&designed, request, settings: settings, log: log, model: model)
             let (workouts, why) = rows(designed, request, settings: settings, tier: tier)
             guard !workouts.isEmpty else { return fallback("the model planned nothing", calls: log.calls.withLock { $0 }) }
             let guarded = PlanGuard.check(workouts, context)
@@ -169,18 +169,18 @@ enum ProgramDesigner {
     /// calls); one more try, from the start. A week that ran out of context (searches fill it) tries again from the
     /// menu alone.
     private static func design(_ request: Request, settings: TrainingSettings, tier: AgeTier, light: Bool, log: Log,
-                               note: String? = nil) async throws -> DesignedWeek {
+                               model: any AIModel, note: String? = nil) async throws -> DesignedWeek {
         var tries = 0, tools = true
         while true {
             tries += 1
             do {
-                let session = LanguageModelSession(tools: tools ? [FindExercises(request: request, settings: settings, log: log)] : [],
-                                                   instructions: instructions(settings, tier: tier, light: light))
+                let session = model.session(tools: tools ? [FindExercises(request: request, settings: settings, log: log)] : [],
+                                            instructions: instructions(settings, tier: tier, light: light))
                 return try await session.respond(to: prompt(request, settings: settings, light: light) + (note.map { "\n" + $0 } ?? ""),
-                                                 generating: DesignedWeek.self).content
-            } catch let error as LanguageModelSession.GenerationError {
-                if case .guardrailViolation = error { throw error }
-                if case .exceededContextWindowSize = error { tools = false }
+                                                 generating: DesignedWeek.self)
+            } catch {
+                if error is CancellationError || AIFailure(error) == .guardrail { throw error }
+                if AIFailure(error) == .tooLong { tools = false }
                 if tries == 2 { throw error }
                 log.calls.withLock { $0.append("retry after \(error)") }
             }
@@ -349,7 +349,8 @@ enum ProgramDesigner {
 
     /// Names the catalog doesn't have go back to the model once, each with its closest options. What's still
     /// unresolved is left for PlanGuard's own search to repair.
-    private static func rename(_ designed: inout DesignedWeek, _ request: Request, settings: TrainingSettings, log: Log) async throws {
+    private static func rename(_ designed: inout DesignedWeek, _ request: Request, settings: TrainingSettings, log: Log,
+                               model: any AIModel) async throws {
         let bySlug = Dictionary(request.catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
         let unresolved = designed.sessions.flatMap(\.exercises).map(\.name)
             .filter { PlanGuard.resolve($0, in: bySlug, names: request.names) == nil }
@@ -360,12 +361,12 @@ enum ProgramDesigner {
         }
         guard !options.isEmpty else { return }
         log.calls.withLock { $0.append("rename \(options.map(\.0).joined(separator: ", "))") }
-        let session = LanguageModelSession(instructions: """
+        let session = model.session(instructions: """
             These exercises aren't in the user's catalog. For each, choose the closest of its options, written exactly.
             """)
         let renames = try await session.respond(
             to: options.map { "\($0.0): \($0.1.joined(separator: ", "))" }.joined(separator: "\n"),
-            generating: Renames.self).content
+            generating: Renames.self)
         let map = Dictionary(renames.exercises.filter { rename in options.contains { $0.0 == rename.from && $0.1.contains(rename.to) } }
             .map { ($0.from, $0.to) }, uniquingKeysWith: { first, _ in first })
         for s in designed.sessions.indices {
@@ -389,7 +390,8 @@ enum ProgramDesigner {
 
     /// FIT-73: every weighted exercise starts with a load the model chose. One more ask for those it left empty, with
     /// what's known to go on; PlanGuard then holds each to its ceiling.
-    private static func fillLoads(_ designed: inout DesignedWeek, _ request: Request, settings: TrainingSettings, log: Log) async throws {
+    private static func fillLoads(_ designed: inout DesignedWeek, _ request: Request, settings: TrainingSettings, log: Log,
+                                  model: any AIModel) async throws {
         let missing = missingLoads(designed, request)
         guard !missing.isEmpty else { return }
         log.calls.withLock { $0.append("first loads \(missing.joined(separator: ", "))") }
@@ -397,7 +399,7 @@ enum ProgramDesigner {
             guard let name = request.names[start.exercise], let load = start.value("load_lb"), let reps = start.value("reps") else { return nil }
             return "\(name) \(Coach.number(load)) lb × \(Coach.number(reps))"
         }.joined(separator: "\n")].filter { !$0.isEmpty }.joined(separator: "\n")
-        let session = LanguageModelSession(instructions: """
+        let session = model.session(instructions: """
             You're a strength coach choosing a light first load for each exercise, from a related lift they know: each \
             dumbbell for a dumbbell bench is about 40% of the barbell bench, an overhead press about 65% of it, a row \
             about 80%, a lunge about 60% of the squat.
@@ -405,7 +407,7 @@ enum ProgramDesigner {
         let prompt = "Age \(settings.age)\(settings.bodyWeight.map { ", \(Coach.number($0)) lb" } ?? "").\n"
             + (known.isEmpty ? "No lifts known yet.\n" : "What they lift:\n\(known)\n")
             + "First loads for: \(missing.joined(separator: ", "))."
-        let loads = try await session.respond(to: prompt, generating: FirstLoads.self).content.loads
+        let loads = try await session.respond(to: prompt, generating: FirstLoads.self).loads
         let byName = Dictionary(loads.filter { missing.contains($0.name) }.map { ($0.name, $0.pounds) }, uniquingKeysWith: { first, _ in first })
         for s in designed.sessions.indices {
             for e in designed.sessions[s].exercises.indices where designed.sessions[s].exercises[e].pounds == nil {

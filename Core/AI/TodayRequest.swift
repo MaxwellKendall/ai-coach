@@ -125,8 +125,8 @@ extension SpokenRequest {
 enum TodayRequestParser {
     /// Two small steps, because the on-device model mixes fields up in one big schema: sort what was said,
     /// then copy out only that kind's facts. Code then drops anything the words don't support.
-    static func parse(_ text: String) async throws -> SpokenRequest? {
-        let sorter = LanguageModelSession(instructions: """
+    static func parse(_ text: String, model: any AIModel = OnDeviceModel()) async throws -> SpokenRequest? {
+        let sorter = model.session(instructions: """
             Sort what the user said to their fitness app.
             change: they can't do today's workout as planned. "I only have thirty minutes", "my knee hurts",
             "slept badly", "move it to Saturday".
@@ -140,36 +140,36 @@ enum TodayRequestParser {
         // anything the change rules can read is a change.
         let kind: String
         do {
-            kind = try await sorter.respond(to: text, generating: TodayRequestKind.self).content.kind
-        } catch LanguageModelSession.GenerationError.refusal {
+            kind = try await sorter.respond(to: text, generating: TodayRequestKind.self).kind
+        } catch where AIFailure(error) == .refusal {
             let read = SpokenRequest.checked(TodayRequestDraft(kind: "change"), against: text)
             kind = read.minutes != nil || read.hurts != nil || read.moveTo != nil || read.lowEnergy == true ? "change" : "edit"
         }
         if kind == "edit" { return SpokenRequest(kind: .edit) }
         var draft = TodayRequestDraft(kind: kind)
         // A change's minutes, body part, day and tiredness are read by code (`checked`); sets need the model.
-        if kind == "did_workout" { draft.differences = try await differences(text, doing: nil) }
+        if kind == "did_workout" { draft.differences = try await differences(text, doing: nil, model: model) }
         // A change none of those rules can read goes to the workout editor.
         if let request = SpokenRequest(SpokenRequest.checked(draft, against: text)) { return request }
         return kind == "change" ? SpokenRequest(kind: .edit) : nil
     }
 
     /// Mid-workout (FIT-31): how the sets of the exercise on screen went. Empty means as planned.
-    static func parseSets(_ text: String, exercise: String) async throws -> [SpokenRequest.Difference] {
-        let differences = try await differences(text, doing: exercise)
+    static func parseSets(_ text: String, exercise: String, model: any AIModel = OnDeviceModel()) async throws -> [SpokenRequest.Difference] {
+        let differences = try await differences(text, doing: exercise, model: model)
         let checked = SpokenRequest.checked(TodayRequestDraft(kind: "did_workout", differences: differences), against: text, current: exercise)
         guard case .didWorkout(let result)? = SpokenRequest(checked)?.kind else { return [] }
         return result
     }
 
     /// Numbers in the example can't leak: `checked` drops any number that wasn't said.
-    private static func differences(_ text: String, doing exercise: String?) async throws -> [TodayWorkoutDraft.Difference] {
-        let session = LanguageModelSession(instructions: """
+    private static func differences(_ text: String, doing exercise: String?, model: any AIModel) async throws -> [TodayWorkoutDraft.Difference] {
+        let session = model.session(instructions: """
             The user \(exercise.map { "is doing \($0) and says how their sets went" } ?? "did their workout").
             Copy out only sets they said were different from the plan. Never invent sets or numbers.
             Example: "last bench set was only four" is exercise bench, set last, reps 4.
             Weights are often said in parts: "two thirty five" means 235 pounds.
             """)
-        return try await session.respond(to: text, generating: TodayWorkoutDraft.self).content.differences
+        return try await session.respond(to: text, generating: TodayWorkoutDraft.self).differences
     }
 }

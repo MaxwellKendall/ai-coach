@@ -53,28 +53,28 @@ enum OnboardingStep: Int, CaseIterable, Sendable {
 
 enum OnboardingSpeech {
     static func hear(_ text: String, on step: OnboardingStep, into answers: inout OnboardingAnswers, catalog: [Exercise],
-                     names: [String: String], now: Date = .now) async throws {
+                     names: [String: String], now: Date = .now, model: any AIModel = OnDeviceModel()) async throws {
         switch step {
         case .goals:
-            let session = LanguageModelSession(instructions: """
+            let session = model.session(instructions: """
                 The user says what they want to train for. Copy out each goal they named and its number if they said one.
                 weight: losing weight or reaching a body weight. squat, bench, deadlift: lifting more. pullups, pushups: more in a row.
                 """)
-            let goals = try await session.respond(to: text, generating: SpokenGoals.self).content.goals
+            let goals = try await session.respond(to: text, generating: SpokenGoals.self).goals
             answers.heardGoals(goals.map { ($0.goal, $0.target) }, in: text, now: now)
         case .exercises:
-            let session = LanguageModelSession(instructions: """
+            let session = model.session(instructions: """
                 The user says which exercises and equipment they want to train with. Copy out the names they said,
                 split into the ones they don't want or don't have, and the ones they like or have.
                 """)
-            let said = try await session.respond(to: text, generating: SpokenExercises.self).content
+            let said = try await session.respond(to: text, generating: SpokenExercises.self)
             answers.heardExercises(without: said.without, with: said.with, catalog: catalog, names: names)
         case .starts:
-            let session = LanguageModelSession(instructions: """
+            let session = model.session(instructions: """
                 The user says what they can do now: a weight for some reps, how many reps in a row, or how long they hold.
                 Copy out only what they said. Never invent numbers.
                 """)
-            let said = try await session.respond(to: text, generating: SpokenStarts.self).content
+            let said = try await session.respond(to: text, generating: SpokenStarts.self)
             answers.heardStarts(said.sets.map { ($0.exercise, $0.pounds, $0.reps, $0.seconds) }, age: said.age,
                                 bodyWeight: said.bodyWeight, in: text, catalog: catalog, names: names)
         case .schedule:
