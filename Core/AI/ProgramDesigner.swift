@@ -26,6 +26,11 @@ enum ProgramDesigner {
         /// FIT-77: a version of this week to differ from ("Try another"): its sessions are shown, and the model asked
         /// for different exercises.
         var differentFrom: [PlannedWorkout] = []
+        /// FIT-95: this week's phase in the program brief, the goals it works toward, and the program's weeks for
+        /// where each goal should be by the end of this one.
+        var brief: ProgramBrief.Phase?
+        var goalLifts: [GoalLift] = []
+        var programPlan: [ProgramWeek] = []
         var calendar: Calendar = .current
     }
 
@@ -223,12 +228,18 @@ enum ProgramDesigner {
             lines.append("A deload week: the same kind of work at about half the sets and lighter loads.")
         }
         if !request.goals.isEmpty { lines.append("Goals: \(request.goals.joined(separator: "; ")).") }
+        if let brief = request.brief {
+            lines.append("This phase's plan: \(brief.focus). Main lifts: \(brief.mainLifts.joined(separator: ", ")), around \(brief.mainReps) reps; the rest around \(brief.accessoryReps).")
+        }
+        if !light { lines += aims(request) }
         let low = light ? max(1, Int(Double(range.lowerBound) * TrainingGenerator.deloadSets)) : range.lowerBound
         let high = light ? max(1, Int(Double(range.upperBound) * TrainingGenerator.deloadSets)) : range.upperBound
         let sets = low == high ? "about \(low)" : "\(low)–\(high)"
         lines.append("Training days: \(days.map { weekdays[$0 % 7] }.joined(separator: ", ")), \(settings.sessionMinutes) minutes each.")
         let reps = settings.style.reps
-        lines.append("Age \(settings.age)\(settings.bodyWeight.map { ", \(Coach.number($0)) lb" } ?? ""). Style: \(settings.style.rawValue) (main lifts around \(Int(reps.main)) reps, the rest around \(Int(reps.accessory))).")
+        // The brief's reps, when there is one, stand for the style's.
+        lines.append("Age \(settings.age)\(settings.bodyWeight.map { ", \(Coach.number($0)) lb" } ?? ""). Style: \(settings.style.rawValue)"
+                     + (request.brief == nil ? " (main lifts around \(Int(reps.main)) reps, the rest around \(Int(reps.accessory)))." : "."))
         lines.append("Equipment: \(settings.equipment.isEmpty ? "none, bodyweight only" : settings.equipment.sorted().map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: ", ")).")
         if !settings.injuredAreas.isEmpty { lines.append("Injured: \(settings.injuredAreas.sorted().joined(separator: ", ")).") }
         if !settings.avoidExercises.isEmpty {
@@ -254,6 +265,29 @@ enum ProgramDesigner {
         lines.append("Menu, by movement:\n" + menu(request, settings: settings))
         lines.append("Design \(days.count) sessions, each of 4 to 6 exercises and \(sets) working sets.")
         return lines.joined(separator: "\n")
+    }
+
+    /// FIT-95: where each goal should be by the end of this week, on the line from its start to its target, and the top
+    /// set that would show it: "Bench Press is a goal (225 by Jan 9): estimated max about 190 now; aim for about 201
+    /// by the end of this week, a top set near 175 × 5."
+    static func aims(_ request: Request) -> [String] {
+        guard let index = request.programIndex, request.programPlan.indices.contains(index) else { return [] }
+        let since = request.calendar.date(byAdding: .day, value: -56, to: request.monday)!
+        let recent = request.history.filter { $0.date < request.monday }
+        return request.goalLifts.map { lift in
+            let name = request.names[lift.exercise] ?? lift.exercise
+            let aim = ProgramPlan.expected(from: lift.start, target: lift.target, at: index, weeks: request.programPlan)
+            let by = lift.deadline.map { " by \($0.formatted(.dateTime.month(.abbreviated).day()))" } ?? ""
+            let now = GoalProgress.current("\(lift.exercise).\(lift.measure)", sets: recent, weighIns: [], since: since)
+            if lift.measure == "reps" {
+                return "\(name) is a goal (\(Coach.number(lift.target)) in a row\(by)): \(now.map { "\(Coach.number($0)) now; " } ?? "")"
+                    + "aim for about \(Coach.number(aim.rounded())) in a row by the end of this week."
+            }
+            let reps = Double(request.brief?.mainReps ?? Int(request.settings.style.reps.main))
+            return "\(name) is a goal (\(Coach.number(lift.target)) lb\(by)): estimated max about \(Coach.number((now ?? lift.start).rounded())) now; "
+                + "aim for about \(Coach.number(aim.rounded())) by the end of this week, a top set near "
+                + "\(Coach.number(ProgramPlan.load(forMax: aim, reps: reps))) × \(Coach.number(reps))."
+        }
     }
 
     static let menuMovements = ["squat", "lunge", "hinge", "horizontal push", "vertical push", "horizontal pull",

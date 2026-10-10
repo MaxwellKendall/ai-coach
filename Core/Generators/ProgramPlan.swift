@@ -18,6 +18,17 @@ struct ProgramWeek: Equatable, Sendable {
     var light: Bool { kind == .deload || kind == .test }
 }
 
+/// FIT-95: a goal a week's design works toward: an exercise's estimated max, or reps in a row.
+struct GoalLift: Equatable, Sendable {
+    var exercise: String
+    /// "1rm_lb" or "reps", as in the goal's metric ("bench-press.1rm_lb").
+    var measure: String
+    /// Where it was when the program started, and where it should end.
+    var start: Double
+    var target: Double
+    var deadline: Date?
+}
+
 /// What someone can do now, from onboarding's "Where are you starting?". Only used until there's history.
 /// Metrics: `load_lb` + `reps` (best recent set), `reps` (most in a row) or `duration_s` (longest hold).
 struct StartingSet: Codable, Hashable, Sendable {
@@ -96,6 +107,11 @@ enum ProgramPlan {
 
     /// Brzycki (fitness-planner CLAUDE.md "1RM Estimation").
     static func estimatedMax(load: Double, reps: Double) -> Double { load * 36 / (37 - min(reps, 36)) }
+
+    /// FIT-95: the load whose Brzycki estimate is `max` at `reps`, to the nearest 5 lb: the top set a week aims for.
+    static func load(forMax max: Double, reps: Double) -> Double {
+        TrainingGenerator.roundTo5(max * (37 - min(reps, 36)) / 36)
+    }
 
     /// A first working set from a starting point, a little under it: 90% of the load Brzycki gives for the
     /// planned reps, 70% of most reps in a row, 75% of the longest hold.

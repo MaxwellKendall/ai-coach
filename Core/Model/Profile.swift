@@ -40,6 +40,8 @@ final class Profile {
     /// Program weeks away from the usual gym, 0-based.
     var travelWeeks: [Int] = []
     var starts: [StartingSet] = []
+    /// FIT-95: the program brief, with what it was written for; written again when that changes (`Planner.design`).
+    var brief: ProgramBrief.Stored?
     var createdAt: Date
     var updatedAt: Date
 

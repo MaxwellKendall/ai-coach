@@ -18,6 +18,8 @@ struct OnboardingView: View {
     @State private var message: String?
     /// FIT-73: the first week the model designed from these answers, and the loads the user changed on it.
     @State private var firstWeek: ProgramDesigner.Result?
+    /// FIT-95: the program brief written with week 1, and the model that wrote it.
+    @State private var brief: ProgramBrief?
     @State private var designing = false
     @State private var loads: [String: Double] = [:]
     var onDone: () -> Void
@@ -86,11 +88,23 @@ struct OnboardingView: View {
         let monday = Week.start(of: .now)
         let weeks = ProgramPlan.weeks(count: answers.weeks, deloadEvery: AgeTier.of(age: settings.age).deloadEveryWeeks)
         let end = Calendar.current.date(byAdding: .day, value: 7 * answers.weeks - 1, to: monday)!
-        let request = ProgramDesigner.Request(
-            monday: monday, settings: settings, catalog: catalog, names: names, history: history, weeksSinceDeload: 0,
-            program: weeks.first, programIndex: 0, programWeeks: weeks.count, goals: answers.goalLines(by: end))
+        let goals = answers.goalLines(by: end)
+        let lifts = answers.goals.compactMap(GoalOption.with(id:)).compactMap { option -> GoalLift? in
+            guard let exercise = option.exercise, let measure = option.metric.split(separator: ".").last,
+                  let start = answers.baseline(option), let target = answers.target(option) else { return nil }
+            return GoalLift(exercise: exercise, measure: String(measure), start: start, target: target, deadline: end)
+        }
         designing = true
         defer { designing = false }
+        // FIT-95: the program's plan first, then week 1 within it.
+        let brief = await ProgramBrief.write(ProgramBrief.Request(settings: settings, catalog: catalog, names: names, goals: goals,
+                                                                  goalLifts: lifts, weeks: weeks))
+        guard !Task.isCancelled else { return }
+        self.brief = brief
+        let request = ProgramDesigner.Request(
+            monday: monday, settings: settings, catalog: catalog, names: names, history: history, weeksSinceDeload: 0,
+            program: weeks.first, programIndex: 0, programWeeks: weeks.count, goals: goals,
+            brief: weeks.first.flatMap { brief?.phase($0.phase) }, goalLifts: lifts, programPlan: weeks)
         let result = await ProgramDesigner.week(request)
         guard !Task.isCancelled else { return }
         withAnimation(.snappy) {
@@ -219,6 +233,13 @@ struct OnboardingView: View {
             goal.baseline = answers.baseline(option)
             goal.deadline = profile.targetDate
             goal.updatedAt = now
+        }
+        try? context.save()
+        // Kept under the key Planner reads it by, with the goals just saved, so it isn't written again.
+        let saved = (try? context.fetch(FetchDescriptor<Goal>())) ?? []
+        profile.brief = brief.map { brief in
+            ProgramBrief.Stored(brief: brief, key: ProgramBrief.key(goals: Planner.goalLines(saved), settings: profile.trainingSettings,
+                                                                    weeks: profile.program ?? []), model: OnDeviceModel().name)
         }
         try? context.save()
         if let plan = try? Planner.generate(weekOf: now, in: context), let firstWeek {

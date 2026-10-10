@@ -21,19 +21,55 @@ enum Planner {
               let entries = try? context.fetch(FetchDescriptor<LogEntry>()) else { return nil }
         let history = loggedSets(entries, templates: templates)
         let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-        let goals = ((try? context.fetch(FetchDescriptor<Goal>())) ?? []).filter { $0.status == .active }.compactMap { goal -> String? in
-            guard let option = GoalOption.all.first(where: { $0.metric == goal.metric }) else { return nil }
-            return option.title(target: goal.target)
-                + (goal.deadline.map { " by \($0.formatted(.dateTime.month(.abbreviated).day()))" } ?? "")
-        }
+        let active = ((try? context.fetch(FetchDescriptor<Goal>())) ?? []).filter { $0.status == .active }
+        let goals = goalLines(active)
         let lastMonday = calendar.date(byAdding: .day, value: -7, to: monday)!
         let program = profile.programWeek(of: monday, calendar: calendar)
+        let weeks = profile.program ?? []
+        // A brief written for other goals or settings isn't this program's; `design` writes it again.
+        let brief = profile.brief.flatMap { stored in
+            stored.key == ProgramBrief.key(goals: goals, settings: profile.trainingSettings, weeks: weeks) ? stored.brief : nil
+        }
         return ProgramDesigner.Request(
             monday: monday, settings: profile.trainingSettings, catalog: catalog(templates), names: names, history: history,
             weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar), program: program?.week,
             programIndex: program?.index, programWeeks: profile.program?.count, goals: goals,
             lastWeek: (try? self.plan(weekOf: lastMonday, in: context)).flatMap { $0 }.map { workouts($0, templates: templates) } ?? [],
-            calendar: calendar)
+            brief: program.flatMap { brief?.phase($0.week.phase) }, goalLifts: goalLifts(active, history: history),
+            programPlan: weeks, calendar: calendar)
+    }
+
+    /// "Bench more 225 lb by Jan 9": the goals as the designer and the brief are told them.
+    static func goalLines(_ goals: [Goal]) -> [String] {
+        goals.filter { $0.status == .active }.compactMap { goal in
+            guard let option = GoalOption.all.first(where: { $0.metric == goal.metric }) else { return nil }
+            return option.title(target: goal.target)
+                + (goal.deadline.map { " by \($0.formatted(.dateTime.month(.abbreviated).day()))" } ?? "")
+        }
+    }
+
+    /// FIT-95: the strength goals a week works toward: a lift's estimated max or reps in a row, from where it started.
+    static func goalLifts(_ goals: [Goal], history: [LoggedSet]) -> [GoalLift] {
+        goals.filter { $0.status == .active }.compactMap { goal in
+            let parts = goal.metric.split(separator: ".").map(String.init)
+            guard parts.count == 2, ["1rm_lb", "reps"].contains(parts[1]),
+                  let start = goal.baseline ?? GoalProgress.current(goal.metric, sets: history, weighIns: [], since: .distantPast)
+            else { return nil }
+            return GoalLift(exercise: parts[0], measure: parts[1], start: start, target: goal.target, deadline: goal.deadline)
+        }
+    }
+
+    /// FIT-95: the program brief for the design request's program, written by the model when the profile has none for
+    /// it (a new program, or goals, days or equipment changed since). Kept on the profile.
+    static func writeBrief(for request: ProgramDesigner.Request, profile: Profile, model: any AIModel = OnDeviceModel()) async -> ProgramBrief? {
+        guard !request.programPlan.isEmpty else { return nil }
+        let key = ProgramBrief.key(goals: request.goals, settings: request.settings, weeks: request.programPlan)
+        if let stored = profile.brief, stored.key == key { return stored.brief }
+        guard let brief = await ProgramBrief.write(ProgramBrief.Request(
+            settings: request.settings, catalog: request.catalog, names: request.names, goals: request.goals,
+            goalLifts: request.goalLifts, weeks: request.programPlan), model: model) else { return nil }
+        profile.brief = ProgramBrief.Stored(brief: brief, key: key, model: model.name)
+        return brief
     }
 
     static func design(weekOf date: Date = .now, in context: ModelContext, calendar: Calendar = .current) async {
@@ -43,9 +79,12 @@ enum Planner {
               let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
               let templates = try? context.fetch(FetchDescriptor<Template>()),
               let entries = try? context.fetch(FetchDescriptor<LogEntry>()),
-              let request = designRequest(weekOf: monday, in: context, calendar: calendar) else { return }
+              var request = designRequest(weekOf: monday, in: context, calendar: calendar) else { return }
         designing.weeks.insert(monday)
         defer { designing.weeks.remove(monday) }
+        if request.brief == nil, let program = profile.programWeek(of: monday, calendar: calendar) {
+            request.brief = await writeBrief(for: request, profile: profile)?.phase(program.week.phase)
+        }
         let result = await ProgramDesigner.week(request)
         // The week may have been planned again while the model worked; that plan gets its own turn.
         guard let current = try? self.plan(weekOf: monday, in: context), current.id == plan.id, plan.designedBy == nil else { return }
