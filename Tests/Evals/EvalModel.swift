@@ -26,6 +26,17 @@ enum EvalModel {
         return OnDeviceModel()
     }
 
+    /// FIT-100: what decides each main lift's next step before a week is designed, from `EVAL_DECIDER`: "rules",
+    /// "openai" (the Decisions API), or nothing (the designer decides, as before).
+    static func decider(tier: AgeTier) -> (any ProgressionDecider)? {
+        let environment = ProcessInfo.processInfo.environment
+        switch environment["EVAL_DECIDER"] ?? "" {
+        case "rules": return Progression.Rules(tier: tier)
+        case "openai": return OpenAIDecisions(key: [environment["OPENAI_API_KEY"], environment["OPEN_AI_API_KEY"]].compactMap { $0 }.first { !$0.isEmpty } ?? "")
+        default: return nil
+        }
+    }
+
     static func unavailable(_ model: any AIModel) -> String {
         switch model {
         case is ClaudeModel: "No ANTHROPIC_API_KEY for \(model.name)"

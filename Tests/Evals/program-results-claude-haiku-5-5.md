@@ -295,4 +295,4 @@ model · 10.9 s · 28 sets · 0 repairs · 2 tool calls
 Why: Upper A: Base capacity: vertical pull, push and hinge at moderate effort, with core, avoiding quad load · Upper B and Hip: Base capacity: vertical and horizontal pull, horizontal push, hip extension and glute work, with walking-style carry, no quad load
 
 
-<!-- compare: | claude-haiku-5-5 | claude-haiku-5-5 | ❌ 13 of 51 main-lift changes were drops; a goal planned to end at 78% | ✅ passes | $0.0022 | $0.0005 | 31/31 | 1.7 | 17 s | 0 | 0 | 24 · 14 · 13 | 0 | Bench Press 180 → 203 of 225 (90%); Back Squat 192 → 214 of 275 (78%); Deadlift 360 → 366 of 405 (90%) | 5 of 5 | base→build 13%, build→peak 0% | 93k tokens in, 120k out over 34 requests | -->
+<!-- compare: | claude-haiku-5-5 | claude-haiku-5-5 | none | ❌ 13 of 51 main-lift changes were drops; a goal planned to end at 78% | ✅ passes | $0.0022 | $0.0005 | 31/31 | 1.7 | 17 s | 0 | 0 | 24 · 14 · 13 | 0 | Bench Press 180 → 203 of 225 (90%); Back Squat 192 → 214 of 275 (78%); Deadlift 360 → 366 of 405 (90%) | 5 of 5 | base→build 13%, build→peak 0% | 93k tokens in, 120k out over 34 requests | -->

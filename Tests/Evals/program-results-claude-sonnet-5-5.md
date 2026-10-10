@@ -293,4 +293,4 @@ model · 10.6 s · 30 sets · 0 repairs · 3 tool calls
 Why: Full Body A: Hinge and pull strength, calf and core base for walking · Full Body B: Glute and press strength, hip stability and carries for walking
 
 
-<!-- compare: | claude-sonnet-5-5 | claude-sonnet-5-5 | ❌ 25 of 66 main-lift changes were drops; a goal planned to end at 65% | ✅ passes | $0.027 | $0.0061 | 31/31 | 1.9 | 14 s | 0 | 0 | 18 · 23 · 25 | 0 | Bench Press 180 → 159 of 225 (71%); Back Squat 192 → 180 of 275 (65%); Deadlift 360 → 288 of 405 (71%) | 5 of 5 | base→build 13%, build→peak 7% | 98k tokens in, 62k out over 34 requests | -->
+<!-- compare: | claude-sonnet-5-5 | claude-sonnet-5-5 | none | ❌ 25 of 66 main-lift changes were drops; a goal planned to end at 65% | ✅ passes | $0.027 | $0.0061 | 31/31 | 1.9 | 14 s | 0 | 0 | 18 · 23 · 25 | 0 | Bench Press 180 → 159 of 225 (71%); Back Squat 192 → 180 of 275 (65%); Deadlift 360 → 288 of 405 (71%) | 5 of 5 | base→build 13%, build→peak 7% | 98k tokens in, 62k out over 34 requests | -->

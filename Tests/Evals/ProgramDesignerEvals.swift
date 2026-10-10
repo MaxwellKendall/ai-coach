@@ -159,6 +159,9 @@ struct ProgramDesignerEvals {
         var brief: ProgramBrief?
         var lifts: [GoalLift]
         var results: [ProgramDesigner.Result]
+        /// FIT-100: each hard week's decided top sets, and what decided them.
+        var decisions: [Progression.Decision] = []
+        var decider: (any ProgressionDecider)?
         var weeks: [TrainingWeek] { results.map(\.week) }
         var light: [Bool] { program.map(\.light) }
     }
@@ -182,17 +185,27 @@ struct ProgramDesignerEvals {
         }
         let brief = await ProgramBrief.write(ProgramBrief.Request(settings: profile.settings, catalog: inputs.catalog, names: inputs.names,
                                                                   goals: profile.goals, goalLifts: lifts, weeks: program), model: briefModel)
+        let decider = EvalModel.decider(tier: tier)
+        var decisions: [Progression.Decision] = []
         for (index, week) in program.enumerated() {
-            let result = await ProgramDesigner.week(ProgramDesigner.Request(
+            var request = ProgramDesigner.Request(
                 monday: ProgramPlan.monday(index, start: monday, calendar: calendar), settings: profile.settings,
                 catalog: inputs.catalog, names: inputs.names, history: history, weeksSinceDeload: 1, program: week,
                 programIndex: index, programWeeks: count, goals: profile.goals, lastWeek: last,
-                brief: brief?.phase(week.phase), goalLifts: lifts, programPlan: program, calendar: calendar), model: model)
+                brief: brief?.phase(week.phase), goalLifts: lifts, programPlan: program, calendar: calendar)
+            // FIT-100: hard weeks' main lifts decided first; a decider that fails leaves them to the designer.
+            if let decider, !week.light {
+                let candidates = Progression.lifts(request)
+                let decided = (try? await decider.decide(candidates, context: Progression.context(request))) ?? [:]
+                request.progression = candidates.compactMap { decided[$0.exercise] }
+                decisions += request.progression
+            }
+            let result = await ProgramDesigner.week(request, model: model)
             results.append(result)
             history += ProbeLog.log(result.week, index: index, patterns: bySlug.mapValues(\.pattern))
             last = result.week.workouts
         }
-        return Probe(profile: profile, program: program, brief: brief, lifts: lifts, results: results)
+        return Probe(profile: profile, program: program, brief: brief, lifts: lifts, results: results, decisions: decisions, decider: decider)
     }
 
     private static func percent(_ share: Double) -> String { "\(Int((share * 100).rounded()))%" }
@@ -261,7 +274,9 @@ struct ProgramDesignerEvals {
         let average = seconds.isEmpty ? 0 : seconds.reduce(0, +) / Double(seconds.count)
         let copies = all.flatMap { ProgramScore.copiedSessions($0.week) }
         let odd = all.flatMap { ProgramScore.oddItems($0.week, catalog: bySlug, names: inputs.names) }
-        report.append("# Program designer evals: weeks by \(model.name), brief by \(briefModel.name)")
+        let decider = probes.first?.decider
+        let decisions = probes.flatMap(\.decisions)
+        report.append("# Program designer evals: weeks by \(model.name), brief by \(briefModel.name)\(decider.map { ", decisions by \($0.name)" } ?? "")")
         report.append("")
         var headline = "**\(designed.count)/\(all.count) weeks designed by the model** · "
         headline += "\(String(format: "%.1f", repairs)) repairs per week · \(String(format: "%.0f", average)) s per week "
@@ -271,6 +286,12 @@ struct ProgramDesignerEvals {
         if let usage = EvalModel.usage(model) { headline += " · weeks: " + usage }
         if let usage = EvalModel.usage(briefModel) { headline += " · briefs: " + usage }
         report.append(headline)
+        // A decider's cost: the Decisions API bills input only; the rule table is free.
+        let decisionCost = probes.compactMap { $0.decider as? OpenAIDecisions }.reduce(0) { $0 + $1.cost }
+        if decider != nil {
+            let counts = Progression.Step.allCases.map { step in "\(decisions.filter { $0.step == step }.count) \(step.rawValue.replacingOccurrences(of: "_", with: " "))" }
+            report.append("\nDecisions: \(counts.joined(separator: ", ")) · \(EvalModel.dollars(decisionCost))")
+        }
         let rules = Dictionary(designed.flatMap(\.repairs).map { ($0.rule.rawValue, 1) }, uniquingKeysWith: +).sorted { $0.value > $1.value }
         if !rules.isEmpty { report.append("\nRepairs by rule: " + rules.map { "\($0.key) \($0.value)" }.joined(separator: ", ")) }
         report.append("\nCopied sessions: \(copies.isEmpty ? "none" : copies.joined(separator: ", ")) · "
@@ -366,7 +387,8 @@ struct ProgramDesignerEvals {
         func verdict(_ failures: [String]) -> String { failures.isEmpty ? "✅ passes" : "❌ " + failures.joined(separator: "; ") }
         report.insert(contentsOf: ["", "**Week design: \(verdict(weekFailures))**", "", "**Brief: \(verdict(briefProblems))**"], at: 3)
         let perWeek = weekCost.map { $0 / Double(max(1, all.count)) }, perBrief = briefCost.map { $0 / Double(max(1, probes.count)) }
-        let cells = [model.name, briefModel.name, verdict(weekFailures), verdict(briefProblems), EvalModel.dollars(perWeek), EvalModel.dollars(perBrief),
+        let decidedWeeks = probes.reduce(0) { total, probe in total + probe.program.filter { !$0.light }.count }
+        let cells = [model.name, briefModel.name, decider?.name ?? "none", verdict(weekFailures), verdict(briefProblems), EvalModel.dollars(perWeek.map { $0 + decisionCost / Double(max(1, decidedWeeks)) }), EvalModel.dollars(perBrief),
                      "\(designed.count)/\(all.count)", String(format: "%.1f", repairs), String(format: "%.0f s", average),
                      "\(copies.count)", "\(odd.count)", probes.isEmpty ? "–" : "\(up) · \(held) · \(down)", probes.isEmpty ? "–" : "\(jumps)",
                      goals.isEmpty ? "–" : goals.joined(separator: "; "), deloads.of == 0 ? "–" : "\(deloads.lighter) of \(deloads.of)",

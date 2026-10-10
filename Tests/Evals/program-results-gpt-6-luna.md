@@ -287,4 +287,4 @@ model · 23.8 s · 28 sets · 0 repairs · 4 tool calls
 Why: Tuesday — Hinge + Push: Build general capacity with quad-sparing work; keep any walking easy and pain-free. · Friday — Upper Body + Posterior Chain: Moderate full-body capacity work while avoiding painful quad loading.
 
 
-<!-- compare: | gpt-6-luna | gpt-6-luna | ❌ model designed 94% of weeks; 29 of 78 main-lift changes were drops; a goal planned to end at 55% | ✅ passes | $0.0015 | $0.0003 | 29/31 | 1.4 | 24 s | 0 | 0 | 17 · 32 · 29 | 0 | Bench Press 174 → 141 of 225 (63%); Back Squat 186 → 152 of 275 (55%); Deadlift 325 → 289 of 405 (71%) | 5 of 5 | base→build 11%, build→peak 4% | 58k tokens in, 83k out over 42 requests | -->
+<!-- compare: | gpt-6-luna | gpt-6-luna | none | ❌ model designed 94% of weeks; 29 of 78 main-lift changes were drops; a goal planned to end at 55% | ✅ passes | $0.0015 | $0.0003 | 29/31 | 1.4 | 24 s | 0 | 0 | 17 · 32 · 29 | 0 | Bench Press 174 → 141 of 225 (63%); Back Squat 186 → 152 of 275 (55%); Deadlift 325 → 289 of 405 (71%) | 5 of 5 | base→build 11%, build→peak 4% | 58k tokens in, 83k out over 42 requests | -->

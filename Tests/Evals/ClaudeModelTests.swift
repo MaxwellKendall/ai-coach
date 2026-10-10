@@ -62,3 +62,35 @@ struct OtherModelsTests {
         #expect(EvalModel.cost(OnDeviceModel()) == 0)
     }
 }
+
+/// FIT-100: what OpenAIDecisions sends and reads, without the network.
+struct OpenAIDecisionsTests {
+    private let bench = Progression.Lift(
+        exercise: "bench-press", name: "Bench Press", plannedLoad: 185, plannedReps: 5,
+        sessions: [[LoggedSet(date: .now, exercise: "bench-press", pattern: nil,
+                              measurements: [.init(metric: "load_lb", value: 185, unit: "lb"), .init(metric: "reps", value: 5, unit: "reps")])]],
+        daysOff: 6, now: nil, aim: nil)
+
+    @Test func oneChoiceQuestionPerLiftWithTheEvidenceAsInput() throws {
+        let request = try OpenAIDecisions.request([bench], context: "Last week: 3 of 3 sessions done.", model: "gpt-6-luna", key: "test")
+        #expect(request.url?.path == "/v1/decisions")
+        let body = try JSONDecoder().decode(JSON.self, from: request.httpBody ?? Data())
+        #expect(body["model"]?.string == "gpt-6-luna")
+        #expect(body["input"]?.string?.hasPrefix("Last week: 3 of 3 sessions done.\nBench Press: last time, 6 days ago, planned 185 × 5") == true)
+        let question = body["questions"]?.array?.first
+        #expect(question?["type"]?.string == "choice")
+        #expect(question?["name"]?.string == "bench-press")
+        #expect(question?["choices"]?.array?.compactMap { $0["value"]?.string } == ["add", "hold", "back_off"])
+    }
+
+    @Test func answersBecomeDecisionsAndARefusalLeavesTheLift() {
+        let response = JSON.object(["answers": .array([
+            .object(["type": .string("choice"), "name": .string("bench-press"), "choice": .string("add"), "confidence": .number(0.9)]),
+            .object(["type": .string("refusal"), "name": .string("back-squat")]),
+        ])])
+        let decided = OpenAIDecisions.decisions(response, lifts: [bench])
+        #expect(decided["bench-press"]?.load == 190)
+        #expect(decided["bench-press"]?.confidence == 0.9)
+        #expect(decided["back-squat"] == nil)
+    }
+}

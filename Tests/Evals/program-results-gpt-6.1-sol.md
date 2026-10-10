@@ -289,4 +289,4 @@ model · 19.9 s · 28 sets · 0 repairs · 4 tool calls
 Why: Tuesday — Full Body A: Build moderate strength and trunk endurance without deliberate quad loading. · Friday — Full Body B: Develop upper-body strength and hip and trunk endurance for later walking progress.
 
 
-<!-- compare: | gpt-6.1-sol | gpt-6.1-sol | ❌ 1 copied sessions; 27 of 56 main-lift changes were drops; a goal planned to end at 53% | ✅ passes | $0.014 | $0.0028 | 31/31 | 0.7 | 20 s | 1 | 0 | 7 · 22 · 27 | 1 | Bench Press 180 → 135 of 225 (60%); Back Squat 192 → 146 of 275 (53%); Deadlift 343 → 305 of 405 (75%) | 5 of 5 | base→build 0%, build→peak 9% | 56k tokens in, 33k out over 48 requests | -->
+<!-- compare: | gpt-6.1-sol | gpt-6.1-sol | none | ❌ 1 copied sessions; 27 of 56 main-lift changes were drops; a goal planned to end at 53% | ✅ passes | $0.014 | $0.0028 | 31/31 | 0.7 | 20 s | 1 | 0 | 7 · 22 · 27 | 1 | Bench Press 180 → 135 of 225 (60%); Back Squat 192 → 146 of 275 (53%); Deadlift 343 → 305 of 405 (75%) | 5 of 5 | base→build 0%, build→peak 9% | 56k tokens in, 33k out over 48 requests | -->

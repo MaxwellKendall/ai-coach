@@ -293,4 +293,4 @@ model · 16.2 s · 28 sets · 0 repairs · 4 tool calls
 Why: Full Body A: Hip hinge, push and calf work for walking · Full Body B: Pull, glutes, hip stability for walking
 
 
-<!-- compare: | claude-opus-5-5 | claude-opus-5-5 | ❌ 18 of 63 main-lift changes were drops; a goal planned to end at 63% | ✅ passes | $0.049 | $0.014 | 31/31 | 2.2 | 17 s | 0 | 0 | 26 · 19 · 18 | 0 | Bench Press 180 → 158 of 225 (70%); Back Squat 192 → 174 of 275 (63%); Deadlift 360 → 278 of 405 (69%) | 5 of 5 | base→build 27%, build→peak 3% | 94k tokens in, 56k out over 33 requests | -->
+<!-- compare: | claude-opus-5-5 | claude-opus-5-5 | none | ❌ 18 of 63 main-lift changes were drops; a goal planned to end at 63% | ✅ passes | $0.049 | $0.014 | 31/31 | 2.2 | 17 s | 0 | 0 | 26 · 19 · 18 | 0 | Bench Press 180 → 158 of 225 (70%); Back Squat 192 → 174 of 275 (63%); Deadlift 360 → 278 of 405 (69%) | 5 of 5 | base→build 27%, build→peak 3% | 94k tokens in, 56k out over 33 requests | -->
