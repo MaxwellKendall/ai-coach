@@ -223,7 +223,7 @@ struct GroupScreen: View {
     }
 
     static func invite(_ group: Cloud.Group) -> String {
-        "Join my group “\(group.name)” in AI Coach. Open the app, go to You › Groups › Join with Code, and enter \(group.inviteCode)."
+        "Join my group “\(group.name)” in Rep & Recipe. Open the app, go to You › Groups › Join with Code, and enter \(group.inviteCode)."
     }
 
     // MARK: Actions

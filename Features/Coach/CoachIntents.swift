@@ -5,7 +5,7 @@ import SwiftData
 /// weight without opening the app.
 struct TalkToCoachIntent: AppIntent {
     static let title: LocalizedStringResource = "Talk to Coach"
-    static let description = IntentDescription("Opens AI Coach listening, ready for what you say.")
+    static let description = IntentDescription("Opens Rep & Recipe listening, ready for what you say.")
     static let openAppWhenRun = true
 
     @MainActor func perform() async throws -> some IntentResult {
@@ -16,7 +16,7 @@ struct TalkToCoachIntent: AppIntent {
 
 struct LogWeightIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Weight"
-    static let description = IntentDescription("Logs your body weight in AI Coach.")
+    static let description = IntentDescription("Logs your body weight in Rep & Recipe.")
 
     @Parameter(title: "Weight", description: "In pounds", inclusiveRange: (50, 700))
     var pounds: Double

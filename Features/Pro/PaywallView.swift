@@ -11,7 +11,7 @@ struct PaywallView: View {
     var body: some View {
         SubscriptionStoreView(productIDs: Pro.products) {
             VStack(alignment: .leading, spacing: 18) {
-                Text("AI Coach Pro").font(.system(size: 34, weight: .bold)).tracking(-0.4)
+                Text("Rep & Recipe Pro").font(.system(size: 34, weight: .bold)).tracking(-0.4)
                 Text("More coaching on top of your program.").font(.title3).foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 14) {
                     benefit("arrow.triangle.2.circlepath", "Redesign any week, as often as you like",
