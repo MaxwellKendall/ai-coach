@@ -36,7 +36,15 @@ enum Planner {
             programIndex: program?.index, programWeeks: profile.program?.count, goals: goals,
             lastWeek: (try? self.plan(weekOf: lastMonday, in: context)).flatMap { $0 }.map { workouts($0, templates: templates) } ?? [],
             brief: program.flatMap { brief?.phase($0.week.phase) }, goalLifts: goalLifts(active, history: history),
-            programPlan: weeks, calendar: calendar)
+            programPlan: weeks, sleepHours: sleepHours(entries, before: monday, calendar: calendar), calendar: calendar)
+    }
+
+    /// FIT-96: hours slept a night on average over the 7 days before `monday`, when any were logged.
+    static func sleepHours(_ entries: [LogEntry], before monday: Date, calendar: Calendar = .current) -> Double? {
+        let since = calendar.date(byAdding: .day, value: -7, to: monday)!
+        let hours = entries.filter { $0.kind == .sleep && $0.timestamp >= since && $0.timestamp < monday }
+            .compactMap { entry in entry.measurements.first { $0.metric == "sleep_h" }?.value }
+        return hours.isEmpty ? nil : hours.reduce(0, +) / Double(hours.count)
     }
 
     /// "Bench more 225 lb by Jan 9": the goals as the designer and the brief are told them.

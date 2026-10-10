@@ -31,6 +31,8 @@ enum ProgramDesigner {
         var brief: ProgramBrief.Phase?
         var goalLifts: [GoalLift] = []
         var programPlan: [ProgramWeek] = []
+        /// FIT-96: hours slept a night over the week before, on average, when logged.
+        var sleepHours: Double?
         var calendar: Calendar = .current
     }
 
@@ -247,6 +249,8 @@ enum ProgramDesigner {
         }
         let last = lastWeek(request)
         if !last.isEmpty { lines.append("Last week's plan:\n" + last) }
+        lines += lastWeekDone(request)
+        if let sleep = request.sleepHours, sleep < 6.5 { lines.append("Slept \(Coach.number((sleep * 2).rounded() / 2)) h a night on average last week.") }
         if !request.differentFrom.isEmpty {
             var other = request
             other.lastWeek = request.differentFrom
@@ -313,6 +317,41 @@ enum ProgramDesigner {
             let day = (request.calendar.component(.weekday, from: session.date) + 5) % 7
             return "\(weekdays[day]) \(session.name): \(session.items.joined(separator: ", "))"
         }.joined(separator: "\n")
+    }
+
+    /// FIT-96: last week as done, against its plan: "2 of 3 sessions done (Fri skipped)." and each main lift that
+    /// went differently: "Bench Press planned 185 × 5, did 185 × 4 at RPE 9.5." Nothing when there was no plan.
+    static func lastWeekDone(_ request: Request) -> [String] {
+        let planned = request.lastWeek.filter { $0.note != TrainingGenerator.warmupNote }
+        guard !planned.isEmpty else { return [] }
+        let calendar = request.calendar
+        let days = Set(planned.map { calendar.startOfDay(for: $0.date) }).sorted()
+        func logged(on day: Date) -> [LoggedSet] { request.history.filter { calendar.isDate($0.date, inSameDayAs: day) } }
+        let skipped = days.filter { logged(on: $0).isEmpty }
+        func weekday(_ day: Date) -> String { weekdays[(calendar.component(.weekday, from: day) + 5) % 7] }
+        var lines = ["Last week: \(days.count - skipped.count) of \(days.count) sessions done"
+                     + (skipped.isEmpty ? "." : " (\(skipped.map(weekday).joined(separator: ", ")) skipped).")]
+        var differed: [String] = []
+        for row in planned where row.main && !skipped.contains(calendar.startOfDay(for: row.date)) {
+            let name = request.names[row.exercise] ?? row.exercise
+            let sets = logged(on: row.date).filter { $0.exercise == row.exercise }
+            let plannedLoad = row.target("load_lb") ?? row.target("load_lb_hand"), plannedReps = row.target("reps")
+            let plan = [plannedLoad.map(Coach.number), plannedReps.map(Coach.number)].compactMap { $0 }.joined(separator: " × ")
+            guard let top = sets.max(by: { ($0.value("load_lb") ?? $0.value("load_lb_hand") ?? 0, $0.value("reps") ?? 0)
+                                           < ($1.value("load_lb") ?? $1.value("load_lb_hand") ?? 0, $1.value("reps") ?? 0) }) else {
+                differed.append("\(name) planned \(plan), not done.")
+                continue
+            }
+            // The set that fell short, or the hardest: the last rep missed shows there.
+            let short = sets.first { ($0.value("reps") ?? .infinity) < (plannedReps ?? 0) } ?? top
+            let load = short.value("load_lb") ?? short.value("load_lb_hand"), reps = short.value("reps"), rpe = sets.compactMap { $0.value("rpe") }.max()
+            let lighter = (load ?? 0) < (plannedLoad ?? 0), fewer = (reps ?? .infinity) < (plannedReps ?? 0), hard = (rpe ?? 0) >= 9
+            guard lighter || fewer || hard else { continue }
+            let did = [load.map(Coach.number), reps.map(Coach.number)].compactMap { $0 }.joined(separator: " × ")
+            differed.append("\(name) planned \(plan), did \(did)\(rpe.map { " at RPE \(Coach.number($0))" } ?? "").")
+        }
+        if !differed.isEmpty { lines.append(differed.prefix(4).joined(separator: " ")) }
+        return lines
     }
 
     /// The last 4 weeks' best set of each exercise, most recent first: "Bench Press 185 lb × 5 at RPE 8, 6 days ago".
