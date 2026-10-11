@@ -39,18 +39,23 @@ enum InviteLink {
         return nil
     }
 
-    /// FIT-113: the id in a shared session's link (barbrabell.com/s/ae79125c4c25), or nil.
-    static func session(from url: URL) -> String? {
+    /// FIT-113/111: the id in a shared session's or program's link (barbrabell.com/s/ae79125c4c25, /p/…), or nil.
+    static func shared(_ kind: String, from url: URL) -> String? {
         guard url.scheme == "https", let host = url.host()?.lowercased(),
               host == "barbrabell.com" || host.hasSuffix(".barbrabell.com") else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
-        guard parts.count == 2, parts[0] == "s", parts[1].count == 12, parts[1].allSatisfy(\.isHexDigit) else { return nil }
+        guard parts.count == 2, parts[0] == kind, parts[1].count == 12, parts[1].allSatisfy(\.isHexDigit) else { return nil }
         return parts[1].lowercased()
     }
 
-    static func session(pasted text: String) -> String? {
+    static func shared(_ kind: String, pasted text: String) -> String? {
         text.split(whereSeparator: \.isWhitespace).lazy.compactMap { word in
-            URL(string: word.trimmingCharacters(in: .punctuationCharacters.subtracting(["/", ":"]))).flatMap(session(from:))
+            URL(string: word.trimmingCharacters(in: .punctuationCharacters.subtracting(["/", ":"]))).flatMap { shared(kind, from: $0) }
         }.first
     }
+
+    static func session(from url: URL) -> String? { shared("s", from: url) }
+    static func session(pasted text: String) -> String? { shared("s", pasted: text) }
+    static func program(from url: URL) -> String? { shared("p", from: url) }
+    static func program(pasted text: String) -> String? { shared("p", pasted: text) }
 }

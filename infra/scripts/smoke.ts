@@ -184,6 +184,18 @@ const aasa = await (await fetch(`${new URL(sharedSession.url).origin}/.well-know
 if (!JSON.stringify(aasa).includes("/s/*")) throw new Error("Apple's file doesn't open sessions in the app");
 pass(`a session opens at ${sharedSession.url}, with its calendar file; another user can read it; the app claims /s/*`);
 
+// FIT-111: a program as the app sends it (SharedProgram.Shared, brief included) opens at its link.
+const program = { name: "Bench 225 by Dec 1", weeks: 12, days: 3, equipment: "Full gym", goals: ["Bench 225 by Dec 1"], invite: created.inviteCode,
+  phases: [{ phase: "base", from: 1, to: 3, focus: "Volume and technique", mainLifts: ["Back Squat", "Bench Press"], mainReps: 8 }],
+  sampleWeek: [{ day: "Monday", title: "Squat and bench", items: ["Back Squat 4 × 8", "Bench Press 4 × 8"] }],
+  brief: { phases: [{ phase: "base", focus: "Volume and technique", mainLifts: ["Back Squat", "Bench Press"], mainReps: 8, accessoryReps: 12 }] } };
+const sharedProgram = must(await gql(a, `mutation($p: AWSJSON!) { createShare(kind: "program", payload: $p) { id url } }`, { p: JSON.stringify(program) }), "createShare program").createShare;
+const programHtml = await (await fetch(sharedProgram.url)).text();
+if (!programHtml.includes("Bench 225 by Dec 1, by Smoke") || !programHtml.includes("Weeks 1–3")) throw new Error(`program page ${sharedProgram.url}`);
+const readProgram = must(await gql(c, `query($i: ID!) { share(id: $i) { kind payload } }`, { i: sharedProgram.id }), "share program").share;
+if (JSON.parse(readProgram.payload).brief.phases[0].mainReps !== 8) throw new Error("program read");
+pass(`a program opens at ${sharedProgram.url}, and another user can read its brief`);
+
 // FIT-110: a page view counts at once; shares made and joins come through the table's stream.
 const viewsBefore = (await stats()).view_w ?? 0;
 if ((await fetch(`${new URL(shared.url).origin}/v/w`)).status !== 204) throw new Error("view count");

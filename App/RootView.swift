@@ -19,6 +19,7 @@ struct RootView: View {
     @State private var signingInToJoin = false
     @State private var pendingInvite: String?
     @State private var pendingSession: String?
+    @State private var pendingProgram: String?
     @State private var joined: Cloud.GroupSummary?
 
     /// Graphite (FIT-27): monochrome, the label colour is the only accent.
@@ -93,6 +94,16 @@ struct RootView: View {
                 }
                 return
             }
+            // FIT-111: a shared program, likewise.
+            if let program = InviteLink.program(from: url) {
+                if account.user == nil {
+                    pendingProgram = program
+                    signingInToJoin = true
+                } else {
+                    navigator.program = program
+                }
+                return
+            }
             guard let code = InviteLink.code(from: url) else { return }
             if account.user == nil {
                 pendingInvite = code
@@ -104,14 +115,20 @@ struct RootView: View {
         .sheet(isPresented: $signingInToJoin, onDismiss: {
             if account.user != nil, let code = pendingInvite { invite = Invite(code: code) }
             if account.user != nil, let session = pendingSession { navigator.session = session }
+            if account.user != nil, let program = pendingProgram { navigator.program = program }
             pendingInvite = nil
             pendingSession = nil
+            pendingProgram = nil
         }) {
-            SignInSheet(reason: pendingSession == nil ? "Sign in to join the group." : "Sign in to train together.")
+            SignInSheet(reason: pendingSession != nil || pendingProgram != nil ? "Sign in to train together." : "Sign in to join the group.")
         }
         .sheet(item: Binding(get: { onboarding == nil ? navigator.session.map(SessionRef.init) : nil },
                              set: { if $0 == nil { navigator.session = nil } })) { ref in
             JoinSessionSheet(id: ref.id).tint(Self.accent)
+        }
+        .sheet(item: Binding(get: { onboarding == nil ? navigator.program.map(ProgramRef.init) : nil },
+                             set: { if $0 == nil { navigator.program = nil } })) { ref in
+            ProgramStartSheet(id: ref.id).tint(Self.accent)
         }
         // The group opens once the Join sheet has gone: two sheets can't be presented at once.
         .sheet(item: $invite, onDismiss: {

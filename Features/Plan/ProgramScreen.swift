@@ -32,6 +32,7 @@ struct ProgramScreen: View {
     @State private var before: ProgramSettings?
     /// The day whose session is open (FIT-45).
     @State private var opened: Date?
+    @State private var programLink: SharedLink?
 
     struct Regenerate: Identifiable {
         let id = UUID()
@@ -76,6 +77,7 @@ struct ProgramScreen: View {
             } message: { Text(message ?? "") }
             .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
             .sheet(item: $amend) { amend in AmendSheet(amend: amend) { applyTravel(amend.travel) } }
+            .sheet(item: $programLink) { ActivityView(link: $0).presentationDetents([.medium, .large]) }
             .background(Color(.systemBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -88,6 +90,12 @@ struct ProgramScreen: View {
                         .frame(width: 200)
                     } else {
                         Text(tab.rawValue).font(.headline)
+                    }
+                }
+                // FIT-111: share the program, signed in and once it has a brief.
+                if tab == .program, account.user != nil, let profile = profiles.first, profile.brief != nil {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Share Program", systemImage: "square.and.arrow.up") { shareProgram(profile) }
                     }
                 }
                 if tab == .program, let profile = profiles.first {
@@ -364,6 +372,23 @@ struct ProgramScreen: View {
     }
 
     /// Writes the chosen sessions over their days, with an Undo that puts the old ones back.
+    /// FIT-111: the program as a link: its brief, goals, days and this week's sessions, never weights or logs.
+    private func shareProgram(_ profile: Profile) {
+        let monday = Week.start(of: .now)
+        let thisWeek = planned.filter { $0.date >= monday && $0.date < monday.addingTimeInterval(7 * 86_400) }
+        toast = Toast(text: "Making your link…")
+        Task {
+            do {
+                programLink = try await SharedProgram.link(profile: profile, goals: goals, thisWeek: thisWeek, templates: templates)
+                toast = nil
+                if programLink == nil { message = "Your program isn’t ready to share yet." }
+            } catch {
+                toast = nil
+                message = "Couldn’t make a link. Check your connection and try again."
+            }
+        }
+    }
+
     private func apply(_ changes: [(items: [PlannedActivity], workouts: [PlannedWorkout])], week: Int) {
         var undo: [(items: [PlannedActivity], workouts: [PlannedWorkout])] = []
         for change in changes {

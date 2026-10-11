@@ -30,6 +30,8 @@ final class Navigator {
     var coach = false
     /// FIT-113: a shared session to join, by its id, once onboarding (if any) is done.
     var session: String?
+    /// FIT-111: a shared program to start, likewise.
+    var program: String?
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {

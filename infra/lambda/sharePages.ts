@@ -219,7 +219,7 @@ export function readSession(v: unknown, name: string): Session | undefined {
  * always 8 characters). Wins, recaps and programs open this page until the app can show them, so a friend who
  * already has the app still sees what was shared.
  */
-export const appPaths = ["/join/*", "/????????", "/s/*"];
+export const appPaths = ["/join/*", "/????????", "/s/*", "/p/*"];
 
 /** FIT-110: the kinds of page whose views are counted, as their paths start. */
 export const viewKinds = ["w", "r", "p", "s", "join"];

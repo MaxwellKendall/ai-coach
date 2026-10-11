@@ -105,7 +105,7 @@ struct OnboardingView: View {
             Label("You’re in \(joined.name)", systemImage: "person.2.fill")
                 .font(.subheadline.weight(.semibold))
         } else if sessionWaiting {
-            Label("Your friend’s session comes up once you’re set up", systemImage: "calendar.badge.checkmark")
+            Label("Your friend’s plan comes up once you’re set up", systemImage: "calendar.badge.checkmark")
                 .font(.subheadline.weight(.semibold))
         } else {
             HStack {
@@ -125,6 +125,12 @@ struct OnboardingView: View {
         // FIT-113: a friend's session; it's offered once onboarding is done.
         if let session = pasted.lazy.compactMap(InviteLink.session(pasted:)).first {
             Navigator.shared.session = session
+            withAnimation(.snappy) { sessionWaiting = true }
+            return
+        }
+        // FIT-111: a friend's program; it's offered once onboarding is done.
+        if let program = pasted.lazy.compactMap(InviteLink.program(pasted:)).first {
+            Navigator.shared.program = program
             withAnimation(.snappy) { sessionWaiting = true }
             return
         }
