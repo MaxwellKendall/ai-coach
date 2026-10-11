@@ -11,6 +11,7 @@ import * as groupDetail from "../resolvers/groupDetail.js";
 import * as subscription from "../resolvers/subscription.js";
 import * as removeMember from "../resolvers/removeMember.js";
 import * as rotateInvite from "../resolvers/rotateInvite.js";
+import * as createShare from "../resolvers/createShare.js";
 
 const ME = "user-a";
 const OTHER = "user-b";
@@ -161,5 +162,23 @@ describe("myGroups", () => {
       { groupId: "g1", name: "Family", role: "member", shareLive: true },
       { groupId: "g2", name: "Work", role: "member", shareLive: false },
     ]);
+  });
+});
+
+describe("createShare (FIT-105)", () => {
+  const share = (args: Record<string, unknown>) =>
+    ctx({ args, stash: { profile: { displayName: "Max Kendall" } }, env: { TABLE: "AICoach-test", SHARE_ORIGIN: "https://share.example.com" } });
+
+  it("saves under the caller, with their own name, and returns the link", () => {
+    const c = share({ kind: "win", payload: JSON.stringify({ kind: "pr", name: "Someone Else" }) });
+    const req = createShare.request(c);
+    expect(req.key.PK).toMatch(/^SHARE#[0-9a-f]{12}$/);
+    expect(req.attributeValues).toMatchObject({ kind: "win", uid: ME, name: "Max Kendall", GSI1PK: `USER#${ME}` });
+    expect(createShare.response(c)).toEqual({ id: req.key.PK.slice(6), url: `https://share.example.com/w/${req.key.PK.slice(6)}` });
+  });
+
+  it("takes only wins, recaps and programs, and not too much of them", () => {
+    expect(() => createShare.request(share({ kind: "group", payload: "{}" }))).toThrow(ResolverError);
+    expect(() => createShare.request(share({ kind: "win", payload: "x".repeat(8001) }))).toThrow(ResolverError);
   });
 });

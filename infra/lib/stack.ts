@@ -2,6 +2,9 @@ import { fileURLToPath } from "node:url";
 import { CfnOutput, Duration, RemovalPolicy, SecretValue, Stack, type StackProps } from "aws-cdk-lib";
 import * as appsync from "aws-cdk-lib/aws-appsync";
 import * as budgets from "aws-cdk-lib/aws-budgets";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
+import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as actions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as cognito from "aws-cdk-lib/aws-cognito";
@@ -11,6 +14,8 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import { DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
+import * as route53 from "aws-cdk-lib/aws-route53";
+import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
@@ -24,6 +29,11 @@ export interface AICoachStackProps extends StackProps {
   /** Federated providers to enable. Each needs its secret in Secrets Manager before deploy. */
   identityProviders: IdentityProvider[];
   alertEmail: string;
+  /**
+   * FIT-105: the share pages' domain, a Route 53 hosted zone in this account, and the hosts on it. A host
+   * starting with "join." takes invite codes at its root (join.{domain}/CODE); the others serve every page.
+   */
+  web?: { zone: string; hosts: string[] };
 }
 
 const path = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
@@ -152,6 +162,10 @@ export class AICoachStack extends Stack {
           supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
         });
 
+    // FIT-105: where shared links point. Without a domain (a stage not set up yet), the API still saves shares.
+    const shareHost = props.web && (props.web.hosts.find((h) => h.startsWith("share.")) ?? props.web.hosts[0]);
+    const shareOrigin = shareHost ? `https://${shareHost}` : "";
+
     // ---- AppSync ----
     const api = new appsync.GraphqlApi(this, "Api", {
       name: `AICoach-${stage}`,
@@ -163,7 +177,7 @@ export class AICoachStack extends Stack {
         },
       },
       logConfig: { fieldLogLevel: appsync.FieldLogLevel.ERROR, retention: logs.RetentionDays.ONE_MONTH },
-      environmentVariables: { TABLE: table.tableName },
+      environmentVariables: { TABLE: table.tableName, SHARE_ORIGIN: shareOrigin },
     });
 
     const tableSource = api.addDynamoDbDataSource("TableSource", table);
@@ -208,6 +222,7 @@ export class AICoachStack extends Stack {
     pipeline("Mutation", "createGroup", ["getProfile", "createGroup"]);
     pipeline("Mutation", "joinGroup", ["getInvite", "getProfile", "joinGroup"]);
     pipeline("Mutation", "registerDevice", ["registerDevice"]);
+    pipeline("Mutation", "createShare", ["getProfile", "createShare"]);
     // Every group operation checks membership first.
     for (const field of ["leaveGroup", "setShareLive", "addGroupGoal", "publishProgress", "publishLiveSet", "endLiveSession", "postFeed"]) {
       pipeline("Mutation", field, ["requireMember", field]);
@@ -279,6 +294,57 @@ export class AICoachStack extends Stack {
         ],
       }),
     );
+
+    // ---- FIT-105: the share pages, on the domain ----
+    if (props.web) {
+      const zone = route53.HostedZone.fromLookup(this, "Zone", { domainName: props.web.zone });
+      const [primary, ...others] = props.web.hosts;
+      const certificate = new acm.Certificate(this, "WebCertificate", {
+        domainName: primary,
+        subjectAlternativeNames: others,
+        validation: acm.CertificateValidation.fromDns(zone),
+      });
+      const share = fn("share", {
+        SHARE_ORIGIN: shareOrigin,
+        APP_ID: "7GZKY29XJH.com.maxwellkendall.aicoach",
+        APP_STORE_URL: "",
+      });
+      table.grant(share, "dynamodb:GetItem", "dynamodb:Query");
+      const url = share.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
+      // join.{domain}/CODE is the invite page, /join/CODE; Apple's file stays where Apple looks for it.
+      const joinPaths = new cloudfront.Function(this, "JoinPaths", {
+        runtime: cloudfront.FunctionRuntime.JS_2_0,
+        code: cloudfront.FunctionCode.fromInline(`function handler(event) {
+  var r = event.request, host = r.headers.host ? r.headers.host.value : "";
+  if (host.indexOf("join.") === 0 && r.uri !== "/" && r.uri.indexOf("/.well-known/") !== 0 && r.uri.indexOf("/join/") !== 0) r.uri = "/join" + r.uri;
+  return r;
+}`),
+      });
+      const web = new cloudfront.Distribution(this, "Web", {
+        domainNames: props.web.hosts,
+        certificate,
+        defaultBehavior: {
+          origin: origins.FunctionUrlOrigin.withOriginAccessControl(url),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+          // The Lambda's cache-control says how long; the path is the whole key.
+          cachePolicy: new cloudfront.CachePolicy(this, "WebCache", {
+            defaultTtl: Duration.minutes(5),
+            minTtl: Duration.seconds(0),
+            maxTtl: Duration.hours(1),
+          }),
+          functionAssociations: [{ function: joinPaths, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+        },
+        priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+      });
+      for (const host of props.web.hosts) {
+        const recordName = host === props.web.zone ? undefined : host;
+        const target = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(web));
+        new route53.ARecord(this, `Web${host}`, { zone, recordName, target });
+        new route53.AaaaRecord(this, `Web6${host}`, { zone, recordName, target });
+      }
+      new CfnOutput(this, "ShareOrigin", { value: shareOrigin });
+    }
 
     // ---- Ops: one alarm, one budget ----
     const alerts = new sns.Topic(this, "Alerts", { topicName: `AICoach-${stage}-alerts` });

@@ -5,8 +5,32 @@
     "region": "us-east-1",
     "alertEmail": "maxwell.n.kendall@gmail.com",
     "stages": {
-      "dev": { "identityProviders": ["apple", "google"] },
-      "prod": { "identityProviders": ["apple", "google"] }
+      "dev": {
+        "identityProviders": [
+          "apple",
+          "google"
+        ],
+        "web": {
+          "zone": "barbrabell.com",
+          "hosts": [
+            "dev.barbrabell.com"
+          ]
+        }
+      },
+      "prod": {
+        "identityProviders": [
+          "apple",
+          "google"
+        ],
+        "web": {
+          "zone": "barbrabell.com",
+          "hosts": [
+            "barbrabell.com",
+            "share.barbrabell.com",
+            "join.barbrabell.com"
+          ]
+        }
+      }
     }
   }
 }

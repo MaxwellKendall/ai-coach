@@ -17,13 +17,15 @@ async function queryKeys(input: Record<string, unknown>) {
   return keys;
 }
 
-/** Every item the user owns: their USER# partition, and their items in each group they belong to. */
+/** Every item the user owns: their USER# partition, what they shared (FIT-105), and their items in each group. */
 export async function itemsToDelete(uid: string) {
-  const memberships = await queryKeys({
+  const indexed = await queryKeys({
     IndexName: "GSI1",
     KeyConditionExpression: "GSI1PK = :u",
     ExpressionAttributeValues: { ":u": `USER#${uid}` },
   });
+  const memberships = indexed.filter((i) => String(i.GSI1SK).startsWith("GROUP#"));
+  const shares = indexed.filter((i) => String(i.GSI1SK).startsWith("SHARE#"));
   const own = await queryKeys({
     KeyConditionExpression: "PK = :pk",
     ExpressionAttributeValues: { ":pk": `USER#${uid}` },
@@ -44,7 +46,7 @@ export async function itemsToDelete(uid: string) {
       return [{ PK: pk, SK: `MEMBER#${uid}` }, { PK: pk, SK: `LIVE#${uid}` }, ...progress, ...feed];
     }),
   );
-  return [...own, ...perGroup.flat()].map(({ PK, SK }) => ({ PK, SK }));
+  return [...own, ...shares, ...perGroup.flat()].map(({ PK, SK }) => ({ PK, SK }));
 }
 
 // App Store 5.1.1(v): in-app account deletion removes the account and the data tied to it.

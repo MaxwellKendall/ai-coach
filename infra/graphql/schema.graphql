@@ -99,6 +99,8 @@ type Query {
 }
 
 type Mutation {
+  "FIT-105: save a win, recap or program to share; returns its link."
+  createShare(kind: String!, payload: AWSJSON!): Share
   updateProfile(displayName: String, units: String): Profile
   createGroup(name: String!): GroupSummary
   joinGroup(inviteCode: String!): GroupSummary
@@ -135,4 +137,10 @@ type Subscription {
   onLiveSet(groupId: ID!): LiveSet @aws_subscribe(mutations: ["publishLiveSet", "endLiveSession"])
   onProgress(groupId: ID!): Progress @aws_subscribe(mutations: ["publishProgress"])
   onFeed(groupId: ID!): FeedItem @aws_subscribe(mutations: ["postFeed"])
+}
+
+"FIT-105: a shared win, recap or program, at its link."
+type Share {
+  id: ID!
+  url: String!
 }

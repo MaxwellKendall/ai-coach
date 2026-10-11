@@ -89,6 +89,95 @@ export interface Page {
   body: string;
 }
 
+// MARK: Reading what users saved. Every field is checked and coerced, so a stored payload can only ever render
+// as text and numbers (names and labels are escaped again when rendered).
+
+class Invalid extends Error {}
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const num = (v: unknown, min = -1e6, max = 1e6) => {
+  const n = typeof v === "number" ? v : Number.NaN;
+  if (!Number.isFinite(n) || n < min || n > max) throw new Invalid();
+  return n;
+};
+const optNum = (v: unknown, min?: number, max?: number) => (v === undefined || v === null ? undefined : num(v, min, max));
+const str = (v: unknown, max = 80) => {
+  if (typeof v !== "string" || v.length === 0 || v.length > max) throw new Invalid();
+  return v;
+};
+const optStr = (v: unknown, max?: number) => (v === undefined || v === null ? undefined : str(v, max));
+const list = <T>(v: unknown, max: number, item: (x: unknown) => T) => {
+  if (!Array.isArray(v) || v.length > max) throw new Invalid();
+  return v.map(item);
+};
+const code = (v: unknown) => (v === undefined || v === null ? undefined : /^[A-Za-z0-9_-]{1,40}$/.test(String(v)) ? String(v) : undefined);
+const isoDate = (v: unknown) => {
+  const d = str(v, 30);
+  if (Number.isNaN(Date.parse(d))) throw new Invalid();
+  return d;
+};
+
+/** A saved win, or undefined when it doesn't hold together. `name` is the sharer's, from their profile. */
+export function readWin(v: unknown, name: string): Win | undefined {
+  try {
+    if (!isObject(v)) return undefined;
+    const kind = v.kind === "pr" || v.kind === "milestone" || v.kind === "streak" ? v.kind : undefined;
+    if (!kind) return undefined;
+    return {
+      kind, name, date: isoDate(v.date), metric: str(v.metric), unit: str(v.unit, 12), value: num(v.value),
+      previous: optNum(v.previous), target: optNum(v.target), percent: optNum(v.percent, 0, 100),
+      trend: v.trend === undefined ? undefined : list(v.trend, 60, (x) => num(x)),
+      showNumbers: v.showNumbers === true, style: v.style === "paper" ? "paper" : "dark",
+      invite: code(v.invite), program: code(v.program),
+    };
+  } catch (e) {
+    if (e instanceof Invalid) return undefined;
+    throw e;
+  }
+}
+
+export function readRecap(v: unknown, name: string): Recap | undefined {
+  try {
+    if (!isObject(v) || !isObject(v.sessions)) return undefined;
+    return {
+      name, week: num(v.week, 1, 104), weeks: num(v.weeks, 1, 104), phase: str(v.phase, 20),
+      sessions: { done: num(v.sessions.done, 0, 999), planned: num(v.sessions.planned, 0, 999) },
+      lifts: list(v.lifts, 8, (l) => {
+        if (!isObject(l)) throw new Invalid();
+        return { metric: str(l.metric), from: num(l.from, 0.1), to: num(l.to), unit: str(l.unit, 12) };
+      }),
+      bests: num(v.bests, 0, 999), showNumbers: v.showNumbers === true, invite: code(v.invite), program: code(v.program),
+    };
+  } catch (e) {
+    if (e instanceof Invalid) return undefined;
+    throw e;
+  }
+}
+
+export function readProgram(v: unknown, by: string): Program | undefined {
+  try {
+    if (!isObject(v)) return undefined;
+    return {
+      name: str(v.name), by, weeks: num(v.weeks, 1, 104), days: num(v.days, 1, 7), equipment: str(v.equipment, 40),
+      goals: list(v.goals, 6, (g) => str(g)),
+      phases: list(v.phases, 8, (p) => {
+        if (!isObject(p)) throw new Invalid();
+        return {
+          phase: str(p.phase, 20), from: num(p.from, 1, 104), to: num(p.to, 1, 104), focus: str(p.focus, 240),
+          mainLifts: list(p.mainLifts, 6, (l) => str(l)), mainReps: num(p.mainReps, 1, 50),
+        };
+      }),
+      sampleWeek: list(v.sampleWeek, 7, (d) => {
+        if (!isObject(d)) throw new Invalid();
+        return { day: str(d.day, 12), title: str(d.title), items: list(d.items, 12, (i) => str(i)) };
+      }),
+      invite: code(v.invite),
+    };
+  } catch (e) {
+    if (e instanceof Invalid) return undefined;
+    throw e;
+  }
+}
+
 /** The paths the app opens itself when it's installed. */
 export const appPaths = ["/join/*", "/w/*", "/r/*", "/p/*"];
 

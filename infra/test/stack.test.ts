@@ -124,7 +124,7 @@ describe("resolvers", () => {
         "Query.me", "Query.myGroups", "Query.group", "Group.feed",
         "Mutation.updateProfile", "Mutation.createGroup", "Mutation.joinGroup", "Mutation.leaveGroup",
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
-        "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages",
+        "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.createShare",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -193,5 +193,35 @@ describe("ops", () => {
     dev.hasResourceProperties("AWS::Budgets::Budget", {
       Budget: Match.objectLike({ BudgetLimit: { Amount: 20, Unit: "USD" }, TimeUnit: "MONTHLY" }),
     });
+  });
+});
+
+describe("share pages (FIT-105)", () => {
+  const web = { zone: "example.com", hosts: ["example.com", "share.example.com", "join.example.com"] };
+  const synthWeb = () => {
+    const app = new App({
+      context: { "hosted-zone:account=111111111111:domainName=example.com:region=us-east-1": { Id: "/hostedzone/Z1", Name: "example.com." } },
+    });
+    return Template.fromStack(new AICoachStack(app, "AICoach-prod", {
+      env: { account: "111111111111", region: "us-east-1" }, stage: "prod", identityProviders: [], alertEmail: "a@example.com", web,
+    }));
+  };
+
+  it("serve every host from one CDN, with a certificate for each, and the Lambda reachable only through it", () => {
+    const t = synthWeb();
+    t.hasResourceProperties("AWS::CertificateManager::Certificate", {
+      DomainName: "example.com",
+      SubjectAlternativeNames: ["share.example.com", "join.example.com"],
+    });
+    t.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: Match.objectLike({ Aliases: web.hosts }),
+    });
+    t.hasResourceProperties("AWS::Lambda::Url", { AuthType: "AWS_IAM" });
+    t.resourceCountIs("AWS::Route53::RecordSet", 6);
+    t.hasOutput("ShareOrigin", { Value: "https://share.example.com" });
+  });
+
+  it("aren't set up for a stage without a domain", () => {
+    dev.resourceCountIs("AWS::CloudFront::Distribution", 0);
   });
 });
