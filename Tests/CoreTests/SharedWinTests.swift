@@ -34,3 +34,10 @@ struct SharedWinTests {
         #expect(payload["metric"] as? String == "bench")
     }
 }
+
+extension SharedWinTests {
+    @Test func theCardPrintsTheShortestLink() {
+        #expect(SharedWin.shortLink(URL(string: "https://dev.barbrabell.com/w/ae79125c4c25")!) == "dev.barbrabell.com/w/ae79125c4c25")
+        #expect(SharedWin.shortLink(URL(string: "https://share.barbrabell.com/w/ae79125c4c25")!) == "barbrabell.com/w/ae79125c4c25")
+    }
+}

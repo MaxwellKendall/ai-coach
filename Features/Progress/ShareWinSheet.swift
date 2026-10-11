@@ -16,6 +16,9 @@ struct ShareWinSheet: View {
     @State private var linking = false
     @State private var sharing: SharedLink?
     @State private var failure: String?
+    /// Links already out for this win (from this phone), which Stop Sharing takes down.
+    @State private var liveLinks: [String] = []
+    @State private var stopping = false
 
     var body: some View {
         let words = WinWords(win, showNumbers: showNumbers)
@@ -69,6 +72,10 @@ struct ShareWinSheet: View {
                             Text("Share image only").font(.subheadline.weight(.semibold)).frame(minHeight: 44)
                         }
                         .tint(.primary)
+                        if !liveLinks.isEmpty {
+                            Button(stopping ? "Stopping…" : "Stop Sharing", role: .destructive) { stopSharing() }
+                                .font(.subheadline).frame(minHeight: 36).disabled(stopping)
+                        }
                     }
                 } else if let image {
                     ShareLink(item: Image(uiImage: image), preview: SharePreview(words.title, image: Image(uiImage: image))) {
@@ -84,6 +91,7 @@ struct ShareWinSheet: View {
         .background(Color(.systemBackground))
         .task(id: "\(style.rawValue)\(showNumbers)") { image = ShareCard.image(win, style: style, showNumbers: showNumbers) }
         .sheet(item: $sharing) { ActivityView(link: $0).presentationDetents([.medium, .large]) }
+        .onAppear { liveLinks = SharedWin.Links.ids(for: win) }
         .alert("Couldn’t make a link", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK") {}
         } message: { Text(failure ?? "") }
@@ -99,6 +107,18 @@ struct ShareWinSheet: View {
         .background(Color.primary, in: .capsule)
     }
 
+    /// Takes down every link made for this win from this phone: their pages then say the link has expired.
+    private func stopSharing() {
+        stopping = true
+        Task {
+            defer { stopping = false }
+            for id in liveLinks { try? await Cloud.deleteShare(id) }
+            SharedWin.Links.clear(for: win)
+            liveLinks = []
+            links = [:]
+        }
+    }
+
     /// Saves the win, uploads its card for the preview, then shares the link.
     private func shareLink(_ image: UIImage, title: String) {
         let look = "\(style.rawValue)\(showNumbers)"
@@ -111,10 +131,14 @@ struct ShareWinSheet: View {
             defer { linking = false }
             do {
                 let share = try await Cloud.createShare(kind: "win", payload: SharedWin.payload(win, style: style, showNumbers: showNumbers))
-                if let png = image.pngData() { try? await Cloud.uploadCard(png, for: share.id) }
                 guard let url = URL(string: share.url) else { throw URLError(.badURL) }
+                SharedWin.Links.add(share.id, for: win)
+                liveLinks = SharedWin.Links.ids(for: win)
+                // The card that goes out carries its link.
+                let card = ShareCard.image(win, style: style, showNumbers: showNumbers, link: SharedWin.shortLink(url)) ?? image
+                if let png = card.pngData() { try? await Cloud.uploadCard(png, for: share.id) }
                 links[look] = url
-                sharing = SharedLink(url: url, title: title, image: image)
+                sharing = SharedLink(url: url, title: title, image: card)
             } catch {
                 failure = "Check your connection and try again, or share the image on its own."
             }

@@ -43,4 +43,18 @@ enum SharedWin {
         }
         return payload
     }
+
+    /// "barbrabell.com/w/ae79125c4c25", as printed on the card: the bare domain serves every page too.
+    static func shortLink(_ url: URL) -> String {
+        let host = url.host() ?? ""
+        return (host.hasPrefix("share.") ? String(host.dropFirst(6)) : host) + url.path()
+    }
+
+    /// FIT-107: the links made for each win on this phone, so they can be taken down later.
+    @MainActor enum Links {
+        private static func key(_ win: WinItem) -> String { "shares.\(win.key)" }
+        static func ids(for win: WinItem) -> [String] { UserDefaults.standard.stringArray(forKey: key(win)) ?? [] }
+        static func add(_ id: String, for win: WinItem) { UserDefaults.standard.set(ids(for: win) + [id], forKey: key(win)) }
+        static func clear(for win: WinItem) { UserDefaults.standard.removeObject(forKey: key(win)) }
+    }
 }

@@ -21,6 +21,8 @@ struct ShareCard: View {
     let win: WinItem
     var style = CardStyle.dark
     var showNumbers = true
+    /// FIT-107: the share's short link, once it has one, in place of the date: a screenshot still leads somewhere.
+    var link: String?
 
     var body: some View {
         let words = WinWords(win, showNumbers: showNumbers)
@@ -32,11 +34,13 @@ struct ShareCard: View {
             default: figure(words)
             }
             HStack {
-                Text(win.date.formatted(.dateTime.month(.abbreviated).day().year())).font(.system(size: 12))
+                Text(link ?? win.date.formatted(.dateTime.month(.abbreviated).day().year()))
+                    .font(.system(size: 12, weight: link == nil ? .regular : .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer()
                 HStack(spacing: 6) {
                     Image(systemName: "circle.circle.fill").font(.system(size: 12)).symbolRenderingMode(.monochrome)
-                    Text(Self.appName).font(.system(size: 12, weight: .semibold))
+                    // With the link printed, the domain names the app; the name would crowd it out.
+                    if link == nil { Text(Self.appName).font(.system(size: 12, weight: .semibold)) }
                 }
             }
             .foregroundStyle(style.muted)
@@ -92,8 +96,8 @@ struct ShareCard: View {
     }
 
     /// The card as one image, 1080 px wide, for the share sheet.
-    @MainActor static func image(_ win: WinItem, style: CardStyle, showNumbers: Bool) -> UIImage? {
-        let renderer = ImageRenderer(content: ShareCard(win: win, style: style, showNumbers: showNumbers))
+    @MainActor static func image(_ win: WinItem, style: CardStyle, showNumbers: Bool, link: String? = nil) -> UIImage? {
+        let renderer = ImageRenderer(content: ShareCard(win: win, style: style, showNumbers: showNumbers, link: link))
         renderer.scale = 1080 / size.width
         return renderer.uiImage
     }
