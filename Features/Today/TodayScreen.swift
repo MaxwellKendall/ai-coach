@@ -29,6 +29,10 @@ struct TodayScreen: View {
     @State private var you = false
     @State private var review: WeekReport?
     @State private var sharing: WinItem?
+    /// FIT-106: the wins there were before a workout, so the ones it earns can be celebrated when it's saved.
+    @State private var winsBefore: Set<String> = []
+    @State private var saved = false
+    @State private var celebrating: [WinItem]?
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
@@ -116,6 +120,13 @@ struct TodayScreen: View {
             }
             // `-review YES` opens this week's review.
             if UserDefaults.standard.bool(forKey: "review") { review = weekReport() }
+            // `-celebrate YES` shows the latest two wins as if a workout had just earned them (FIT-106).
+            if UserDefaults.standard.bool(forKey: "celebrate") {
+                // A sample when there's no history yet, so the screen can be looked at on a fresh simulator.
+                let sample = WinItem(kind: .pr, date: .now, key: "pr:sample", metric: "bench-press.1rm_lb", unit: "lb", value: 205, previous: 190,
+                                     trend: [175, 180, 185, 190, 205])
+                celebrating = allWins.isEmpty ? [sample] : Array(allWins.prefix(2))
+            }
         }
         #endif
         .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
@@ -128,17 +139,36 @@ struct TodayScreen: View {
         .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
             if let review { WeeklyReviewScreen(report: review, profile: profiles.first) }
         }
-        .fullScreenCover(item: $live) { draft in
+        .fullScreenCover(item: $live, onDismiss: celebrate) { draft in
             WorkoutModeView(draft: draft) {
                 day = todayIndex
-                toast = Toast(text: "Workout saved")
+                saved = true
             }
+            .onAppear {
+                saved = false
+                winsBefore = Set(allWins.map(\.key))
+            }
+        }
+        .sheet(isPresented: Binding(get: { celebrating != nil }, set: { if !$0 { celebrating = nil } })) {
+            if let celebrating { CelebrationSheet(wins: celebrating) }
         }
         // A new week, or a profile that just finished onboarding, gets a plan.
         .task(id: profiles.first?.isComplete) {
             try? Planner.ensureWeek(in: context)
             await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
         }
+    }
+
+    private var allWins: [WinItem] {
+        WinFeed.wins(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
+    }
+
+    /// FIT-106: a saved workout that earned wins ends on their cards; otherwise a quiet "saved".
+    private func celebrate() {
+        guard saved else { return }
+        saved = false
+        let earned = Wins.earned(allWins, before: winsBefore)
+        if earned.isEmpty { toast = Toast(text: "Workout saved") } else { celebrating = earned }
     }
 
     // MARK: Header and strip
@@ -367,8 +397,7 @@ struct TodayScreen: View {
             }
             Spacer(minLength: 12)
             // FIT-15: wins earned that day, a card each (two at most; the rest are in Wins), easy to ignore.
-            let wins = WinFeed.wins(WinFeed.wins(profile: profiles.first, goals: goals, entries: entries, planned: planned,
-                                                templates: templates), on: done.start)
+            let wins = WinFeed.wins(allWins, on: done.start)
             if !wins.isEmpty {
                 VStack(spacing: 8) {
                     ForEach(wins.prefix(2)) { win in WinCard(win: win) { sharing = win } }

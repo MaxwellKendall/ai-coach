@@ -3,6 +3,8 @@ import SwiftUI
 /// FIT-15, prototype board B: the card as it will be sent, black or paper, with or without weights, and Share.
 struct ShareWinSheet: View {
     let win: WinItem
+    /// "Share" from Wins; the celebration after a session says something warmer (FIT-106).
+    var heading = "Share"
     @Environment(\.dismiss) private var dismiss
     @State private var style = CardStyle.dark
     @State private var showNumbers = true
@@ -14,7 +16,7 @@ struct ShareWinSheet: View {
             HStack {
                 Color.clear.frame(width: 44, height: 44)
                 Spacer()
-                Text("Share").font(.headline)
+                Text(heading).font(.headline)
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(.primary).frame(width: 44, height: 44)
@@ -63,6 +65,25 @@ struct ShareWinSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
         .task(id: "\(style.rawValue)\(showNumbers)") { image = ShareCard.image(win, style: style, showNumbers: showNumbers) }
+        .presentationDetents([.large])
+    }
+}
+
+/// FIT-106: a session that earned wins ends here, on the best one's card with Share first; the others are a swipe away.
+struct CelebrationSheet: View {
+    let wins: [WinItem]
+    @State private var appeared = false
+
+    var body: some View {
+        TabView {
+            ForEach(Array(wins.enumerated()), id: \.element.id) { index, win in
+                ShareWinSheet(win: win, heading: wins.count == 1 ? "Nice work" : "Nice work · \(index + 1) of \(wins.count)")
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .background(Color(.systemBackground))
+        .sensoryFeedback(.success, trigger: appeared)
+        .onAppear { appeared = true }
         .presentationDetents([.large])
     }
 }

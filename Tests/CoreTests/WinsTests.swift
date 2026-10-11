@@ -91,4 +91,15 @@ struct WinsTests {
         #expect(wins.map(\.date) == wins.map(\.date).sorted(by: >))
         #expect(wins.first?.date == day(10, 3))
     }
+
+    /// FIT-106: what a session just earned is celebrated, best first.
+    @Test func aSessionCelebratesOnlyWhatItEarnedBestFirst() {
+        func win(_ kind: WinItem.Kind, _ key: String, percent: Int? = nil) -> WinItem {
+            WinItem(kind: kind, date: day(10, 3), key: key, metric: "bench_1rm_lb", unit: "lb", value: 200, percent: percent)
+        }
+        let all = [win(.streak, "streak:4"), win(.milestone, "m:50", percent: 50), win(.pr, "pr:200"),
+                   win(.milestone, "m:100", percent: 100), win(.milestone, "m:75", percent: 75), win(.pr, "pr:190")]
+        #expect(Wins.earned(all, before: ["pr:190"]).map(\.key) == ["m:100", "pr:200", "m:75", "m:50", "streak:4"])
+        #expect(Wins.earned(all, before: Set(all.map(\.key))).isEmpty)
+    }
 }

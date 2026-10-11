@@ -69,6 +69,21 @@ enum Wins {
         return wins.sorted { ($0.date, $0.key) > ($1.date, $1.key) }
     }
 
+    /// FIT-106: the wins a session just earned (not in `before`), best first: a goal reached, then personal bests,
+    /// then other milestones, then streaks; the bigger milestone first.
+    static func earned(_ wins: [WinItem], before: Set<String>) -> [WinItem] {
+        func rank(_ win: WinItem) -> Int {
+            switch win.kind {
+            case .milestone where win.percent == 100: 0
+            case .pr: 1
+            case .milestone: 2
+            case .streak: 3
+            }
+        }
+        return wins.filter { !before.contains($0.key) }
+            .sorted { (rank($0), -($0.percent ?? 0), $0.key) < (rank($1), -($1.percent ?? 0), $1.key) }
+    }
+
     /// Whole weeks left on the date, not counting a part week.
     static func weeksLeft(from date: Date, to end: Date) -> Int {
         max(0, Int((end.timeIntervalSince(date) / (7 * 86_400)).rounded(.down)))
