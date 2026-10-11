@@ -144,6 +144,35 @@ enum Cloud {
                           as: AnyDecodable?.self)
     }
 
+    // MARK: Shares (FIT-105/107)
+
+    struct Share: Decodable, Sendable {
+        var id: String
+        var url: String
+    }
+
+    /// Saves a win, recap or program to share, and returns its link. The page shows the profile's name.
+    @MainActor static func createShare(kind: String, payload: [String: Any]) async throws -> Share {
+        try await run("mutation($k: String!, $p: AWSJSON!) { createShare(kind: $k, payload: $p) { id url } }",
+                      ["k": kind, "p": json(payload)], at: "createShare")
+    }
+
+    /// Uploads the share's card, so link previews show it. Done before the link is shared: iMessage fetches the
+    /// preview on the sender's phone as the message is written.
+    @MainActor static func uploadCard(_ png: Data, for id: String) async throws {
+        let upload: String = try await run("mutation($i: ID!) { shareImageUpload(id: $i) }", ["i": id], at: "shareImageUpload")
+        guard let url = URL(string: upload) else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("image/png", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await URLSession.shared.upload(for: request, from: png)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+    }
+
+    @MainActor static func deleteShare(_ id: String) async throws {
+        _ = try await run("mutation($i: ID!) { deleteShare(id: $i) }", ["i": id], at: "deleteShare", as: Bool?.self)
+    }
+
     // MARK: Groups
 
     @MainActor static func myGroups() async throws -> [GroupSummary] {

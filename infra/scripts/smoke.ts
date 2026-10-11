@@ -140,6 +140,21 @@ const invitePage = await fetch(`${new URL(shared.url).origin}/join/${created.inv
 if (invitePage.status !== 200 || !(await invitePage.text()).includes("Join Smoke group")) throw new Error(`invite page: ${invitePage.status}`);
 pass(`a shared win opens at ${shared.url}, and the invite page shows the group`);
 
+// FIT-107: the card uploads for link previews, and a share can be taken down.
+const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+const upload = must(await gql(a, `mutation($i: ID!) { shareImageUpload(id: $i) }`, { i: shared.id }), "shareImageUpload").shareImageUpload;
+const put = await fetch(upload, { method: "PUT", headers: { "content-type": "image/png" }, body: png });
+if (put.status !== 200) throw new Error(`card upload: ${put.status}`);
+const cardUrl = `${new URL(shared.url).origin}/cards/${shared.id}.png`;
+const card = await fetch(cardUrl);
+if (card.status !== 200 || card.headers.get("content-type") !== "image/png") throw new Error(`card: ${card.status} ${card.headers.get("content-type")}`);
+if (!winHtml.includes(`<meta property="og:image" content="${cardUrl}">`)) throw new Error("the win page doesn't preview its card");
+if (!(await gql(b, `mutation($i: ID!) { shareImageUpload(id: $i) }`, { i: shared.id })).errors?.length) throw new Error("B got an upload URL for A's share");
+const other = must(await gql(a, `mutation($p: AWSJSON!) { createShare(kind: "win", payload: $p) { id url } }`, { p: JSON.stringify(win) }), "createShare").createShare;
+must(await gql(a, `mutation($i: ID!) { deleteShare(id: $i) }`, { i: other.id }), "deleteShare");
+if ((await fetch(other.url)).status !== 404) throw new Error("a deleted share's page still opens");
+pass("the card uploads and previews the page; only the sharer can upload it; a deleted share's link expires");
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {

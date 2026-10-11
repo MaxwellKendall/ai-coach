@@ -137,7 +137,7 @@ struct WinWords {
         }
     }
 
-    private var shortName: String {
+    var shortName: String {
         switch option?.id {
         case "squat": "squat"
         case "bench": "bench"

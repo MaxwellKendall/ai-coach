@@ -101,6 +101,10 @@ type Query {
 type Mutation {
   "FIT-105: save a win, recap or program to share; returns its link."
   createShare(kind: String!, payload: AWSJSON!): Share
+  "FIT-107: a short-lived URL to upload the share's card (PNG), for link previews."
+  shareImageUpload(id: ID!): String
+  "FIT-107: take a share down; its link then says it has expired."
+  deleteShare(id: ID!): Boolean
   updateProfile(displayName: String, units: String): Profile
   createGroup(name: String!): GroupSummary
   joinGroup(inviteCode: String!): GroupSummary

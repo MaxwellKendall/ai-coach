@@ -20,6 +20,8 @@ describe("share pages (FIT-105)", () => {
     expect(page.body).toContain("Max set a bench press best");
     expect(page.body).toContain('href="/join/X7K2PQ"');
     expect(page.body).toContain('<meta property="og:title" content="Max set a bench press best">');
+    // FIT-107: the uploaded card is the link preview.
+    expect(page.body).toContain('<meta property="og:image" content="https://example.com/cards/bench.png">');
   });
 
   it("hides weights the sharer chose not to show", () => {

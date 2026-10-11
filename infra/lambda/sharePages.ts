@@ -191,13 +191,15 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
   }
   const [, kind, id = ""] = path.split("/");
   const valid = /^[A-Za-z0-9_-]{1,40}$/.test(id);
+  // FIT-107: the card the app uploaded with the share, for link previews.
+  const card = `${site.origin}/cards/${id}.png`;
   if (kind === "w" && valid) {
     const win = await store.win(id);
-    if (win) return html(winPage(win, path, site));
+    if (win) return html(winPage(win, path, site, card));
   }
   if (kind === "r" && valid) {
     const recap = await store.recap(id);
-    if (recap) return html(recapPage(recap, path, site));
+    if (recap) return html(recapPage(recap, path, site, card));
   }
   if (kind === "p" && valid) {
     const program = await store.program(id);
@@ -300,13 +302,14 @@ export function winCard(win: Win, site: Site) {
 
 // MARK: Pages
 
-function winPage(win: Win, path: string, site: Site) {
+function winPage(win: Win, path: string, site: Site, image?: string) {
   const w = winWords(win);
   const who = first(win.name);
   return layout(site, {
     title: w.title,
     description: `${who} is training with ${site.appName}: a 12-week program written for their goals, and a coach that keeps it on track.`,
     path,
+    image,
     body: `
       <section class="hero">
         ${winCard(win, site)}
@@ -321,7 +324,7 @@ function winPage(win: Win, path: string, site: Site) {
   });
 }
 
-function recapPage(recap: Recap, path: string, site: Site) {
+function recapPage(recap: Recap, path: string, site: Site, image?: string) {
   const who = first(recap.name);
   const done = recap.week >= recap.weeks;
   const title = done ? `${who} finished a ${recap.weeks}-week program` : `${who}'s week ${recap.week} of ${recap.weeks}`;
@@ -334,6 +337,7 @@ function recapPage(recap: Recap, path: string, site: Site) {
     title,
     description: `${recap.sessions.done} of ${recap.sessions.planned} sessions, ${recap.bests} new ${recap.bests === 1 ? "best" : "bests"}. Training with ${site.appName}.`,
     path,
+    image,
     body: `
       <section class="hero">
         <article class="recap">
@@ -467,7 +471,7 @@ function how(site: Site) {
 
 const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.5"/><rect x="9.5" y="8.5" width="5" height="12.5" rx="1.5"/><rect x="16" y="3" width="5" height="18" rx="1.5"/></svg>`;
 
-function layout(site: Site, page: { title: string; description: string; path: string; body: string }) {
+function layout(site: Site, page: { title: string; description: string; path: string; body: string; image?: string }) {
   const url = `${site.origin}${page.path}`;
   return `<!doctype html>
 <html lang="en">
@@ -481,7 +485,11 @@ function layout(site: Site, page: { title: string; description: string; path: st
 <meta property="og:description" content="${esc(page.description)}">
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:type" content="website">
-<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:card" content="summary_large_image">${
+  page.image
+    ? `\n<meta property="og:image" content="${esc(page.image)}">\n<meta property="og:image:width" content="1080">\n<meta property="og:image:height" content="1348">\n<meta property="og:image:alt" content="${esc(page.title)}">`
+    : ""
+}
 <meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 <style>${css}</style>

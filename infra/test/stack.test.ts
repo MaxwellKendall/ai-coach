@@ -124,7 +124,7 @@ describe("resolvers", () => {
         "Query.me", "Query.myGroups", "Query.group", "Group.feed",
         "Mutation.updateProfile", "Mutation.createGroup", "Mutation.joinGroup", "Mutation.leaveGroup",
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
-        "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.createShare",
+        "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -219,6 +219,13 @@ describe("share pages (FIT-105)", () => {
     t.hasResourceProperties("AWS::Lambda::Url", { AuthType: "AWS_IAM" });
     t.hasResourceProperties("AWS::Lambda::Permission", { Action: "lambda:InvokeFunction", Principal: "cloudfront.amazonaws.com" });
     t.resourceCountIs("AWS::Route53::RecordSet", 6);
+    // FIT-107: cards come from the private bucket, through the same distribution.
+    t.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: Match.objectLike({ CacheBehaviors: [Match.objectLike({ PathPattern: "/cards/*" })] }),
+    });
+    t.hasResourceProperties("AWS::S3::Bucket", {
+      PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },
+    });
     t.hasOutput("ShareOrigin", { Value: "https://share.example.com" });
   });
 

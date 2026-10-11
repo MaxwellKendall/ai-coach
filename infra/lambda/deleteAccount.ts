@@ -1,10 +1,12 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { BatchWriteCommand, DynamoDBDocumentClient, paginateQuery } from "@aws-sdk/lib-dynamodb";
 import { AdminDeleteUserCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
+import { DeleteObjectsCommand, S3Client } from "@aws-sdk/client-s3";
 import type { AppSyncResolverEvent, AppSyncIdentityCognito } from "aws-lambda";
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
+const s3 = new S3Client({});
 const TABLE = process.env.TABLE!;
 
 type Key = { PK: string; SK: string };
@@ -61,6 +63,11 @@ export async function handler(event: AppSyncResolverEvent<Record<string, never>>
       const out = await db.send(new BatchWriteCommand({ RequestItems: pending as never }));
       pending = out.UnprocessedItems as Record<string, unknown[]> | undefined;
     }
+  }
+  // FIT-107: the images of what they shared.
+  const cards = keys.filter((k) => k.PK.startsWith("SHARE#")).map((k) => ({ Key: `cards/${k.PK.slice(6)}.png` }));
+  for (let i = 0; i < cards.length; i += 1000) {
+    await s3.send(new DeleteObjectsCommand({ Bucket: process.env.CARDS_BUCKET, Delete: { Objects: cards.slice(i, i + 1000), Quiet: true } }));
   }
   await cognito.send(new AdminDeleteUserCommand({ UserPoolId: process.env.USER_POOL_ID, Username: identity.username }));
   return true;

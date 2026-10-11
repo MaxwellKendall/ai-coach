@@ -15,6 +15,7 @@ import { DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as route53 from "aws-cdk-lib/aws-route53";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sns from "aws-cdk-lib/aws-sns";
@@ -235,8 +236,26 @@ export class AICoachStack extends Stack {
       pipeline("Subscription", field, ["requireMember"], "subscription");
     }
 
-    const deleteAccount = fn("deleteAccount", { USER_POOL_ID: userPool.userPoolId });
+    // ---- FIT-107: shared cards' images, for link previews (served at /cards/* by the web distribution) ----
+    const cards = new s3.Bucket(this, "Cards", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      removalPolicy,
+      autoDeleteObjects: !isProd,
+    });
+    const shares = fn("shares", { CARDS_BUCKET: cards.bucketName });
+    table.grant(shares, "dynamodb:GetItem", "dynamodb:DeleteItem");
+    cards.grantPut(shares, "cards/*");
+    cards.grantDelete(shares, "cards/*");
+    const sharesSource = api.addLambdaDataSource("SharesSource", shares);
+    for (const fieldName of ["shareImageUpload", "deleteShare"]) {
+      sharesSource.createResolver(`Shares${fieldName}`, { typeName: "Mutation", fieldName });
+    }
+
+    const deleteAccount = fn("deleteAccount", { USER_POOL_ID: userPool.userPoolId, CARDS_BUCKET: cards.bucketName });
     table.grant(deleteAccount, "dynamodb:Query", "dynamodb:BatchWriteItem");
+    cards.grantDelete(deleteAccount, "cards/*");
     deleteAccount.addToRolePolicy(
       new iam.PolicyStatement({ actions: ["cognito-idp:AdminDeleteUser"], resources: [userPool.userPoolArn] }),
     );
@@ -334,6 +353,13 @@ export class AICoachStack extends Stack {
             maxTtl: Duration.hours(1),
           }),
           functionAssociations: [{ function: joinPaths, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+        },
+        additionalBehaviors: {
+          "/cards/*": {
+            origin: origins.S3BucketOrigin.withOriginAccessControl(cards),
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          },
         },
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       });
