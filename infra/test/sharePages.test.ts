@@ -96,3 +96,14 @@ describe("sessions (FIT-113)", () => {
     expect(readSession({ title: "Legs", date: "2026-10-15", exercises: [{ name: "Squat", sets: 4, reps: 5 }] }, "Max")?.exercises[0].sets).toBe(4);
   });
 });
+
+describe("view counts (FIT-110)", () => {
+  it("a page asks to be counted once it's open, and only known kinds count", async () => {
+    const counted: string[] = [];
+    const counting = { ...store, count: async (kind: string) => { counted.push(kind); } };
+    expect((await route("/w/bench", counting, site)).body).toContain('fetch("/v/w"');
+    expect((await route("/v/w", counting, site)).status).toBe(204);
+    expect((await route("/v/nope", counting, site)).status).toBe(404);
+    expect(counted).toEqual(["w"]);
+  });
+});

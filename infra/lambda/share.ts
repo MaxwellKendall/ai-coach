@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
 import { readProgram, readRecap, readSession, readWin, route, type Site, type Store } from "./sharePages.ts";
 
@@ -27,6 +27,16 @@ async function shared(id: string, kind: string) {
 }
 
 export const store: Store = {
+  // FIT-110: today's views of each kind of page.
+  async count(kind) {
+    await db.send(new UpdateCommand({
+      TableName: TABLE,
+      Key: { PK: "STATS#SHARES", SK: new Date().toISOString().slice(0, 10) },
+      UpdateExpression: "ADD #k :one",
+      ExpressionAttributeNames: { "#k": `view_${kind}` },
+      ExpressionAttributeValues: { ":one": 1 },
+    }));
+  },
   async win(id) {
     const s = await shared(id, "win");
     return s && readWin(s.payload, s.name);
@@ -70,7 +80,8 @@ export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunc
       headers: {
         "content-type": page.type,
         // A shared item can be taken down, so pages are only kept for a few minutes.
-        "cache-control": page.status === 200 ? "public, max-age=300" : "public, max-age=60",
+        // A view count must reach the Lambda every time; pages are kept a few minutes.
+        "cache-control": page.status === 204 ? "no-store" : page.status === 200 ? "public, max-age=300" : "public, max-age=60",
         "x-content-type-options": "nosniff",
         "referrer-policy": "strict-origin-when-cross-origin",
       },

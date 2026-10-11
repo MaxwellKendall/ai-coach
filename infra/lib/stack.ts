@@ -329,7 +329,7 @@ export class AICoachStack extends Stack {
         APP_ID: "7GZKY29XJH.com.maxwellkendall.aicoach",
         APP_STORE_URL: "",
       });
-      table.grant(share, "dynamodb:GetItem", "dynamodb:Query");
+      table.grant(share, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:UpdateItem");
       const url = share.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
       // join.{domain}/CODE is the invite page, /join/CODE; Apple's file stays where Apple looks for it.
       const joinPaths = new cloudfront.Function(this, "JoinPaths", {
@@ -378,6 +378,28 @@ export class AICoachStack extends Stack {
       }
       new CfnOutput(this, "ShareOrigin", { value: shareOrigin });
     }
+
+    // ---- FIT-110: what the sharing flywheel makes, counted by day ----
+    const shareStats = fn("shareStats", {});
+    table.grant(shareStats, "dynamodb:UpdateItem");
+    shareStats.addEventSource(
+      new DynamoEventSource(table, {
+        startingPosition: lambda.StartingPosition.LATEST,
+        batchSize: 25,
+        retryAttempts: 2,
+        filters: [
+          lambda.FilterCriteria.filter({ eventName: lambda.FilterRule.isEqual("INSERT"), dynamodb: { Keys: { PK: { S: lambda.FilterRule.beginsWith("SHARE#") } } } }),
+          lambda.FilterCriteria.filter({
+            eventName: lambda.FilterRule.isEqual("INSERT"),
+            dynamodb: { Keys: { PK: { S: lambda.FilterRule.beginsWith("GROUP#") }, SK: { S: lambda.FilterRule.isEqual("META") } } },
+          }),
+          lambda.FilterCriteria.filter({
+            eventName: lambda.FilterRule.isEqual("INSERT"),
+            dynamodb: { Keys: { PK: { S: lambda.FilterRule.beginsWith("GROUP#") }, SK: { S: lambda.FilterRule.beginsWith("MEMBER#") } } },
+          }),
+        ],
+      }),
+    );
 
     // ---- Ops: one alarm, one budget ----
     const alerts = new sns.Topic(this, "Alerts", { topicName: `AICoach-${stage}-alerts` });

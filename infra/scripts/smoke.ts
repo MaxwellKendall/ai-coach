@@ -59,6 +59,11 @@ const pass = (s: string) => {
 };
 
 const [a, b, c] = await Promise.all(["smoke-a", "smoke-b", "smoke-c"].map(signIn));
+// FIT-110: today's flywheel counts before this run, to check what it adds.
+const statsKey = { PK: "STATS#SHARES", SK: new Date().toISOString().slice(0, 10) };
+const stats = async () => ((await DynamoDBDocumentClient.from(new DynamoDBClient({ region: out.Region }))
+  .send(new GetCommand({ TableName: "AICoach-dev", Key: statsKey }))).Item ?? {}) as Record<string, number>;
+const statsBefore = await stats();
 must(await gql(a, `mutation { updateProfile(displayName: "Smoke A") { uid } }`), "A profile");
 must(await gql(b, `mutation { updateProfile(displayName: "Smoke B") { uid } }`), "B profile");
 
@@ -178,6 +183,21 @@ if (read.kind !== "session" || JSON.parse(read.payload).exercises[0].exercise !=
 const aasa = await (await fetch(`${new URL(sharedSession.url).origin}/.well-known/apple-app-site-association`)).json();
 if (!JSON.stringify(aasa).includes("/s/*")) throw new Error("Apple's file doesn't open sessions in the app");
 pass(`a session opens at ${sharedSession.url}, with its calendar file; another user can read it; the app claims /s/*`);
+
+// FIT-110: a page view counts at once; shares made and joins come through the table's stream.
+const viewsBefore = (await stats()).view_w ?? 0;
+if ((await fetch(`${new URL(shared.url).origin}/v/w`)).status !== 204) throw new Error("view count");
+if (((await stats()).view_w ?? 0) !== viewsBefore + 1) throw new Error("the win page's view wasn't counted");
+const countStart = Date.now();
+let counts = await stats();
+const grew = (n: Record<string, number>) => (n.made_win ?? 0) > (statsBefore.made_win ?? 0) && (n.made_session ?? 0) > (statsBefore.made_session ?? 0)
+  && (n.members ?? 0) - (n.groups ?? 0) > (statsBefore.members ?? 0) - (statsBefore.groups ?? 0);
+while (!grew(counts)) {
+  if (Date.now() - countStart > 60_000) throw new Error(`share counts didn't grow: ${JSON.stringify({ statsBefore, counts })}`);
+  await new Promise((r) => setTimeout(r, 2000));
+  counts = await stats();
+}
+pass(`views, shares made and joins are counted (${((Date.now() - countStart) / 1000).toFixed(1)} s for the stream)`);
 
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);

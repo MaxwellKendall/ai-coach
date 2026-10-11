@@ -85,6 +85,8 @@ export interface Store {
   program(id: string): Promise<Program | undefined>;
   invite(code: string): Promise<Invite | undefined>;
   session(id: string): Promise<Session | undefined>;
+  /** FIT-110: one more view of a kind of page today. */
+  count?(kind: string): Promise<void>;
 }
 
 export interface Site {
@@ -219,7 +221,17 @@ export function readSession(v: unknown, name: string): Session | undefined {
  */
 export const appPaths = ["/join/*", "/????????", "/s/*"];
 
+/** FIT-110: the kinds of page whose views are counted, as their paths start. */
+export const viewKinds = ["w", "r", "p", "s", "join"];
+
 export async function route(path: string, store: Store, site: Site): Promise<Page> {
+  // FIT-110: a page's view, sent by its script once it's open in a browser (link-preview bots run no scripts).
+  const view = /^\/v\/([a-z]+)$/.exec(path)?.[1];
+  if (view !== undefined) {
+    if (!viewKinds.includes(view)) return { status: 404, type: "text/plain", body: "" };
+    await store.count?.(view);
+    return { status: 204, type: "text/plain", body: "" };
+  }
   if (path === "/.well-known/apple-app-site-association") {
     return { status: 200, type: "application/json", body: JSON.stringify(associationFile(site)) };
   }
@@ -348,6 +360,7 @@ function winPage(win: Win, path: string, site: Site, image?: string) {
   const w = winWords(win);
   const who = first(win.name);
   return layout(site, {
+    view: "w",
     title: w.title,
     description: `${who} is training with ${site.appName}: a 12-week program written for their goals, and a coach that keeps it on track.`,
     path,
@@ -376,6 +389,7 @@ function recapPage(recap: Recap, path: string, site: Site, image?: string) {
     return `<li><span>${esc(l.metric)}</span><b class="${up >= 0 ? "up" : ""}">${change}</b>${recap.showNumbers ? `<small>${round(l.from)} → ${round(l.to)}</small>` : ""}</li>`;
   };
   return layout(site, {
+    view: "r",
     title,
     description: `${recap.sessions.done} of ${recap.sessions.planned} sessions, ${recap.bests} new ${recap.bests === 1 ? "best" : "bests"}. Training with ${site.appName}.`,
     path,
@@ -407,6 +421,7 @@ function recapPage(recap: Recap, path: string, site: Site, image?: string) {
 function programPage(program: Program, path: string, site: Site) {
   const who = first(program.by);
   return layout(site, {
+    view: "p",
     title: `${program.name}, by ${who}`,
     description: `${program.weeks} weeks, ${program.days} days a week, ${program.equipment}. Start it with your own weights in ${site.appName}.`,
     path,
@@ -447,6 +462,7 @@ function sessionPage(session: Session, id: string, path: string, site: Site) {
   const set = (e: Session["exercises"][number]) =>
     `${e.sets} × ${e.reps ?? (e.seconds ? `${e.seconds} s` : "")}${e.load ? ` · ${round(e.load)} ${e.unit ?? "lb"}` : ""}`;
   return layout(site, {
+    view: "s",
     title: `Train with ${who}: ${session.title}, ${when}`,
     description: `${who} is training ${session.title} on ${when}. Join with your own weights in ${site.appName}.`,
     path,
@@ -484,6 +500,7 @@ function invitePage(invite: Invite, code: string, path: string, site: Site) {
   const who = first(invite.by);
   const shown = invite.members.slice(0, 5);
   return layout(site, {
+    view: "join",
     title: `Join ${invite.group}`,
     description: `${who} invited you to train together in ${site.appName}.`,
     path,
@@ -554,7 +571,7 @@ function how(site: Site) {
 
 const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.5"/><rect x="9.5" y="8.5" width="5" height="12.5" rx="1.5"/><rect x="16" y="3" width="5" height="18" rx="1.5"/></svg>`;
 
-function layout(site: Site, page: { title: string; description: string; path: string; body: string; image?: string }) {
+function layout(site: Site, page: { title: string; description: string; path: string; body: string; image?: string; view?: string }) {
   const url = `${site.origin}${page.path}`;
   return `<!doctype html>
 <html lang="en">
@@ -581,7 +598,7 @@ function layout(site: Site, page: { title: string; description: string; path: st
 <header class="top"><a href="/" class="brand">${logo}${esc(site.appName)}</a></header>
 <main>${page.body}</main>
 <footer class="foot">© ${new Date().getUTCFullYear()} ${esc(site.appName)}</footer>
-<script>
+<script>${page.view ? `\nfetch("/v/${page.view}", { cache: "no-store", keepalive: true }).catch(() => {});` : ""}
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-copy]");
   if (!b) return;

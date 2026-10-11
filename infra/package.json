@@ -10,6 +10,7 @@
     "outputs": "tsx scripts/outputs.ts",
     "smoke": "tsx scripts/smoke.ts",
     "web": "tsx scripts/web.ts",
+    "share-stats": "tsx scripts/shareStats.ts",
     "buddy": "tsx scripts/buddy.ts",
     "seed-review": "tsx scripts/seed-review.ts"
   },

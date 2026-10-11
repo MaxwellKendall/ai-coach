@@ -86,3 +86,14 @@ describe("groupCleanup (FIT-61)", () => {
     ]);
   });
 });
+
+describe("shareStats (FIT-110)", () => {
+  it("counts shares by kind, groups started and members added; nothing else", async () => {
+    const { counted } = await import("../lambda/shareStats.ts");
+    expect(counted("SHARE#ab12", "META", "session")).toBe("made_session");
+    expect(counted("GROUP#g1", "META")).toBe("groups");
+    expect(counted("GROUP#g1", "MEMBER#u1")).toBe("members");
+    expect(counted("GROUP#g1", "LIVE#u1")).toBeUndefined();
+    expect(counted("USER#u1", "PROFILE")).toBeUndefined();
+  });
+});
