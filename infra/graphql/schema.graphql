@@ -93,6 +93,8 @@ type Group {
 }
 
 type Query {
+  "FIT-113: a shared item by its id, so the app can open a session someone shared."
+  share(id: ID!): SharedItem
   me: Profile
   myGroups: [GroupSummary!]!
   group(groupId: ID!): Group
@@ -147,4 +149,12 @@ type Subscription {
 type Share {
   id: ID!
   url: String!
+}
+
+"FIT-113: what was shared, as saved, and who shared it."
+type SharedItem {
+  id: ID!
+  kind: String!
+  name: String
+  payload: AWSJSON!
 }

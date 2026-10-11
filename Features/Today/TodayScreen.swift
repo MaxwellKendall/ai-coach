@@ -33,6 +33,7 @@ struct TodayScreen: View {
     @State private var winsBefore: Set<String> = []
     @State private var saved = false
     @State private var celebrating: [WinItem]?
+    @State private var sessionLink: SharedLink?
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
@@ -152,6 +153,7 @@ struct TodayScreen: View {
                 winsBefore = Set(allWins.map(\.key))
             }
         }
+        .sheet(item: $sessionLink) { ActivityView(link: $0).presentationDetents([.medium, .large]) }
         .sheet(isPresented: Binding(get: { celebrating != nil }, set: { if !$0 { celebrating = nil } })) {
             if let celebrating { CelebrationSheet(wins: celebrating) }
         }
@@ -173,6 +175,19 @@ struct TodayScreen: View {
         let plannedDays = Set(planned.filter { $0.kind == .workout && $0.date >= start && $0.date <= .now }.map { day($0.date) })
         let doneDays = Set(entries.filter { $0.kind == .workout && $0.timestamp >= start }.map { day($0.timestamp) })
         return (plannedDays.intersection(doneDays).count, plannedDays.count)
+    }
+
+    private func trainWithFriend(_ plan: DayCard.Planned) {
+        toast = Toast(text: "Making your link…")
+        Task {
+            do {
+                sessionLink = try await TrainWithFriend.link(for: plan, templates: templates)
+                toast = nil
+            } catch {
+                toast = nil
+                message = "Couldn’t make a link. Check your connection and try again."
+            }
+        }
     }
 
     /// FIT-106: a saved workout that earned wins ends on their cards; otherwise a quiet "saved".
@@ -322,6 +337,10 @@ struct TodayScreen: View {
                 Spacer()
                 Menu {
                     Button("Edit exercises", systemImage: "list.bullet") { sheet = .details(plan.items) }
+                    // FIT-113: send this session to a friend, who does it with their own weights.
+                    if account.user != nil, !isPast {
+                        Button("Train with a Friend", systemImage: "person.2") { trainWithFriend(plan) }
+                    }
                     if let plan = thisWeeksPlan {
                         Button("Change this week", systemImage: "slider.horizontal.3") { sheet = .adjust(plan) }
                     }

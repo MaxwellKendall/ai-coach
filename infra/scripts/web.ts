@@ -3,7 +3,7 @@
  * The renderers are the ones the Lambda will serve (lambda/sharePages.ts); only the store differs.
  */
 import { createServer } from "node:http";
-import { route, type Invite, type Program, type Recap, type Site, type Store, type Win } from "../lambda/sharePages.ts";
+import { route, type Invite, type Program, type Recap, type Session, type Site, type Store, type Win } from "../lambda/sharePages.ts";
 
 const port = Number(process.env.PORT ?? 8787);
 
@@ -75,11 +75,22 @@ const invites: Record<string, Invite> = {
   },
 };
 
+const sessions: Record<string, Session> = {
+  legs: {
+    name: "Max Kendall", title: "Lower body", date: "2026-10-15", minutes: 50, invite: "X7K2PQ",
+    exercises: [
+      { name: "Back Squat", sets: 4, reps: 5 }, { name: "Romanian Deadlift", sets: 3, reps: 8 },
+      { name: "Walking Lunge", sets: 3, reps: 10 }, { name: "Plank", sets: 3, seconds: 45 },
+    ],
+  },
+};
+
 const store: Store = {
   win: async (id) => wins[id],
   recap: async (id) => recaps[id],
   program: async (id) => programs[id],
   invite: async (code) => invites[code],
+  session: async (id) => sessions[id],
 };
 
 createServer(async (req, res) => {
@@ -87,7 +98,7 @@ createServer(async (req, res) => {
   if (path === "/samples") {
     const links = [
       ...Object.keys(wins).map((id) => `/w/${id}`), ...Object.keys(recaps).map((id) => `/r/${id}`),
-      ...Object.keys(programs).map((id) => `/p/${id}`), ...Object.keys(invites).map((code) => `/join/${code}`),
+      ...Object.keys(programs).map((id) => `/p/${id}`), ...Object.keys(sessions).map((id) => `/s/${id}`), ...Object.keys(invites).map((code) => `/join/${code}`),
       "/w/missing", "/.well-known/apple-app-site-association",
     ];
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });

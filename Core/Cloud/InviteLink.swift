@@ -38,4 +38,19 @@ enum InviteLink {
         }
         return nil
     }
+
+    /// FIT-113: the id in a shared session's link (barbrabell.com/s/ae79125c4c25), or nil.
+    static func session(from url: URL) -> String? {
+        guard url.scheme == "https", let host = url.host()?.lowercased(),
+              host == "barbrabell.com" || host.hasSuffix(".barbrabell.com") else { return nil }
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.count == 2, parts[0] == "s", parts[1].count == 12, parts[1].allSatisfy(\.isHexDigit) else { return nil }
+        return parts[1].lowercased()
+    }
+
+    static func session(pasted text: String) -> String? {
+        text.split(whereSeparator: \.isWhitespace).lazy.compactMap { word in
+            URL(string: word.trimmingCharacters(in: .punctuationCharacters.subtracting(["/", ":"]))).flatMap(session(from:))
+        }.first
+    }
 }

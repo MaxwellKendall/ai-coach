@@ -34,3 +34,20 @@ struct InviteLinkTests {
         #expect(InviteLink.code(pasted: "https://example.com/X7K2PQ9A") == nil)
     }
 }
+
+/// FIT-113: shared sessions' links.
+struct SessionLinkTests {
+    @Test func aSessionLinkOnAnyOfOurHosts() {
+        #expect(InviteLink.session(from: URL(string: "https://share.barbrabell.com/s/ae79125c4c25")!) == "ae79125c4c25")
+        #expect(InviteLink.session(from: URL(string: "https://barbrabell.com/s/AE79125C4C25")!) == "ae79125c4c25")
+        #expect(InviteLink.session(from: URL(string: "https://barbrabell.com/w/ae79125c4c25")!) == nil)
+        #expect(InviteLink.session(from: URL(string: "https://evil.com/s/ae79125c4c25")!) == nil)
+        #expect(InviteLink.session(pasted: "Train with me: Lower body, Thursday https://share.barbrabell.com/s/ae79125c4c25") == "ae79125c4c25")
+    }
+
+    @Test func theSharersTimeOfDay() {
+        #expect(JoinSessionSheet.time("6:00\u{202F}AM") == DateComponents(hour: 6, minute: 0))
+        #expect(JoinSessionSheet.time("5:30 PM") == DateComponents(hour: 17, minute: 30))
+        #expect(JoinSessionSheet.time("dawn") == nil)
+    }
+}

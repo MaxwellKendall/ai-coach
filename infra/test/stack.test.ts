@@ -121,7 +121,7 @@ describe("resolvers", () => {
     const resolved = Object.values(dev.findResources("AWS::AppSync::Resolver")).map((r) => `${r.Properties.TypeName}.${r.Properties.FieldName}`);
     expect(resolved.sort()).toEqual(
       [
-        "Query.me", "Query.myGroups", "Query.group", "Group.feed",
+        "Query.me", "Query.share", "Query.myGroups", "Query.group", "Group.feed",
         "Mutation.updateProfile", "Mutation.createGroup", "Mutation.joinGroup", "Mutation.leaveGroup",
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
         "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",

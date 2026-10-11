@@ -2,11 +2,11 @@ import { util } from "@aws-appsync/utils";
 
 // FIT-105, after getProfile: saves what the user shared (a win, a recap or a program) and returns its link.
 // The name on the page is the sharer's own display name, never one sent with the payload.
-const kinds = { win: "w", recap: "r", program: "p" };
+const kinds = { win: "w", recap: "r", program: "p", session: "s" };
 
 export function request(ctx) {
   const { kind } = ctx.args;
-  if (!kinds[kind]) util.error("Only a win, a recap or a program can be shared.", "BadRequest");
+  if (!kinds[kind]) util.error("Only a win, a recap, a program or a session can be shared.", "BadRequest");
   const payload = typeof ctx.args.payload === "string" ? ctx.args.payload : JSON.stringify(ctx.args.payload);
   if (payload.length > 8000) util.error("That's too much to share.", "BadRequest");
   const uid = ctx.identity.sub;

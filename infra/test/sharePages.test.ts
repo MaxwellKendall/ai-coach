@@ -10,6 +10,8 @@ const store: Store = {
   win: async (id) => ({ bench: win, evil: { ...win, name: `<script>alert(1)</script>` } })[id],
   recap: async () => undefined,
   program: async () => undefined,
+  session: async (id) => (id === "leg" ? { name: "Max Kendall", title: "Lower body", date: "2026-10-15", minutes: 50,
+    exercises: [{ name: "Back Squat", sets: 4, reps: 5 }, { name: "Plank", sets: 3, seconds: 45 }], invite: "X7K2PQ" } : undefined),
   invite: async (code) => (code === "X7K2PQ" ? { group: "Dawn Patrol", by: "Max", members: ["Max", "Jo"], recent: [] } : undefined),
 };
 
@@ -48,7 +50,7 @@ describe("share pages (FIT-105)", () => {
     const page = await route("/.well-known/apple-app-site-association", store, site);
     expect(page.type).toBe("application/json");
     expect(JSON.parse(page.body)).toEqual(associationFile(site));
-    expect(associationFile(site).applinks.details[0].components.map((c) => c["/"])).toEqual(["/join/*", "/????????"]);
+    expect(associationFile(site).applinks.details[0].components.map((c) => c["/"])).toEqual(["/join/*", "/????????", "/s/*"]);
   });
 });
 
@@ -68,5 +70,29 @@ describe("reading what users saved (FIT-105)", () => {
     expect(readWin({ ...win, invite: "<x>" }, "Max")?.invite).toBeUndefined();
     expect(readRecap({ week: "<i>", weeks: 12 }, "Max")).toBeUndefined();
     expect(readProgram("nope", "Max")).toBeUndefined();
+  });
+});
+
+describe("sessions (FIT-113)", () => {
+  it("a session page shows the day and the exercises, and offers the calendar", async () => {
+    const page = await route("/s/leg", store, site);
+    expect(page.status).toBe(200);
+    expect(page.body).toContain("Train with Max: Lower body, Thursday, Oct 15");
+    expect(page.body).toContain("4 × 5");
+    expect(page.body).toContain('href="/s/leg.ics"');
+  });
+
+  it("its calendar file is an all-day event on that day", async () => {
+    const ics = await route("/s/leg.ics", store, site);
+    expect(ics.type).toContain("text/calendar");
+    expect(ics.body).toContain("DTSTART;VALUE=DATE:20261015");
+    expect(ics.body).toContain("DTEND;VALUE=DATE:20261016");
+    expect(ics.body).toContain("SUMMARY:Lower body with Max");
+  });
+
+  it("reads only a well-formed session", async () => {
+    const { readSession } = await import("../lambda/sharePages.ts");
+    expect(readSession({ title: "Legs", date: "2026-10-15", exercises: [{ name: "Squat", sets: "<b>" }] }, "Max")).toBeUndefined();
+    expect(readSession({ title: "Legs", date: "2026-10-15", exercises: [{ name: "Squat", sets: 4, reps: 5 }] }, "Max")?.exercises[0].sets).toBe(4);
   });
 });

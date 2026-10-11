@@ -13,6 +13,7 @@ export const util = {
   unauthorized(): never {
     throw new Unauthorized("Unauthorized");
   },
+  matches: (pattern: string, value: string) => new RegExp(pattern).test(value),
   autoId: () => "11111111-2222-3333-4444-555555555555",
   time: { nowISO8601: () => "2026-10-03T12:00:00.000Z", nowEpochSeconds: () => 1_790_000_000 },
   // Identity, so tests read plain values instead of DynamoDB attribute maps.

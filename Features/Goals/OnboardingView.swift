@@ -30,6 +30,7 @@ struct OnboardingView: View {
     @State private var signingInToJoin = false
     @State private var pendingInvite: String?
     @State private var joined: Cloud.GroupSummary?
+    @State private var sessionWaiting = false
     var onDone: () -> Void
 
     private static let steps = [
@@ -103,6 +104,9 @@ struct OnboardingView: View {
         if let joined {
             Label("You’re in \(joined.name)", systemImage: "person.2.fill")
                 .font(.subheadline.weight(.semibold))
+        } else if sessionWaiting {
+            Label("Your friend’s session comes up once you’re set up", systemImage: "calendar.badge.checkmark")
+                .font(.subheadline.weight(.semibold))
         } else {
             HStack {
                 Text("Invited by a friend?").foregroundStyle(.secondary)
@@ -118,6 +122,12 @@ struct OnboardingView: View {
     }
 
     private func pasteInvite(_ pasted: [String]) {
+        // FIT-113: a friend's session; it's offered once onboarding is done.
+        if let session = pasted.lazy.compactMap(InviteLink.session(pasted:)).first {
+            Navigator.shared.session = session
+            withAnimation(.snappy) { sessionWaiting = true }
+            return
+        }
         guard let code = pasted.lazy.compactMap(InviteLink.code(pasted:)).first else {
             message = "That isn’t an invite. Copy the link or the code from your invite, then paste again."
             return

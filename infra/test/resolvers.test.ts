@@ -12,6 +12,7 @@ import * as subscription from "../resolvers/subscription.js";
 import * as removeMember from "../resolvers/removeMember.js";
 import * as rotateInvite from "../resolvers/rotateInvite.js";
 import * as createShare from "../resolvers/createShare.js";
+import * as getShare from "../resolvers/getShare.js";
 
 const ME = "user-a";
 const OTHER = "user-b";
@@ -180,5 +181,15 @@ describe("createShare (FIT-105)", () => {
   it("takes only wins, recaps and programs, and not too much of them", () => {
     expect(() => createShare.request(share({ kind: "group", payload: "{}" }))).toThrow(ResolverError);
     expect(() => createShare.request(share({ kind: "win", payload: "x".repeat(8001) }))).toThrow(ResolverError);
+  });
+});
+
+describe("getShare (FIT-113)", () => {
+  it("reads a share by a well-formed id, and hands back its payload parsed", () => {
+    expect(getShare.request(ctx({ args: { id: "ae79125c4c25" } })).key).toEqual({ PK: "SHARE#ae79125c4c25", SK: "META" });
+    expect(() => getShare.request(ctx({ args: { id: "../GROUP#x" } }))).toThrow(ResolverError);
+    const c = ctx({ args: { id: "ae79125c4c25" }, result: { kind: "session", name: "Max", payload: '{"title":"Legs"}' } });
+    expect(getShare.response(c)).toEqual({ id: "ae79125c4c25", kind: "session", name: "Max", payload: { title: "Legs" } });
+    expect(getShare.response(ctx({ args: { id: "ae79125c4c25" }, result: null }))).toBeNull();
   });
 });

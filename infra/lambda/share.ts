@@ -1,7 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
-import { readProgram, readRecap, readWin, route, type Site, type Store } from "./sharePages.ts";
+import { readProgram, readRecap, readSession, readWin, route, type Site, type Store } from "./sharePages.ts";
 
 /**
  * FIT-105: the share pages on the web, behind CloudFront (which turns join.{domain}/CODE into /join/CODE).
@@ -38,6 +38,10 @@ export const store: Store = {
   async program(id) {
     const s = await shared(id, "program");
     return s && readProgram(s.payload, s.name);
+  },
+  async session(id) {
+    const s = await shared(id, "session");
+    return s && readSession(s.payload, s.name);
   },
   async invite(code) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `INVITE#${code}`, SK: "META" } }));

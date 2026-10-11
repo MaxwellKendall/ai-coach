@@ -169,6 +169,18 @@ enum Cloud {
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
     }
 
+    /// FIT-113: what was shared, as saved; `payload` is its JSON.
+    struct SharedItem: Decodable, Sendable {
+        var id: String
+        var kind: String
+        var name: String?
+        var payload: String
+    }
+
+    @MainActor static func share(_ id: String) async throws -> SharedItem? {
+        try await run("query($i: ID!) { share(id: $i) { id kind name payload } }", ["i": id], at: "share", as: SharedItem?.self, query: true)
+    }
+
     @MainActor static func deleteShare(_ id: String) async throws {
         _ = try await run("mutation($i: ID!) { deleteShare(id: $i) }", ["i": id], at: "deleteShare", as: Bool?.self)
     }

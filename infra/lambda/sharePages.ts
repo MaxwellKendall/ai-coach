@@ -58,6 +58,19 @@ export interface Program {
   invite?: string;
 }
 
+/** FIT-113: a session someone is going to do, shared so a friend can do it with them. */
+export interface Session {
+  name: string;
+  title: string;
+  /** ISO date. */
+  date: string;
+  /** "6:00 AM". */
+  time?: string;
+  minutes?: number;
+  exercises: { name: string; sets: number; reps?: number; seconds?: number; load?: number; unit?: string }[];
+  invite?: string;
+}
+
 export interface Invite {
   group: string;
   by: string;
@@ -71,6 +84,7 @@ export interface Store {
   recap(id: string): Promise<Recap | undefined>;
   program(id: string): Promise<Program | undefined>;
   invite(code: string): Promise<Invite | undefined>;
+  session(id: string): Promise<Session | undefined>;
 }
 
 export interface Site {
@@ -178,12 +192,32 @@ export function readProgram(v: unknown, by: string): Program | undefined {
   }
 }
 
+export function readSession(v: unknown, name: string): Session | undefined {
+  try {
+    if (!isObject(v)) return undefined;
+    return {
+      name, title: str(v.title, 40), date: isoDate(v.date), time: optStr(v.time, 12), minutes: optNum(v.minutes, 1, 300),
+      exercises: list(v.exercises, 16, (e) => {
+        if (!isObject(e)) throw new Invalid();
+        return {
+          name: str(e.name, 60), sets: num(e.sets, 1, 20), reps: optNum(e.reps, 1, 100), seconds: optNum(e.seconds, 1, 3600),
+          load: optNum(e.load, 0, 2000), unit: optStr(e.unit, 12),
+        };
+      }),
+      invite: code(v.invite),
+    };
+  } catch (e) {
+    if (e instanceof Invalid) return undefined;
+    throw e;
+  }
+}
+
 /**
  * The paths the app opens itself when it's installed: invites only, as /join/CODE or join.{domain}/CODE (codes are
  * always 8 characters). Wins, recaps and programs open this page until the app can show them, so a friend who
  * already has the app still sees what was shared.
  */
-export const appPaths = ["/join/*", "/????????"];
+export const appPaths = ["/join/*", "/????????", "/s/*"];
 
 export async function route(path: string, store: Store, site: Site): Promise<Page> {
   if (path === "/.well-known/apple-app-site-association") {
@@ -200,6 +234,14 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
   if (kind === "r" && valid) {
     const recap = await store.recap(id);
     if (recap) return html(recapPage(recap, path, site, card));
+  }
+  if (kind === "s" && id.endsWith(".ics") && /^[A-Za-z0-9_-]{1,40}$/.test(id.slice(0, -4))) {
+    const session = await store.session(id.slice(0, -4));
+    if (session) return { status: 200, type: "text/calendar; charset=utf-8", body: calendar(session, `${site.origin}/s/${id.slice(0, -4)}`, site) };
+  }
+  if (kind === "s" && valid) {
+    const session = await store.session(id);
+    if (session) return html(sessionPage(session, id, path, site));
   }
   if (kind === "p" && valid) {
     const program = await store.program(id);
@@ -395,6 +437,47 @@ function programPage(program: Program, path: string, site: Site) {
       </section>
       ${how(site)}`,
   });
+}
+
+const weekday = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
+
+function sessionPage(session: Session, id: string, path: string, site: Site) {
+  const who = first(session.name);
+  const when = weekday(session.date);
+  const set = (e: Session["exercises"][number]) =>
+    `${e.sets} × ${e.reps ?? (e.seconds ? `${e.seconds} s` : "")}${e.load ? ` · ${round(e.load)} ${e.unit ?? "lb"}` : ""}`;
+  return layout(site, {
+    title: `Train with ${who}: ${session.title}, ${when}`,
+    description: `${who} is training ${session.title} on ${when}. Join with your own weights in ${site.appName}.`,
+    path,
+    body: `
+      <section class="hero left">
+        <p class="eyebrow">${esc(who)} is training</p>
+        <h1>${esc(session.title)}</h1>
+        <div class="chips"><span>${esc(when)}${session.time ? ` · ${esc(session.time)}` : ""}</span>${session.minutes ? `<span>~${Math.round(session.minutes)} min</span>` : ""}<span>${session.exercises.length} exercises</span></div>
+        ${actions(site, [{ href: `/s/${id}.ics`, label: "Add to calendar" }], `Train with ${who}`)}
+        <p class="fine">Your weights come from your own numbers, and you'll see each other live as you train.</p>
+      </section>
+      <section class="block">
+        <h2>The session</h2>
+        <div class="days"><article><ul>${session.exercises.map((e) => `<li><b>${esc(e.name)}</b> ${esc(set(e))}</li>`).join("")}</ul></article></div>
+      </section>
+      ${how(site)}`,
+  });
+}
+
+/** An all-day event on the session's day, so it's in the friend's calendar before they've installed anything. */
+export function calendar(session: Session, url: string, site: Site) {
+  const day = session.date.slice(0, 10).replaceAll("-", "");
+  const next = new Date(Date.parse(session.date.slice(0, 10)) + 86_400_000).toISOString().slice(0, 10).replaceAll("-", "");
+  const text = (t: string) => t.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\r?\n/g, " ");
+  return [
+    "BEGIN:VCALENDAR", "VERSION:2.0", `PRODID:-//${text(site.appName)}//EN`, "BEGIN:VEVENT",
+    `UID:${day}-${url.split("/").pop()}@${new URL(site.origin).host}`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`,
+    `DTSTART;VALUE=DATE:${day}`, `DTEND;VALUE=DATE:${next}`,
+    `SUMMARY:${text(`${session.title} with ${first(session.name)}`)}`, `URL:${url}`, `DESCRIPTION:${text(url)}`,
+    "END:VEVENT", "END:VCALENDAR", "",
+  ].join("\r\n");
 }
 
 function invitePage(invite: Invite, code: string, path: string, site: Site) {

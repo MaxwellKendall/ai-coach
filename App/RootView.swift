@@ -18,6 +18,7 @@ struct RootView: View {
     @State private var invite: Invite?
     @State private var signingInToJoin = false
     @State private var pendingInvite: String?
+    @State private var pendingSession: String?
     @State private var joined: Cloud.GroupSummary?
 
     /// Graphite (FIT-27): monochrome, the label colour is the only accent.
@@ -81,7 +82,18 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { pro.paywall }, set: { pro.paywall = $0 })) { PaywallView() }
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).
         .onOpenURL { url in
-            guard account.isAvailable, let code = InviteLink.code(from: url) else { return }
+            guard account.isAvailable else { return }
+            // FIT-113: a shared session; it waits for onboarding, if any, then asks before planning anything.
+            if let session = InviteLink.session(from: url) {
+                if account.user == nil {
+                    pendingSession = session
+                    signingInToJoin = true
+                } else {
+                    navigator.session = session
+                }
+                return
+            }
+            guard let code = InviteLink.code(from: url) else { return }
             if account.user == nil {
                 pendingInvite = code
                 signingInToJoin = true
@@ -91,9 +103,15 @@ struct RootView: View {
         }
         .sheet(isPresented: $signingInToJoin, onDismiss: {
             if account.user != nil, let code = pendingInvite { invite = Invite(code: code) }
+            if account.user != nil, let session = pendingSession { navigator.session = session }
             pendingInvite = nil
+            pendingSession = nil
         }) {
-            SignInSheet(reason: "Sign in to join the group.")
+            SignInSheet(reason: pendingSession == nil ? "Sign in to join the group." : "Sign in to train together.")
+        }
+        .sheet(item: Binding(get: { onboarding == nil ? navigator.session.map(SessionRef.init) : nil },
+                             set: { if $0 == nil { navigator.session = nil } })) { ref in
+            JoinSessionSheet(id: ref.id).tint(Self.accent)
         }
         // The group opens once the Join sheet has gone: two sheets can't be presented at once.
         .sheet(item: $invite, onDismiss: {

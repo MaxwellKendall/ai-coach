@@ -28,6 +28,8 @@ final class Navigator {
     var group: Cloud.GroupSummary?
     /// FIT-65: Talk to Coach (Action button, Siri) asks for the coach.
     var coach = false
+    /// FIT-113: a shared session to join, by its id, once onboarding (if any) is done.
+    var session: String?
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {

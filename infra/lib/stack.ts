@@ -210,6 +210,7 @@ export class AICoachStack extends Stack {
       });
 
     pipeline("Query", "me", ["getProfile"]);
+    pipeline("Query", "share", ["getShare"]);
     pipeline("Query", "myGroups", ["myGroups"]);
     pipeline("Query", "group", ["requireMember", "groupDetail"]);
     tableSource.createResolver("GroupFeed", {

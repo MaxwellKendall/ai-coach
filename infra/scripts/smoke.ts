@@ -164,6 +164,21 @@ const recapHtml = await recapPage.text();
 if (recapPage.status !== 200 || !recapHtml.includes("Smoke&#39;s week 6 of 12") || !recapHtml.includes("+15 lb")) throw new Error(`recap page ${sharedRecap.url}: ${recapPage.status}`);
 pass(`a weekly recap opens at ${sharedRecap.url}`);
 
+// FIT-113: a session as the app sends it (SharedSession.Shared): its page, its calendar file, and another user reading it.
+const session = { title: "Lower body", date: "2026-10-15", time: "6:00\u202fAM", minutes: 50, invite: created.inviteCode,
+  exercises: [{ exercise: "back-squat", name: "Back Squat", sets: 4, reps: 5 }, { exercise: "plank", name: "Plank", sets: 3, seconds: 45 }] };
+const sharedSession = must(await gql(a, `mutation($p: AWSJSON!) { createShare(kind: "session", payload: $p) { id url } }`, { p: JSON.stringify(session) }), "createShare session").createShare;
+if (!sharedSession.url.includes("/s/")) throw new Error(`session link ${sharedSession.url}`);
+const sessionHtml = await (await fetch(sharedSession.url)).text();
+if (!sessionHtml.includes("Train with Smoke: Lower body") || !sessionHtml.includes("4 × 5")) throw new Error("session page");
+const ics = await fetch(`${sharedSession.url}.ics`);
+if (!(await ics.text()).includes("DTSTART;VALUE=DATE:20261015")) throw new Error("session calendar file");
+const read = must(await gql(c, `query($i: ID!) { share(id: $i) { kind name payload } }`, { i: sharedSession.id }), "share").share;
+if (read.kind !== "session" || JSON.parse(read.payload).exercises[0].exercise !== "back-squat") throw new Error(`share read: ${JSON.stringify(read)}`);
+const aasa = await (await fetch(`${new URL(sharedSession.url).origin}/.well-known/apple-app-site-association`)).json();
+if (!JSON.stringify(aasa).includes("/s/*")) throw new Error("Apple's file doesn't open sessions in the app");
+pass(`a session opens at ${sharedSession.url}, with its calendar file; another user can read it; the app claims /s/*`);
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {

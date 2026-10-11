@@ -121,7 +121,7 @@ struct ShareActions: View {
 struct SharedLink: Identifiable {
     let url: URL
     let title: String
-    let image: UIImage
+    var image: UIImage?
     var id: URL { url }
 }
 
@@ -147,7 +147,7 @@ struct ActivityView: UIViewControllerRepresentable {
             metadata.url = link.url
             metadata.originalURL = link.url
             metadata.title = link.title
-            metadata.imageProvider = NSItemProvider(object: link.image)
+            metadata.imageProvider = link.image.map { NSItemProvider(object: $0) }
             return metadata
         }
     }
