@@ -217,6 +217,7 @@ describe("share pages (FIT-105)", () => {
       DistributionConfig: Match.objectLike({ Aliases: web.hosts }),
     });
     t.hasResourceProperties("AWS::Lambda::Url", { AuthType: "AWS_IAM" });
+    t.hasResourceProperties("AWS::Lambda::Permission", { Action: "lambda:InvokeFunction", Principal: "cloudfront.amazonaws.com" });
     t.resourceCountIs("AWS::Route53::RecordSet", 6);
     t.hasOutput("ShareOrigin", { Value: "https://share.example.com" });
   });

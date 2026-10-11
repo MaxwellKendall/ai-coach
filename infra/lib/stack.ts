@@ -337,6 +337,12 @@ export class AICoachStack extends Stack {
         },
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       });
+      // Function URLs behind CloudFront need InvokeFunction as well as the InvokeFunctionUrl that CDK grants.
+      share.addPermission("WebInvoke", {
+        principal: new iam.ServicePrincipal("cloudfront.amazonaws.com"),
+        action: "lambda:InvokeFunction",
+        sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${web.distributionId}`,
+      });
       for (const host of props.web.hosts) {
         const recordName = host === props.web.zone ? undefined : host;
         const target = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(web));
