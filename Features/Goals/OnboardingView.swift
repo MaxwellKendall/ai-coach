@@ -25,6 +25,11 @@ struct OnboardingView: View {
     @State private var briefModel = OnDeviceModel().name
     @State private var designing = false
     @State private var loads: [String: Double] = [:]
+    /// FIT-109: an invite pasted after installing from its page (iOS loses the link through the App Store).
+    @State private var invite: Invite?
+    @State private var signingInToJoin = false
+    @State private var pendingInvite: String?
+    @State private var joined: Cloud.GroupSummary?
     var onDone: () -> Void
 
     private static let steps = [
@@ -52,6 +57,7 @@ struct OnboardingView: View {
                                            history: history, firstLoads: firstWeek.map { FirstLoads.items($0.week.workouts) },
                                            designing: designing, brief: brief, loads: $loads,
                                            go: { index in withAnimation(.snappy) { page = index } })
+                        if index == 0, account.isAvailable { inviteRow.padding(.top, 28) }
                     }
                     .padding(.horizontal, 22)
                     .padding(.bottom, 24)
@@ -73,8 +79,55 @@ struct OnboardingView: View {
         } message: { Text(message ?? "") }
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .onAppear(perform: prefill)
+        .sheet(isPresented: $signingInToJoin, onDismiss: {
+            if account.user != nil, let code = pendingInvite { invite = Invite(code: code) }
+            pendingInvite = nil
+        }) {
+            SignInSheet(reason: "Sign in to join the group.")
+        }
+        .sheet(item: $invite) { invite in
+            NavigationStack {
+                JoinGroupSheet(code: invite.code) { group in
+                    withAnimation(.snappy) { joined = group }
+                    self.invite = nil
+                }
+            }
+        }
         // The check step designs the first week, again whenever the answers it's built from change.
         .task(id: page == 4 ? designKey : nil) { if page == 4 { await designFirstWeek() } }
+    }
+
+    /// FIT-109: one quiet line, for someone who came from a friend's invite. Apple's paste button reads the
+    /// clipboard only when tapped, so there's no permission prompt.
+    @ViewBuilder private var inviteRow: some View {
+        if let joined {
+            Label("You’re in \(joined.name)", systemImage: "person.2.fill")
+                .font(.subheadline.weight(.semibold))
+        } else {
+            HStack {
+                Text("Invited by a friend?").foregroundStyle(.secondary)
+                Spacer()
+                PasteButton(payloadType: String.self) { pasted in
+                    Task { @MainActor in pasteInvite(pasted) }
+                }
+                .buttonBorderShape(.capsule)
+                .tint(.primary)
+            }
+            .font(.subheadline)
+        }
+    }
+
+    private func pasteInvite(_ pasted: [String]) {
+        guard let code = pasted.lazy.compactMap(InviteLink.code(pasted:)).first else {
+            message = "That isn’t an invite. Copy the link or the code from your invite, then paste again."
+            return
+        }
+        if account.user == nil {
+            pendingInvite = code
+            signingInToJoin = true
+        } else {
+            invite = Invite(code: code)
+        }
     }
 
     /// What the first week is designed from.

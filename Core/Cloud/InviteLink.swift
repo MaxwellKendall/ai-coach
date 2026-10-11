@@ -27,4 +27,15 @@ enum InviteLink {
         guard let code = code?.uppercased(), code.count == 8, code.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
         return code
     }
+
+    /// FIT-109: the code in pasted text: an invite link, the message it came in, or the code on its own.
+    static func code(pasted text: String) -> String? {
+        for word in text.split(whereSeparator: \.isWhitespace) {
+            let word = word.trimmingCharacters(in: .punctuationCharacters.subtracting(["/", ":"]))
+            if let url = URL(string: word), url.scheme != nil, let code = code(from: url) { return code }
+            // On its own, a code has to look like one: 8 hex digits, so "tomorrow" isn't taken for one.
+            if word.count == 8, word.allSatisfy(\.isHexDigit) { return word.uppercased() }
+        }
+        return nil
+    }
 }
