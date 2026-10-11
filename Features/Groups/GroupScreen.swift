@@ -12,6 +12,7 @@ struct GroupScreen: View {
     @State private var group: Cloud.Group?
     @State private var failure: String?
     @State private var numbers = false
+    @State private var sharesWeek = false
     @State private var confirmingLeave = false
     @State private var removing: Cloud.Member?
     /// The goal card showing; the members' progress follows it.
@@ -32,6 +33,7 @@ struct GroupScreen: View {
                 liveNow(group)
                 header(group)
                 members(group)
+                week(group)
                 activity(group)
             } else if let failure {
                 Text(failure).foregroundStyle(.secondary)
@@ -50,6 +52,7 @@ struct GroupScreen: View {
         .refreshable { await load(publish: true) }
         .task {
             numbers = GroupSync.sharesNumbers(summary.groupId)
+            sharesWeek = GroupSync.sharesWeek(summary.groupId)
             await load(publish: true)
         }
         .task { await listenLive() }
@@ -180,6 +183,26 @@ struct GroupScreen: View {
         }
     }
 
+    /// FIT-114: who's training which days this week, for members who share it.
+    @ViewBuilder private func week(_ group: Cloud.Group) -> some View {
+        let monday = SharedSession.day(Week.start(of: .now))
+        let weeks = group.weeks.filter { $0.weekOf == monday && !$0.days.isEmpty }
+        if !weeks.isEmpty {
+            Section("This Week") {
+                ForEach(weeks, id: \.uid) { plan in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(plan.uid == me ? "You" : group.members.first { $0.uid == plan.uid }?.name ?? "A member").font(.subheadline.weight(.semibold))
+                        Text(plan.days.compactMap { day in
+                            SharedSession.date(day.day).map { "\($0.formatted(.dateTime.weekday(.abbreviated))) \(day.title)" }
+                        }.joined(separator: " · "))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
     @ViewBuilder private func activity(_ group: Cloud.Group) -> some View {
         let cheers = group.feed.filter { $0.kind == "cheer" }
         let items = group.feed.filter { $0.kind != "cheer" }
@@ -209,6 +232,7 @@ struct GroupScreen: View {
                 Toggle("Share Workouts Live", systemImage: "dot.radiowaves.left.and.right",
                        isOn: Binding(get: { group.members.first { $0.uid == me }?.shareLive ?? false }, set: { setShareLive($0) }))
                 Toggle("Share My Numbers", systemImage: "number", isOn: Binding(get: { numbers }, set: { setNumbers($0) }))
+                Toggle("Share My Week", systemImage: "calendar", isOn: Binding(get: { sharesWeek }, set: { setSharesWeek($0) }))
                 Text("Invite code \(group.inviteCode)")
                 if group.createdBy == me {
                     Button("New Invite Code", systemImage: "arrow.clockwise") { rotate(group) }
@@ -243,6 +267,7 @@ struct GroupScreen: View {
             group = loaded
             GroupCache.groups[loaded.id] = loaded
             failure = nil
+            if publish, GroupSync.sharesWeek(loaded.id) { await publishWeek(loaded.id) }
             if publish, await GroupSync.publish(loaded, me: me, logs: GroupSync.Logs(context)),
                let fresh = try await Cloud.group(summary.groupId) {
                 loaded = fresh
@@ -251,6 +276,23 @@ struct GroupScreen: View {
             }
         } catch {
             if group == nil { failure = "Couldn't load the group. Pull to try again." }
+        }
+    }
+
+    /// FIT-114: my planned days this week, sent when the group opens (if I share them).
+    private func publishWeek(_ groupId: String) async {
+        let planned = ((try? context.fetch(FetchDescriptor<PlannedActivity>())) ?? []).filter { $0.kind == .workout }
+            .map { (date: $0.date, title: $0.slot ?? "Workout") }
+        let week = GroupSync.week(planned: planned)
+        try? await Cloud.publishWeek(week.weekOf, days: week.days, in: groupId)
+    }
+
+    private func setSharesWeek(_ on: Bool) {
+        sharesWeek = on
+        GroupSync.setSharesWeek(on, summary.groupId)
+        Task {
+            if on { await publishWeek(summary.groupId) } else { try? await Cloud.clearWeek(in: summary.groupId) }
+            await load(publish: false)
         }
     }
 

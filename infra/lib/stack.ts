@@ -226,7 +226,8 @@ export class AICoachStack extends Stack {
     pipeline("Mutation", "registerDevice", ["registerDevice"]);
     pipeline("Mutation", "createShare", ["getProfile", "createShare"]);
     // Every group operation checks membership first.
-    for (const field of ["leaveGroup", "setShareLive", "addGroupGoal", "publishProgress", "publishLiveSet", "endLiveSession", "postFeed"]) {
+    for (const field of ["leaveGroup", "setShareLive", "addGroupGoal", "publishProgress", "publishLiveSet", "endLiveSession", "postFeed",
+      "publishWeek", "clearWeek"]) {
       pipeline("Mutation", field, ["requireMember", field]);
     }
     // Creator-only: the step checks META.createdBy.

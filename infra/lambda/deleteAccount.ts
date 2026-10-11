@@ -45,7 +45,7 @@ export async function itemsToDelete(uid: string) {
         ExpressionAttributeNames: { "#uid": "uid" },
         ExpressionAttributeValues: { ":pk": pk, ":f": "FEED#", ":uid": uid },
       });
-      return [{ PK: pk, SK: `MEMBER#${uid}` }, { PK: pk, SK: `LIVE#${uid}` }, ...progress, ...feed];
+      return [{ PK: pk, SK: `MEMBER#${uid}` }, { PK: pk, SK: `LIVE#${uid}` }, { PK: pk, SK: `WEEK#${uid}` }, ...progress, ...feed];
     }),
   );
   return [...own, ...shares, ...perGroup.flat()].map(({ PK, SK }) => ({ PK, SK }));

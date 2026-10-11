@@ -89,7 +89,27 @@ type Group {
   goals: [GroupGoal!]!
   progress: [Progress!]!
   live: [LiveSet!]!
+  "FIT-114: this week's planned days of members who share them."
+  weeks: [WeekPlan!]!
   feed(limit: Int): [FeedItem!]!
+}
+
+"FIT-114: a member's planned days for a week: day and session name, never logs or weights."
+type WeekPlan {
+  uid: ID!
+  weekOf: AWSDate!
+  days: [PlannedDay!]!
+  updatedAt: AWSDateTime!
+}
+
+type PlannedDay {
+  day: AWSDate!
+  title: String!
+}
+
+input PlannedDayInput {
+  day: AWSDate!
+  title: String!
 }
 
 type Query {
@@ -117,6 +137,9 @@ type Mutation {
   rotateInvite(groupId: ID!): String
   setShareLive(groupId: ID!, shareLive: Boolean!): Member
   addGroupGoal(groupId: ID!, metric: String!, target: Float!, deadline: AWSDate, mode: String!): GroupGoal
+  "FIT-114: share my planned days this week (weekOf: its Sunday) with the group (opt-in), or stop."
+  publishWeek(groupId: ID!, weekOf: AWSDate!, days: [PlannedDayInput!]!): WeekPlan
+  clearWeek(groupId: ID!): Boolean
   publishProgress(groupId: ID!, goalId: ID!, baseline: Float, value: Float, pct: Float, onPace: Boolean): Progress
   publishLiveSet(
     groupId: ID!

@@ -105,7 +105,7 @@ describe("resolvers", () => {
       return [...body.matchAll(/^\s+(\w+)\(([^)]*)\)/gm)].filter(([, , args]) => /\bgroupId:/.test(args)).map(([, f]) => [type, f]);
     });
     groupFields.push(["Query", "group"]);
-    expect(groupFields.length).toBe(13);
+    expect(groupFields.length).toBe(15);
 
     const names = functionNames(dev);
     const resolvers = Object.values(dev.findResources("AWS::AppSync::Resolver")).map((r) => r.Properties);
@@ -124,7 +124,7 @@ describe("resolvers", () => {
         "Query.me", "Query.share", "Query.myGroups", "Query.group", "Group.feed",
         "Mutation.updateProfile", "Mutation.createGroup", "Mutation.joinGroup", "Mutation.leaveGroup",
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
-        "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
+        "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.publishWeek", "Mutation.clearWeek", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );

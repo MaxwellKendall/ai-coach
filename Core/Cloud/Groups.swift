@@ -22,7 +22,21 @@ enum Cloud {
         var goals: [GroupGoal]
         var progress: [Progress]
         var live: [LiveSet]
+        /// FIT-114: this week's planned days of members who share them.
+        var weeks: [WeekPlan]
         var feed: [FeedItem]
+    }
+
+    struct WeekPlan: Decodable, Hashable, Sendable {
+        var uid: String
+        /// The week's first day (a Sunday, as Week.start), "2026-10-11".
+        var weekOf: String
+        var days: [PlannedDay]
+    }
+
+    struct PlannedDay: Codable, Hashable, Sendable {
+        var day: String
+        var title: String
     }
 
     struct Member: Decodable, Identifiable, Hashable, Sendable {
@@ -109,6 +123,7 @@ enum Cloud {
         goals { goalId metric target deadline mode createdAt }
         progress { uid goalId baseline value pct onPace updatedAt }
         live { \(liveFields) }
+        weeks { uid weekOf days { day title } }
         feed(limit: 50) { id uid kind measurements createdAt }
         """
 
@@ -232,6 +247,17 @@ enum Cloud {
 
     @MainActor static func rotateInvite(_ groupId: String) async throws -> String {
         try await run("mutation($g: ID!) { rotateInvite(groupId: $g) }", ["g": groupId], at: "rotateInvite")
+    }
+
+    /// FIT-114: my planned days this week, for the group (opt-in), or stop sharing them.
+    @MainActor static func publishWeek(_ weekOf: String, days: [PlannedDay], in groupId: String) async throws {
+        _ = try await run("mutation($g: ID!, $w: AWSDate!, $d: [PlannedDayInput!]!) { publishWeek(groupId: $g, weekOf: $w, days: $d) { uid } }",
+                          ["g": groupId, "w": weekOf, "d": days.map { ["day": $0.day, "title": $0.title] }], at: "publishWeek",
+                          as: AnyDecodable?.self)
+    }
+
+    @MainActor static func clearWeek(in groupId: String) async throws {
+        _ = try await run("mutation($g: ID!) { clearWeek(groupId: $g) }", ["g": groupId], at: "clearWeek", as: Bool?.self)
     }
 
     @MainActor static func setShareLive(_ on: Bool, in groupId: String) async throws {

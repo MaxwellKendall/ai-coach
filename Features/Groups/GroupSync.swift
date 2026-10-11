@@ -13,6 +13,29 @@ enum GroupSync {
         UserDefaults.standard.set(on, forKey: "group.\(groupId).numbers")
     }
 
+    /// FIT-114, per group on this iPhone: share my planned days this week (off by default).
+    static func sharesWeek(_ groupId: String) -> Bool {
+        UserDefaults.standard.bool(forKey: "group.\(groupId).week")
+    }
+
+    static func setSharesWeek(_ on: Bool, _ groupId: String) {
+        UserDefaults.standard.set(on, forKey: "group.\(groupId).week")
+    }
+
+    /// This week's planned workout days, a session name each, as the group sees them.
+    static func week(of date: Date = .now, planned: [(date: Date, title: String)], calendar: Calendar = .current)
+        -> (weekOf: String, days: [Cloud.PlannedDay]) {
+        let monday = Week.start(of: date, calendar: calendar)
+        let end = calendar.date(byAdding: .day, value: 7, to: monday)!
+        var days: [Date: String] = [:]
+        for item in planned where item.date >= monday && item.date < end {
+            let day = calendar.startOfDay(for: item.date)
+            if days[day] == nil { days[day] = String(item.title.prefix(40)) }
+        }
+        return (SharedSession.day(monday, calendar: calendar),
+                days.keys.sorted().map { Cloud.PlannedDay(day: SharedSession.day($0, calendar: calendar), title: days[$0]!) })
+    }
+
     /// Where I started on a group goal. Kept here because a percent-only member never sends it.
     private static func baseline(_ goalId: String) -> Double? {
         UserDefaults.standard.object(forKey: "group.goal.\(goalId).baseline") as? Double

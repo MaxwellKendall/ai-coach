@@ -1,6 +1,6 @@
 import { util } from "@aws-appsync/utils";
 
-// One query for everything except the feed. Sort keys GOAL#, LIVE#, MEMBER#, META and PROGRESS#
+// One query for everything except the feed. Sort keys GOAL#, LIVE#, MEMBER#, META, PROGRESS# and WEEK#
 // all sort at or after "G"; FEED# sorts before it and has its own paged field resolver.
 export function request(ctx) {
   return {
@@ -32,5 +32,6 @@ export function response(ctx) {
     // Members who left keep their PROGRESS items until deleteAccount; don't show them.
     progress: items.filter((i) => i.SK.startsWith("PROGRESS#") && memberIds.indexOf(i.uid) >= 0),
     live: items.filter((i) => i.SK.startsWith("LIVE#") && memberIds.indexOf(i.uid) >= 0),
+    weeks: items.filter((i) => i.SK.startsWith("WEEK#") && memberIds.indexOf(i.uid) >= 0),
   };
 }

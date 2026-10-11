@@ -53,3 +53,18 @@ struct SharedSessionTests {
         #expect(calendar.isDate(workouts[0].date, inSameDayAs: thursday))
     }
 }
+
+/// FIT-114: the week a member shares with a group.
+struct WeekShareTests {
+    @MainActor @Test func oneSessionNameADayThisWeekOnly() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        calendar.firstWeekday = 2
+        let day = { (d: Int, h: Int) in calendar.date(from: DateComponents(year: 2026, month: 10, day: d, hour: h))! }
+        let planned = [(date: day(12, 6), title: "Lower body"), (date: day(12, 7), title: "Lower body"),
+                       (date: day(14, 6), title: "Upper body"), (date: day(19, 6), title: "Next week")]
+        let week = GroupSync.week(of: day(13, 12), planned: planned, calendar: calendar)
+        #expect(week.weekOf == "2026-10-11")  // The app's weeks start on Sunday (Week.start).
+        #expect(week.days == [Cloud.PlannedDay(day: "2026-10-12", title: "Lower body"), Cloud.PlannedDay(day: "2026-10-14", title: "Upper body")])
+    }
+}

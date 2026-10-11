@@ -57,6 +57,7 @@ describe("deleteAccount", () => {
       { PK: "SHARE#s1", SK: "META" },
       { PK: "GROUP#g1", SK: "MEMBER#a" },
       { PK: "GROUP#g1", SK: "LIVE#a" },
+      { PK: "GROUP#g1", SK: "WEEK#a" },
       { PK: "GROUP#g1", SK: "PROGRESS#a#goal1" },
       { PK: "GROUP#g1", SK: "FEED#t#1" },
     ]);

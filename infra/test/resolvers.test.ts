@@ -13,6 +13,8 @@ import * as removeMember from "../resolvers/removeMember.js";
 import * as rotateInvite from "../resolvers/rotateInvite.js";
 import * as createShare from "../resolvers/createShare.js";
 import * as getShare from "../resolvers/getShare.js";
+import * as publishWeek from "../resolvers/publishWeek.js";
+import * as clearWeek from "../resolvers/clearWeek.js";
 
 const ME = "user-a";
 const OTHER = "user-b";
@@ -191,5 +193,23 @@ describe("getShare (FIT-113)", () => {
     const c = ctx({ args: { id: "ae79125c4c25" }, result: { kind: "session", name: "Max", payload: '{"title":"Legs"}' } });
     expect(getShare.response(c)).toEqual({ id: "ae79125c4c25", kind: "session", name: "Max", payload: { title: "Legs" } });
     expect(getShare.response(ctx({ args: { id: "ae79125c4c25" }, result: null }))).toBeNull();
+  });
+});
+
+describe("week plans (FIT-114)", () => {
+  it("are keyed by the caller, a week at most, with short names", () => {
+    const days = [{ day: "2026-10-12", title: "Lower body" }];
+    const req = publishWeek.request(ctx({ args: { groupId: "g1", weekOf: "2026-10-12", days, uid: OTHER } }));
+    expect(req.key).toEqual({ PK: "GROUP#g1", SK: `WEEK#${ME}` });
+    expect(req.attributeValues).toMatchObject({ uid: ME, weekOf: "2026-10-12", days });
+    expect(() => publishWeek.request(ctx({ args: { groupId: "g1", weekOf: "2026-10-12", days: Array(8).fill(days[0]) } }))).toThrow(ResolverError);
+    expect(() => publishWeek.request(ctx({ args: { groupId: "g1", weekOf: "2026-10-12", days: [{ day: "2026-10-12", title: "x".repeat(41) }] } }))).toThrow(ResolverError);
+    expect(clearWeek.request(ctx({ args: { groupId: "g1" } })).key).toEqual({ PK: "GROUP#g1", SK: `WEEK#${ME}` });
+  });
+
+  it("show only members' weeks in the group", () => {
+    const items = [{ SK: "META", name: "G" }, { SK: `MEMBER#${ME}`, uid: ME }, { SK: `WEEK#${ME}`, uid: ME }, { SK: "WEEK#gone", uid: "gone" }];
+    const group = groupDetail.response(ctx({ args: { groupId: "g1" }, result: { items } }));
+    expect(group.weeks.map((w: { uid: string }) => w.uid)).toEqual([ME]);
   });
 });

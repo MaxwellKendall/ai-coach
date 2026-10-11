@@ -105,6 +105,17 @@ pass("non-member C can't read or write the group");
 subB.close();
 subC.close();
 
+// FIT-114: a member shares their week; another member sees it; a non-member can't; clearing takes it away.
+const days = [{ day: "2026-10-12", title: "Lower body" }, { day: "2026-10-14", title: "Upper body" }];
+must(await gql(a, `mutation($g: ID!, $d: [PlannedDayInput!]!) { publishWeek(groupId: $g, weekOf: "2026-10-11", days: $d) { uid } }`, { g: groupId, d: days }), "publishWeek");
+const weeksSeen = must(await gql(b, `query($g: ID!) { group(groupId: $g) { weeks { uid weekOf days { day title } } } }`, { g: groupId }), "group weeks").group.weeks;
+if (weeksSeen.length !== 1 || weeksSeen[0].days[1].title !== "Upper body") throw new Error(`weeks: ${JSON.stringify(weeksSeen)}`);
+if (!rejected(await gql(c, `mutation($g: ID!, $d: [PlannedDayInput!]!) { publishWeek(groupId: $g, weekOf: "2026-10-11", days: $d) { uid } }`, { g: groupId, d: days }))) throw new Error("a non-member shared a week");
+must(await gql(a, `mutation($g: ID!) { clearWeek(groupId: $g) }`, { g: groupId }), "clearWeek");
+const weeksAfter = must(await gql(b, `query($g: ID!) { group(groupId: $g) { weeks { uid } } }`, { g: groupId }), "group weeks").group.weeks;
+if (weeksAfter.length !== 0) throw new Error("the cleared week is still shown");
+pass("a member's week shows to the group, a non-member can't share one, and clearing takes it away");
+
 // FIT-58/59: creator-only invite revocation and member removal.
 if (!rejected(await gql(b, `mutation($g: ID!) { rotateInvite(groupId: $g) }`, { g: groupId }))) throw new Error("B rotated A's invite");
 const newCode = must(await gql(a, `mutation($g: ID!) { rotateInvite(groupId: $g) }`, { g: groupId }), "rotateInvite").rotateInvite as string;
