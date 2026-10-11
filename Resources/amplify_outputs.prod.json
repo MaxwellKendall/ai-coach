@@ -1,0 +1,36 @@
+{
+  "version": "1",
+  "auth": {
+    "aws_region": "us-east-1",
+    "user_pool_id": "us-east-1_N9iJQX81P",
+    "user_pool_client_id": "2u8g9ni34bvehaqh8gaes9ahsk",
+    "oauth": {
+      "identity_providers": [
+        "APPLE",
+        "GOOGLE"
+      ],
+      "domain": "aicoach.auth.us-east-1.amazoncognito.com",
+      "scopes": [
+        "openid",
+        "email",
+        "profile"
+      ],
+      "redirect_sign_in_uri": [
+        "aicoach://auth/callback"
+      ],
+      "redirect_sign_out_uri": [
+        "aicoach://auth/signout"
+      ],
+      "response_type": "code"
+    },
+    "standard_required_attributes": [],
+    "username_attributes": [],
+    "user_verification_types": []
+  },
+  "data": {
+    "aws_region": "us-east-1",
+    "url": "https://2s3tolgkobcmlnzjoqllgsh3si.appsync-api.us-east-1.amazonaws.com/graphql",
+    "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
+    "authorization_types": []
+  }
+}
