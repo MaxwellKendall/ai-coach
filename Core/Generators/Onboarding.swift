@@ -33,6 +33,11 @@ struct GoalOption: Identifiable, Sendable {
     static func with(id: String) -> GoalOption? { all.first { $0.id == id } }
 
     /// What the goal measures: "Body weight", "Back squat max", "Pull-ups in a row".
+    /// FIT-107: the lift on its own, for shared pages: "Bench press", "Pull-ups".
+    var liftName: String {
+        name.replacingOccurrences(of: " max", with: "").replacingOccurrences(of: " in a row", with: "")
+    }
+
     var name: String {
         switch id {
         case "weight": "Body weight"

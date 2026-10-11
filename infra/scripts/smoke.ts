@@ -155,6 +155,15 @@ must(await gql(a, `mutation($i: ID!) { deleteShare(id: $i) }`, { i: other.id }),
 if ((await fetch(other.url)).status !== 404) throw new Error("a deleted share's page still opens");
 pass("the card uploads and previews the page; only the sharer can upload it; a deleted share's link expires");
 
+// FIT-108: a recap as the app sends it (Recap.payload) opens at its link.
+const recap = { week: 6, weeks: 12, phase: "build", sessions: { done: 3, planned: 3 }, bests: 2, showNumbers: true,
+  lifts: [{ metric: "Bench press", from: 190, to: 205, unit: "lb" }] };
+const sharedRecap = must(await gql(a, `mutation($p: AWSJSON!) { createShare(kind: "recap", payload: $p) { url } }`, { p: JSON.stringify(recap) }), "createShare recap").createShare;
+const recapPage = await fetch(sharedRecap.url);
+const recapHtml = await recapPage.text();
+if (recapPage.status !== 200 || !recapHtml.includes("Smoke&#39;s week 6 of 12") || !recapHtml.includes("+15 lb")) throw new Error(`recap page ${sharedRecap.url}: ${recapPage.status}`);
+pass(`a weekly recap opens at ${sharedRecap.url}`);
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {

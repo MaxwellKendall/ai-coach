@@ -6,6 +6,9 @@ import SwiftData
 struct WeeklyReviewScreen: View {
     let report: WeekReport
     let profile: Profile?
+    /// FIT-108: the week as a card to share; nil outside a program.
+    var recap: Recap?
+    @State private var sharing = false
     @Environment(\.dismiss) private var dismiss
     @Environment(Pro.self) private var pro
     /// FIT-83: Pro's paywall, from here, since this is a sheet.
@@ -21,6 +24,11 @@ struct WeeklyReviewScreen: View {
             ScrollView { content }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                if recap != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Share", systemImage: "square.and.arrow.up") { sharing = true }
+                    }
+                }
             }
             .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 8) }
             .animation(.snappy, value: toast)
@@ -35,6 +43,7 @@ struct WeeklyReviewScreen: View {
             writing = false
         }
         .sheet(isPresented: $paywall) { PaywallView() }
+        .sheet(isPresented: $sharing) { if let recap { RecapShareSheet(recap: recap) } }
     }
 
     // MARK: Sections

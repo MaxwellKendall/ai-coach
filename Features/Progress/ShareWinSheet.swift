@@ -1,5 +1,4 @@
 import SwiftUI
-import LinkPresentation
 
 /// FIT-15, prototype board B: the card as it will be sent, black or paper, with or without weights, and Share.
 struct ShareWinSheet: View {
@@ -10,15 +9,6 @@ struct ShareWinSheet: View {
     @State private var style = CardStyle.dark
     @State private var showNumbers = true
     @State private var image: UIImage?
-    @Environment(Account.self) private var account
-    /// FIT-107: links already made in this sheet, one per look of the card, so sharing twice doesn't save twice.
-    @State private var links: [String: URL] = [:]
-    @State private var linking = false
-    @State private var sharing: SharedLink?
-    @State private var failure: String?
-    /// Links already out for this win (from this phone), which Stop Sharing takes down.
-    @State private var liveLinks: [String] = []
-    @State private var stopping = false
 
     var body: some View {
         let words = WinWords(win, showNumbers: showNumbers)
@@ -59,126 +49,16 @@ struct ShareWinSheet: View {
             }
             .padding(.horizontal, 24).padding(.top, 20)
             Spacer(minLength: 12)
-            Group {
-                if let image, account.isAvailable, account.user != nil {
-                    // FIT-107: signed in, the link goes, with the card as its preview; the image alone is a tap below.
-                    VStack(spacing: 6) {
-                        Button { shareLink(image, title: words.title) } label: {
-                            primary(linking ? "Making your link…" : "Share", working: linking)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(linking)
-                        ShareLink(item: Image(uiImage: image), preview: SharePreview(words.title, image: Image(uiImage: image))) {
-                            Text("Share image only").font(.subheadline.weight(.semibold)).frame(minHeight: 44)
-                        }
-                        .tint(.primary)
-                        if !liveLinks.isEmpty {
-                            Button(stopping ? "Stopping…" : "Stop Sharing", role: .destructive) { stopSharing() }
-                                .font(.subheadline).frame(minHeight: 36).disabled(stopping)
-                        }
-                    }
-                } else if let image {
-                    ShareLink(item: Image(uiImage: image), preview: SharePreview(words.title, image: Image(uiImage: image))) {
-                        primary("Share image", working: false)
-                    }
-                } else {
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 58)
-                }
-            }
+            ShareActions(image: image, item: ShareActions.Item(
+                kind: "win", key: win.key, look: "\(style.rawValue)\(showNumbers)", title: words.title,
+                payload: { SharedWin.payload(win, style: style, showNumbers: showNumbers) },
+                render: { ShareCard.image(win, style: style, showNumbers: showNumbers, link: $0) }))
             .padding(.horizontal, 24).padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
         .task(id: "\(style.rawValue)\(showNumbers)") { image = ShareCard.image(win, style: style, showNumbers: showNumbers) }
-        .sheet(item: $sharing) { ActivityView(link: $0).presentationDetents([.medium, .large]) }
-        .onAppear { liveLinks = SharedWin.Links.ids(for: win) }
-        .alert("Couldn’t make a link", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-            Button("OK") {}
-        } message: { Text(failure ?? "") }
         .presentationDetents([.large])
-    }
-
-    private func primary(_ title: String, working: Bool) -> some View {
-        HStack(spacing: 8) {
-            if working { ProgressView().tint(Color(.systemBackground)) } else { Image(systemName: "square.and.arrow.up") }
-            Text(title)
-        }
-        .font(.headline).frame(maxWidth: .infinity, minHeight: 58).foregroundStyle(Color(.systemBackground))
-        .background(Color.primary, in: .capsule)
-    }
-
-    /// Takes down every link made for this win from this phone: their pages then say the link has expired.
-    private func stopSharing() {
-        stopping = true
-        Task {
-            defer { stopping = false }
-            for id in liveLinks { try? await Cloud.deleteShare(id) }
-            SharedWin.Links.clear(for: win)
-            liveLinks = []
-            links = [:]
-        }
-    }
-
-    /// Saves the win, uploads its card for the preview, then shares the link.
-    private func shareLink(_ image: UIImage, title: String) {
-        let look = "\(style.rawValue)\(showNumbers)"
-        if let url = links[look] {
-            sharing = SharedLink(url: url, title: title, image: image)
-            return
-        }
-        linking = true
-        Task {
-            defer { linking = false }
-            do {
-                let share = try await Cloud.createShare(kind: "win", payload: SharedWin.payload(win, style: style, showNumbers: showNumbers))
-                guard let url = URL(string: share.url) else { throw URLError(.badURL) }
-                SharedWin.Links.add(share.id, for: win)
-                liveLinks = SharedWin.Links.ids(for: win)
-                // The card that goes out carries its link.
-                let card = ShareCard.image(win, style: style, showNumbers: showNumbers, link: SharedWin.shortLink(url)) ?? image
-                if let png = card.pngData() { try? await Cloud.uploadCard(png, for: share.id) }
-                links[look] = url
-                sharing = SharedLink(url: url, title: title, image: card)
-            } catch {
-                failure = "Check your connection and try again, or share the image on its own."
-            }
-        }
-    }
-}
-
-/// FIT-107: a link to share, with the card for the share sheet's header.
-struct SharedLink: Identifiable {
-    let url: URL
-    let title: String
-    let image: UIImage
-    var id: URL { url }
-}
-
-/// The system share sheet for a link, previewed with the card rather than a fetched page.
-struct ActivityView: UIViewControllerRepresentable {
-    let link: SharedLink
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [Item(link)], applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
-
-    final class Item: NSObject, UIActivityItemSource {
-        let link: SharedLink
-        init(_ link: SharedLink) { self.link = link }
-
-        func activityViewControllerPlaceholderItem(_ controller: UIActivityViewController) -> Any { link.url }
-        func activityViewController(_ controller: UIActivityViewController, itemForActivityType type: UIActivity.ActivityType?) -> Any? { link.url }
-
-        func activityViewControllerLinkMetadata(_ controller: UIActivityViewController) -> LPLinkMetadata? {
-            let metadata = LPLinkMetadata()
-            metadata.url = link.url
-            metadata.originalURL = link.url
-            metadata.title = link.title
-            metadata.imageProvider = NSItemProvider(object: link.image)
-            return metadata
-        }
     }
 }
 

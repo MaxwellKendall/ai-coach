@@ -137,7 +137,10 @@ struct TodayScreen: View {
         .sheet(isPresented: $you) { YouScreen() }
         .sheet(item: $sharing) { ShareWinSheet(win: $0) }
         .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
-            if let review { WeeklyReviewScreen(report: review, profile: profiles.first) }
+            if let review {
+                WeeklyReviewScreen(report: review, profile: profiles.first,
+                                   recap: Recap.make(review, profile: profiles.first, wins: allWins, sessions: programSessions))
+            }
         }
         .fullScreenCover(item: $live, onDismiss: celebrate) { draft in
             WorkoutModeView(draft: draft) {
@@ -161,6 +164,15 @@ struct TodayScreen: View {
 
     private var allWins: [WinItem] {
         WinFeed.wins(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
+    }
+
+    /// FIT-108: the program's planned sessions so far, and how many were done, for its recap.
+    private var programSessions: (done: Int, planned: Int) {
+        guard let start = profiles.first?.programStart else { return (0, 0) }
+        let day = { Calendar.current.startOfDay(for: $0) }
+        let plannedDays = Set(planned.filter { $0.kind == .workout && $0.date >= start && $0.date <= .now }.map { day($0.date) })
+        let doneDays = Set(entries.filter { $0.kind == .workout && $0.timestamp >= start }.map { day($0.timestamp) })
+        return (plannedDays.intersection(doneDays).count, plannedDays.count)
     }
 
     /// FIT-106: a saved workout that earned wins ends on their cards; otherwise a quiet "saved".
