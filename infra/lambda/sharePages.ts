@@ -253,15 +253,15 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
   }
   if (kind === "s" && valid) {
     const session = await store.session(id);
-    if (session) return html(sessionPage(session, id, path, site));
+    if (session) return html(sessionPage(session, id, path, site, card));
   }
   if (kind === "p" && valid) {
     const program = await store.program(id);
-    if (program) return html(programPage(program, path, site));
+    if (program) return html(programPage(program, path, site, card));
   }
   if (kind === "join" && valid) {
     const invite = await store.invite(id.toUpperCase());
-    if (invite) return html(invitePage(invite, id.toUpperCase(), path, site));
+    if (invite) return html(invitePage(invite, id.toUpperCase(), path, site, `${site.origin}/cards/invite.png`));
   }
   if (path === "/") return html(homePage(site));
   return { ...html(missingPage(site)), status: 404 };
@@ -418,13 +418,14 @@ function recapPage(recap: Recap, path: string, site: Site, image?: string) {
   });
 }
 
-function programPage(program: Program, path: string, site: Site) {
+function programPage(program: Program, path: string, site: Site, image?: string) {
   const who = first(program.by);
   return layout(site, {
     view: "p",
     title: `${program.name}, by ${who}`,
     description: `${program.weeks} weeks, ${program.days} days a week, ${program.equipment}. Start it with your own weights in ${site.appName}.`,
     path,
+    image,
     body: `
       <section class="hero left">
         <p class="eyebrow">${esc(who)}'s program</p>
@@ -456,7 +457,7 @@ function programPage(program: Program, path: string, site: Site) {
 
 const weekday = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
 
-function sessionPage(session: Session, id: string, path: string, site: Site) {
+function sessionPage(session: Session, id: string, path: string, site: Site, image?: string) {
   const who = first(session.name);
   const when = weekday(session.date);
   const set = (e: Session["exercises"][number]) =>
@@ -466,6 +467,7 @@ function sessionPage(session: Session, id: string, path: string, site: Site) {
     title: `Train with ${who}: ${session.title}, ${when}`,
     description: `${who} is training ${session.title} on ${when}. Join with your own weights in ${site.appName}.`,
     path,
+    image,
     body: `
       <section class="hero left">
         <p class="eyebrow">${esc(who)} is training</p>
@@ -496,7 +498,7 @@ export function calendar(session: Session, url: string, site: Site) {
   ].join("\r\n");
 }
 
-function invitePage(invite: Invite, code: string, path: string, site: Site) {
+function invitePage(invite: Invite, code: string, path: string, site: Site, image?: string) {
   const who = first(invite.by);
   const shown = invite.members.slice(0, 5);
   return layout(site, {
@@ -504,6 +506,7 @@ function invitePage(invite: Invite, code: string, path: string, site: Site) {
     title: `Join ${invite.group}`,
     description: `${who} invited you to train together in ${site.appName}.`,
     path,
+    image,
     body: `
       <section class="hero">
         <div class="faces" aria-hidden="true">${shown.map((m) => `<span>${esc(m.trim()[0]?.toUpperCase() ?? "?")}</span>`).join("")}${
@@ -587,7 +590,7 @@ function layout(site: Site, page: { title: string; description: string; path: st
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">${
   page.image
-    ? `\n<meta property="og:image" content="${esc(page.image)}">\n<meta property="og:image:width" content="1080">\n<meta property="og:image:height" content="1348">\n<meta property="og:image:alt" content="${esc(page.title)}">`
+    ? `\n<meta property="og:image" content="${esc(page.image)}">${page.image.endsWith("/invite.png") ? "" : `\n<meta property="og:image:width" content="1080">\n<meta property="og:image:height" content="1348">`}\n<meta property="og:image:alt" content="${esc(page.title)}">`
     : ""
 }
 <meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">

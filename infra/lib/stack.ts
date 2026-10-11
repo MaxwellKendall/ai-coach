@@ -16,6 +16,7 @@ import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as route53 from "aws-cdk-lib/aws-route53";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sns from "aws-cdk-lib/aws-sns";
@@ -245,6 +246,13 @@ export class AICoachStack extends Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       removalPolicy,
       autoDeleteObjects: !isProd,
+    });
+    // The invite's link preview, the same for every group (assets/cards). Never pruned: users' cards live here too.
+    new s3deploy.BucketDeployment(this, "CardAssets", {
+      sources: [s3deploy.Source.asset(path("../assets/cards"))],
+      destinationBucket: cards,
+      destinationKeyPrefix: "cards/",
+      prune: false,
     });
     const shares = fn("shares", { CARDS_BUCKET: cards.bucketName });
     table.grant(shares, "dynamodb:GetItem", "dynamodb:DeleteItem");

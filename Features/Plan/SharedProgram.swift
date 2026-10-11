@@ -89,7 +89,9 @@ enum SharedProgram {
         let payload = try JSONSerialization.jsonObject(with: JSONEncoder().encode(shared)) as? [String: Any] ?? [:]
         let share = try await Cloud.createShare(kind: "program", payload: payload)
         guard let url = URL(string: share.url) else { throw URLError(.badURL) }
-        return SharedLink(url: url, title: "Train my program: \(shared.name)")
+        let card = PlanCard.program(shared, link: ShareLinks.short(url)).image()
+        if let png = card?.pngData() { try? await Cloud.uploadCard(png, for: share.id) }
+        return SharedLink(url: url, title: "Train my program: \(shared.name)", image: card)
     }
 }
 

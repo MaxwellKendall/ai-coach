@@ -19,7 +19,10 @@ import SwiftData
         let payload = try JSONSerialization.jsonObject(with: JSONEncoder().encode(shared)) as? [String: Any] ?? [:]
         let share = try await Cloud.createShare(kind: "session", payload: payload)
         guard let url = URL(string: share.url) else { throw URLError(.badURL) }
-        return SharedLink(url: url, title: "Train with me: \(plan.title), \(plan.start.formatted(.dateTime.weekday(.wide)))")
+        // The card is the link's preview in iMessage, so it's uploaded before the link is shared.
+        let card = PlanCard.session(shared, link: ShareLinks.short(url)).image()
+        if let png = card?.pngData() { try? await Cloud.uploadCard(png, for: share.id) }
+        return SharedLink(url: url, title: "Train with me: \(plan.title), \(plan.start.formatted(.dateTime.weekday(.wide)))", image: card)
     }
 }
 
