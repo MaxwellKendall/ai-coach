@@ -410,10 +410,10 @@ function invitePage(invite: Invite, code: string, path: string, site: Site) {
         <p class="lede">${invite.members.length} ${invite.members.length === 1 ? "person trains" : "people train"} here. See each other's wins, and work out together live.</p>
         ${invite.recent.length ? `<ul class="feed">${invite.recent.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
         <ol class="steps">
-          <li><b>Get ${esc(site.appName)}</b><span>Free on the App Store.</span></li>
-          <li><b>Tap Join with code</b><span>In You, then Groups.</span></li>
-          <li><b>Enter the code</b>
+          <li><b>Copy your invite</b>
             <button class="code" type="button" data-copy="${esc(code)}" aria-label="Copy the code ${esc(code)}">${esc(code)}<small>Copy</small></button></li>
+          <li><b>Get ${esc(site.appName)}</b><span>Free on the App Store.</span></li>
+          <li><b>Open it and tap Paste</b><span>Under “Invited by a friend?” on the first screen.</span></li>
         </ol>
         ${actions(site, [])}
         <p class="fine">Already have the app? Open this link on your iPhone and it goes straight to the group.</p>
