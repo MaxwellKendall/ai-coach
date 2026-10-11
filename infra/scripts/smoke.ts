@@ -130,6 +130,16 @@ if (!opus.errors?.some((e) => e.message.startsWith("Only claude-haiku"))) throw 
 if ((await used()) !== usedBefore + 1) throw new Error(`A's AI use went from ${usedBefore} to ${await used()}, not up by 1`);
 pass(`aiMessages answers with Haiku (${reply.body.usage?.output_tokens} tokens), refuses other models, and counts the day`);
 
+// FIT-105/58: a saved win opens at its link, and the group's invite has a page.
+const win = { kind: "pr", date: "2026-10-08", metric: "Bench Press", unit: "lb", value: 205, previous: 190, trend: [190, 205], showNumbers: true, style: "dark" };
+const shared = must(await gql(a, `mutation($p: AWSJSON!) { createShare(kind: "win", payload: $p) { id url } }`, { p: JSON.stringify(win) }), "createShare").createShare;
+const winPage = await fetch(shared.url);
+const winHtml = await winPage.text();
+if (winPage.status !== 200 || !winHtml.includes("Smoke set a bench press best")) throw new Error(`win page ${shared.url}: ${winPage.status}`);
+const invitePage = await fetch(`${new URL(shared.url).origin}/join/${created.inviteCode}`);
+if (invitePage.status !== 200 || !(await invitePage.text()).includes("Join Smoke group")) throw new Error(`invite page: ${invitePage.status}`);
+pass(`a shared win opens at ${shared.url}, and the invite page shows the group`);
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {
