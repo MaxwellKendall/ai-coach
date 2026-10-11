@@ -178,8 +178,12 @@ export function readProgram(v: unknown, by: string): Program | undefined {
   }
 }
 
-/** The paths the app opens itself when it's installed. */
-export const appPaths = ["/join/*", "/w/*", "/r/*", "/p/*"];
+/**
+ * The paths the app opens itself when it's installed: invites only, as /join/CODE or join.{domain}/CODE (codes are
+ * always 8 characters). Wins, recaps and programs open this page until the app can show them, so a friend who
+ * already has the app still sees what was shared.
+ */
+export const appPaths = ["/join/*", "/????????"];
 
 export async function route(path: string, store: Store, site: Site): Promise<Page> {
   if (path === "/.well-known/apple-app-site-association") {

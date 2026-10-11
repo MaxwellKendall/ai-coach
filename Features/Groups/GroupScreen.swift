@@ -200,7 +200,7 @@ struct GroupScreen: View {
 
     @ToolbarContentBuilder private func toolbar(_ group: Cloud.Group) -> some ToolbarContent {
         ToolbarItem {
-            ShareLink(item: Self.invite(group), subject: Text("Join \(group.name)")) {
+            ShareLink(item: InviteLink.url(code: group.inviteCode), subject: Text("Join \(group.name)"), message: Text(Self.invite(group))) {
                 Label("Invite", systemImage: "person.badge.plus")
             }
         }
@@ -223,7 +223,7 @@ struct GroupScreen: View {
     }
 
     static func invite(_ group: Cloud.Group) -> String {
-        "Join my group “\(group.name)” in Rep & Recipe. Open the app, go to You › Groups › Join with Code, and enter \(group.inviteCode)."
+        "Join my group “\(group.name)” in Rep & Recipe."
     }
 
     // MARK: Actions

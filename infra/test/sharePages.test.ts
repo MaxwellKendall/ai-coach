@@ -42,11 +42,11 @@ describe("share pages (FIT-105)", () => {
     expect((await route("/w/../../etc", store, site)).status).toBe(404);
   });
 
-  it("Apple's association file opens the app for every shared path", async () => {
+  it("Apple's association file opens the app for invites only", async () => {
     const page = await route("/.well-known/apple-app-site-association", store, site);
     expect(page.type).toBe("application/json");
     expect(JSON.parse(page.body)).toEqual(associationFile(site));
-    expect(associationFile(site).applinks.details[0].components.map((c) => c["/"])).toEqual(["/join/*", "/w/*", "/r/*", "/p/*"]);
+    expect(associationFile(site).applinks.details[0].components.map((c) => c["/"])).toEqual(["/join/*", "/????????"]);
   });
 });
 

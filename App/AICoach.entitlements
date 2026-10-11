@@ -4,5 +4,12 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:join.barbrabell.com</string>
+		<string>applinks:barbrabell.com</string>
+		<string>applinks:share.barbrabell.com</string>
+		<string>applinks:dev.barbrabell.com</string>
+	</array>
 </dict>
 </plist>

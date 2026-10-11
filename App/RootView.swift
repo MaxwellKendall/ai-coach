@@ -14,6 +14,11 @@ struct RootView: View {
     @State private var lastTab: AppTab = .today
     @State private var coach = CoachInbox()
     @State private var groupsTab = GroupsTab()
+    /// FIT-58: an invite link the app was opened with, joined once signed in.
+    @State private var invite: Invite?
+    @State private var signingInToJoin = false
+    @State private var pendingInvite: String?
+    @State private var joined: Cloud.GroupSummary?
 
     /// Graphite (FIT-27): monochrome, the label colour is the only accent.
     static let accent = Color.primary
@@ -74,6 +79,37 @@ struct RootView: View {
             .tint(Self.accent)
         }
         .sheet(isPresented: Binding(get: { pro.paywall }, set: { pro.paywall = $0 })) { PaywallView() }
+        // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).
+        .onOpenURL { url in
+            guard account.isAvailable, let code = InviteLink.code(from: url) else { return }
+            if account.user == nil {
+                pendingInvite = code
+                signingInToJoin = true
+            } else {
+                invite = Invite(code: code)
+            }
+        }
+        .sheet(isPresented: $signingInToJoin, onDismiss: {
+            if account.user != nil, let code = pendingInvite { invite = Invite(code: code) }
+            pendingInvite = nil
+        }) {
+            SignInSheet(reason: "Sign in to join the group.")
+        }
+        // The group opens once the Join sheet has gone: two sheets can't be presented at once.
+        .sheet(item: $invite, onDismiss: {
+            guard let joined else { return }
+            tab = .groups
+            navigator.group = joined
+            self.joined = nil
+        }) { invite in
+            NavigationStack {
+                JoinGroupSheet(code: invite.code) { group in
+                    joined = group
+                    self.invite = nil
+                }
+            }
+            .tint(Self.accent)
+        }
         .fullScreenCover(item: $onboarding) { profile in
             // FIT-83: Pro's trial is offered once the program has just been shown.
             OnboardingView(profile: profile) {
@@ -84,4 +120,10 @@ struct RootView: View {
                 .tint(Self.accent)
         }
     }
+}
+
+/// FIT-58: the code from an invite link.
+struct Invite: Identifiable {
+    let code: String
+    var id: String { code }
 }
