@@ -345,7 +345,7 @@ extension OnboardingAnswers {
     func startSummary(_ catalog: [Exercise], names: [String: String]) -> String {
         let parts = startRows(catalog).filter { $0.measure != .age && $0.measure != .body }.compactMap { row -> String? in
             guard let start = starts[row.id] else { return nil }
-            let name = (names[row.id] ?? row.id).split(separator: " ").first.map(String.init) ?? row.id
+            let name = Self.shortName(names[row.id] ?? row.id)
             if let load = start.value("load_lb"), let reps = start.value("reps") {
                 return "\(name) ≈\(Int(ProgramPlan.estimatedMax(load: load, reps: reps).rounded()))"
             }
@@ -353,5 +353,12 @@ extension OnboardingAnswers {
             return start.value("duration_s").map { "\(name) \(Coach.number($0)) s" }
         }
         return parts.isEmpty ? "Found in week 1" : parts.prefix(3).joined(separator: " · ")
+    }
+
+    /// The word a lift goes by: "Back Squat" is Squat, "Bent Over Barbell Row" Row, "Bench Press" Bench.
+    static func shortName(_ name: String) -> String {
+        let qualifiers: Set<String> = ["back", "barbell", "standing", "seated", "flat", "bent", "over"]
+        let words = name.split(separator: " ").map(String.init)
+        return words.drop { qualifiers.contains($0.lowercased()) }.first ?? words.first ?? name
     }
 }

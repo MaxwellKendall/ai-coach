@@ -179,4 +179,13 @@ struct OnboardingGoalWordsTests {
         answers.heardGoals([(id: "weight", target: 180)], in: "get to 180", now: .now)
         #expect(answers.targets["weight"] == 180)
     }
+
+    /// The check step's starting point names each lift by the word it goes by, not its first word ("Back ≈250").
+    @Test func startingPointsUseTheLiftsShortName() {
+        #expect(OnboardingAnswers.shortName("Back Squat") == "Squat")
+        #expect(OnboardingAnswers.shortName("Bench Press") == "Bench")
+        #expect(OnboardingAnswers.shortName("Bent Over Barbell Row") == "Row")
+        #expect(OnboardingAnswers.shortName("Front Squat") == "Front")
+        #expect(OnboardingAnswers.shortName("Pull-up") == "Pull-up")
+    }
 }

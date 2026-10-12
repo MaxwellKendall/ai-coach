@@ -98,7 +98,14 @@ enum Planner {
         request.progression = await Progression.decided(request, by: Progression.Rules(tier: AgeTier.of(age: profile.age)))
         let result = await ProgramDesigner.week(request, model: model)
         // The week may have been planned again while the model worked; that plan gets its own turn.
-        guard let current = try? self.plan(weekOf: monday, in: context), current.id == plan.id, plan.designedBy == nil else { return }
+        guard let current = try? self.plan(weekOf: monday, in: context), current.id == plan.id else { return }
+        land(result, on: plan, entries: entries, templates: templates, in: context, calendar: calendar)
+    }
+
+    /// A designed week replaces the plan's, but for days done or pinned; the plan is marked designed either way.
+    private static func land(_ result: ProgramDesigner.Result, on plan: Plan, entries: [LogEntry], templates: [Template],
+                             in context: ModelContext, calendar: Calendar) {
+        guard plan.designedBy == nil else { return }
         if result.source == .model {
             let done = Set(entries.filter { $0.kind == .workout }.map { calendar.startOfDay(for: $0.timestamp) })
             let pinned = Set(plan.items.filter { $0.kind == .workout && $0.pinned }.map { calendar.startOfDay(for: $0.date) })
@@ -108,6 +115,29 @@ enum Planner {
         }
         plan.designedBy = result.source.rawValue
         try? context.save()
+    }
+
+    /// Onboarding's first week, when Start was tapped before its design came back: Today says the coach is planning
+    /// it, and it lands as `design`'s would (with the brief, if the profile has none yet). Without a design, `design`
+    /// starts one.
+    static func finishFirstWeek(_ design: Task<(brief: ProgramBrief?, model: String, result: ProgramDesigner.Result)?, Never>,
+                                weekOf date: Date = .now, in context: ModelContext, model: any AIModel,
+                                calendar: Calendar = .current) async {
+        let monday = Week.start(of: date, calendar: calendar)
+        designing.weeks.insert(monday)
+        let done = await design.value
+        designing.weeks.remove(monday)
+        guard let done else { return await self.design(weekOf: monday, in: context, model: model, calendar: calendar) }
+        guard let profile = try? context.fetch(FetchDescriptor<Profile>()).first,
+              let templates = try? context.fetch(FetchDescriptor<Template>()),
+              let entries = try? context.fetch(FetchDescriptor<LogEntry>()),
+              let plan = try? plan(weekOf: monday, in: context) else { return }
+        if profile.brief == nil, let brief = done.brief {
+            let goals = goalLines((try? context.fetch(FetchDescriptor<Goal>())) ?? [])
+            profile.brief = ProgramBrief.Stored(brief: brief, key: ProgramBrief.key(goals: goals, settings: profile.trainingSettings,
+                                                                                    weeks: profile.program ?? []), model: done.model)
+        }
+        land(done.result, on: plan, entries: entries, templates: templates, in: context, calendar: calendar)
     }
 
     /// FIT-82: weeks began on Monday until they moved to Sunday. Each plan keyed by a Monday is keyed by the Sunday

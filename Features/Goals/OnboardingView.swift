@@ -24,6 +24,8 @@ struct OnboardingView: View {
     @State private var brief: ProgramBrief?
     @State private var briefModel = OnDeviceModel().name
     @State private var designing = false
+    /// The first week's design under way, and the answers it's from. Start hands an unfinished one to Today (FIT-38).
+    @State private var design: (key: String, task: Task<FirstWeekDesign?, Never>)?
     @State private var loads: [String: Double] = [:]
     /// FIT-109: an invite pasted after installing from its page (iOS loses the link through the App Store).
     @State private var invite: Invite?
@@ -95,7 +97,7 @@ struct OnboardingView: View {
             }
         }
         // The check step designs the first week, again whenever the answers it's built from change.
-        .task(id: page == 4 ? designKey : nil) { if page == 4 { await designFirstWeek() } }
+        .onChange(of: page == 4 ? designKey : nil, initial: true) { _, key in if let key { startDesign(key) } }
     }
 
     /// FIT-109: one quiet line, for someone who came from a friend's invite. Apple's paste button reads the
@@ -154,10 +156,34 @@ struct OnboardingView: View {
          "\(answers.days)", "\(answers.minutes)", answers.hurts.sorted().joined(separator: ",")].joined(separator: "|")
     }
 
-    private func designFirstWeek() async {
+    typealias FirstWeekDesign = (brief: ProgramBrief?, model: String, result: ProgramDesigner.Result)
+
+    /// A design for these answers, unless one is under way for them; one for older answers is cancelled. Not tied to
+    /// the view, so Start can hand it on.
+    private func startDesign(_ key: String) {
+        guard design?.key != key else { return }
+        design?.task.cancel()
+        let task = Task { await designFirstWeek() }
+        design = (key, task)
+        designing = true
+        Task {
+            let done = await task.value
+            guard design?.key == key else { return }
+            designing = false
+            guard let done else { return }
+            withAnimation(.snappy) {
+                firstWeek = done.result.source == .model ? done.result : nil
+                // Loads the user set stay for the exercises still in the week.
+                let kept = Set(done.result.week.workouts.map(\.exercise))
+                loads = loads.filter { kept.contains($0.key) }
+            }
+        }
+    }
+
+    private func designFirstWeek() async -> FirstWeekDesign? {
         let model = LanguageModel.programs(signedIn: account.user != nil)
         guard model.isAvailable, let settings = answers.trainingSettings(workoutTime: profile.workoutTime,
-                                                                                 maxWeeklySets: profile.maxWeeklySets) else { return }
+                                                                                 maxWeeklySets: profile.maxWeeklySets) else { return nil }
         let monday = Week.start(of: .now)
         let weeks = ProgramPlan.weeks(count: answers.weeks, deloadEvery: AgeTier.of(age: settings.age).deloadEveryWeeks)
         let end = Calendar.current.date(byAdding: .day, value: 7 * answers.weeks - 1, to: monday)!
@@ -167,12 +193,10 @@ struct OnboardingView: View {
                   let start = answers.baseline(option), let target = answers.target(option) else { return nil }
             return GoalLift(exercise: exercise, measure: String(measure), start: start, target: target, deadline: end)
         }
-        designing = true
-        defer { designing = false }
         // FIT-95: the program's plan first, then week 1 within it.
         let brief = await ProgramBrief.write(ProgramBrief.Request(settings: settings, catalog: catalog, names: names, goals: goals,
                                                                   goalLifts: lifts, weeks: weeks), model: model)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return nil }
         self.brief = brief
         briefModel = model.name
         let request = ProgramDesigner.Request(
@@ -180,13 +204,8 @@ struct OnboardingView: View {
             program: weeks.first, programIndex: 0, programWeeks: weeks.count, goals: goals,
             brief: weeks.first.flatMap { brief?.phase($0.phase) }, goalLifts: lifts, programPlan: weeks)
         let result = await ProgramDesigner.week(request, model: model)
-        guard !Task.isCancelled else { return }
-        withAnimation(.snappy) {
-            firstWeek = result.source == .model ? result : nil
-            // Loads the user set stay for the exercises still in the week.
-            let kept = Set(result.week.workouts.map(\.exercise))
-            loads = loads.filter { kept.contains($0.key) }
-        }
+        guard !Task.isCancelled else { return nil }
+        return (brief, model.name, result)
     }
 
     private static let prompts = ["“Get to 180 and do 10 pull-ups by the end of February”",
@@ -322,6 +341,12 @@ struct OnboardingView: View {
             plan.warnings = firstWeek.week.warnings
             plan.designedBy = firstWeek.source.rawValue
             try? context.save()
+        } else if designing, let task = design?.task {
+            // Started before the design came back: it lands on Today's week when it does, not thrown away.
+            // Marked now, so Today, appearing next, doesn't start a design of its own.
+            Planner.designing.weeks.insert(Week.start(of: now))
+            let model = LanguageModel.programs(signedIn: account.user != nil)
+            Task { await Planner.finishFirstWeek(task, in: context, model: model) }
         }
         onDone()
     }
