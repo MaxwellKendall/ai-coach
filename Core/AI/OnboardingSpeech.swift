@@ -56,12 +56,20 @@ enum OnboardingSpeech {
                      names: [String: String], now: Date = .now, model: any AIModel = OnDeviceModel()) async throws {
         switch step {
         case .goals:
+            // Plain on purpose (2026-10-12): explaining each goal ("losing weight or reaching a body weight", even "a
+            // scale number") made the on-device model refuse every request as sensitive, "Squat 315" included.
             let session = model.session(instructions: """
-                The user says what they want to train for. Copy out each goal they named and its number if they said one.
-                weight: losing weight or reaching a body weight. squat, bench, deadlift: lifting more. pullups, pushups: more in a row.
+                The user names their training goals. List each goal they named, with its number if they said one.
                 """)
-            let goals = try await session.respond(to: text, generating: SpokenGoals.self).goals
-            answers.heardGoals(goals.map { ($0.goal, $0.target) }, in: text, now: now)
+            do {
+                let goals = try await session.respond(to: text, generating: SpokenGoals.self).goals
+                answers.heardGoals(goals.map { ($0.goal, $0.target) }, in: text, now: now)
+            } catch let error as LanguageModelSession.GenerationError {
+                // Refused or confused: the goals by their words, so the card still fills in.
+                let goals = OnboardingAnswers.goals(namedIn: text)
+                guard !goals.isEmpty else { throw error }
+                answers.heardGoals(goals.map { ($0, nil) }, in: text, now: now)
+            }
         case .exercises:
             let session = model.session(instructions: """
                 The user says which exercises and equipment they want to train with. Copy out the names they said,
@@ -94,7 +102,12 @@ extension OnboardingAnswers {
             unconfirmed.insert("goals")
         }
         for goal in goals {
-            guard let target = goal.target, said.contains(target), GoalOption.with(id: goal.id) != nil else { continue }
+            guard var target = goal.target, said.contains(target), GoalOption.with(id: goal.id) != nil else { continue }
+            // "Lose 15 pounds": a small number for body weight is how much to lose (or gain), not the weight to reach.
+            if goal.id == "weight", target < 70 {
+                guard let weight else { continue }
+                target = text.lowercased().contains("gain") || text.lowercased().contains("put on") ? weight + target : weight - target
+            }
             targets[goal.id] = target
             unconfirmed.insert("target.\(goal.id)")
         }
@@ -103,6 +116,17 @@ extension OnboardingAnswers {
                         ProgramPlan.weekCount(start: now, target: date, calendar: calendar)))
             unconfirmed.insert("weeks")
         }
+    }
+
+    /// FIT-38: the goals in what was said by their words alone, for when the model won't answer.
+    static func goals(namedIn text: String) -> [String] {
+        let said = text.lowercased()
+        let words: [(String, [String])] = [
+            ("weight", ["lose", "weigh", "pounds off", "lbs off", "lean", "fat", "cut"]),
+            ("squat", ["squat"]), ("bench", ["bench"]), ("deadlift", ["deadlift", "dead lift"]),
+            ("pullups", ["pull-up", "pull up", "pullup", "chin-up", "chin up"]), ("pushups", ["push-up", "push up", "pushup"]),
+        ]
+        return words.filter { $0.1.contains { said.contains($0) } }.map(\.0)
     }
 
     /// Names are matched to the catalog and the equipment list; "no squats" leaves out every squat.

@@ -158,3 +158,25 @@ struct OnboardingTests {
         #expect(answers.hurts == ["knees", "lower back"])
     }
 }
+
+/// 2026-10-12: goals heard when the on-device model won't answer, and "lose 15 pounds".
+struct OnboardingGoalWordsTests {
+    @Test func goalsByTheirWords() {
+        #expect(OnboardingAnswers.goals(namedIn: "Lose 15 pounds and bench 225") == ["weight", "bench"])
+        #expect(OnboardingAnswers.goals(namedIn: "ten pull ups and a big deadlift") == ["deadlift", "pullups"])
+        #expect(OnboardingAnswers.goals(namedIn: "just feel better").isEmpty)
+    }
+
+    @Test func aSmallBodyWeightNumberIsHowMuchToLose() {
+        var answers = OnboardingAnswers()
+        answers.heardGoals([(id: "weight", target: 15)], in: "lose 15 pounds", now: .now)
+        #expect(answers.targets["weight"] == nil)
+        answers.weight = 200
+        answers.heardGoals([(id: "weight", target: 15)], in: "lose 15 pounds", now: .now)
+        #expect(answers.targets["weight"] == 185)
+        answers.heardGoals([(id: "weight", target: 10)], in: "gain 10 pounds", now: .now)
+        #expect(answers.targets["weight"] == 210)
+        answers.heardGoals([(id: "weight", target: 180)], in: "get to 180", now: .now)
+        #expect(answers.targets["weight"] == 180)
+    }
+}
