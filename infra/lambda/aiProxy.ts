@@ -3,6 +3,7 @@ import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { checkEntitlement } from "./entitlement.ts";
+import { giftedUntil } from "./gifts.ts";
 
 /**
  * FIT-102: the app's one way to Claude. The app runs the conversation (the same code the evals run, `ClaudeModel`)
@@ -95,8 +96,9 @@ export async function handler(event: AppSyncResolverEvent<{ request: unknown; en
   const allowed = allowedRequest(event.arguments.request);
   if ("error" in allowed) throw new Error(allowed.error);
   const now = new Date();
-  const pro = checkEntitlement(event.arguments.entitlement, now);
-  if (!pro.pro && !(await allowance(uid, "AIFREE", limits.freeRequests))) {
+  // FIT-122: or Pro from a redeemed gift, on the account.
+  const pro = checkEntitlement(event.arguments.entitlement, now).pro || (await giftedUntil(uid, now)) !== undefined;
+  if (!pro && !(await allowance(uid, "AIFREE", limits.freeRequests))) {
     throw new Error(`${PRO_REQUIRED}: start your free trial so your coach can keep planning.`);
   }
   const expiresAt = Math.floor(now.getTime() / 1000) + 3 * 86_400;

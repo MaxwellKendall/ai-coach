@@ -32,6 +32,8 @@ final class Navigator {
     var session: String?
     /// FIT-111: a shared program to start, likewise.
     var program: String?
+    /// FIT-122: a gift's code, from its link, to redeem.
+    var gift: String?
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {

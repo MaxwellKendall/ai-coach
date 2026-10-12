@@ -1,6 +1,8 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
+import { giftRoute, type GiftStore } from "./giftPages.ts";
+import { checkout, gift, price, thanks } from "./gifts.ts";
 import { readProgram, readRecap, readSession, readWin, route, type Site, type Store } from "./sharePages.ts";
 
 /**
@@ -72,16 +74,20 @@ export const store: Store = {
   },
 };
 
+// FIT-122: the gift's pages.
+const gifts: GiftStore = { gift, checkout: () => checkout(site.origin), thanks };
+
 export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunctionURLResult> {
   try {
-    const page = await route(event.rawPath, store, site);
+    const page = (await giftRoute(event.rawPath, gifts, site, price.cents)) ?? (await route(event.rawPath, store, site));
     return {
       statusCode: page.status,
       headers: {
         "content-type": page.type,
+        ...(page.location ? { location: page.location } : {}),
         // A shared item can be taken down, so pages are only kept for a few minutes.
         // A view count must reach the Lambda every time; pages are kept a few minutes.
-        "cache-control": page.status === 204 ? "no-store" : page.status === 200 ? "public, max-age=300" : "public, max-age=60",
+        "cache-control": page.status === 204 || page.noStore ? "no-store" : page.status === 200 ? "public, max-age=300" : "public, max-age=60",
         "x-content-type-options": "nosniff",
         "referrer-policy": "strict-origin-when-cross-origin",
       },

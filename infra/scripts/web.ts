@@ -3,6 +3,7 @@
  * The renderers are the ones the Lambda will serve (lambda/sharePages.ts); only the store differs.
  */
 import { createServer } from "node:http";
+import { giftRoute, type GiftCard, type GiftStore } from "../lambda/giftPages.ts";
 import { route, type Invite, type Program, type Recap, type Session, type Site, type Store, type Win } from "../lambda/sharePages.ts";
 
 const port = Number(process.env.PORT ?? 8787);
@@ -93,12 +94,24 @@ const store: Store = {
   session: async (id) => sessions[id],
 };
 
+// FIT-122: gifts; /gift/buy goes to the thanks page as if paid, without Stripe.
+const gifts: Record<string, GiftCard> = {
+  ABCDEFGHJKLM: { code: "ABCDEFGHJKLM", for: "Sam", note: "Squat 250 by summer. You've got this.", status: "unused" },
+  USEDUSEDUSED: { code: "USEDUSEDUSED", for: "Jo", status: "redeemed" },
+};
+const giftStore: GiftStore = {
+  gift: async (code) => gifts[code],
+  checkout: async () => "/gift/thanks/cs_test_sample",
+  thanks: async (id) => (id === "cs_test_sample" ? gifts.ABCDEFGHJKLM : undefined),
+};
+
 createServer(async (req, res) => {
   const path = new URL(req.url ?? "/", site.origin).pathname.replace(/\/+$/, "") || "/";
   if (path === "/samples") {
     const links = [
       ...Object.keys(wins).map((id) => `/w/${id}`), ...Object.keys(recaps).map((id) => `/r/${id}`),
       ...Object.keys(programs).map((id) => `/p/${id}`), ...Object.keys(sessions).map((id) => `/s/${id}`), ...Object.keys(invites).map((code) => `/join/${code}`),
+      "/gift", "/gift/buy", "/g/ABCDEFGHJKLM", "/g/USEDUSEDUSED", "/gift/thanks/cs_test_open",
       "/w/missing", "/.well-known/apple-app-site-association",
     ];
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -106,7 +119,7 @@ createServer(async (req, res) => {
       <body style="font:17px/1.8 -apple-system,sans-serif;padding:24px"><h1>Share page samples</h1>${links.map((l) => `<a href="${l}">${l}</a>`).join("<br>")}`);
     return;
   }
-  const page = await route(path, store, site);
-  res.writeHead(page.status, { "content-type": page.type });
+  const page = (await giftRoute(path, giftStore, site, 3999)) ?? (await route(path, store, site));
+  res.writeHead(page.status, { "content-type": page.type, ...(page.location ? { location: page.location } : {}) });
   res.end(page.body);
 }).listen(port, () => console.log(`Share pages on http://localhost:${port}/samples`));

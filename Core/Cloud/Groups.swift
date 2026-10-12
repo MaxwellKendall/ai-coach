@@ -143,6 +143,8 @@ enum Cloud {
         }
         switch result {
         case .success(let value): return value
+        // The server's own words (FIT-122: "This gift has already been redeemed."), not Amplify's wrapping of them.
+        case .failure(.error(let errors)) where !errors.isEmpty: throw Failure(message: errors[0].message)
         case .failure(let error): throw Failure(message: error.errorDescription)
         }
     }
@@ -157,6 +159,21 @@ enum Cloud {
     @MainActor static func setDisplayName(_ name: String) async throws {
         _ = try await run("mutation($n: String) { updateProfile(displayName: $n) { uid } }", ["n": name], at: "updateProfile",
                           as: AnyDecodable?.self)
+    }
+
+    // MARK: Gifts (FIT-122)
+
+    /// Redeems a gift code on this account; until when it has Pro.
+    @MainActor static func redeemGift(_ code: String) async throws -> Date {
+        let until: String = try await run("mutation($c: String!) { redeemGift(code: $c) }", ["c": code], at: "redeemGift")
+        guard let date = date(until) else { throw Failure(message: "The server's answer wasn't a date.") }
+        return date
+    }
+
+    /// Until when the account has Pro from gifts, or nil.
+    @MainActor static func giftedPro() async throws -> Date? {
+        let until: String? = try await run("query { giftedPro }", at: "giftedPro", as: String?.self, query: true)
+        return until.flatMap(date)
     }
 
     // MARK: Shares (FIT-105/107)

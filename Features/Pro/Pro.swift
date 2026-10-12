@@ -5,7 +5,7 @@ import UserNotifications
 /// FIT-83: the Pro subscription. The one place that answers "is this person Pro?" for the app; the proxy checks the
 /// same App Store transaction on its side (FIT-102). Entitlements come from StoreKit 2, so a purchase, a renewal, a
 /// refund or a purchase on another device of the same Apple ID shows up here without the app doing anything.
-/// FIT-120: Pro runs the program; free keeps logging, progress and groups.
+/// FIT-120: Pro runs the program; free keeps logging, progress and groups. FIT-122: or a year of it, as a gift.
 @MainActor @Observable
 final class Pro {
     nonisolated static let annual = "com.maxwellkendall.aicoach.pro.yearly"
@@ -14,7 +14,11 @@ final class Pro {
     /// The annual plan's free trial (author, 2026-10-12): two training weeks, the second one adapted to the first.
     nonisolated static let trialDays = 14
 
-    private(set) var active = false
+    /// An App Store subscription (or its trial) is in force.
+    private(set) var subscribed = false
+    /// FIT-122: Pro from a gift redeemed on the account, until then. Kept on the phone so it holds offline.
+    private(set) var giftUntil: Date? = UserDefaults.standard.object(forKey: giftKey) as? Date
+    var active: Bool { subscribed || giftUntil.map { $0 > .now } == true }
     /// When the free trial ends, while in one.
     private(set) var trialEnds: Date?
     /// Whether this Apple Account can still have the free trial; someone whose Pro lapsed can't.
@@ -52,15 +56,38 @@ final class Pro {
         // `-pro YES`: Pro without buying, for trying Pro's screens in the simulator.
         if UserDefaults.standard.bool(forKey: "pro") { active = true }
         #endif
-        self.active = active
+        subscribed = active
         self.trialEnds = trialEnds
         if let annual = try? await Product.products(for: [Self.annual]).first, let subscription = annual.subscription {
             trialEligible = await subscription.isEligibleForIntroOffer
         }
-        await remind(trialEnds)
+        await remind()
     }
 
-    // MARK: Trial reminder
+    // MARK: Gifts (FIT-122)
+
+    private static let giftKey = "pro.giftUntil"
+
+    /// The account's gifted Pro, from the server; signed out, there's none. Offline, the last answer stands.
+    func refreshGift(signedIn: Bool) async {
+        guard signedIn else { return setGift(nil) }
+        guard let until = try? await Cloud.giftedPro() else { return }
+        setGift(until)
+        await remind()
+    }
+
+    /// A gift just redeemed: Pro until `until`.
+    func redeemed(until: Date) async {
+        setGift(until)
+        await remind()
+    }
+
+    private func setGift(_ until: Date?) {
+        giftUntil = until
+        UserDefaults.standard.set(until, forKey: Self.giftKey)
+    }
+
+    // MARK: Reminders
 
     static let reminderID = "pro.trial.reminder"
 
@@ -70,16 +97,31 @@ final class Pro {
         return date > now ? date : nil
     }
 
-    /// Asked for in context, right after a trial starts (FIT-59: never at launch). Replaced on each refresh, removed
-    /// once there's no trial.
-    private func remind(_ trialEnds: Date?) async {
+    /// FIT-122: two weeks before a gift's year ends, the offer to keep going; nil once that's passed.
+    nonisolated static func giftReminderDate(until: Date, now: Date = .now) -> Date? {
+        let date = until.addingTimeInterval(-14 * 24 * 3600)
+        return date > now ? date : nil
+    }
+
+    /// Asked for in context, right after a trial starts or a gift is redeemed (FIT-59: never at launch). Replaced on
+    /// each refresh, removed once there's nothing to remind of. A trial's reminder comes first: it's the one that bills.
+    private func remind() async {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [Self.reminderID])
-        guard let trialEnds, let date = Self.reminderDate(trialEnds: trialEnds),
-              (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Your free trial ends in 2 days"
-        content.body = "Pro renews on \(trialEnds.formatted(.dateTime.month(.wide).day())). To cancel, go to Settings › Apple Account › Subscriptions."
+        let date: Date
+        if let trialEnds, let reminder = Self.reminderDate(trialEnds: trialEnds) {
+            date = reminder
+            content.title = "Your free trial ends in 2 days"
+            content.body = "Pro renews on \(trialEnds.formatted(.dateTime.month(.wide).day())). To cancel, go to Settings › Apple Account › Subscriptions."
+        } else if !subscribed, let giftUntil, let reminder = Self.giftReminderDate(until: giftUntil) {
+            date = reminder
+            content.title = "Your gift of Pro ends in 2 weeks"
+            content.body = "It runs until \(giftUntil.formatted(.dateTime.month(.wide).day())). Subscribe in the app to keep your coach planning."
+        } else {
+            return
+        }
+        guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
         let trigger = UNCalendarNotificationTrigger(dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date),
                                                     repeats: false)
         try? await center.add(UNNotificationRequest(identifier: Self.reminderID, content: content, trigger: trigger))

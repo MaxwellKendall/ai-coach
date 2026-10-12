@@ -274,12 +274,28 @@ export class AICoachStack extends Stack {
       fieldName: "deleteAccount",
     });
 
+    // ---- FIT-122: gifts of Pro, sold on the web through Stripe; the author creates the secret ----
+    const stripeSecret = secretsmanager.Secret.fromSecretNameV2(this, "StripeSecret", `aicoach/${stage}/stripe`);
+    const giftEnv = { STRIPE_SECRET: stripeSecret.secretName, GIFT_PRICE_CENTS: "3999" };
+    const gifts = fn("gifts", giftEnv);
+    table.grant(gifts, "dynamodb:GetItem", "dynamodb:UpdateItem");
+    stripeSecret.grantRead(gifts);
+    const giftsSource = api.addLambdaDataSource("GiftsSource", gifts);
+    giftsSource.createResolver("GiftsRedeem", { typeName: "Mutation", fieldName: "redeemGift" });
+    giftsSource.createResolver("GiftsPro", { typeName: "Query", fieldName: "giftedPro" });
+    // Stripe posts here directly: CloudFront's origin access control passes only GETs on to a function URL.
+    const stripeWebhook = fn("stripeWebhook", giftEnv);
+    table.grant(stripeWebhook, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem");
+    stripeSecret.grantRead(stripeWebhook);
+    const webhookUrl = stripeWebhook.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
+    new CfnOutput(this, "StripeWebhookUrl", { value: webhookUrl.url });
+
     // ---- FIT-102: Claude for the app, with the key kept here ----
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(this, "AnthropicSecret", `aicoach/${stage}/anthropic`);
     // FIT-123: without Pro, a few requests per account for good; dev has room for testing with StoreKit's local
     // config, whose Xcode-signed transactions aren't Apple's.
     const aiProxy = fn("aiProxy", { ANTHROPIC_SECRET: anthropicSecret.secretName, FREE_REQUESTS: isProd ? "40" : "1000" });
-    table.grant(aiProxy, "dynamodb:UpdateItem");
+    table.grant(aiProxy, "dynamodb:UpdateItem", "dynamodb:GetItem");
     anthropicSecret.grantRead(aiProxy);
     api.addLambdaDataSource("AiProxySource", aiProxy).createResolver("AiMessages", {
       typeName: "Mutation",
@@ -339,8 +355,11 @@ export class AICoachStack extends Stack {
         SHARE_ORIGIN: shareOrigin,
         APP_ID: "7GZKY29XJH.com.maxwellkendall.aicoach",
         APP_STORE_URL: "",
+        ...giftEnv,
       });
-      table.grant(share, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:UpdateItem");
+      // PutItem: the thanks page saves a paid gift if Stripe's webhook hasn't yet.
+      table.grant(share, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:UpdateItem", "dynamodb:PutItem");
+      stripeSecret.grantRead(share);
       const url = share.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
       // join.{domain}/CODE is the invite page, /join/CODE; Apple's file stays where Apple looks for it.
       const joinPaths = new cloudfront.Function(this, "JoinPaths", {
@@ -416,9 +435,9 @@ export class AICoachStack extends Stack {
     const alerts = new sns.Topic(this, "Alerts", { topicName: `AICoach-${stage}-alerts` });
     alerts.addSubscription(new subs.EmailSubscription(props.alertEmail));
 
-    const lambdas = { a: postConfirmation, b: deleteAccount, c: push, d: groupCleanup };
+    const lambdas = { a: postConfirmation, b: deleteAccount, c: push, d: groupCleanup, e: gifts, f: stripeWebhook };
     const errors = new cloudwatch.MathExpression({
-      expression: "a + b + c + d + api",
+      expression: "a + b + c + d + e + f + api",
       usingMetrics: {
         ...Object.fromEntries(Object.entries(lambdas).map(([k, f]) => [k, f.metricErrors({ period: Duration.minutes(5) })])),
         api: new cloudwatch.Metric({

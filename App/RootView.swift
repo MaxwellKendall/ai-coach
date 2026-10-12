@@ -81,9 +81,20 @@ struct RootView: View {
             .tint(Self.accent)
         }
         .sheet(isPresented: Binding(get: { pro.paywall }, set: { pro.paywall = $0 })) { PaywallView() }
+        .sheet(item: Binding(get: { onboarding == nil ? navigator.gift.map(GiftRef.init) : nil },
+                             set: { if $0 == nil { navigator.gift = nil } })) { ref in
+            NavigationStack { RedeemGiftView(code: ref.id) }.tint(Self.accent)
+        }
+        // FIT-122: Pro from a gift is the account's.
+        .task(id: account.user?.uid) { await pro.refreshGift(signedIn: account.user != nil) }
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).
         .onOpenURL { url in
             guard account.isAvailable else { return }
+            // FIT-122: a gift's link opens Redeem with its code; Redeem asks to sign in.
+            if let gift = InviteLink.gift(from: url) {
+                navigator.gift = gift
+                return
+            }
             // FIT-113: a shared session; it waits for onboarding, if any, then asks before planning anything.
             if let session = InviteLink.session(from: url) {
                 if account.user == nil {

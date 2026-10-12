@@ -103,6 +103,10 @@ export interface Page {
   status: number;
   type: string;
   body: string;
+  /** FIT-122: a redirect's target (to Stripe Checkout, or from the thanks page to the gift). */
+  location?: string;
+  /** Pages that change as they're used (a gift's) aren't kept by CloudFront. */
+  noStore?: boolean;
 }
 
 // MARK: Reading what users saved. Every field is checked and coerced, so a stored payload can only ever render
@@ -215,11 +219,11 @@ export function readSession(v: unknown, name: string): Session | undefined {
 }
 
 /**
- * The paths the app opens itself when it's installed: invites only, as /join/CODE or join.{domain}/CODE (codes are
- * always 8 characters). Wins, recaps and programs open this page until the app can show them, so a friend who
+ * The paths the app opens itself when it's installed: invites, as /join/CODE or join.{domain}/CODE (codes are
+ * always 8 characters), shared sessions and programs, and gifts (FIT-122). Wins, recaps and programs open this page until the app can show them, so a friend who
  * already has the app still sees what was shared.
  */
-export const appPaths = ["/join/*", "/????????", "/s/*", "/p/*"];
+export const appPaths = ["/join/*", "/????????", "/s/*", "/p/*", "/g/*"];
 
 /** FIT-110: the kinds of page whose views are counted, as their paths start. */
 export const viewKinds = ["w", "r", "p", "s", "join"];
@@ -273,7 +277,7 @@ export function associationFile(site: Site) {
   };
 }
 
-const html = (body: string): Page => ({ status: 200, type: "text/html; charset=utf-8", body });
+export const html = (body: string): Page => ({ status: 200, type: "text/html; charset=utf-8", body });
 
 /** Everything a user typed (names, group names) goes through this. */
 export const esc = (s: string) =>
@@ -539,7 +543,7 @@ function homePage(site: Site) {
   });
 }
 
-function missingPage(site: Site) {
+export function missingPage(site: Site) {
   return layout(site, {
     title: "This link has expired",
     description: site.appName,
@@ -551,7 +555,7 @@ function missingPage(site: Site) {
 
 type Action = { href: string; label: string } | undefined | "" | false;
 
-function actions(site: Site, more: Action[], primary = `Get ${site.appName}`) {
+export function actions(site: Site, more: Action[], primary = `Get ${site.appName}`) {
   const store = site.appStoreUrl ?? "#soon";
   const secondary = more.filter((a): a is { href: string; label: string } => !!a);
   return `<div class="actions">
@@ -572,9 +576,9 @@ function how(site: Site) {
   </section>`;
 }
 
-const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.5"/><rect x="9.5" y="8.5" width="5" height="12.5" rx="1.5"/><rect x="16" y="3" width="5" height="18" rx="1.5"/></svg>`;
+export const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.5"/><rect x="9.5" y="8.5" width="5" height="12.5" rx="1.5"/><rect x="16" y="3" width="5" height="18" rx="1.5"/></svg>`;
 
-function layout(site: Site, page: { title: string; description: string; path: string; body: string; image?: string; view?: string }) {
+export function layout(site: Site, page: { title: string; description: string; path: string; body: string; image?: string; view?: string }) {
   const url = `${site.origin}${page.path}`;
   return `<!doctype html>
 <html lang="en">

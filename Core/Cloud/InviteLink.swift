@@ -58,4 +58,21 @@ enum InviteLink {
     static func session(pasted text: String) -> String? { shared("s", pasted: text) }
     static func program(from url: URL) -> String? { shared("p", from: url) }
     static func program(pasted text: String) -> String? { shared("p", pasted: text) }
+
+    /// FIT-122: a gift's code: 12 letters and digits without 0, 1, I or O, typed any way or in its link
+    /// (barbrabell.com/g/ABCDEFGHJKLM).
+    static func gift(_ text: String) -> String? {
+        var text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: text), url.scheme == "https" {
+            guard let host = url.host()?.lowercased(), host == "barbrabell.com" || host.hasSuffix(".barbrabell.com") else { return nil }
+            let parts = url.pathComponents.filter { $0 != "/" }
+            guard parts.count == 2, parts[0] == "g" else { return nil }
+            text = parts[1]
+        }
+        let code = text.uppercased().filter { $0 != "-" && !$0.isWhitespace }
+        let alphabet = Set("23456789ABCDEFGHJKLMNPQRSTUVWXYZ")
+        return code.count == 12 && code.allSatisfy(alphabet.contains) ? code : nil
+    }
+
+    static func gift(from url: URL) -> String? { url.scheme == "https" ? gift(url.absoluteString) : nil }
 }

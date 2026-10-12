@@ -116,6 +116,8 @@ type Query {
   "FIT-113: a shared item by its id, so the app can open a session someone shared."
   share(id: ID!): SharedItem
   me: Profile
+  "FIT-122: until when the account has Pro from a redeemed gift, or null."
+  giftedPro: AWSDateTime
   myGroups: [GroupSummary!]!
   group(groupId: ID!): Group
 }
@@ -128,6 +130,8 @@ type Mutation {
   "FIT-107: take a share down; its link then says it has expired."
   deleteShare(id: ID!): Boolean
   updateProfile(displayName: String, units: String): Profile
+  "FIT-122: redeem a gift code on this account; returns until when it has Pro."
+  redeemGift(code: String!): AWSDateTime
   createGroup(name: String!): GroupSummary
   joinGroup(inviteCode: String!): GroupSummary
   leaveGroup(groupId: ID!): Boolean

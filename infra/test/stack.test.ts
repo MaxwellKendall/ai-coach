@@ -125,6 +125,7 @@ describe("resolvers", () => {
         "Mutation.updateProfile", "Mutation.createGroup", "Mutation.joinGroup", "Mutation.leaveGroup",
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
         "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.publishWeek", "Mutation.clearWeek", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
+        "Mutation.redeemGift", "Query.giftedPro",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -174,8 +175,14 @@ describe("least privilege", () => {
     expect(actionsOf(dev, /^push/)).toContain("secretsmanager:GetSecretValue");
     expect(actionsOf(dev, /^groupCleanup/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem"]));
     expect(actionsOf(dev, /^groupCleanup/)).not.toContain("dynamodb:PutItem");
-    // FIT-102: the AI proxy counts each user's requests and reads the Anthropic key; nothing else.
-    expect(actionsOf(dev, /^aiProxy/).filter((a) => a.startsWith("dynamodb:"))).toEqual(["dynamodb:UpdateItem"]);
+    // FIT-102: the AI proxy counts each user's requests and reads the Anthropic key; FIT-122: and reads a gift's Pro.
+    expect(actionsOf(dev, /^aiProxy/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:UpdateItem"]);
+    // FIT-122: gifts are redeemed and refunded, never scanned or deleted.
+    for (const name of [/^gifts/, /^stripeWebhook/]) {
+      expect(actionsOf(dev, name)).not.toContain("dynamodb:DeleteItem");
+      expect(actionsOf(dev, name)).not.toContain("dynamodb:Scan");
+      expect(actionsOf(dev, name)).toContain("secretsmanager:GetSecretValue");
+    }
     expect(actionsOf(dev, /^aiProxy/)).toContain("secretsmanager:GetSecretValue");
   });
 });
