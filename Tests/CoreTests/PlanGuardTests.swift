@@ -240,6 +240,62 @@ struct PlanGuardTests {
         #expect(PlanGuard.missingMovements(rows, context).map(\.name) == ["a hinge"])
     }
 
+    // MARK: Rule 8: decided lifts (FIT-102)
+
+    private func decision(_ exercise: String, _ load: Double, _ reps: Double) -> Progression.Decision {
+        Progression.Decision(exercise: exercise, step: .add, load: load, reps: reps,
+                             estimatedMax: ProgramPlan.estimatedMax(load: load, reps: reps), perHand: false, confidence: 1)
+    }
+
+    private func decidedCheck(_ rows: [PlannedWorkout], _ decided: [Progression.Decision], light: Bool = false) -> (workouts: [PlannedWorkout], repairs: [PlanGuard.Repair]) {
+        PlanGuard.check(rows, PlanGuard.Context(settings: settings(), catalog: catalog, names: names,
+                                                history: [logged("bench-press", 185, 5, rpe: 8)], light: light, decided: decided))
+    }
+
+    /// Decided 190 × 5; the designer planned 180 × 5 (a drop): the top set goes back to 190 × 5.
+    @Test func aDecidedLiftPlannedBelowItsDecisionIsRaised() {
+        let result = decidedCheck([row("bench-press", 4, 5, load: 180, main: true)], [decision("bench-press", 190, 5)])
+        #expect(result.workouts.first?.target("load_lb") == 190)
+        #expect(result.workouts.first?.target("reps") == 5)
+        #expect(result.repairs.map(\.rule) == [.decided])
+    }
+
+    /// Triples at 205 show more than 190 × 5's max, and 195 × 5 is above it: both are the designer's call.
+    @Test func atOrAboveTheDecisionIsLeftAlone() {
+        #expect(decidedCheck([row("bench-press", 4, 3, load: 205, main: true)], [decision("bench-press", 190, 5)]).repairs.isEmpty)
+        #expect(decidedCheck([row("bench-press", 4, 5, load: 195, main: true)], [decision("bench-press", 190, 5)]).repairs.isEmpty)
+    }
+
+    /// The heaviest of two bench days is the one raised; an accessory bench, a light week and a lift the week
+    /// doesn't have are left alone.
+    @Test func onlyTheTopMainSetOfAHardWeekIsRaised() {
+        let twice = decidedCheck([row("bench-press", 4, 5, load: 180, main: true),
+                                  row("bench-press", 3, 8, load: 135, main: true, on: tuesday)], [decision("bench-press", 190, 5)])
+        #expect(twice.workouts.map { $0.target("load_lb") } == [190, 135])
+        #expect(decidedCheck([row("bench-press", 3, 5, load: 180)], [decision("bench-press", 190, 5)]).repairs.isEmpty)
+        #expect(decidedCheck([row("bench-press", 2, 5, load: 180, main: true)], [decision("bench-press", 190, 5)], light: true)
+            .repairs.allSatisfy { $0.rule != .decided })
+        #expect(decidedCheck([row("back-squat", 4, 5, load: 200, main: true)], [decision("bench-press", 190, 5)]).repairs.isEmpty)
+    }
+
+    /// A decision past rule 3's ceiling (185 × 5 last time; 10% over is about 203) is held to it.
+    @Test func aDecisionIsHeldToTheLoadCeiling() {
+        let result = decidedCheck([row("bench-press", 4, 5, load: 180, main: true)], [decision("bench-press", 225, 5)])
+        let load = try? #require(result.workouts.first?.target("load_lb"))
+        #expect(load == 200)
+    }
+
+    /// After a deload (135 × 5 last week, 185 × 5 the week before), the hard week's ceiling is 10% over 185, not 135.
+    @Test func theWeekAfterADeloadIsntCappedByIt() {
+        let hard = LoggedSet(date: monday - 14 * 86_400, exercise: "bench-press", pattern: nil,
+                             measurements: [.init(metric: "load_lb", value: 185, unit: "lb"), .init(metric: "reps", value: 5, unit: "reps")])
+        let result = PlanGuard.check([row("bench-press", 4, 5, load: 190, main: true)],
+                                     PlanGuard.Context(settings: settings(), catalog: catalog, names: names,
+                                                       history: [hard, logged("bench-press", 135, 5)], light: false))
+        #expect(result.workouts.first?.target("load_lb") == 190)
+        #expect(result.repairs.isEmpty)
+    }
+
     // MARK: A bad model-shaped week
 
     /// What a model left unchecked might write: bench 12×8 at 400 on a 155 bench, a cable row with no cable, squat

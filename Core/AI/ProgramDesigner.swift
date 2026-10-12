@@ -129,7 +129,7 @@ enum ProgramDesigner {
         let light = request.program?.light ?? (request.weeksSinceDeload >= (settings.deloadEveryWeeks ?? tier.deloadEveryWeeks))
         let past = request.history.filter { $0.date < request.monday }
         let context = PlanGuard.Context(settings: settings, catalog: request.catalog, names: request.names, history: past,
-                                        light: light, calendar: request.calendar, wholeWeek: true)
+                                        light: light, calendar: request.calendar, wholeWeek: true, decided: request.progression)
         func seconds() -> Double {
             let elapsed = ContinuousClock.now - clock
             return Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18

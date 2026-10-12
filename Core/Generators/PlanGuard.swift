@@ -19,6 +19,8 @@ enum PlanGuard {
         case rpe, lightWeek
         /// 7. A full week trains a squat or lunge, a hinge, a push and a pull (FIT-76).
         case movements
+        /// 8. A main lift decided before the week (FIT-101) is planned at least at its decided top set (FIT-102).
+        case decided
     }
 
     struct Repair: Equatable, Sendable, CustomStringConvertible {
@@ -40,6 +42,8 @@ enum PlanGuard {
         /// The rows are a whole week, so rule 7 (every main movement) applies; a single session or part of a week
         /// isn't held to it.
         var wholeWeek = false
+        /// Each main lift's top set, decided before the week (`Progression.decided`).
+        var decided: [Progression.Decision] = []
     }
 
     /// Fewer sets than this in a light week's session, as a share of the volume table's top: plan.md step 4 (sets
@@ -57,6 +61,7 @@ enum PlanGuard {
         }
         var result = sessions.flatMap { session(Session(rows: $0, context: context), &repairs) }
         movements(&result, context, &repairs)
+        decided(&result, context, &repairs)
         weeklyCeiling(&result, context, &repairs)
         return (result, repairs)
     }
@@ -107,6 +112,44 @@ enum PlanGuard {
             rows[index] = row
             let name = { (slug: String) in context.names[slug] ?? slug }
             repairs.append(Repair(rule: .movements, text: "\(old.session): the week had no \(movement.name.dropFirst(2)); \(name(exercise.slug)) instead of \(name(old.exercise))."))
+        }
+    }
+
+    // MARK: Decided lifts
+
+    /// 8. FIT-102: designers given each lift's decided top set still planned some below it, a drop the decision didn't
+    /// make (15 of 54 changes in one Haiku run) and goals left short. A decided main lift whose best planned set shows a
+    /// lower estimated max than the decision gets the decided top set, held to rule 3's ceiling. Above it is the
+    /// designer's call (rule 3 still caps it); a lift the week doesn't have as a main lift is left alone.
+    private static func decided(_ rows: inout [PlannedWorkout], _ context: Context, _ repairs: inout [Repair]) {
+        guard !context.light else { return }
+        let bySlug = Dictionary(context.catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
+        for decision in context.decided {
+            let metric = decision.perHand ? "load_lb_hand" : "load_lb"
+            func estimate(_ row: PlannedWorkout) -> Double? {
+                guard let load = row.target(metric), let reps = row.target("reps") else { return nil }
+                return ProgramPlan.estimatedMax(load: load, reps: reps)
+            }
+            let mains = rows.indices.filter { rows[$0].main && rows[$0].exercise == decision.exercise && rows[$0].note != TrainingGenerator.warmupNote }
+            guard let top = mains.max(by: { (estimate(rows[$0]) ?? 0) < (estimate(rows[$1]) ?? 0) }),
+                  let planned = estimate(rows[top]), planned < decision.estimatedMax * 0.995 else { continue }
+            let exercise = bySlug[decision.exercise]
+            var load = decision.load
+            if let ceiling = ceiling(decision.exercise, exercise, metric: metric, reps: decision.reps, context), load > ceiling.load {
+                let barbell = !(exercise?.equipment ?? []).isDisjoint(with: ["barbell", "trap_bar", "ez_bar"])
+                load = barbell ? (ceiling.load / 5).rounded(.down) * 5 : ceiling.load.rounded(.down)
+            }
+            let old = rows[top]
+            guard ProgramPlan.estimatedMax(load: load, reps: decision.reps) > planned else { continue }
+            rows[top].set(metric, load)
+            rows[top].set("reps", decision.reps)
+            let name = context.names[decision.exercise] ?? decision.exercise
+            repairs.append(Repair(rule: .decided, text: "\(old.session): \(name) \(Coach.number(old.target(metric) ?? 0)) × \(Coach.number(old.target("reps") ?? 0)) → \(Coach.number(load)) × \(Coach.number(decision.reps)), the top set decided for this week."))
+            // Its warm-up follows the new load.
+            if let warmup = rows.indices.first(where: { rows[$0].date == old.date && rows[$0].exercise == old.exercise && rows[$0].note == TrainingGenerator.warmupNote }),
+               let fresh = TrainingGenerator.warmup(for: rows[top], settings: context.settings, tier: AgeTier.of(age: context.settings.age)) {
+                rows[warmup] = fresh
+            }
         }
     }
 
@@ -309,15 +352,20 @@ enum PlanGuard {
            let related = related(exercise, metric: metric, reps: reps, context) {
             ceilings.append(related)
         }
-        if let day = sets.map(\.date).max().map(context.calendar.startOfDay),
-           let top = sets.filter({ context.calendar.startOfDay(for: $0.date) == day }).max(by: { $0.value(metric)! < $1.value(metric)! }) {
+        // The best top set of the last two weeks logged, so a deload's light sets aren't the base for the hard week
+        // after it (FIT-102: the week after each deload was capped 10% over the deload, under its decided top set).
+        if let last = sets.map(\.date).max(),
+           let since = context.calendar.date(byAdding: .day, value: -14, to: context.calendar.startOfDay(for: last)) {
             // At the planned reps: 95×10 last time is 105×8 now, not a jump.
-            var load = top.value(metric)!
-            if let reps, let done = top.value("reps"), done != reps {
-                let reserve = 10 - min(max(top.value("rpe") ?? 8, 6), 10)
-                load *= (37 - min(reps + reserve, 36)) / (37 - min(done + reserve, 36))
-            }
-            ceilings.append((load * maxJump, "10% over your last top set"))
+            let best = sets.filter { $0.date >= since }.map { set -> Double in
+                var load = set.value(metric)!
+                if let reps, let done = set.value("reps"), done != reps {
+                    let reserve = 10 - min(max(set.value("rpe") ?? 8, 6), 10)
+                    load *= (37 - min(reps + reserve, 36)) / (37 - min(done + reserve, 36))
+                }
+                return load
+            }.max()!
+            ceilings.append((best * maxJump, "10% over your last top set"))
         }
         return ceilings.min { $0.load < $1.load }
     }
@@ -415,6 +463,6 @@ enum PlanGuard {
 private extension PlannedWorkout {
     mutating func set(_ metric: String, _ value: Double) {
         if let index = targets.firstIndex(where: { $0.metric == metric }) { targets[index].value = value }
-        else { targets.append(Measurement(metric: metric, value: value, unit: ["sets": "sets", "rpe": "RPE", "load_lb": "lb"][metric] ?? metric)) }
+        else { targets.append(Measurement(metric: metric, value: value, unit: ["sets": "sets", "rpe": "RPE", "load_lb": "lb", "reps": "reps"][metric] ?? metric)) }
     }
 }
