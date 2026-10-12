@@ -220,6 +220,12 @@ struct TodayScreen: View {
                     .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
                 Text(title).font(.system(size: 34, weight: .bold)).tracking(-0.5)
                     .contentTransition(.numericText())
+                if let streak {
+                    Label(streak.line, systemImage: "flame.fill")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(streak.atRisk ? .primary : .secondary)
+                        .padding(.top, 2)
+                }
             }
             Spacer()
             Button { you = true } label: {
@@ -230,6 +236,20 @@ struct TodayScreen: View {
         }
         .padding(.leading, 22).padding(.trailing, 12).padding(.top, 8)
         .animation(.snappy, value: index)
+    }
+
+    /// FIT-121: weeks in a row with every planned session done, or what keeps it going this week.
+    private var streak: (line: String, atRisk: Bool)? {
+        #if DEBUG
+        // `-streak YES`: a streak at risk, so the line can be looked at on a fresh simulator.
+        if UserDefaults.standard.bool(forKey: "streak") { return ("Do Wednesday’s session by Saturday to make it 6 weeks in a row", true) }
+        #endif
+        guard let start = profiles.first?.programStart else { return nil }
+        let status = Streak.status(since: start, plannedDays: planned.filter { $0.kind == .workout }.map(\.date),
+                                   workoutDays: entries.filter { $0.kind == .workout }.map(\.timestamp))
+        guard let line = Streak.line(status) else { return nil }
+        if case .atRisk = status.thisWeek { return (line, true) }
+        return (line, false)
     }
 
     /// FIT-39's "Week 3 of 16", in the date line since the program has its own tab (FIT-64).

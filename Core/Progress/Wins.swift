@@ -89,8 +89,8 @@ enum Wins {
         max(0, Int((end.timeIntervalSince(date) / (7 * 86_400)).rounded(.down)))
     }
 
-    /// A full week is every planned session done, and a week with none planned neither adds nor breaks. The week in
-    /// progress doesn't count yet. A win at 2 weeks, then every 4.
+    /// A full week is every planned session done (FIT-121: as many days trained as planned), and a week with none
+    /// planned neither adds nor breaks. The week in progress doesn't count yet. A win at 2 weeks, then every 4.
     private static func streaks(since start: Date, plannedDays: [Date], workoutDays: [Date], today: Date,
                                 calendar: Calendar) -> [WinItem] {
         let thisWeek = ProgramPlan.week(of: today, start: start, calendar: calendar)
@@ -98,13 +98,12 @@ enum Wins {
         let planned = Set(plannedDays.map(calendar.startOfDay)), done = Set(workoutDays.map(calendar.startOfDay))
         var wins: [WinItem] = [], streak = 0, workouts = 0
         for week in 0..<thisWeek {
+            guard let full = Streak.full(week, start: start, planned: planned, done: done, calendar: calendar) else { continue }
+            guard full else { streak = 0; workouts = 0; continue }
             let monday = ProgramPlan.monday(week, start: start, calendar: calendar)
             let next = ProgramPlan.monday(week + 1, start: start, calendar: calendar)
-            let days = planned.filter { $0 >= monday && $0 < next }
-            guard !days.isEmpty else { continue }
-            guard days.isSubset(of: done) else { streak = 0; workouts = 0; continue }
             streak += 1
-            workouts += days.count
+            workouts += planned.filter { $0 >= monday && $0 < next }.count
             if streak == 2 || streak % 4 == 0 {
                 wins.append(WinItem(kind: .streak, date: calendar.date(byAdding: .day, value: -1, to: next)!, key: "streak:\(streak)",
                                 metric: "streak", unit: "weeks", value: Double(streak), workouts: workouts))
