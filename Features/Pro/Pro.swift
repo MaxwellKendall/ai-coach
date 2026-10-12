@@ -8,7 +8,7 @@ import UserNotifications
 /// FIT-120: Pro runs the program; free keeps logging, progress and groups.
 @MainActor @Observable
 final class Pro {
-    static let annual = "com.maxwellkendall.aicoach.pro.annual"
+    static let annual = "com.maxwellkendall.aicoach.pro.yearly"
     static let monthly = "com.maxwellkendall.aicoach.pro.monthly"
     static let products = [annual, monthly]
     /// The annual plan's free trial (author, 2026-10-12): two training weeks, the second one adapted to the first.

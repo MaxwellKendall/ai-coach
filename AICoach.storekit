@@ -34,7 +34,7 @@
               "locale": "en_US"
             }
           ],
-          "productID": "com.maxwellkendall.aicoach.pro.annual",
+          "productID": "com.maxwellkendall.aicoach.pro.yearly",
           "recurringSubscriptionPeriod": "P1Y",
           "referenceName": "Pro Annual",
           "subscriptionGroupID": "21500001",
