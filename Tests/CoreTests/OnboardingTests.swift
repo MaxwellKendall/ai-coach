@@ -188,4 +188,21 @@ struct OnboardingGoalWordsTests {
         #expect(OnboardingAnswers.shortName("Front Squat") == "Front")
         #expect(OnboardingAnswers.shortName("Pull-up") == "Pull-up")
     }
+
+    /// "Squat 245 by January", no starting point: 245 / 1.16 over 16 weeks is a max of about 211, so 190 × 5, dashed.
+    /// Set once: a start cleared after it stays cleared. A goal of reps, or one with no target, isn't estimated.
+    @Test func aLiftGoalWithoutAStartEstimatesOneFromItsTarget() {
+        var answers = OnboardingAnswers()
+        answers.weeks = 16
+        answers.goals = ["squat", "pullups", "bench"]
+        answers.targets = ["squat": 245, "pullups": 10]
+        answers.estimateStarts()
+        #expect(answers.starts["back-squat"]?.value("load_lb") == 190)
+        #expect(answers.starts["back-squat"]?.value("reps") == 5)
+        #expect(answers.unconfirmed.contains("start.back-squat"))
+        #expect(answers.starts["pull-up"] == nil && answers.starts["bench-press"] == nil)
+        answers.starts["back-squat"] = nil
+        answers.estimateStarts()
+        #expect(answers.starts["back-squat"] == nil)
+    }
 }

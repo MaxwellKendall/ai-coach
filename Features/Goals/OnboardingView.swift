@@ -33,6 +33,9 @@ struct OnboardingView: View {
     @State private var pendingInvite: String?
     @State private var joined: Cloud.GroupSummary?
     @State private var sessionWaiting = false
+    /// Signed out at the check step: sign in first, so Claude designs the program (author, 2026-10-12, FIT-102).
+    @State private var signingInForCoach = false
+    @State private var askedSignIn = false
     var onDone: () -> Void
 
     private static let steps = [
@@ -97,7 +100,21 @@ struct OnboardingView: View {
             }
         }
         // The check step designs the first week, again whenever the answers it's built from change.
-        .onChange(of: page == 4 ? designKey : nil, initial: true) { _, key in if let key { startDesign(key) } }
+        .onChange(of: page == 4 ? designKey : nil, initial: true) { _, key in
+            guard let key else { return }
+            if account.isAvailable, account.user == nil, !askedSignIn {
+                askedSignIn = true
+                signingInForCoach = true
+            } else if !signingInForCoach {
+                startDesign(key)
+            }
+        }
+        // Signed in or not, the design starts once the sheet goes.
+        .sheet(isPresented: $signingInForCoach, onDismiss: { if page == 4 { startDesign(designKey) } }) {
+            SignInSheet(reason: "Sign in so your coach can design your program.")
+        }
+        .onChange(of: answers.goals) { answers.estimateStarts() }
+        .onChange(of: answers.targets) { answers.estimateStarts() }
     }
 
     /// FIT-109: one quiet line, for someone who came from a friend's invite. Apple's paste button reads the
@@ -153,7 +170,9 @@ struct OnboardingView: View {
         [answers.goals.joined(separator: ","), answers.targets.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","),
          "\(answers.weeks)", answers.equipment.sorted().joined(separator: ","), answers.avoid.sorted().joined(separator: ","),
          "\(answers.age ?? 0)", "\(answers.weight ?? 0)", answers.starts.values.map { "\($0)" }.sorted().joined(),
-         "\(answers.days)", "\(answers.minutes)", answers.hurts.sorted().joined(separator: ",")].joined(separator: "|")
+         "\(answers.days)", "\(answers.minutes)", answers.hurts.sorted().joined(separator: ","),
+         // Signing in changes the model that designs it.
+         "\(account.user != nil)"].joined(separator: "|")
     }
 
     typealias FirstWeekDesign = (brief: ProgramBrief?, model: String, result: ProgramDesigner.Result)

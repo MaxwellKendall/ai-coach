@@ -92,6 +92,8 @@ struct OnboardingAnswers: Sendable {
     /// Values heard or suggested and not touched since, drawn dashed: "goals", "weeks", "age", "weight", "days",
     /// "minutes", "hurts", "move.<slug>", "start.<slug>", "target.<goal>".
     var unconfirmed: Set<String> = []
+    /// Lifts whose starting point was estimated from their goal, once each, so one cleared stays cleared.
+    var estimated: Set<String> = []
 
     static let weekRange = 4...52
 
@@ -154,6 +156,22 @@ struct OnboardingAnswers: Sendable {
     }
 
     func target(_ goal: GoalOption) -> Double? { targets[goal.id] ?? suggestedTarget(goal) }
+
+    /// A lift goal set without a starting point says the user already lifts: its start is estimated from the target,
+    /// the inverse of `suggestedTarget`'s 1% a week (at most 25%), as a set of 5, dashed to confirm. Without it, week 1
+    /// guessed from body weight as if they'd never lifted (squat 105 × 8 for a "Squat 245" goal).
+    mutating func estimateStarts() {
+        for goal in goals.compactMap(GoalOption.with(id:)) where goal.measure == .load {
+            guard let slug = goal.exercise, starts[slug] == nil, !estimated.contains(slug), let target = targets[goal.id] else { continue }
+            let max = target / min(1.25, 1 + 0.01 * Double(weeks))
+            starts[slug] = StartingSet(exercise: slug, measurements: [
+                Measurement(metric: "load_lb", value: TrainingGenerator.roundTo5(ProgramPlan.load(forMax: max, reps: 5)), unit: "lb"),
+                Measurement(metric: "reps", value: 5, unit: "reps"),
+            ])
+            estimated.insert(slug)
+            unconfirmed.insert("start.\(slug)")
+        }
+    }
 
     /// Code's proposal, which the user edits. About a pound a week of weight, at most 10%; strength up 1% a week
     /// (at most 25%); reps up one every two weeks (at most double). Without a starting point, the age tier's
