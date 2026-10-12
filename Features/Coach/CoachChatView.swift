@@ -2,14 +2,13 @@ import SwiftUI
 import SwiftData
 
 /// FIT-103: a conversation with the coach about this week or the program. Each answer may leave changes in one draft,
-/// shown as a card under the conversation; nothing changes until Apply (principle 7), and Apply has Undo. Free users
-/// get `FreeLimits.coachChatsPerMonth` conversations a month (counted at the first message), then Pro's paywall.
+/// shown as a card under the conversation; nothing changes until Apply (principle 7), and Apply has Undo. It's Pro
+/// (FIT-120): without it, sending shows the offer.
 struct CoachChatView: View {
     let scope: CoachChat.Scope
     @Environment(\.modelContext) private var context
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
-    @Query private var profiles: [Profile]
 
     struct Message: Identifiable, Equatable {
         let id = UUID()
@@ -23,8 +22,6 @@ struct CoachChatView: View {
     @State private var text = ""
     @FocusState private var typing: Bool
     @State private var working = false
-    @State private var counted = false
-    @State private var paywall = false
     @State private var voice = VoiceCapture()
     @State private var toast: Toast?
 
@@ -59,7 +56,6 @@ struct CoachChatView: View {
         .animation(.snappy, value: messages)
         .animation(.snappy, value: draft)
         .animation(.snappy, value: working)
-        .sheet(isPresented: $paywall) { PaywallView() }
     }
 
     private var intro: String {
@@ -140,10 +136,8 @@ struct CoachChatView: View {
                         .accessibilityLabel("Send")
                 }
             }
-            if !pro.active, !counted, let profile = profiles.first {
-                let left = FreeLimits.coachChatsLeft(profile.coachChats)
-                Text(left == 0 ? "You’ve used this month’s free conversations. Pro is unlimited."
-                     : "\(left) of \(FreeLimits.coachChatsPerMonth) free conversations left this month")
+            if !pro.active {
+                Text("Talking with your coach is part of Pro, free for \(Pro.trialDays) days.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -157,16 +151,10 @@ struct CoachChatView: View {
     private func send(_ said: String) {
         let said = said.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !said.isEmpty, !working else { return }
-        // A free conversation is counted at its first message; with none left, the paywall instead.
-        if !counted, !pro.active, let profile = profiles.first {
-            guard FreeLimits.coachChatsLeft(profile.coachChats) > 0 else {
-                paywall = true
-                return
-            }
-            profile.coachChats.append(.now)
-            try? context.save()
+        guard pro.active else {
+            pro.paywall = true
+            return
         }
-        counted = true
         text = ""
         messages.append(Message(coach: false, text: said))
         guard let coachContext = Planner.coachContext(in: context) else {

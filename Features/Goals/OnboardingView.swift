@@ -7,6 +7,8 @@ struct OnboardingView: View {
     @Environment(\.modelContext) private var context
     /// FIT-102: signed in, program design uses Claude through our server.
     @Environment(Account.self) private var account
+    /// FIT-120: starting the program is the offer, unless Pro already is.
+    @Environment(Pro.self) private var pro
     @Bindable var profile: Profile
     @Query private var templates: [Template]
     @Query private var goals: [Goal]
@@ -263,7 +265,7 @@ struct OnboardingView: View {
     @ViewBuilder private var footer: some View {
         if page == 4 {
             let ready = answers.age != nil && answers.weight != nil && !answers.days.isEmpty
-            Button(ready ? "Start program" : "Add your age and weight") {
+            Button(!ready ? "Add your age and weight" : pro.active ? "Start program" : ProOfferBar.title(trialEligible: pro.trialEligible)) {
                 if ready { start() } else { withAnimation(.snappy) { page = 2; open = answers.age == nil ? "age" : "weight" } }
             }
             .font(.headline)

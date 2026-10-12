@@ -14,6 +14,8 @@ struct WorkoutDetailView: View {
     var onStart: ([PlannedActivity]) -> Void = { _ in }
     /// Called with the saved rows after Save.
     var onSave: ([PlannedActivity]) -> Void = { _ in }
+    /// FIT-120: a workout of your own, nothing planned: Start hands over the session as built, and there's no Save.
+    var onStartOwn: ((SessionPlan) -> Void)?
     /// Pushed rather than presented: the system Back button leaves instead of Cancel.
     var pushed = false
     @State private var session: SessionPlan
@@ -42,8 +44,10 @@ struct WorkoutDetailView: View {
     }
 
     init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil, pushed: Bool = false,
-         onStart: @escaping ([PlannedActivity]) -> Void = { _ in }, onSave: @escaping ([PlannedActivity]) -> Void = { _ in }) {
+         onStart: @escaping ([PlannedActivity]) -> Void = { _ in }, onSave: @escaping ([PlannedActivity]) -> Void = { _ in },
+         onStartOwn: ((SessionPlan) -> Void)? = nil) {
         self.items = items
+        self.onStartOwn = onStartOwn
         self.startTitle = startTitle
         self.onStart = onStart
         self.onSave = onSave
@@ -82,8 +86,10 @@ struct WorkoutDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !pushed { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { onSave(save()); dismiss() }.disabled(session.items == original.items || session.blocks.isEmpty)
+            if onStartOwn == nil {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { onSave(save()); dismiss() }.disabled(session.items == original.items || session.blocks.isEmpty)
+                }
             }
         }
         .safeAreaInset(edge: .bottom) { bottom(names) }
@@ -346,6 +352,11 @@ struct WorkoutDetailView: View {
             .transition(.move(edge: .bottom))
         } else if let startTitle {
             Button {
+                if let onStartOwn {
+                    dismiss()
+                    onStartOwn(session)
+                    return
+                }
                 let saved = save()
                 dismiss()
                 onStart(saved)

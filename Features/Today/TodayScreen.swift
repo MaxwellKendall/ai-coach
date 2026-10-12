@@ -8,6 +8,8 @@ struct TodayScreen: View {
     /// FIT-102: signed in, program design uses Claude through our server.
     @Environment(Account.self) private var account
     @Environment(CoachInbox.self) private var coach
+    /// FIT-120: Pro runs the program; without it, logging stays.
+    @Environment(Pro.self) private var pro
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var plans: [Plan]
     @Query private var profiles: [Profile]
@@ -37,9 +39,10 @@ struct TodayScreen: View {
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
-        case propose(Proposal), spoken(Spoken)
+        case propose(Proposal), spoken(Spoken), own
         var id: String {
             switch self {
+            case .own: "own"
             case .details(let items): "details \(items.map(\.id))"
             case .record(let items): "record \(items.map(\.id))"
             case .log(let items): "log \(items.map(\.id))"
@@ -159,9 +162,10 @@ struct TodayScreen: View {
         .sheet(isPresented: Binding(get: { celebrating != nil }, set: { if !$0 { celebrating = nil } })) {
             if let celebrating { CelebrationSheet(wins: celebrating) }
         }
-        // A new week, or a profile that just finished onboarding, gets a plan.
-        .task(id: profiles.first?.isComplete) {
+        // A new week, or a profile that just finished onboarding, gets a plan; the coach designs it with Pro (FIT-120).
+        .task(id: "\(profiles.first?.isComplete == true) \(pro.active)") {
             try? Planner.ensureWeek(in: context)
+            guard pro.active else { return }
             await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
         }
     }
@@ -325,6 +329,7 @@ struct TodayScreen: View {
                     Text("Rest").font(.system(size: 30, weight: .bold)).tracking(-0.4)
                     Text(coach).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         .frame(maxWidth: 240)
+                    if isToday && !pro.active { logOwnButton.padding(.top, 18) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -333,32 +338,17 @@ struct TodayScreen: View {
 
     private func planCard(_ plan: DayCard.Planned, isToday: Bool, isPast: Bool) -> some View {
         let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        // FIT-120: the program's sessions show without Pro, but run with it; a friend's (pinned, FIT-113) stays open.
+        let locked = !pro.active && !plan.items.allSatisfy(\.pinned)
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("\(plan.start.formatted(date: .omitted, time: .shortened)) · \(plan.minutes) min")
                     .font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
-                Menu {
-                    Button("Edit exercises", systemImage: "list.bullet") { sheet = .details(plan.items) }
-                    // FIT-113: send this session to a friend, who does it with their own weights.
-                    if account.user != nil, !isPast {
-                        Button("Train with a Friend", systemImage: "person.2") { trainWithFriend(plan) }
-                    }
-                    if let plan = thisWeeksPlan {
-                        Button("Change this week", systemImage: "slider.horizontal.3") { sheet = .adjust(plan) }
-                    }
-                    Button("Plan this week again", systemImage: "arrow.clockwise") {
-                        try? Planner.generate(weekOf: .now, in: context)
-                        Task { await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil)) }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
-                        .frame(width: 32, height: 24)
-                }
-                .accessibilityLabel("More")
+                if !locked { menu(plan, isPast: isPast) }
             }
             // The title opens the session, as its exercises do.
-            Button { sheet = .details(plan.items) } label: {
+            Button { open(plan, locked: locked) } label: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(plan.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
                     Text(plan.coach).font(.subheadline).foregroundStyle(.secondary).lineSpacing(2).padding(.top, 10)
@@ -392,9 +382,19 @@ struct TodayScreen: View {
             }
             .padding(.top, 22)
             .contentShape(.rect)
-            .onTapGesture { sheet = .details(plan.items) }
+            .onTapGesture { open(plan, locked: locked) }
             Spacer(minLength: 16)
-            if isToday {
+            if locked {
+                VStack(spacing: 10) {
+                    Button { pro.paywall = true } label: {
+                        Text(ProOfferBar.title(trialEligible: pro.trialEligible)).font(.headline).frame(maxWidth: .infinity, minHeight: 58)
+                            .foregroundStyle(Color(.systemBackground))
+                            .background(Color.primary, in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    if isToday { logOwnButton }
+                }
+            } else if isToday {
                 Button { start(plan) } label: {
                     Label("Start", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
                         .foregroundStyle(Color(.systemBackground))
@@ -409,6 +409,43 @@ struct TodayScreen: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private func menu(_ plan: DayCard.Planned, isPast: Bool) -> some View {
+        Menu {
+            Button("Edit exercises", systemImage: "list.bullet") { sheet = .details(plan.items) }
+            // FIT-113: send this session to a friend, who does it with their own weights.
+            if account.user != nil, !isPast {
+                Button("Train with a Friend", systemImage: "person.2") { trainWithFriend(plan) }
+            }
+            // Changing the program's week is Pro (FIT-120).
+            if pro.active, let plan = thisWeeksPlan {
+                Button("Change this week", systemImage: "slider.horizontal.3") { sheet = .adjust(plan) }
+            }
+            if pro.active {
+                Button("Plan this week again", systemImage: "arrow.clockwise") {
+                    try? Planner.generate(weekOf: .now, in: context)
+                    Task { await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil)) }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
+                .frame(width: 32, height: 24)
+        }
+        .accessibilityLabel("More")
+    }
+
+    private func open(_ plan: DayCard.Planned, locked: Bool) {
+        if locked { pro.paywall = true } else { sheet = .details(plan.items) }
+    }
+
+    /// FIT-120: free, a workout of your own: pick the exercises, then the same workout mode.
+    private var logOwnButton: some View {
+        Button { sheet = .own } label: {
+            Label("Log a workout", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                .background(Color(.systemBackground), in: .capsule)
+        }
+        .buttonStyle(.plain)
     }
 
     private func doneCard(_ done: DayCard.Done) -> some View {
@@ -471,6 +508,15 @@ struct TodayScreen: View {
         live = WorkoutDraft(session: plan.title, plan: plan.session)
     }
 
+    /// A workout of your own, started once its sheet has gone (two can't be presented at once).
+    private func startOwn(_ session: SessionPlan) {
+        let draft = WorkoutDraft(session: "Workout", plan: session)
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            live = draft
+        }
+    }
+
     /// The mic on Today (FIT-29, FIT-30): change the plan, log the session, or log a meal, sleep or weight
     /// (FIT-9). The model sorts what was said; the rules decide; a sheet confirms.
     private func heard(_ said: String) {
@@ -480,6 +526,8 @@ struct TodayScreen: View {
             defer { working = nil; job = nil }
             do {
                 switch try await TodayRequestParser.parse(said)?.kind {
+                // FIT-120: changing the plan, or logging it as planned, is Pro; logging anything else stays free.
+                case .change?, .edit?, .didWorkout? where !pro.active: pro.paywall = true
                 case .change(let change)?: propose(change, said: said)
                 case .edit?: try await editToday(said)
                 case .didWorkout(let differences)?: logSpoken(differences, said: said)
@@ -698,6 +746,10 @@ struct TodayScreen: View {
                 WorkoutDetailView(items: items, session: Planner.session(items, templates: templates))
             }
         case .record(let items): NavigationStack { SessionRecordView(planned: items) }
+        case .own:
+            NavigationStack {
+                WorkoutDetailView(items: [], session: SessionPlan(blocks: []), startTitle: "Start", onStartOwn: startOwn)
+            }
         case .log(let items):
             NavigationStack {
                 WorkoutLogView(draft: WorkoutDraft(session: items.first?.slot ?? "Workout", plan: Planner.session(items, templates: templates)),

@@ -53,7 +53,9 @@ struct ProgramScreen: View {
                 if let profile = profiles.first, let weeks = profile.program, let start = profile.programStart {
                     let current = max(0, min(weeks.count - 1, ProgramPlan.week(of: .now, start: start)))
                     switch tab {
-                    case .program: program(weeks, start: start, current: current, profile: profile)
+                    case .program:
+                        program(weeks, start: start, current: current, profile: profile)
+                            .safeAreaInset(edge: .bottom) { if !pro.active { ProOfferBar() } }
                     case .goals: goalList(weeks, start: start, current: current, profile: profile)
                     case .wins: WinsScreen()
                     }
@@ -95,14 +97,16 @@ struct ProgramScreen: View {
                 // FIT-111: share the program, signed in and once it has a brief.
                 if tab == .program, account.user != nil, let profile = profiles.first, profile.brief != nil {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Share Program", systemImage: "square.and.arrow.up") { shareProgram(profile) }
+                        Button("Share Program", systemImage: "square.and.arrow.up") { pro.gate { shareProgram(profile) } }
                     }
                 }
                 if tab == .program, let profile = profiles.first {
                     ToolbarItem(placement: .primaryAction) {
                         Button("Whole program", systemImage: "list.bullet") {
-                            before = ProgramSettings(profile)
-                            peeking = true
+                            pro.gate {
+                                before = ProgramSettings(profile)
+                                peeking = true
+                            }
                         }
                     }
                 }
@@ -186,12 +190,7 @@ struct ProgramScreen: View {
                         Spacer(minLength: 8)
                         if days.contains(where: { $0.kept == nil }) {
                             Button("Regenerate", systemImage: "arrow.triangle.2.circlepath") {
-                                // FIT-83: free includes a few redesigns a month; then Pro.
-                                guard pro.active || FreeLimits.redesignsLeft(profile.redesigns) > 0 else {
-                                    pro.paywall = true
-                                    return
-                                }
-                                regenerating = Regenerate(week: index + 1, days: days)
+                                pro.gate { regenerating = Regenerate(week: index + 1, days: days) }
                             }
                             .font(.subheadline.weight(.semibold))
                             .buttonStyle(.bordered)
@@ -292,7 +291,8 @@ struct ProgramScreen: View {
                         let items = dayItems(day.date)
                         let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
                         Button {
-                            withAnimation(.snappy) { for item in items { item.pinned = !pinned; item.updatedAt = .now } }
+                            // Pinned sessions stay open on Today without Pro (FIT-120), so pinning is Pro too.
+                            pro.gate { withAnimation(.snappy) { for item in items { item.pinned = !pinned; item.updatedAt = .now } } }
                         } label: {
                             Image(systemName: pinned ? "pin.fill" : "pin")
                                 .font(.subheadline)
@@ -333,6 +333,8 @@ struct ProgramScreen: View {
     /// Next week is only a preview until one of its sessions is opened: then it's saved, to be planned again
     /// when it starts, keeping what's pinned (Planner.ensureWeek).
     private func open(_ date: Date, monday: Date) {
+        // FIT-120: the program can be looked through without Pro; running it is Pro.
+        guard pro.active else { return pro.paywall = true }
         if dayItems(in: monday).isEmpty { try? Planner.generate(weekOf: monday, in: context) }
         opened = Calendar.current.startOfDay(for: date)
     }
@@ -437,7 +439,7 @@ struct ProgramScreen: View {
 
     /// A trip, read by code from the words: travel weeks are dumbbells and bodyweight, and the deload moves into them.
     private func takeFromCoach() {
-        if let said = coach.take(for: .program) { heard(said) }
+        if let said = coach.take(for: .program) { pro.gate { heard(said) } }
     }
 
     private func heard(_ said: String) {
