@@ -159,7 +159,8 @@ type Mutation {
   registerDevice(token: String!, platform: String!): Boolean
   deleteAccount: Boolean
   # FIT-102: one Messages API request to Claude, sent on by the aiProxy Lambda with the key. Signed-in users only.
-  aiMessages(request: AWSJSON!): AWSJSON
+  # FIT-123: entitlement is the app's Pro transaction as Apple signed it (a JWS); without it, a few requests for good.
+  aiMessages(request: AWSJSON!, entitlement: String): AWSJSON
 }
 
 type Subscription {

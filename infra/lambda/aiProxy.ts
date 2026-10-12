@@ -2,11 +2,14 @@ import { DynamoDBClient, ConditionalCheckFailedException } from "@aws-sdk/client
 import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
+import { checkEntitlement } from "./entitlement.ts";
 
 /**
  * FIT-102: the app's one way to Claude. The app runs the conversation (the same code the evals run, `ClaudeModel`)
  * and sends each Messages API request here; this adds the key, which never ships in the app, and passes on only
  * what the app needs: Haiku, a capped answer, a capped prompt, and a daily allowance per signed-in user.
+ * FIT-123: Claude is Pro's. With Apple's signed proof of Pro (`entitlement`) a request goes on; without it, an account
+ * has a few for good (`limits.freeRequests`), enough for onboarding's brief and first week, the program it's offered.
  */
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -21,7 +24,12 @@ export const limits = {
   maxRequestChars: 60_000,
   /** Requests a user can send a day: a week's design is 2 to 6, so this leaves room for redesigns and the coach. */
   dailyRequests: 300,
+  /** Requests an account without Pro ever gets: onboarding's brief and week 1, redesigned a few times as answers change. */
+  freeRequests: Number(process.env.FREE_REQUESTS ?? 40),
 };
+
+/** What the app shows the offer for (ClaudeProxy). */
+export const PRO_REQUIRED = "Pro required";
 
 type Request = Record<string, unknown>;
 
@@ -53,16 +61,16 @@ export function allowedRequest(raw: unknown): { body: Request } | { error: strin
 /** "2026-10-10": a user's allowance resets each UTC day. */
 export const day = (now: Date) => now.toISOString().slice(0, 10);
 
-/** Counts one request against the user's allowance; false when it's used up. */
-async function allowance(uid: string, now: Date): Promise<boolean> {
+/** Counts one request against an allowance; false when it's used up. A day's expires; the free one doesn't. */
+async function allowance(uid: string, sk: string, limit: number, expiresAt?: number): Promise<boolean> {
   try {
     await db.send(new UpdateCommand({
       TableName: TABLE,
-      Key: { PK: `USER#${uid}`, SK: `AIUSE#${day(now)}` },
-      UpdateExpression: "ADD #n :one SET #expiresAt = :expiresAt",
+      Key: { PK: `USER#${uid}`, SK: sk },
+      UpdateExpression: "ADD #n :one" + (expiresAt ? " SET #expiresAt = :expiresAt" : ""),
       ConditionExpression: "attribute_not_exists(#n) OR #n < :limit",
-      ExpressionAttributeNames: { "#n": "count", "#expiresAt": "expiresAt" },
-      ExpressionAttributeValues: { ":one": 1, ":limit": limits.dailyRequests, ":expiresAt": Math.floor(now.getTime() / 1000) + 3 * 86_400 },
+      ExpressionAttributeNames: { "#n": "count", ...(expiresAt ? { "#expiresAt": "expiresAt" } : {}) },
+      ExpressionAttributeValues: { ":one": 1, ":limit": limit, ...(expiresAt ? { ":expiresAt": expiresAt } : {}) },
     }));
     return true;
   } catch (error) {
@@ -81,12 +89,20 @@ async function apiKey() {
   return key;
 }
 
-export async function handler(event: AppSyncResolverEvent<{ request: unknown }>) {
+export async function handler(event: AppSyncResolverEvent<{ request: unknown; entitlement?: string | null }>) {
   const uid = (event.identity as AppSyncIdentityCognito | null)?.sub;
   if (!uid) throw new Error("Sign in to use the coach.");
   const allowed = allowedRequest(event.arguments.request);
   if ("error" in allowed) throw new Error(allowed.error);
-  if (!(await allowance(uid, new Date()))) throw new Error("You've reached today's limit for the coach. It resets tomorrow.");
+  const now = new Date();
+  const pro = checkEntitlement(event.arguments.entitlement, now);
+  if (!pro.pro && !(await allowance(uid, "AIFREE", limits.freeRequests))) {
+    throw new Error(`${PRO_REQUIRED}: start your free trial so your coach can keep planning.`);
+  }
+  const expiresAt = Math.floor(now.getTime() / 1000) + 3 * 86_400;
+  if (!(await allowance(uid, `AIUSE#${day(now)}`, limits.dailyRequests, expiresAt))) {
+    throw new Error("You've reached today's limit for the coach. It resets tomorrow.");
+  }
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": await apiKey(), "anthropic-version": "2023-06-01", "content-type": "application/json" },

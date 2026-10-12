@@ -132,19 +132,26 @@ pass("only the creator can remove a member, who then loses access");
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: out.Region }));
 
 // FIT-102: the Claude proxy answers with Haiku, refuses any other model, and counts the user's day.
-const ai = (model: string) => gql(a, `mutation($r: AWSJSON!) { aiMessages(request: $r) }`, {
-  r: JSON.stringify({ model, max_tokens: 20, messages: [{ role: "user", content: "Reply with the word ok." }] }),
+const ai = (model: string, entitlement?: string) => gql(a, `mutation($r: AWSJSON!, $e: String) { aiMessages(request: $r, entitlement: $e) }`, {
+  r: JSON.stringify({ model, max_tokens: 20, messages: [{ role: "user", content: "Reply with the word ok." }] }), e: entitlement,
 });
 const aUid = JSON.parse(Buffer.from(a.split(".")[1], "base64url").toString()).sub;
 const useKey = { PK: `USER#${aUid}`, SK: `AIUSE#${new Date().toISOString().slice(0, 10)}` };
 const used = async () => ((await db.send(new GetCommand({ TableName: "AICoach-dev", Key: useKey }))).Item?.count as number) ?? 0;
 const usedBefore = await used();
+// FIT-123: without Pro (none, or a forged one), each request counts against the account's free allowance.
+const freeKey = { PK: `USER#${aUid}`, SK: "AIFREE" };
+const free = async () => ((await db.send(new GetCommand({ TableName: "AICoach-dev", Key: freeKey }))).Item?.count as number) ?? 0;
+const freeBefore = await free();
 const reply = JSON.parse(must(await ai("claude-haiku-5-5"), "aiMessages").aiMessages);
 if (reply.status !== 200 || reply.body.content?.[0]?.type !== "text") throw new Error(`aiMessages: ${JSON.stringify(reply)}`);
 const opus = await ai("claude-opus-5-5");
 if (!opus.errors?.some((e) => e.message.startsWith("Only claude-haiku"))) throw new Error(`the proxy passed on another model: ${JSON.stringify(opus)}`);
 if ((await used()) !== usedBefore + 1) throw new Error(`A's AI use went from ${usedBefore} to ${await used()}, not up by 1`);
-pass(`aiMessages answers with Haiku (${reply.body.usage?.output_tokens} tokens), refuses other models, and counts the day`);
+const forged = JSON.parse(must(await ai("claude-haiku-5-5", "eyJhbGciOiJFUzI1NiJ9.eyJleHBpcmVzRGF0ZSI6OTl9.c2ln"), "aiMessages").aiMessages);
+if (forged.status !== 200) throw new Error(`aiMessages with a forged entitlement: ${JSON.stringify(forged)}`);
+if ((await free()) !== freeBefore + 2) throw new Error(`A's free use went from ${freeBefore} to ${await free()}, not up by 2`);
+pass(`aiMessages answers with Haiku (${reply.body.usage?.output_tokens} tokens), refuses other models, counts the day, and counts requests without Pro against the free allowance`);
 
 // FIT-105/58: a saved win opens at its link, and the group's invite has a page.
 const win = { kind: "pr", date: "2026-10-08", metric: "Bench Press", unit: "lb", value: 205, previous: 190, trend: [190, 205], showNumbers: true, style: "dark" };

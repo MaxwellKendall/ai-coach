@@ -276,7 +276,9 @@ export class AICoachStack extends Stack {
 
     // ---- FIT-102: Claude for the app, with the key kept here ----
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(this, "AnthropicSecret", `aicoach/${stage}/anthropic`);
-    const aiProxy = fn("aiProxy", { ANTHROPIC_SECRET: anthropicSecret.secretName });
+    // FIT-123: without Pro, a few requests per account for good; dev has room for testing with StoreKit's local
+    // config, whose Xcode-signed transactions aren't Apple's.
+    const aiProxy = fn("aiProxy", { ANTHROPIC_SECRET: anthropicSecret.secretName, FREE_REQUESTS: isProd ? "40" : "1000" });
     table.grant(aiProxy, "dynamodb:UpdateItem");
     anthropicSecret.grantRead(aiProxy);
     api.addLambdaDataSource("AiProxySource", aiProxy).createResolver("AiMessages", {
