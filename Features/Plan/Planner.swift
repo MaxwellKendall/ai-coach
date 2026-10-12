@@ -140,6 +140,69 @@ enum Planner {
         land(done.result, on: plan, entries: entries, templates: templates, in: context, calendar: calendar)
     }
 
+    // MARK: The coach (FIT-103)
+
+    /// What the coach is told: the profile's settings and program, the goals, and this week from today on, days done left out.
+    static func coachContext(in context: ModelContext, now: Date = .now, calendar: Calendar = .current) -> CoachChat.Context? {
+        guard let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
+              let templates = try? context.fetch(FetchDescriptor<Template>()),
+              let entries = try? context.fetch(FetchDescriptor<LogEntry>()) else { return nil }
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let today = calendar.startOfDay(for: now)
+        let done = Set(entries.filter { $0.kind == .workout }.map { calendar.startOfDay(for: $0.timestamp) })
+        let week = ((try? plan(weekOf: now, in: context, calendar: calendar)) ?? nil).map { workouts($0, templates: templates) }?
+            .filter { $0.date >= today && !done.contains(calendar.startOfDay(for: $0.date)) } ?? []
+        let goals = goalLines(((try? context.fetch(FetchDescriptor<Goal>())) ?? []).filter { $0.status == .active })
+        let phases = profile.brief?.brief.phases.map { "\($0.phase): \($0.focus); main lifts \($0.mainLifts.joined(separator: ", ")) × \($0.mainReps)." } ?? []
+        return CoachChat.Context(now: now, settings: profile.trainingSettings, catalog: catalog(templates), names: names,
+                                 history: loggedSets(entries, templates: templates), week: week, goals: goals, program: profile.program,
+                                 programStart: profile.programStart, targetDate: profile.targetDate, travelWeeks: profile.travelWeeks,
+                                 phases: phases, calendar: calendar)
+    }
+
+    /// The coach's draft, applied: the program's settings, then the rest of this week, as the draft has it or planned
+    /// again for new settings (and then designed, by whoever calls `design`). Days done stay. Returns the Undo.
+    static func applyCoach(_ draft: CoachChat.Draft, in context: ModelContext, now: Date = .now,
+                           calendar: Calendar = .current) throws -> () -> Void {
+        guard let profile = try context.fetch(FetchDescriptor<Profile>()).first else { return {} }
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let entries = try context.fetch(FetchDescriptor<LogEntry>())
+        let before = (days: profile.trainingDays, minutes: profile.sessionMinutes, target: profile.targetDate, travel: profile.travelWeeks)
+        let programChanged = draft.trainingDays != nil || draft.sessionMinutes != nil || draft.targetDate != nil || draft.travelWeeks != nil
+        if let days = draft.trainingDays { profile.trainingDays = days }
+        if let minutes = draft.sessionMinutes { profile.sessionMinutes = minutes }
+        if let target = draft.targetDate { profile.targetDate = target }
+        if let travel = draft.travelWeeks { profile.travelWeeks = travel }
+        if programChanged { profile.updatedAt = now }
+        try context.save()
+        let done = Set(entries.filter { $0.kind == .workout }.map { calendar.startOfDay(for: $0.timestamp) })
+        var removed: [PlannedWorkout] = []
+        var designedBy: String?
+        if let plan = try plan(weekOf: now, in: context, calendar: calendar) {
+            designedBy = plan.designedBy
+            if let week = draft.week {
+                removed = try replan(plan, with: week, keep: done, today: now, templates: templates, in: context, calendar: calendar)
+            } else if programChanged {
+                removed = try replan(plan, with: try preview(weekOf: now, in: context, calendar: calendar), keep: done, today: now,
+                                     templates: templates, in: context, calendar: calendar)
+                // New settings: the coach designs the rest of the week again.
+                plan.designedBy = nil
+                try context.save()
+            }
+        }
+        return {
+            profile.trainingDays = before.days
+            profile.sessionMinutes = before.minutes
+            profile.targetDate = before.target
+            profile.travelWeeks = before.travel
+            if let plan = try? self.plan(weekOf: now, in: context, calendar: calendar) {
+                _ = try? replan(plan, with: removed, keep: done, today: now, templates: templates, in: context, calendar: calendar)
+                plan.designedBy = designedBy
+            }
+            try? context.save()
+        }
+    }
+
     /// FIT-82: weeks began on Monday until they moved to Sunday. Each plan keyed by a Monday is keyed by the Sunday
     /// before it, and an item that now falls in another week (a Sunday, the old week's last day) moves to that week's
     /// plan; a plan made for it is planned again when its week starts. Does nothing once every plan starts on a Sunday.

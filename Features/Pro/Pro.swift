@@ -33,6 +33,10 @@ final class Pro {
             if let expires = transaction.expirationDate, expires < .now { continue }
             active = true
         }
+        #if DEBUG
+        // `-pro YES`: Pro without buying, for trying Pro's screens in the simulator.
+        if UserDefaults.standard.bool(forKey: "pro") { active = true }
+        #endif
         self.active = active
     }
 }

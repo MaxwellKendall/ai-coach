@@ -44,6 +44,8 @@ final class Profile {
     var brief: ProgramBrief.Stored?
     /// FIT-83: when free-plan redesigns of the week were used (`FreeLimits`).
     var redesigns: [Date] = []
+    /// FIT-103: when free-plan coach conversations were started (`FreeLimits`).
+    var coachChats: [Date] = []
     var createdAt: Date
     var updatedAt: Date
 

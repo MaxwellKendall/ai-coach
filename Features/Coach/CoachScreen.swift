@@ -44,10 +44,40 @@ struct CoachScreen: View {
     /// Listening started by opening the coach, not by the mic: if it can't, just offer the keyboard.
     @State private var autoStarted = false
 
+    /// FIT-103: what the coach is talking about. This session acts on Today as before; the week and the program are
+    /// a conversation.
+    @State private var scope: CoachChat.Scope
+
+    init(from: AppTab, send: @escaping (String, AppTab) -> Void) {
+        self.from = from
+        self.send = send
+        _scope = State(initialValue: from == .program ? .program : .session)
+    }
+
     private var target: AppTab { from == .program ? .program : .today }
 
     var body: some View {
         NavigationStack {
+            Group {
+                if scope == .session { sessionView } else { CoachChatView(scope: scope).id(scope) }
+            }
+            .navigationTitle("Coach")
+            .navigationBarTitleDisplayMode(.inline)
+            // Above the content, not in the bar: typing in the search field hides the bar.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Picker("About", selection: $scope) {
+                    ForEach(CoachChat.Scope.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.bar)
+            }
+        }
+    }
+
+    /// Today's workout and logging, said or typed: sent to the screen that acts on it (FIT-47 to FIT-50, FIT-9).
+    private var sessionView: some View {
             List {
                 ForEach(suggestions, id: \.title) { section in
                     Section(section.title) {
@@ -57,7 +87,6 @@ struct CoachScreen: View {
                     }
                 }
             }
-            .navigationTitle("Coach")
             .searchable(text: $text, prompt: "Tell your coach…")
             .searchFocused($typing)
             .onSubmit(of: .search) { submit(text) }
@@ -92,7 +121,6 @@ struct CoachScreen: View {
                 autoStarted = false
             }
             .onChange(of: voice.listening) { _, listening in if listening { autoStarted = false } }
-        }
     }
 
     private var prompt: String {

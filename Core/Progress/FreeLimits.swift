@@ -11,4 +11,12 @@ enum FreeLimits {
         let thisMonth = used.filter { calendar.isDate($0, equalTo: now, toGranularity: .month) }.count
         return max(0, redesignsPerMonth - thisMonth)
     }
+
+    /// Coach conversations about the week or the program a calendar month on the free plan (author, 2026-10-12).
+    static let coachChatsPerMonth = 3
+
+    static func coachChatsLeft(_ used: [Date], now: Date = .now, calendar: Calendar = .current) -> Int {
+        let thisMonth = used.filter { calendar.isDate($0, equalTo: now, toGranularity: .month) }.count
+        return max(0, coachChatsPerMonth - thisMonth)
+    }
 }

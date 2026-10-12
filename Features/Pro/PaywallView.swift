@@ -14,6 +14,8 @@ struct PaywallView: View {
                 Text("Rep & Recipe Pro").font(.system(size: 34, weight: .bold)).tracking(-0.4)
                 Text("More coaching on top of your program.").font(.title3).foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 14) {
+                    benefit("bubble.left.and.text.bubble.right", "Talk with your coach, any time",
+                            "About your week or your program; it makes the changes. Free includes \(FreeLimits.coachChatsPerMonth) conversations a month.")
                     benefit("arrow.triangle.2.circlepath", "Redesign any week, as often as you like",
                             "Free includes \(FreeLimits.redesignsPerMonth) a month.")
                     benefit("text.quote", "Your coach's take on every week",
