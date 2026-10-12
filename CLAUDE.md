@@ -20,6 +20,7 @@ All scope, decisions and status live in Linear. **Read Linear before building an
 4. Comment on the issue with what shipped, anything deferred, and any decisions made, then move it to **Done**.
 5. When you make or discover a decision that changes scope, **write it to Linear** (update the issue or create a new one). Don't keep plans in local markdown files.
 6. Found a bug or follow-up that's out of scope? Create a Linear issue in the right milestone instead of expanding the current one.
+7. Added or changed a feature, a free limit (`FreeLimits`) or a paywall trigger? Update the project document **Features and upgrade paths (Free vs Pro)**: https://linear.app/custom-voice-app/document/features-and-upgrade-paths-free-vs-pro-4bb4f341b5f0
 
 If Linear tools aren't available, stop and tell the user. Don't invent scope.
 
