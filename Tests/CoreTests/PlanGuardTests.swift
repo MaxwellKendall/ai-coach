@@ -240,6 +240,15 @@ struct PlanGuardTests {
         #expect(PlanGuard.missingMovements(rows, context).map(\.name) == ["a hinge"])
     }
 
+    /// A dumbbell bench planned with no weight gets one; a push-up stays at body weight.
+    @Test func aWeightedExerciseWithoutAWeightGetsOne() {
+        let result = check([row("bench-press", 4, 5, load: 185, main: true), row("dumbbell-bench-press", 3, 10), row("push-up", 3, 12)],
+                           settings(), history: [logged("bench-press", 185, 5)])
+        #expect((result.workouts[1].target("load_lb_hand") ?? result.workouts[1].target("load_lb") ?? 0) > 0)
+        #expect(result.workouts[2].target("load_lb") == nil && result.workouts[2].target("load_lb_hand") == nil)
+        #expect(result.repairs.map(\.rule) == [.load])
+    }
+
     // MARK: Rule 8: decided lifts (FIT-102)
 
     private func decision(_ exercise: String, _ load: Double, _ reps: Double) -> Progression.Decision {

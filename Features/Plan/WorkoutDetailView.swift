@@ -168,7 +168,7 @@ struct WorkoutDetailView: View {
                     }
                     ForEach(Array(movement.sets.enumerated()), id: \.element.id) { s, set in
                         setRow(set, label: set.isWarmup ? "W" : "\(movement.sets[..<s].filter { !$0.isWarmup }.count + 1)",
-                               load: loadMetric(movement.exercise),
+                               load: loadMetric(movement.exercise), weighted: weighted(movement.exercise),
                                cell: { Cell(block: index, movement: m, set: s, metric: $0) })
                     }
                 }
@@ -185,7 +185,13 @@ struct WorkoutDetailView: View {
         return !Set(equipment).isDisjoint(with: ["dumbbells", "kettlebells"]) && !equipment.contains("barbell") ? "load_lb_hand" : "load_lb"
     }
 
-    private func setRow(_ set: SessionPlan.PlannedSet, label: String, load: String, cell: @escaping (String) -> Cell) -> some View {
+    /// Done with a weight (dumbbells, a barbell…): with none set yet it says so, never "bodyweight".
+    private func weighted(_ slug: String) -> Bool {
+        !Set(templates.first { $0.slug == slug }?.values("equipment") ?? []).isDisjoint(with: Exercise.weights)
+    }
+
+    private func setRow(_ set: SessionPlan.PlannedSet, label: String, load: String, weighted: Bool,
+                        cell: @escaping (String) -> Cell) -> some View {
         let metrics = Self.editable(set)
         return HStack(spacing: 8) {
             Text(label).font(.subheadline.weight(.bold).monospacedDigit()).frame(width: 24)
@@ -208,7 +214,7 @@ struct WorkoutDetailView: View {
                 // FIT-81: tap to add a load ("bodyweight" until one's set; back to 0 is bodyweight again).
                 let isSelected = selected == cell(load)
                 Button { withAnimation(.snappy) { selected = isSelected ? nil : cell(load) } } label: {
-                    Text(isSelected ? "0 \(SetRow.units[load] ?? "lb")" : "bodyweight").font(.subheadline).foregroundStyle(.secondary)
+                    Text(isSelected ? "0 \(SetRow.units[load] ?? "lb")" : weighted ? "add weight" : "bodyweight").font(.subheadline).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(isSelected ? Color.primary.opacity(0.12) : .clear, in: .rect(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isSelected ? Color.primary : .clear, lineWidth: 2))

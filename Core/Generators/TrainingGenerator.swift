@@ -57,6 +57,10 @@ struct Exercise: Sendable {
     /// Other names it goes by: free-exercise-db's name for one of the author's cards ("Barbell Deadlift").
     var aliases: [String]
 
+    /// Equipment that is itself the weight: an exercise using any is done with a load, never at body weight.
+    static let weights: Set<String> = ["barbell", "dumbbells", "kettlebells", "cable", "machine", "ez_bar", "trap_bar", "medicine_ball", "sled"]
+    var isLoaded: Bool { !equipment.isDisjoint(with: Self.weights) }
+
     init?(slug: String, attributes: [TemplateAttribute]) {
         func values(_ key: String) -> [String] { attributes.first { $0.key == key }?.values ?? [] }
         guard let pattern = values("movement_pattern").first else { return nil }
@@ -467,6 +471,12 @@ enum TrainingGenerator {
                                        unit: "lb/hand"))
         } else if let load = first?.load {
             targets.append(Measurement(metric: "load_lb", value: deload ? roundTo5(load * deloadLoad) : load, unit: "lb"))
+        } else if exercise.isLoaded, !exercise.isTimed,
+                  let (metric, load) = PlanGuard.firstLoad(exercise, reps: exercise.pattern == "carry" ? nil : reps,
+                                                           settings: settings, history: history), load > 0 {
+            // A weighted exercise never goes without a weight (FIT-102): one from its movement's anchor lift.
+            targets.append(Measurement(metric: metric, value: !deload ? load : metric == "load_lb" ? roundTo5(load * deloadLoad) : (load * deloadLoad / 2.5).rounded(.down) * 2.5,
+                                       unit: metric == "load_lb_hand" ? "lb/hand" : "lb"))
         }
         if !exercise.isTimed, exercise.pattern != "carry" {
             targets.append(Measurement(metric: "rpe", value: rpeCap, unit: "RPE"))

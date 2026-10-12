@@ -246,6 +246,23 @@ enum PlanGuard {
             }
         }
 
+        // 3. A weighted exercise has a weight: one left without is dosed as TrainingGenerator would (FIT-102: a
+        // dumbbell bench came with none and showed as "bodyweight").
+        for index in rows.indices {
+            let row = rows[index]
+            guard let exercise = session.bySlug[row.exercise], exercise.isLoaded, !exercise.isTimed,
+                  row.target("load_lb") == nil, row.target("load_lb_hand") == nil else { continue }
+            let dosed = TrainingGenerator.dose(exercise, main: row.main, sets: Int(row.target("sets") ?? 3), date: row.date,
+                                               session: row.session, settings: settings, history: context.history,
+                                               weeksSinceDeload: context.light ? .max : 0, calendar: context.calendar).last!
+            // From its own history or starting set, else from its movement's anchor lift (FIT-73's first loads).
+            guard let (metric, load) = ["load_lb", "load_lb_hand"].lazy.compactMap({ m in dosed.target(m).map { (m, $0) } }).first
+                    ?? firstLoad(exercise, reps: row.target("reps"), settings: settings, history: context.history),
+                  load > 0 else { continue }
+            rows[index].set(metric, load)
+            repair(.load, "\(name(row.exercise)) had no weight; \(Coach.number(load)) lb\(metric == "load_lb_hand" ? " each" : "").")
+        }
+
         // 2. A session's sets within the volume table's top for its length (fitness-planner CLAUDE.md "Schedule →
         // Volume Mapping"), so 22 exercises don't land in 30 minutes.
         let sessionMost = TrainingGenerator.sessionRange(settings, program: nil).upperBound
@@ -368,6 +385,19 @@ enum PlanGuard {
             ceilings.append((best * maxJump, "10% over your last top set"))
         }
         return ceilings.min { $0.load < $1.load }
+    }
+
+    /// A weighted exercise's first load when nothing of its own is known: its movement's anchor lift, scaled (`related`),
+    /// each dumbbell or kettlebell for those, rounded down to what can be loaded. nil when nothing's known.
+    static func firstLoad(_ exercise: Exercise, reps: Double?, settings: TrainingSettings, history: [LoggedSet])
+        -> (metric: String, load: Double)? {
+        let perHand = !exercise.equipment.isDisjoint(with: ["dumbbells", "kettlebells"]) && !exercise.equipment.contains("barbell")
+        let metric = perHand ? "load_lb_hand" : "load_lb"
+        let context = Context(settings: settings, catalog: [], names: [:], history: history, light: false)
+        guard let estimate = related(exercise, metric: metric, reps: reps, context)?.load else { return nil }
+        let barbell = !exercise.equipment.isDisjoint(with: ["barbell", "trap_bar", "ez_bar"])
+        let load = barbell ? (estimate / 5).rounded(.down) * 5 : perHand ? (estimate / 2.5).rounded(.down) * 2.5 : estimate.rounded(.down)
+        return (metric, load)
     }
 
     /// FIT-73: the lift each movement is measured against, and the share of its max a first load may be. General
