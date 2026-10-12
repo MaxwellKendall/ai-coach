@@ -67,6 +67,8 @@ struct TodayScreen: View {
     private var todayIndex: Int { week.firstIndex { Calendar.current.isDateInToday($0) } ?? 0 }
 
     private var thisWeeksPlan: Plan? { plans.first { $0.weekStart == week[0] } }
+    /// The coach is designing the shown week, and hasn't yet.
+    private var planning: Bool { Planner.designing.weeks.contains(week[0]) && thisWeeksPlan?.designedBy == nil }
 
     var body: some View {
         let week = week
@@ -214,14 +216,6 @@ struct TodayScreen: View {
                     .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
                 Text(title).font(.system(size: 34, weight: .bold)).tracking(-0.5)
                     .contentTransition(.numericText())
-                // FIT-74: the model's version of the week is on its way; this one stands until it arrives.
-                if Planner.designing.weeks.contains(Week.start(of: date)) {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.mini)
-                        Text("Your coach is planning this week").font(.footnote).foregroundStyle(.secondary)
-                    }
-                    .transition(.opacity)
-                }
             }
             Spacer()
             Button { you = true } label: {
@@ -315,6 +309,15 @@ struct TodayScreen: View {
     @ViewBuilder private func dayContent(_ card: DayCard, isToday: Bool, isPast: Bool) -> some View {
         Group {
             switch card {
+            // FIT-74: the week standing in until the coach's arrives isn't shown as if it were the plan.
+            case .plan where planning:
+                VStack(spacing: 12) {
+                    ProgressView().controlSize(.large)
+                    Text("Your coach is planning this week").font(.headline)
+                    Text("Usually under a minute.").font(.subheadline).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
             case .plan(let plan): planCard(plan, isToday: isToday, isPast: isPast)
             case .done(let done): doneCard(done)
             case .rest(let coach):
