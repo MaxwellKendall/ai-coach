@@ -49,26 +49,64 @@ struct ValueRow<Editor: View>: View {
     }
 }
 
-/// − value +, for one number.
+/// − value +, for one number. With `value` and `set`, the number can be tapped and typed instead.
 struct Nudge: View {
     let label: String
     var lessLabel = "Less"
     var moreLabel = "More"
     let less: () -> Void
     let more: () -> Void
+    var value: Double? = nil
+    var set: ((Double) -> Void)? = nil
+
+    @State private var typing = false
+    @State private var text = ""
+    @FocusState private var focused: Bool
 
     var body: some View {
         HStack {
             button("minus", lessLabel, less)
-            Text(label)
-                .font(.system(.title3, design: .rounded, weight: .semibold))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .frame(maxWidth: .infinity)
+            Group {
+                if typing {
+                    TextField(label, text: $text)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.center)
+                        .focused($focused)
+                        .onAppear { focused = true }
+                        .onChange(of: focused) { _, now in if !now { commit() } }
+                        .toolbar {
+                            ToolbarItemGroup(placement: .keyboard) {
+                                Spacer()
+                                Button("Done") { focused = false }.bold()
+                            }
+                        }
+                } else {
+                    Text(label)
+                        .contentTransition(.numericText())
+                        .onTapGesture {
+                            guard value != nil, set != nil else { return }
+                            // Empty, the value as its placeholder: what's typed replaces it, and nothing typed keeps it.
+                            text = ""
+                            typing = true
+                        }
+                        .accessibilityHint(set == nil ? "" : "Double-tap to type a number")
+                }
+            }
+            .font(.system(.title3, design: .rounded, weight: .semibold))
+            .monospacedDigit()
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(.rect)
             button("plus", moreLabel, more)
         }
         .padding(4)
         .background(Color(.secondarySystemBackground), in: .capsule)
+    }
+
+    private func commit() {
+        if let number = Double(text.replacingOccurrences(of: ",", with: ".")), number >= 0 {
+            withAnimation(.snappy) { set?(number) }
+        }
+        typing = false
     }
 
     private func button(_ symbol: String, _ label: String, _ action: @escaping () -> Void) -> some View {

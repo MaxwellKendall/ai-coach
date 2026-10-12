@@ -36,6 +36,8 @@ struct OnboardingView: View {
     /// Signed out at the check step: sign in first, so Claude designs the program (author, 2026-10-12, FIT-102).
     @State private var signingInForCoach = false
     @State private var askedSignIn = false
+    /// A number being typed: the mic and its hint step aside for the keyboard.
+    @State private var keyboard = false
     var onDone: () -> Void
 
     private static let steps = [
@@ -71,9 +73,11 @@ struct OnboardingView: View {
                 .scrollIndicators(.hidden)
                 .background(Color(.systemBackground))
             }
-            footer
+            if !keyboard { footer }
         }
         .background(Color(.systemBackground))
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
         .overlay {
             if voice.listening || working != nil {
                 ListeningVeil(voice: voice, working: working, prompt: Self.prompts[min(page, 3)])

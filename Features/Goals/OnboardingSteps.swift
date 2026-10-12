@@ -168,24 +168,30 @@ struct OnboardingStepView: View {
         switch row.measure {
         case .age:
             Nudge(label: "\(answers.age ?? 35)", less: { answers.age = max(13, (answers.age ?? 35) - 1); touch("age") },
-                  more: { answers.age = min(100, (answers.age ?? 35) + 1); touch("age") })
+                  more: { answers.age = min(100, (answers.age ?? 35) + 1); touch("age") },
+                  value: Double(answers.age ?? 35), set: { answers.age = min(100, max(13, Int($0.rounded()))); touch("age") })
         case .body:
             Nudge(label: "\(Coach.number(answers.weight ?? 180)) lb", less: { answers.weight = max(60, (answers.weight ?? 180) - 1); touch("weight") },
-                  more: { answers.weight = (answers.weight ?? 180) + 1; touch("weight") })
+                  more: { answers.weight = (answers.weight ?? 180) + 1; touch("weight") },
+                  value: answers.weight ?? 180, set: { answers.weight = max(60, $0); touch("weight") })
         case .load:
             let load = start?.value("load_lb") ?? 45, reps = start?.value("reps") ?? 5
             Nudge(label: "\(Coach.number(load)) lb", less: { set(row.id, load: max(0, load - 5), reps: reps) },
-                  more: { set(row.id, load: load + 5, reps: reps) })
+                  more: { set(row.id, load: load + 5, reps: reps) },
+                  value: load, set: { set(row.id, load: $0, reps: reps) })
             Nudge(label: "\(Coach.number(reps)) reps", lessLabel: "Fewer reps", moreLabel: "More reps",
-                  less: { set(row.id, load: load, reps: max(1, reps - 1)) }, more: { set(row.id, load: load, reps: min(20, reps + 1)) })
+                  less: { set(row.id, load: load, reps: max(1, reps - 1)) }, more: { set(row.id, load: load, reps: min(20, reps + 1)) },
+                  value: reps, set: { set(row.id, load: load, reps: min(20, max(1, $0.rounded()))) })
         case .reps:
             let reps = start?.value("reps") ?? 5
             Nudge(label: "\(Coach.number(reps)) reps", less: { set(row.id, ["reps": max(0, reps - 1)]) },
-                  more: { set(row.id, ["reps": reps + 1]) })
+                  more: { set(row.id, ["reps": reps + 1]) },
+                  value: reps, set: { set(row.id, ["reps": $0.rounded()]) })
         case .hold:
             let seconds = start?.value("duration_s") ?? 30
             Nudge(label: "\(Coach.number(seconds)) s", less: { set(row.id, ["duration_s": max(5, seconds - 5)]) },
-                  more: { set(row.id, ["duration_s": seconds + 5]) })
+                  more: { set(row.id, ["duration_s": seconds + 5]) },
+                  value: seconds, set: { set(row.id, ["duration_s": max(5, $0.rounded())]) })
         }
     }
 
@@ -313,7 +319,8 @@ struct OnboardingStepView: View {
                          open: opened("load.\(item.exercise)")) {
                     Nudge(label: "\(Coach.number(value)) lb", lessLabel: "Lighter", moreLabel: "Heavier",
                           less: { loads[item.exercise] = max(perHand ? 2.5 : 5, value - (perHand ? 2.5 : 5)) },
-                          more: { loads[item.exercise] = value + (perHand ? 2.5 : 5) })
+                          more: { loads[item.exercise] = value + (perHand ? 2.5 : 5) },
+                          value: value, set: { loads[item.exercise] = max(0, $0) })
                 }
             }
         }
@@ -329,7 +336,8 @@ struct OnboardingStepView: View {
             if let target {
                 Nudge(label: "\(Coach.number(target)) \(option.unit)", lessLabel: "Lower", moreLabel: "Raise",
                       less: { answers.targets[option.id] = max(0, target - option.step); touch("target.\(option.id)") },
-                      more: { answers.targets[option.id] = target + option.step; touch("target.\(option.id)") })
+                      more: { answers.targets[option.id] = target + option.step; touch("target.\(option.id)") },
+                      value: target, set: { answers.targets[option.id] = $0; touch("target.\(option.id)") })
             }
         }
     }
