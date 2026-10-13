@@ -27,10 +27,13 @@ export function form(params: Params, prefix = ""): string {
   return parts.filter(Boolean).join("&");
 }
 
+/** Pinned, so Stripe's answers keep their shape; Managed Payments needs 2025-03-31.basil or later. */
+export const API_VERSION = "2026-04-22.dahlia";
+
 export async function stripe<T = Record<string, unknown>>(key: string, path: string, params?: Params): Promise<T> {
   const response = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: params ? "POST" : "GET",
-    headers: { authorization: `Bearer ${key}`, "content-type": "application/x-www-form-urlencoded" },
+    headers: { authorization: `Bearer ${key}`, "content-type": "application/x-www-form-urlencoded", "stripe-version": API_VERSION },
     body: params ? form(params) : undefined,
   });
   const body = (await response.json()) as T & { error?: { message?: string } };

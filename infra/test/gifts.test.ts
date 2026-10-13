@@ -48,7 +48,11 @@ describe("buying with Stripe", () => {
     const body = decodeURIComponent(form(params));
     expect(body).toContain("line_items[0][price_data][unit_amount]=3999");
     expect(body).toContain("custom_fields[1][optional]=true");
-    expect(body).toContain("payment_method_types[0]=card");
+    // Managed Payments: Stripe is the merchant of record, choosing payment methods and tax itself.
+    expect(body).toContain("managed_payments[enabled]=true");
+    expect(body).toContain("line_items[0][price_data][product_data][tax_code]=txcd_10103100");
+    expect(body).not.toContain("payment_method_types");
+    expect(body).not.toContain("automatic_tax");
   });
 
   it("makes a gift only from a paid session with a code", () => {

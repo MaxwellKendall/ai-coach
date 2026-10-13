@@ -60,8 +60,6 @@ export function proUntil(current: string | undefined, now: Date): string {
 export interface StripeConfig {
   secretKey: string;
   webhookSecret?: string;
-  /** Stripe Tax on in the account: Checkout adds sales tax or VAT where it's due. */
-  automaticTax?: boolean;
 }
 
 let config: StripeConfig | undefined;
@@ -81,17 +79,26 @@ export async function stripeConfig(): Promise<StripeConfig | undefined> {
 
 export const price = { cents: Number(process.env.GIFT_PRICE_CENTS ?? 3999), currency: "usd" };
 
-/** The Checkout Session for one gift: its code travels in the metadata, the name and note are Checkout's own fields. */
-export function checkoutParams(code: string, origin: string, automaticTax = false) {
+/**
+ * Stripe's tax category for the gift (author, 2026-10-13: Managed Payments, Stripe as merchant of record, so Stripe
+ * owes and files sales tax and VAT): SaaS, electronic download, personal use — an app's year of access.
+ */
+export const TAX_CODE = "txcd_10103100";
+
+/**
+ * The Checkout Session for one gift: its code travels in the metadata, the name and note are Checkout's own fields.
+ * Managed Payments picks the payment methods and the tax itself, so neither is set here.
+ */
+export function checkoutParams(code: string, origin: string) {
   return {
     mode: "payment",
-    "payment_method_types": ["card"],
+    managed_payments: { enabled: true },
     line_items: [{
       quantity: 1,
       price_data: {
         currency: price.currency,
         unit_amount: price.cents,
-        product_data: { name: "A year of Rep & Recipe Pro, as a gift", description: "Redeemed in the app. It doesn't renew." },
+        product_data: { name: "A year of Rep & Recipe Pro, as a gift", description: "Redeemed in the app. It doesn't renew.", tax_code: TAX_CODE },
       },
     }],
     custom_fields: [
@@ -100,7 +107,6 @@ export function checkoutParams(code: string, origin: string, automaticTax = fals
     ],
     metadata: { gift: code },
     payment_intent_data: { metadata: { gift: code } },
-    automatic_tax: { enabled: automaticTax },
     success_url: `${origin}/gift/thanks/{CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/gift`,
   };
@@ -250,7 +256,7 @@ export async function checkout(origin: string): Promise<string | undefined> {
   const stripeKeys = await stripeConfig();
   if (!stripeKeys) return undefined;
   const session = await stripe<{ url: string }>(stripeKeys.secretKey, "checkout/sessions",
-                                                checkoutParams(newCode(), origin, stripeKeys.automaticTax));
+                                                checkoutParams(newCode(), origin));
   return session.url;
 }
 
