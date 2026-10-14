@@ -205,4 +205,12 @@ struct OnboardingGoalWordsTests {
         answers.estimateStarts()
         #expect(answers.starts["back-squat"] == nil)
     }
+
+    /// FIT-124: lifts lead, and the deload rhythm is said by age where the program is shown.
+    @Test func liftGoalsComeFirstAndTheDeloadIsSaidByAge() {
+        #expect(GoalOption.all.prefix(3).map(\.id) == ["squat", "bench", "deadlift"])
+        #expect(AgeTier.deloadLine(age: 42) == "At 42, every 5th week is lighter. That’s when the strength from the hard weeks shows up.")
+        #expect(AgeTier.deloadLine(age: 34).hasPrefix("At 34, every 6th week"))
+        #expect(AgeTier.deloadLine(age: nil) == "A lighter deload week comes every few weeks.")
+    }
 }

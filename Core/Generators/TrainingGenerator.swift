@@ -92,6 +92,13 @@ struct AgeTier: Equatable, Sendable {
     var tempo: String?
     var deloadEveryWeeks: Int
 
+    /// FIT-124: the deload rhythm in words, where the program is shown: "At 42, every 5th week is lighter. That's when
+    /// the strength from the hard weeks shows up." Without an age, just that it comes.
+    static func deloadLine(age: Int?) -> String {
+        guard let age else { return "A lighter deload week comes every few weeks." }
+        return "At \(age), every \(of(age: age).deloadEveryWeeks)th week is lighter. That’s when the strength from the hard weeks shows up."
+    }
+
     static func of(age: Int) -> AgeTier {
         switch age {
         case ..<30: AgeTier(name: "18–29", topRPE: 9, accessoryRPE: 8, mandatoryWarmup: false, tempo: nil, deloadEveryWeeks: 7)

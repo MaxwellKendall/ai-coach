@@ -15,9 +15,8 @@ struct GoalOption: Identifiable, Sendable {
     let exercise: String?
 
     /// Running isn't planned yet, so there's no 5K goal here (FIT-36).
+    /// FIT-124: lifts first. The app is for adults getting back to barbell strength with a goal and a date.
     static let all: [GoalOption] = [
-        GoalOption(id: "weight", title: "Lose weight", why: "About a pound a week, keeping your strength.", kind: .body,
-                   metric: "weight_lb", unit: "lb", measure: .body, exercise: nil),
         GoalOption(id: "squat", title: "Squat more", why: "A heavier estimated max.", kind: .training,
                    metric: "back-squat.1rm_lb", unit: "lb", measure: .load, exercise: "back-squat"),
         GoalOption(id: "bench", title: "Bench more", why: "A heavier estimated max.", kind: .training,
@@ -26,6 +25,8 @@ struct GoalOption: Identifiable, Sendable {
                    metric: "deadlift.1rm_lb", unit: "lb", measure: .load, exercise: "deadlift"),
         GoalOption(id: "pullups", title: "More pull-ups", why: "Strict, in a row.", kind: .training,
                    metric: "pull-up.reps", unit: "reps", measure: .reps, exercise: "pull-up"),
+        GoalOption(id: "weight", title: "Lose weight", why: "About a pound a week, keeping your strength.", kind: .body,
+                   metric: "weight_lb", unit: "lb", measure: .body, exercise: nil),
         GoalOption(id: "pushups", title: "More push-ups", why: "In a row. No equipment needed.", kind: .training,
                    metric: "push-up.reps", unit: "reps", measure: .reps, exercise: "push-up"),
     ]

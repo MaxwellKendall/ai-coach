@@ -43,7 +43,7 @@ struct OnboardingView: View {
     var onDone: () -> Void
 
     private static let steps = [
-        ("What are you training for?", "Say it in your own words, or pick."),
+        ("What do you want to lift, and by when?", "Say it in your own words, or pick."),
         ("What will you train with?", "Untick anything you never want to see."),
         ("Where are you starting?", "Built from your goals and exercises. Skip any you don’t know; week 1 finds it."),
         ("When can you train?", "Days, how long, and anything to be careful with."),
@@ -233,7 +233,7 @@ struct OnboardingView: View {
         return (brief, model.name, result)
     }
 
-    private static let prompts = ["“Get to 180 and do 10 pull-ups by the end of February”",
+    private static let prompts = ["“Squat 225 and bench 185 by the end of June”",
                                   "“No barbell. I like push-ups”",
                                   "“I’m 36, 200 pounds, and I squat 155 for 5”",
                                   "“Monday, Wednesday, Friday, 45 minutes. My knee gets cranky”"]

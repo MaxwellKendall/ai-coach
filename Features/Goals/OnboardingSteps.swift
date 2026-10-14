@@ -292,10 +292,10 @@ struct OnboardingStepView: View {
                 }
             }
             .padding(.top, 12)
-            Text("A lighter deload comes every few weeks, and week \(weeks.count) tests your goals. Each week is planned when the one before ends, from how it went.")
+            Text("\(AgeTier.deloadLine(age: answers.age)) Week \(weeks.count) tests your goals. Each week is planned when the one before ends, from how it went.")
                 .font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
         } else {
-            Text("Weeks 1–\(weeks.filter { $0.phase == .base }.count) build a base. Then the work climbs, the last weeks peak, and week \(weeks.count) tests your goals. A lighter deload comes every few weeks. Each week is planned when the one before ends, from how it went.")
+            Text("Weeks 1–\(weeks.filter { $0.phase == .base }.count) build a base. Then the work climbs, the last weeks peak, and week \(weeks.count) tests your goals. \(AgeTier.deloadLine(age: answers.age)) Each week is planned when the one before ends, from how it went.")
                 .font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
         }
     }
