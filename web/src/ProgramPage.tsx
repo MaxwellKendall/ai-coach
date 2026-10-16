@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Config, User } from "./auth";
 import catalog from "./catalog.json";
-import { addLine, editLine, editLines, editOf, moveLine, removeLine, type Edit, type EditLine } from "./edit";
+import { addLine, editLine, editLines, editOf, moveDay, moveLine, removeLine, type Edit, type EditLine } from "./edit";
+import { checkDay, checkWeek, type Exercise, type Profile } from "./guard";
 import { dayKey, describe, week, weekStart, type Day } from "./program";
 import { pullAll, pushDay, type PlanRow, type Unit } from "./sync";
 
 const names = new Map(catalog.map((t) => [t.slug, t.name]));
+const exercises = new Map<string, Exercise>(catalog.map((t) => [t.slug, t]));
 const weekday = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 const monthDay = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" });
 
@@ -20,7 +22,12 @@ export function ProgramPage({ config, me, empty }: { config: Config; me: User; e
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<string>();
 
-  const load = useCallback(() => pullAll(config).then(setUnits, (e: Error) => setError(e.message)), [config]);
+  // Bumped by every edit: a pull that started before an edit would show the old plan, so it's dropped.
+  const edits = useRef(0);
+  const load = useCallback(() => {
+    const at = edits.current;
+    return pullAll(config).then((u) => { if (edits.current === at) setUnits(u); }, (e: Error) => setError(e.message));
+  }, [config]);
   useEffect(() => {
     load();
     // Back on this tab: the phone may have changed something.
@@ -32,6 +39,7 @@ export function ProgramPage({ config, me, empty }: { config: Config; me: User; e
   const save = useCallback(
     async (key: string, rows: PlanRow[]) => {
       const body = rows.length ? JSON.stringify(rows) : null;
+      edits.current += 1;
       setUnits((u) => new Map(u).set(`plan#${key}`, { key: `plan#${key}`, updatedAt: new Date().toISOString(), deleted: !body, body }));
       setStatus("Saving…");
       try {
@@ -67,21 +75,33 @@ export function ProgramPage({ config, me, empty }: { config: Config; me: User; e
 
   const todayKey = dayKey(today);
   // The picker offers what the profile's equipment allows, as the app's catalog does.
-  const profile = units.get("profile")?.body;
+  const profileBody = units.get("profile")?.body;
+  const profile: Profile | undefined = profileBody ? JSON.parse(profileBody) : undefined;
   // Without a profile (it hasn't synced), nothing is known to be missing, so the whole catalog.
-  const owned: string[] | undefined = profile ? JSON.parse(profile).equipment : undefined;
-  const equipment = owned ? new Set(owned) : undefined;
+  const equipment = profile?.equipment ? new Set(profile.equipment) : undefined;
+  const weekWarning = checkWeek(days.map((d) => rowsOf(units, d.key)), profile);
+  const editable = (day: Day) => day.key >= todayKey && !day.done;
+  // FIT-128: a session dragged onto a rest day moves there (both days sync).
+  const move = async (from: Day, to: Day) => {
+    const rows = rowsOf(units, from.key);
+    if (from.key === to.key || !rows.length || rowsOf(units, to.key).some((r) => r.kind === "workout")) return;
+    await save(to.key, moveDay(rows, from.date.getTime() / 1000, to.date.getTime() / 1000));
+    await save(from.key, []);
+  };
   return (
     <>
       <header className="page">
         <p className="eyebrow">Week of {monthDay.format(days[0].date)}</p>
         <h1>This week</h1>
         {status && <p className="status" role="status">{status}</p>}
+        {weekWarning && <p className="warning">{weekWarning}</p>}
       </header>
       <ol className="days">
         {days.map((day) => (
-          <DayCard key={day.key} day={day} today={day.key === todayKey} editable={day.key >= todayKey && !day.done}
-                   rows={rowsOf(units, day.key)} equipment={equipment} onSave={(rows) => save(day.key, rows)} />
+          <DayCard key={day.key} day={day} today={day.key === todayKey} editable={editable(day)}
+                   rows={rowsOf(units, day.key)} equipment={equipment} onSave={(rows) => save(day.key, rows)}
+                   warnings={editable(day) ? checkDay(rowsOf(units, day.key), profile, exercises) : []}
+                   onDrop={(fromKey) => { const from = days.find((d) => d.key === fromKey); if (from && editable(from)) move(from, day); }} />
         ))}
       </ol>
       {earlier.length > 0 && (
@@ -103,22 +123,29 @@ export function ProgramPage({ config, me, empty }: { config: Config; me: User; e
   );
 }
 
-function DayCard({ day, today, editable, rows, equipment, onSave }: {
+function DayCard({ day, today, editable, rows, equipment, onSave, warnings = [], onDrop }: {
   day: Day; today: boolean; editable: boolean; rows: PlanRow[]; equipment?: Set<string>; onSave: (rows: PlanRow[]) => void;
+  warnings?: string[]; onDrop?: (fromKey: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [over, setOver] = useState(false);
   const lines = editLines(rows);
   const dayStart = day.date.getTime() / 1000;
   const empty = editable ? lines.length === 0 : day.lines.length === 0;
   return (
-    <li className={`day${today ? " today" : ""}${empty ? " rest" : ""}`}>
+    <li className={`day${today ? " today" : ""}${empty ? " rest" : ""}${over ? " drop" : ""}`}
+        onDragOver={(e) => { if (editable && empty && onDrop) { e.preventDefault(); setOver(true); } }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { setOver(false); onDrop?.(e.dataTransfer.getData("text/x-day")); }}>
       <div className="date">
         <span>{weekday.format(day.date)}</span>
         <strong>{day.date.getDate()}</strong>
       </div>
       <div className="session">
         {!empty && (
-          <h3>
+          <h3 draggable={editable} title={editable ? "Drag to a rest day to move this session" : undefined}
+              className={editable ? "handle" : undefined}
+              onDragStart={(e) => { e.dataTransfer.setData("text/x-day", day.key); e.dataTransfer.effectAllowed = "move"; }}>
             {day.title ?? "Workout"}
             {day.done && <span className="done">Done</span>}
           </h3>
@@ -135,6 +162,9 @@ function DayCard({ day, today, editable, rows, equipment, onSave }: {
                            onRemove={() => onSave(removeLine(rows, line))} />
                 ))}
               </ul>
+            )}
+            {warnings.length > 0 && (
+              <ul className="warnings">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
             )}
             {adding ? (
               <ExercisePicker equipment={equipment} onPick={(slug) => { setAdding(false); onSave(addLine(rows, slug, "Workout", dayStart)); }}

@@ -139,3 +139,8 @@ export function editOf(line: EditLine): Edit {
     rpe: value(line.targets, "rpe"),
   };
 }
+
+/** A session moved to another day: the same rows at the same time of day, pinned. */
+export function moveDay(rows: PlanRow[], fromStart: number, toStart: number): PlanRow[] {
+  return pin(rows.map((row) => ({ ...row, at: row.at - fromStart + toStart })));
+}

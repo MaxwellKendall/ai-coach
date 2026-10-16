@@ -123,3 +123,11 @@ h3 { font-size: 17px; font-weight: 650; display: flex; align-items: center; gap:
   .session ul.edit li { flex-direction: row; }
   .tools { opacity: 1; }
 }
+.warning, .session ul.warnings li { color: #b0541f; font-size: 14px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .warning, :root:not([data-theme="light"]) .session ul.warnings li { color: #f0a46b; } }
+.session ul.warnings { margin-top: 8px; gap: 2px; }
+.session ul.warnings li { border: 0; padding: 0; display: block; }
+.warning { margin-top: 8px; }
+h3.handle { cursor: grab; }
+h3.handle::before { content: "⠿"; color: var(--muted); font-size: 14px; margin-left: -2px; }
+.day.drop { border-color: var(--accent); border-style: dashed; background: var(--surface); }

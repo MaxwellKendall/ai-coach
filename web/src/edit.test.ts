@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLine, editLine, editLines, editOf, moveLine, removeLine } from "./edit";
+import { addLine, editLine, editLines, editOf, moveDay, moveLine, removeLine } from "./edit";
 import { describe as text, lines, WARMUP } from "./program";
 import type { PlanRow } from "./sync";
 
@@ -77,5 +77,16 @@ describe("editing a session (FIT-128)", () => {
 
   it("starts a rest day's first exercise at 7:00", () => {
     expect(addLine([], "plank", "Workout", start, "x")[0]).toMatchObject({ at: start + 7 * 3600, slot: "Workout" });
+  });
+});
+
+describe("moving a session to another day (FIT-128)", () => {
+  it("keeps its rows, ids and time of day", () => {
+    const rows = session();
+    const day = 86_400;
+    const out = moveDay(rows, start - 7 * 3600, start - 7 * 3600 + 2 * day);
+    expect(out.map((r) => r.id)).toEqual(rows.map((r) => r.id));
+    expect(out.map((r) => r.at - 2 * day)).toEqual(rows.map((r) => r.at));
+    expect(out.every((r) => r.pinned)).toBe(true);
   });
 });
