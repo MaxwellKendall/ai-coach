@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import OSLog
 import SwiftData
 @preconcurrency import Amplify
@@ -6,20 +7,24 @@ import SwiftData
 /// FIT-126: keeps a signed-in account's program and logs in step with the server, both ways. After a save here it
 /// pushes what changed; on start, on foreground and when the server says something changed (a web edit), it pulls.
 /// Signed out, it doesn't run, and the app works as before.
-@MainActor
+@Observable @MainActor
 final class SyncEngine {
     static let shared = SyncEngine()
 
-    private var uid: String?
-    private var context: ModelContext?
-    private var state = SyncState()
-    private var running: Task<Void, Never>?
-    private var again = false
-    private var listeners: [Task<Void, Never>] = []
-    private let log = Logger(subsystem: "AICoach", category: "sync")
+    /// What the Account screen shows: when this phone last finished a sync, or why the last one failed.
+    private(set) var lastSynced: Date?
+    private(set) var failure: String?
+
+    @ObservationIgnored private var uid: String?
+    @ObservationIgnored private var context: ModelContext?
+    @ObservationIgnored private var state = SyncState()
+    @ObservationIgnored private var running: Task<Void, Never>?
+    @ObservationIgnored private var again = false
+    @ObservationIgnored private var listeners: [Task<Void, Never>] = []
+    @ObservationIgnored private let log = Logger(subsystem: "AICoach", category: "sync")
 
     /// This install, so the subscription can skip what it pushed itself.
-    private let source: String = {
+    @ObservationIgnored private let source: String = {
         if let id = UserDefaults.standard.string(forKey: "sync.source") { return id }
         let id = UUID().uuidString
         UserDefaults.standard.set(id, forKey: "sync.source")
@@ -40,6 +45,8 @@ final class SyncEngine {
         listeners.forEach { $0.cancel() }
         listeners = []
         uid = nil
+        lastSynced = nil
+        failure = nil
         context = nil
     }
 
@@ -79,8 +86,11 @@ final class SyncEngine {
             }
             try await pull(into: context)
             Self.save(state, uid)
+            lastSynced = .now
+            failure = nil
         } catch {
             log.error("sync failed: \(error.localizedDescription, privacy: .public)")
+            failure = error.localizedDescription
             Self.save(state, uid)
         }
     }
