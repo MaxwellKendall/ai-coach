@@ -28,6 +28,8 @@ targets:
       path: App/AICoach.entitlements
       properties:
         aps-environment: development
+        # FIT-138: Apple's own Sign in with Apple sheet.
+        com.apple.developer.applesignin: [Default]
         # FIT-58: invite links open the app (Apple's file is served by the share pages, infra/lambda/sharePages.ts).
         com.apple.developer.associated-domains:
           - applinks:join.barbrabell.com

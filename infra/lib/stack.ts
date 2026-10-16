@@ -82,6 +82,17 @@ export class AICoachStack extends Stack {
     // ---- Cognito: federated sign-in only ----
     const postConfirmation = fn("postConfirmation", {});
     table.grant(postConfirmation, "dynamodb:PutItem");
+    // FIT-138: native Sign in with Apple, as custom auth answered with Apple's identity token.
+    const appleTrigger = (handler: string) =>
+      new NodejsFunction(this, `Apple${handler}`, {
+        entry: path("../lambda/appleAuth.ts"),
+        handler,
+        runtime: lambda.Runtime.NODEJS_22_X,
+        architecture: lambda.Architecture.ARM_64,
+        timeout: Duration.seconds(10),
+        logGroup: new logs.LogGroup(this, `Apple${handler}Logs`, { retention: logs.RetentionDays.ONE_MONTH, removalPolicy }),
+      });
+    const verifyAuthChallengeResponse = appleTrigger("verifyChallenge");
 
     const userPool = new cognito.UserPool(this, "Users", {
       userPoolName: `AICoach-${stage}`,
@@ -93,7 +104,13 @@ export class AICoachStack extends Stack {
         email: { required: false, mutable: true },
         fullname: { required: false, mutable: true },
       },
-      lambdaTriggers: { postConfirmation },
+      lambdaTriggers: {
+        postConfirmation,
+        preSignUp: appleTrigger("preSignUp"),
+        defineAuthChallenge: appleTrigger("define"),
+        createAuthChallenge: appleTrigger("create"),
+        verifyAuthChallengeResponse,
+      },
       deletionProtection: isProd,
       removalPolicy,
     });
@@ -151,9 +168,23 @@ export class AICoachStack extends Stack {
         logoutUrls: ["aicoach://auth/signout"],
       },
     });
-    // Hosted-UI federation plus refresh only: no SRP or password flows on the public client.
-    (appClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_REFRESH_TOKEN_AUTH"];
+    // Hosted-UI federation, native Apple (custom auth, FIT-138) and refresh: no SRP or password flows on the public client.
+    (appClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_CUSTOM_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"];
     providers.forEach((p) => appClient.node.addDependency(p));
+
+    // FIT-138: finds or creates the user for Apple's identity token before custom auth signs them in.
+    const appleStart = fn("appleStart", {
+      USER_POOL_ID: userPool.userPoolId,
+      APPLE_PROVIDER: props.identityProviders.includes("apple") ? "SignInWithApple" : "",
+    });
+    table.grant(appleStart, "dynamodb:PutItem");
+    appleStart.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["cognito-idp:AdminGetUser", "cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword", "cognito-idp:AdminLinkProviderForUser"],
+        resources: [userPool.userPoolArn],
+      }),
+    );
+    const appleStartUrl = appleStart.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
     // FIT-127: the web dashboard signs in through the same hosted UI, as a public client with PKCE.
     const webOrigins = [...(props.app ? [`https://${props.app.host}/`] : []), "http://localhost:5173/"];
@@ -515,9 +546,9 @@ export class AICoachStack extends Stack {
     const alerts = new sns.Topic(this, "Alerts", { topicName: `AICoach-${stage}-alerts` });
     alerts.addSubscription(new subs.EmailSubscription(props.alertEmail));
 
-    const lambdas = { a: postConfirmation, b: deleteAccount, c: push, d: groupCleanup, e: gifts, f: stripeWebhook };
+    const lambdas = { a: postConfirmation, b: deleteAccount, c: push, d: groupCleanup, e: gifts, f: stripeWebhook, g: appleStart, h: verifyAuthChallengeResponse };
     const errors = new cloudwatch.MathExpression({
-      expression: "a + b + c + d + e + f + api",
+      expression: "a + b + c + d + e + f + g + h + api",
       usingMetrics: {
         ...Object.fromEntries(Object.entries(lambdas).map(([k, f]) => [k, f.metricErrors({ period: Duration.minutes(5) })])),
         api: new cloudwatch.Metric({
@@ -557,6 +588,7 @@ export class AICoachStack extends Stack {
     new CfnOutput(this, "Region", { value: this.region });
     new CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
     new CfnOutput(this, "AppClientId", { value: appClient.userPoolClientId });
+    new CfnOutput(this, "AppleStartUrl", { value: appleStartUrl.url });
     new CfnOutput(this, "WebClientId", { value: webClient.userPoolClientId });
     new CfnOutput(this, "CognitoDomain", { value: `${domainPrefix}.auth.${this.region}.amazoncognito.com` });
     new CfnOutput(this, "IdentityProviders", { value: props.identityProviders.join(",") || "none" });

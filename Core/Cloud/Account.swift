@@ -1,3 +1,5 @@
+import AuthenticationServices
+import CryptoKit
 import Foundation
 import Observation
 @preconcurrency import Amplify
@@ -14,9 +16,10 @@ final class Account {
         var id: Self { self }
         var title: String { self == .apple ? "Apple" : "Google" }
 
-        /// Cognito names federated users after their provider, e.g. `SignInWithApple_001877…`, `Google_1074…`.
+        /// Cognito names federated users after their provider, e.g. `SignInWithApple_001877…`, `Google_1074…`;
+        /// native Apple users (FIT-138) are `apple_001877…`.
         init?(username: String) {
-            if username.hasPrefix("SignInWithApple_") { self = .apple }
+            if username.hasPrefix("SignInWithApple_") || username.hasPrefix("apple_") { self = .apple }
             else if username.hasPrefix("Google_") { self = .google }
             else { return nil }
         }
@@ -73,7 +76,54 @@ final class Account {
         user = User(uid: current.userId, name: value(.name), email: value(.email), provider: Provider(username: current.username))
     }
 
-    /// Opens Cognito's hosted sign-in straight at the provider. Returns false if the user cancelled.
+    /// FIT-138: Sign in with Apple's own sheet (one tap, Face ID), no web page. The app asks Apple with the hash of a
+    /// fresh nonce and keeps the nonce; `appleStart` checks Apple's token and names the Cognito user (creating it the
+    /// first time), then Cognito's custom auth signs that user in with the same token, so Amplify keeps the session.
+    final class AppleRequest {
+        let nonce = Data((0..<32).map { _ in UInt8.random(in: .min ... .max) }).base64EncodedString()
+
+        func prepare(_ request: ASAuthorizationAppleIDRequest) {
+            request.requestedScopes = [.fullName, .email]
+            request.nonce = SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
+        }
+    }
+
+    enum AppleSignInError: Error { case noToken, refused, unexpectedStep }
+
+    func signIn(apple credential: ASAuthorizationAppleIDCredential, nonce: String) async throws {
+        guard let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }) else { throw AppleSignInError.noToken }
+        // Apple shares the name only the first time; appleStart keeps it for a new account.
+        let name = credential.fullName.map { PersonNameComponentsFormatter.localizedString(from: $0, style: .default) }
+        let username = try await appleUsername(token: token, nonce: nonce, name: name?.isEmpty == false ? name : nil)
+        let options = AuthSignInRequest.Options(pluginOptions: AWSAuthSignInOptions(authFlowType: .customWithoutSRP))
+        let start = try await Amplify.Auth.signIn(username: username, options: options)
+        guard case .confirmSignInWithCustomChallenge = start.nextStep else { throw AppleSignInError.unexpectedStep }
+        let answer = String(decoding: try JSONEncoder().encode(["identityToken": token, "nonce": nonce]), as: UTF8.self)
+        let done = try await Amplify.Auth.confirmSignIn(challengeResponse: answer)
+        guard done.isSignedIn else { throw AppleSignInError.refused }
+        lastProvider = .apple
+        await refresh()
+    }
+
+    private func appleUsername(token: String, nonce: String, name: String?) async throws -> String {
+        var request = URLRequest(url: try Self.appleStartURL())
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.httpBody = try JSONEncoder().encode(["identityToken": token, "nonce": nonce, "name": name])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw AppleSignInError.refused }
+        guard let username = try JSONDecoder().decode([String: String].self, from: data)["username"] else { throw AppleSignInError.refused }
+        return username
+    }
+
+    /// The `appleStart` function URL, written into amplify_outputs' `custom` section by infra/scripts/outputs.ts.
+    private static func appleStartURL() throws -> URL {
+        struct Outputs: Decodable { struct Custom: Decodable { let apple_start_url: URL }; let custom: Custom }
+        guard let file = Bundle.main.url(forResource: outputs, withExtension: "json") else { throw AppleSignInError.refused }
+        return try JSONDecoder().decode(Outputs.self, from: Data(contentsOf: file)).custom.apple_start_url
+    }
+
+    /// Google: Cognito's hosted sign-in straight at Google. Returns false if the user cancelled.
     func signIn(with provider: Provider) async throws -> Bool {
         do {
             // A private session skips the "wants to use amazoncognito.com to sign in" alert.

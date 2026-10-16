@@ -63,10 +63,10 @@ describe("auth", () => {
     }
   });
 
-  it("the iOS client allows only federated hosted-UI sign-in plus refresh", () => {
+  it("the iOS client allows federated hosted-UI sign-in, native Apple (custom auth, FIT-138) and refresh, no passwords", () => {
     prod.hasResourceProperties("AWS::Cognito::UserPoolClient", {
       ClientName: "ios",
-      ExplicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH"],
+      ExplicitAuthFlows: ["ALLOW_CUSTOM_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"],
       SupportedIdentityProviders: ["SignInWithApple", "Google"],
       AllowedOAuthFlows: ["code"],
       CallbackURLs: ["aicoach://auth/callback"],
@@ -85,11 +85,21 @@ describe("auth", () => {
     expect(Object.values(prod.findResources("AWS::Cognito::UserPoolClient")).map((r) => r.Properties.ClientName)).toEqual(["ios", "web"]);
   });
 
-  it("uses the Lite feature plan and a post-confirmation trigger", () => {
+  it("uses the Lite feature plan, a post-confirmation trigger, and custom auth for native Apple (FIT-138)", () => {
     dev.hasResourceProperties("AWS::Cognito::UserPool", {
       UserPoolTier: "LITE",
-      LambdaConfig: { PostConfirmation: Match.anyValue() },
+      LambdaConfig: {
+        PostConfirmation: Match.anyValue(),
+        PreSignUp: Match.anyValue(),
+        DefineAuthChallenge: Match.anyValue(),
+        CreateAuthChallenge: Match.anyValue(),
+        VerifyAuthChallengeResponse: Match.anyValue(),
+      },
     });
+  });
+
+  it("the web client stays on the hosted UI (FIT-127)", () => {
+    prod.hasResourceProperties("AWS::Cognito::UserPoolClient", { ClientName: "web", ExplicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH"] });
   });
 });
 
@@ -187,6 +197,9 @@ describe("least privilege", () => {
     expect(actionsOf(dev, /^aiProxy/)).toContain("secretsmanager:GetSecretValue");
     // FIT-126: sync writes and reads units, never deletes or scans.
     expect(actionsOf(dev, /^sync/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
+    // FIT-138: appleStart finds, creates and links users and writes their profile; it never deletes them.
+    expect(actionsOf(dev, /^appleStart/).sort()).toEqual(["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser", "cognito-idp:AdminLinkProviderForUser",
+      "cognito-idp:AdminSetUserPassword", "dynamodb:PutItem"]);
   });
 });
 
