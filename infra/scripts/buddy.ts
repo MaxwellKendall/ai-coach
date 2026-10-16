@@ -1,6 +1,8 @@
 // Dev-only second member for trying groups on one simulator (FIT-16/53):
 //   AWS_PROFILE=aicoach-dev npm run buddy -- join CODE      join, share progress, post a milestone
 //   AWS_PROFILE=aicoach-dev npm run buddy -- live GROUPID   opt in to live sharing and log a workout, a set every few seconds
+//   AWS_PROFILE=aicoach-dev npm run buddy -- program        sync a sample week (FIT-126) and write a session for the dashboard's
+//                                                       dev server to web/public/session.json (FIT-127; gitignored)
 //   AWS_PROFILE=aicoach-dev npm run buddy -- delete         delete the buddy's account (and with it its group items)
 import { gql, must, signIn } from "./dev.ts";
 
@@ -63,9 +65,39 @@ if (command === "join") {
   }
   must(await gql(token, `mutation($g: ID!) { endLiveSession(groupId: $g) { ${fields} } }`, { g: arg }), "end");
   console.log("Workout ended.");
+} else if (command === "program") {
+  // This week, as the app syncs it: Monday and Friday planned, Monday logged.
+  const today = new Date();
+  const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+  const day = (offset: number, hour = 7) => new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + offset, hour);
+  const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const m = (metric: string, value: number, unit: string) => ({ metric, value, unit });
+  const row = (d: Date, i: number, slot: string, template: string, targets: object[], note = "") => ({
+    id: crypto.randomUUID(), kind: "workout", at: d.getTime() / 1000 + i, slot, template, targets, note, main: i === 1, pinned: false,
+  });
+  const monday = day(1), friday = day(5);
+  const units = [
+    { key: `plan#${key(monday)}`, rows: [
+      row(monday, 0, "Lower A", "back-squat", [m("sets", 2, "sets"), m("reps", 5, "reps"), m("load_lb", 135, "lb")], "warm-up"),
+      row(monday, 1, "Lower A", "back-squat", [m("sets", 4, "sets"), m("reps", 5, "reps"), m("load_lb", 205, "lb")]),
+      row(monday, 2, "Lower A", "romanian-deadlift", [m("sets", 3, "sets"), m("reps", 8, "reps"), m("load_lb", 155, "lb")]),
+      row(monday, 3, "Lower A", "plank", [m("sets", 3, "sets"), m("duration_s", 45, "s")]),
+    ] },
+    { key: `log#${key(monday)}`, rows: [
+      { id: crypto.randomUUID(), kind: "workout", at: day(1, 8).getTime() / 1000, template: "back-squat", measurements: [m("reps", 5, "reps"), m("load_lb", 205, "lb")], note: "" },
+    ] },
+    { key: `plan#${key(friday)}`, rows: [
+      row(friday, 1, "Upper A", "bench-press", [m("sets", 4, "sets"), m("reps", 5, "reps"), m("load_lb", 185, "lb"), m("rpe", 8, "rpe")]),
+      row(friday, 2, "Upper A", "dumbbell-row", [m("sets", 3, "sets"), m("reps", 10, "reps"), m("load_lb_hand", 60, "lb/hand")]),
+    ] },
+  ].map((u) => ({ key: u.key, updatedAt: new Date().toISOString(), deleted: false, body: JSON.stringify(u.rows) }));
+  must(await gql(token, `mutation($u: [SyncUnitInput!]!) { syncPush(units: $u, source: "buddy") { changedAt } }`, { u: units }), "syncPush");
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(new URL("../../web/public/session.json", import.meta.url), JSON.stringify({ id: token, refresh: "", expiresAt: Date.now() + 55 * 60_000 }));
+  console.log(`Synced ${units.length} units for Test Buddy; the dashboard's dev session is in web/public/session.json.`);
 } else if (command === "delete") {
   must(await gql(token, `mutation { deleteAccount }`), "delete");
   console.log("Test Buddy's account is deleted.");
 } else {
-  console.log("usage: npm run buddy -- join CODE | live GROUPID | delete");
+  console.log("usage: npm run buddy -- join CODE | live GROUPID | program | delete");
 }

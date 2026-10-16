@@ -15,6 +15,20 @@ scripts/smoke.ts     end-to-end test against deployed dev
 test/                vitest: CDK template assertions, resolver and Lambda unit tests
 ```
 
+## Web dashboard (FIT-127)
+
+`web/` is the dashboard: Vite + React + TypeScript (author, 2026-10-16: web dependencies are fine there; CLAUDE.md's
+rule is for the iOS app). It signs in through the same Cognito hosted UI as the app, with its own public `web` client
+(PKCE), and talks to AppSync directly. CDK serves `web/dist` from a private bucket behind CloudFront at
+`stages.{stage}.app.host` (dev `app.dev.barbrabell.com`, prod `app.barbrabell.com`) and writes its `config.json`.
+
+```bash
+npm --prefix ../web run build                    # before every cdk deploy: the stack uploads web/dist
+AWS_PROFILE=aicoach-dev npm run dashboard-config # web/public/config.json for the dev server, from AICoach-dev
+npm --prefix ../web run dev                      # http://localhost:5173 (the web client allows it as a redirect)
+npm --prefix ../web test
+```
+
 ## Accounts
 
 Decision (FIT-57, 2026-10-03, author): dev and prod share one account, `397614038040` (profile

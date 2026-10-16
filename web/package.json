@@ -1,0 +1,25 @@
+{
+  "name": "aicoach-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "catalog": "node scripts/catalog.mjs",
+    "predev": "npm run catalog",
+    "dev": "vite",
+    "prebuild": "npm run catalog",
+    "build": "tsc --noEmit && vite build && node -e \"require('fs').rmSync('dist/config.json',{force:true})\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}

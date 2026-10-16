@@ -1,0 +1,6 @@
+node_modules/
+dist/
+src/catalog.json
+# Written by `npm run web-config` in infra, for the dev server only.
+public/config.json
+public/session.json
