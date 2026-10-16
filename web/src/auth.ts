@@ -109,9 +109,12 @@ export function signOut(config: Config) {
   location.assign(`https://${config.cognitoDomain}/logout?${params}`);
 }
 
-export type User = { uid: string; name?: string; email?: string };
+export type User = { uid: string; name?: string; email?: string; provider?: Provider };
 
 export function user(token: string): User {
   const claims = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-  return { uid: claims.sub, name: claims.name, email: claims.email };
+  // Cognito names federated users after their provider (as Account.Provider reads it in the app).
+  const username: string = claims["cognito:username"] ?? "";
+  const provider = username.startsWith("Google_") ? "google" : username.startsWith("SignInWithApple_") ? "apple" : undefined;
+  return { uid: claims.sub, name: claims.name, email: claims.email, provider };
 }

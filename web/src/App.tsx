@@ -113,6 +113,14 @@ function Program({ config, me }: { config: Config; me: User }) {
           <p className="muted">
             Open {APP} on your iPhone, signed in as {me.email ?? me.name ?? "this account"}, and your program shows up here.
           </p>
+          {me.provider && (
+            <p className="muted">
+              You're signed in with {me.provider === "google" ? "Google" : "Apple"}. If the app uses{" "}
+              {me.provider === "google" ? "Apple" : "Google"}, that's a separate account:{" "}
+              <button className="link" onClick={() => signOut(config)}>sign out</button> and continue with{" "}
+              {me.provider === "google" ? "Apple" : "Google"}.
+            </p>
+          )}
         </div>
       ) : (
         <ol className="days">
