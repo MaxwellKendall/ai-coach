@@ -12,8 +12,8 @@ import { verifyAppleToken, type AppleClaims } from "./appleToken.ts";
 
 /**
  * FIT-138: the step before native Sign in with Apple's custom auth, which can only sign in a user who exists. The app
- * posts Apple's identity token; this checks it and answers with the Cognito username to sign in as, creating the user
- * the first time. A new user is linked to their Apple identity, so the web dashboard's Apple sign-in (Cognito's
+ * posts Apple's identity token; this checks it and answers with the Cognito username to sign in as: the federated user
+ * from before FIT-138 if there is one, else `apple_<sub>`, created the first time. A new user is linked to their Apple identity, so the web dashboard's Apple sign-in (Cognito's
  * hosted UI) is the same account.
  */
 
@@ -71,6 +71,9 @@ export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunc
     console.log("refused", result.why);
     return reply(401, { error: "Apple's token wasn't accepted." });
   }
+  // Someone who signed in with Apple before FIT-138 is a federated user; custom auth signs them in as that user.
+  const federated = `SignInWithApple_${result.claims.sub}`;
+  if (await exists(federated)) return reply(200, { username: federated });
   const username = usernameFor(result.claims.sub);
   if (!(await exists(username))) {
     try {

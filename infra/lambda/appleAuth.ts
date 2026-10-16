@@ -22,6 +22,8 @@ export function appleSubject(username: string): string | undefined {
 export async function define(event: DefineAuthChallengeTriggerEvent) {
   const session = event.request.session;
   const last = session.at(-1);
+  // Cognito still runs the flow for an unknown user (it doesn't reveal who exists); appleStart should have made them.
+  if (event.request.userNotFound) console.log("no such user", event.userName);
   if (session.length === 0) {
     event.response.challengeName = "CUSTOM_CHALLENGE";
     event.response.issueTokens = false;

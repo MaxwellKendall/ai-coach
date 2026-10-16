@@ -42,7 +42,7 @@ struct SignInSheet: View {
     }
 
     @ViewBuilder private func button(_ provider: Account.Provider) -> some View {
-        if provider == .apple {
+        if provider == .apple, account.hasNativeApple {
             // FIT-138: Apple's own button and sheet (Face ID), not a web page.
             SignInWithAppleButton(.continue) { request in
                 apple = Account.AppleRequest()
@@ -65,6 +65,8 @@ struct SignInSheet: View {
             HStack(spacing: 12) {
                 if working == provider {
                     ProgressView()
+                } else if provider == .apple {
+                    Image(systemName: "apple.logo").font(.title3)
                 } else {
                     Image("GoogleG").resizable().frame(width: 20, height: 20)
                 }

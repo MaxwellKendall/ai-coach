@@ -106,7 +106,8 @@ final class Account {
     }
 
     private func appleUsername(token: String, nonce: String, name: String?) async throws -> String {
-        var request = URLRequest(url: try Self.appleStartURL())
+        guard let url = Self.appleStartURL else { throw AppleSignInError.refused }
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = try JSONEncoder().encode(["identityToken": token, "nonce": nonce, "name": name])
@@ -117,13 +118,16 @@ final class Account {
     }
 
     /// The `appleStart` function URL, written into amplify_outputs' `custom` section by infra/scripts/outputs.ts.
-    private static func appleStartURL() throws -> URL {
+    /// Missing (a backend not yet deployed with FIT-138), Apple signs in through the hosted UI as before.
+    static let appleStartURL: URL? = {
         struct Outputs: Decodable { struct Custom: Decodable { let apple_start_url: URL }; let custom: Custom }
-        guard let file = Bundle.main.url(forResource: outputs, withExtension: "json") else { throw AppleSignInError.refused }
-        return try JSONDecoder().decode(Outputs.self, from: Data(contentsOf: file)).custom.apple_start_url
-    }
+        guard let file = Bundle.main.url(forResource: outputs, withExtension: "json"), let data = try? Data(contentsOf: file) else { return nil }
+        return (try? JSONDecoder().decode(Outputs.self, from: data))?.custom.apple_start_url
+    }()
 
-    /// Google: Cognito's hosted sign-in straight at Google. Returns false if the user cancelled.
+    var hasNativeApple: Bool { isAvailable && Self.appleStartURL != nil }
+
+    /// Cognito's hosted sign-in straight at the provider: Google, or Apple without `appleStart`. Returns false if the user cancelled.
     func signIn(with provider: Provider) async throws -> Bool {
         do {
             // A private session skips the "wants to use amazoncognito.com to sign in" alert.
