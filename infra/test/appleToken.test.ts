@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign } from "node:crypto";
-import { describe, expect, it } from "vitest";
-import { appleSubject, define } from "../lambda/appleAuth.ts";
+import { describe, expect, it, vi } from "vitest";
+import { appleSubject, define, verifyChallenge } from "../lambda/appleAuth.ts";
 import { checkAppleToken, sha256, type AppleKey } from "../lambda/appleToken.ts";
 
 const now = new Date("2026-10-16T12:00:00Z");
@@ -71,6 +71,15 @@ describe("custom auth (FIT-138)", () => {
   });
   it("fails on a wrong answer, with no second try", async () => {
     expect(await run([{ challengeName: "CUSTOM_CHALLENGE", challengeResult: false }])).toMatchObject({ issueTokens: false, failAuthentication: true });
+  });
+  it("Verify runs as Lambda calls it, with (event, context)", async () => {
+    // The first real sign-in failed: the time was an optional second parameter, and Lambda passed its context there.
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const event = { userName: "SignInWithApple_001877.abc.1234", request: { challengeAnswer: JSON.stringify({ identityToken: "x", nonce }) }, response: {} };
+    const out = await (verifyChallenge as (e: unknown, c: unknown) => Promise<{ response: { answerCorrect: boolean } }>)(event, { awsRequestId: "r1" });
+    expect(out.response.answerCorrect).toBe(false);
+    expect(log).toHaveBeenCalledWith("refused", "not a JWT");
+    log.mockRestore();
   });
   it("never issues tokens for another challenge", async () => {
     expect(await run([{ challengeName: "SRP_A", challengeResult: true }])).toMatchObject({ issueTokens: false, failAuthentication: true });

@@ -45,7 +45,10 @@ export async function create(event: CreateAuthChallengeTriggerEvent) {
   return event;
 }
 
-export async function verifyChallenge(event: VerifyAuthChallengeResponseTriggerEvent, now = new Date()) {
+/** Lambda calls a handler with (event, context), so the time can't be an optional second parameter here. */
+export const verifyChallenge = (event: VerifyAuthChallengeResponseTriggerEvent) => checkAnswer(event, new Date());
+
+export async function checkAnswer(event: VerifyAuthChallengeResponseTriggerEvent, now: Date) {
   event.response.answerCorrect = false;
   const subject = appleSubject(event.userName);
   try {
@@ -53,8 +56,10 @@ export async function verifyChallenge(event: VerifyAuthChallengeResponseTriggerE
     const result = subject ? await verifyAppleToken(identityToken, nonce, now) : { ok: false as const, why: "not an Apple user" };
     if (result.ok && result.claims.sub === subject) event.response.answerCorrect = true;
     else console.log("refused", result.ok ? "another Apple user" : result.why);
-  } catch {
-    console.log("refused", "unreadable answer");
+  } catch (e) {
+    // The answer's shape, never its content (it holds Apple's token).
+    const answer = String(event.request.challengeAnswer ?? "");
+    console.log("refused", "unreadable answer", (e as Error).message, { length: answer.length, starts: answer.slice(0, 1) });
   }
   return event;
 }
