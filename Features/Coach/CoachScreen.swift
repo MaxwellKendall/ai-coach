@@ -102,15 +102,13 @@ struct CoachScreen: View {
             }
             .onAppear {
                 autoStarted = true
-                Task { await voice.start() }
+                voice.vocabulary = vocabulary
+                #if DEBUG
+                if let said = UserDefaults.standard.string(forKey: "listen") { return voice.pretend(said, onDone: submit) }
+                #endif
+                Task { await voice.start(onDone: submit) }
             }
             .onDisappear { if voice.listening { _ = voice.stop() } }
-            // Like the mic's tap mode: done after 1.6 s without new words.
-            .task(id: voice.transcript) {
-                guard voice.listening, !voice.transcript.isEmpty else { return }
-                try? await Task.sleep(for: .seconds(1.6))
-                if !Task.isCancelled, voice.listening { submit(voice.stop()) }
-            }
             .animation(.snappy, value: voice.listening)
             .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK") {}
@@ -141,6 +139,7 @@ struct CoachScreen: View {
         let said = said.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !said.isEmpty else { return }
         text = ""
+        VoiceLog.record(said, "sent to \(target)")
         send(said, target)
     }
 
@@ -161,6 +160,13 @@ struct CoachScreen: View {
             Suggestions(title: "Today’s workout", items: today),
             Suggestions(title: "Log", items: ["Weighed…", "Had … for breakfast", "Slept … hours"]),
         ]
+    }
+
+    /// FIT-134: this week's exercise names, so the recognizer hears "RDL" rather than "our deal".
+    private var vocabulary: [String] {
+        let names = Dictionary(templates.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let weekAhead = Date.now.addingTimeInterval(7 * 86_400)
+        return Array(Set(planned.filter { $0.kind == .workout && $0.date <= weekAhead }.compactMap { $0.templateRef.flatMap { names[$0] } }))
     }
 
     private var todaysFirstExercise: String? {

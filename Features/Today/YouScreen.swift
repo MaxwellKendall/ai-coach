@@ -10,6 +10,9 @@ struct YouScreen: View {
             List {
                 Section {
                     NavigationLink { CatalogScreen() } label: { Label("Library", systemImage: "books.vertical") }
+                    #if DEBUG
+                    NavigationLink { VoiceLogView() } label: { Label("Spoken attempts", systemImage: "waveform") }
+                    #endif
                     // FIT-122: a year of Pro bought as a gift on the web.
                     if account.isAvailable {
                         NavigationLink { RedeemGiftView() } label: { Label("Redeem a gift", systemImage: "gift") }

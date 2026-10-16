@@ -169,9 +169,11 @@ struct CoachChatView: View {
                                                         model: LanguageModel.programs(signedIn: account.user != nil))
                 let answer = reply.text.isEmpty ? (reply.draft.isEmpty ? "Could you say that another way?" : "Here’s the change.") : reply.text
                 messages.append(Message(coach: true, text: answer))
+                VoiceLog.record(said, "coach (\(scope.rawValue)): \(answer)" + (reply.draft.isEmpty ? "" : " · draft: " + reply.draft.lines.joined(separator: " ")))
                 draft = reply.draft
                 last = CoachChat.Turn(said: said, reply: answer)
             } catch {
+                VoiceLog.record(said, "coach failed: \(error)")
                 messages.append(Message(coach: true, text: "I couldn’t answer that just now. Try again in a moment."))
             }
         }

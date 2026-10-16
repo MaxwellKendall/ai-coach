@@ -545,9 +545,13 @@ struct TodayScreen: View {
         job = Task {
             defer { working = nil; job = nil }
             do {
-                switch try await TodayRequestParser.parse(said)?.kind {
+                let kind = try await TodayRequestParser.parse(said)?.kind
+                VoiceLog.record(said, "Today sorted it as \(kind.map { String(describing: $0) } ?? "nothing it understood")")
+                switch kind {
                 // FIT-120: changing the plan, or logging it as planned, is Pro; logging anything else stays free.
-                case .change?, .edit?, .didWorkout? where !pro.active: pro.paywall = true
+                case .change?, .edit?, .didWorkout? where !pro.active:
+                    VoiceLog.record(said, "stopped: Pro offer shown")
+                    pro.paywall = true
                 case .change(let change)?: propose(change, said: said)
                 case .edit?: try await editToday(said)
                 case .didWorkout(let differences)?: logSpoken(differences, said: said)
@@ -568,6 +572,7 @@ struct TodayScreen: View {
             } catch {
                 // What actually went wrong, for the console; the user gets a plain message.
                 print("Spoken request failed: \(said) → \(error)")
+                VoiceLog.record(said, "failed: \(error)")
                 if !Task.isCancelled { message = "The coach couldn’t do that one. Try saying it another way." }
             }
         }
@@ -708,6 +713,7 @@ struct TodayScreen: View {
             restore()
             throw error
         }
+        VoiceLog.record(said, "edit calls: \(result.calls.isEmpty ? "none" : result.calls.joined(separator: "; ")) → \(result.changed ? result.summary : "no change")")
         guard result.changed, result.workouts != todays else {
             restore()
             if result.changed { withAnimation { toast = Toast(text: "That’s already today’s plan") } }
