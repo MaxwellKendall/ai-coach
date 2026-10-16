@@ -125,7 +125,7 @@ describe("resolvers", () => {
         "Mutation.updateProfile", "Mutation.createGroup", "Mutation.joinGroup", "Mutation.leaveGroup",
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
         "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.publishWeek", "Mutation.clearWeek", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
-        "Mutation.redeemGift", "Query.giftedPro",
+        "Mutation.redeemGift", "Query.giftedPro", "Mutation.syncPush", "Query.syncPull", "Subscription.onSync",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -184,6 +184,8 @@ describe("least privilege", () => {
       expect(actionsOf(dev, name)).toContain("secretsmanager:GetSecretValue");
     }
     expect(actionsOf(dev, /^aiProxy/)).toContain("secretsmanager:GetSecretValue");
+    // FIT-126: sync writes and reads units, never deletes or scans.
+    expect(actionsOf(dev, /^sync/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
   });
 });
 

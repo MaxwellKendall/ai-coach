@@ -28,7 +28,7 @@ struct SignInSheet: View {
                 Text(failure).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
             }
             Spacer(minLength: 0)
-            Text("Your workouts stay on this iPhone. Only what you choose to share with a group leaves it.")
+            Text("Your program and workouts are kept with your account, so they're backed up and you can see them on the web. Groups see only what you choose to share.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

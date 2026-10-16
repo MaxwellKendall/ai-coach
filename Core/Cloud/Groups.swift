@@ -132,7 +132,7 @@ enum Cloud {
         var errorDescription: String? { message }
     }
 
-    private static func run<R: Decodable & Sendable>(_ document: String, _ variables: sending [String: Any]? = nil, at path: String,
+    static func run<R: Decodable & Sendable>(_ document: String, _ variables: sending [String: Any]? = nil, at path: String,
                                           as type: R.Type = R.self, query: Bool = false) async throws -> R {
         let request = GraphQLRequest<R>(document: document, variables: variables, responseType: R.self, decodePath: path)
         let result: GraphQLResponse<R>

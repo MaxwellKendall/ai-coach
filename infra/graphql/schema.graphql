@@ -112,7 +112,44 @@ input PlannedDayInput {
   title: String!
 }
 
+"""
+FIT-126: one synced piece of a user's data: a day's planned activity (plan#YYYY-MM-DD) or logs (log#YYYY-MM-DD), a goal
+(goal#UUID) or the profile. body is the app's JSON as a string, kept byte for byte; null when deleted. updatedAt is when the
+writer changed it (the newest wins); changedAt is when the server stored it (the pull cursor).
+"""
+type SyncUnit {
+  key: String!
+  updatedAt: AWSDateTime!
+  deleted: Boolean!
+  body: String
+  changedAt: AWSDateTime!
+}
+
+input SyncUnitInput {
+  key: String!
+  updatedAt: AWSDateTime!
+  deleted: Boolean!
+  body: String
+}
+
+"FIT-126: what a push stored; rejected are the server's newer copies of units it kept. Subscribers learn only that uid changed."
+type SyncPush {
+  uid: ID!
+  source: String
+  changedAt: AWSDateTime!
+  rejected: [SyncUnit!]!
+}
+
+type SyncPage {
+  units: [SyncUnit!]!
+  "Pass back as since for the next page or the next pull."
+  cursor: String
+  more: Boolean!
+}
+
 type Query {
+  "FIT-126: my units stored since the cursor (all of them without one), oldest first."
+  syncPull(since: String): SyncPage!
   "FIT-113: a shared item by its id, so the app can open a session someone shared."
   share(id: ID!): SharedItem
   me: Profile
@@ -123,6 +160,8 @@ type Query {
 }
 
 type Mutation {
+  "FIT-126: store my changed units (at most 25); a unit older than the server's copy is rejected. source names the writer."
+  syncPush(units: [SyncUnitInput!]!, source: String): SyncPush
   "FIT-105: save a win, recap or program to share; returns its link."
   createShare(kind: String!, payload: AWSJSON!): Share
   "FIT-107: a short-lived URL to upload the share's card (PNG), for link previews."
@@ -171,6 +210,8 @@ type Subscription {
   onLiveSet(groupId: ID!): LiveSet @aws_subscribe(mutations: ["publishLiveSet", "endLiveSession"])
   onProgress(groupId: ID!): Progress @aws_subscribe(mutations: ["publishProgress"])
   onFeed(groupId: ID!): FeedItem @aws_subscribe(mutations: ["postFeed"])
+  "FIT-126: my data changed somewhere; pull. Only for my own uid."
+  onSync(uid: ID!): SyncPush @aws_subscribe(mutations: ["syncPush"])
 }
 
 "FIT-105: a shared win, recap or program, at its link."

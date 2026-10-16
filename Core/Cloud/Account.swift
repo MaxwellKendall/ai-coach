@@ -99,7 +99,7 @@ final class Account {
     }
 
     /// App Store 5.1.1(v): removes the account and everything it shared (FIT-56 `deleteAccount`).
-    /// Workouts on this iPhone are untouched; they were never uploaded.
+    /// Workouts on this iPhone are untouched; the server copy of them (FIT-126) goes with the account.
     func deleteAccount() async throws {
         let request = GraphQLRequest<Bool>(document: "mutation { deleteAccount }", responseType: Bool.self, decodePath: "deleteAccount")
         if case .failure(let error) = try await Amplify.API.mutate(request: request) {

@@ -302,6 +302,19 @@ export class AICoachStack extends Stack {
       fieldName: "aiMessages",
     });
 
+    // ---- FIT-126: the program and logs, synced both ways ----
+    const sync = fn("sync", {});
+    table.grant(sync, "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:Query");
+    const syncSource = api.addLambdaDataSource("SyncSource", sync);
+    syncSource.createResolver("SyncPush", { typeName: "Mutation", fieldName: "syncPush" });
+    syncSource.createResolver("SyncPull", { typeName: "Query", fieldName: "syncPull" });
+    api.addNoneDataSource("None").createResolver("OnSync", {
+      typeName: "Subscription",
+      fieldName: "onSync",
+      runtime: appsync.FunctionRuntime.JS_1_0_0,
+      code: appsync.Code.fromAsset(path("../resolvers/onSync.js")),
+    });
+
     // ---- Push: stream → Lambda → APNs ----
     const apnsSecret = secretsmanager.Secret.fromSecretNameV2(this, "ApnsSecret", `aicoach/${stage}/apns`);
     const push = fn("push", {

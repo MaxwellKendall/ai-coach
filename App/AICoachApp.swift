@@ -28,6 +28,14 @@ struct AICoachApp: App {
                 .environment(pro)
                 .task { await account.refresh() }
                 .task { await pro.refresh() }
+                // FIT-126: a signed-in account's program and logs sync; signed out, nothing leaves the phone.
+                .onChange(of: account.user?.uid, initial: true) { _, uid in
+                    if let uid {
+                        SyncEngine.shared.start(uid: uid, context: container.mainContext)
+                    } else {
+                        SyncEngine.shared.stop()
+                    }
+                }
         }
         .modelContainer(container)
         // FIT-16: coming back to the app shares what changed with your groups.
@@ -36,6 +44,7 @@ struct AICoachApp: App {
             Task {
                 await account.refresh()
                 guard let uid = account.user?.uid else { return }
+                SyncEngine.shared.start(uid: uid, context: container.mainContext)
                 await Push.refresh()
                 await GroupSync.all(container.mainContext, me: uid)
             }

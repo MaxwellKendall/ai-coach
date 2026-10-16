@@ -9,6 +9,7 @@ import * as createGroup from "../resolvers/createGroup.js";
 import * as joinGroup from "../resolvers/joinGroup.js";
 import * as groupDetail from "../resolvers/groupDetail.js";
 import * as subscription from "../resolvers/subscription.js";
+import * as onSync from "../resolvers/onSync.js";
 import * as removeMember from "../resolvers/removeMember.js";
 import * as rotateInvite from "../resolvers/rotateInvite.js";
 import * as createShare from "../resolvers/createShare.js";
@@ -128,6 +129,13 @@ describe("subscriptions", () => {
   it("filter events to the subscribed group", () => {
     subscription.response(ctx({ args: { groupId: "g1" } }));
     expect(subscriptionFilters.at(-1)).toEqual({ filter: { groupId: { eq: "g1" } } });
+  });
+
+  it("onSync (FIT-126): only my own uid, filtered to my pushes", () => {
+    expect(() => onSync.request(ctx({ args: { uid: OTHER } }))).toThrow(Unauthorized);
+    onSync.request(ctx({ args: { uid: ME } }));
+    onSync.response(ctx({ args: { uid: ME } }));
+    expect(subscriptionFilters.at(-1)).toEqual({ filter: { uid: { eq: ME } } });
   });
 });
 

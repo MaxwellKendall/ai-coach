@@ -10,7 +10,8 @@ import { cognito, gql, must, out, rejected, signIn } from "./dev.ts";
 const LIVE_FIELDS = "groupId uid workout exercise setIndex setCount loadLb reps seconds rpe state startedAt updatedAt";
 
 /** AppSync real-time protocol over WebSocket. Resolves once the subscription is acknowledged or rejected. */
-function subscribe(token: string, groupId: string) {
+function subscribe(token: string, groupId: string,
+  query = `subscription($g: ID!) { onLiveSet(groupId: $g) { ${LIVE_FIELDS} } }`, field = "onLiveSet", variables: Record<string, string> = { g: groupId }) {
   const host = new URL(out.GraphqlUrl).host;
   const header = Buffer.from(JSON.stringify({ host, Authorization: token })).toString("base64");
   const url = `wss://${host.replace("appsync-api", "appsync-realtime-api")}/graphql?header=${header}&payload=e30=`;
@@ -28,7 +29,7 @@ function subscribe(token: string, groupId: string) {
             id: "1",
             type: "start",
             payload: {
-              data: JSON.stringify({ query: `subscription($g: ID!) { onLiveSet(groupId: $g) { ${LIVE_FIELDS} } }`, variables: { g: groupId } }),
+              data: JSON.stringify({ query, variables }),
               extensions: { authorization: { host, Authorization: token } },
             },
           }),
@@ -36,8 +37,8 @@ function subscribe(token: string, groupId: string) {
       } else if (m.type === "start_ack") resolve("ack");
       else if (m.type === "error") resolve("rejected");
       else if (m.type === "data") {
-        received.push({ at: Date.now(), data: m.payload.data.onLiveSet });
-        onData?.(m.payload.data.onLiveSet);
+        received.push({ at: Date.now(), data: m.payload.data[field] });
+        onData?.(m.payload.data[field]);
       }
     };
   });
@@ -229,6 +230,35 @@ while (!grew(counts)) {
 }
 pass(`views, shares made and joins are counted (${((Date.now() - countStart) / 1000).toFixed(1)} s for the stream)`);
 
+// FIT-126: A's program syncs: a push from one client shows in another's pull and on A's subscription, a stale
+// push gets the server's copy back, and nobody else can read A's units or listen for them.
+const day = "plan#2026-10-16";
+const unit = (body: string, updatedAt: string) => ({ key: day, updatedAt, deleted: false, body });
+const syncPush = `mutation($u: [SyncUnitInput!]!, $s: String) { syncPush(units: $u, source: $s) { uid source changedAt rejected { key body } } }`;
+const syncPull = `query($s: String) { syncPull(since: $s) { units { key body deleted updatedAt } cursor more } }`;
+const onSync = `subscription($u: ID!) { onSync(uid: $u) { uid source changedAt } }`;
+const subA = subscribe(a, "", onSync, "onSync", { u: aUid });
+if ((await subA.ready) !== "ack") throw new Error("A's onSync subscription was rejected");
+const subSpy = subscribe(c, "", onSync, "onSync", { u: aUid });
+if ((await subSpy.ready) !== "rejected") throw new Error("C subscribed to A's sync");
+const heard = subA.next(5000);
+const phoneAt = new Date().toISOString();
+must(await gql(a, syncPush, { u: [unit('[{"reps":5}]', phoneAt)], s: "phone" }), "syncPush");
+if ((await heard).source !== "phone") throw new Error("A's subscription didn't hear the push");
+const pulled = must(await gql(a, syncPull, {}), "syncPull").syncPull;
+if (pulled.units.find((u: any) => u.key === day)?.body !== '[{"reps":5}]') throw new Error(`pull: ${JSON.stringify(pulled)}`);
+const webAt = new Date(Date.now() + 1000).toISOString();
+await new Promise((r) => setTimeout(r, 1100));
+must(await gql(a, syncPush, { u: [unit('[{"reps":4}]', webAt)], s: "web" }), "syncPush web");
+const stalePush = must(await gql(a, syncPush, { u: [unit('[{"reps":6}]', phoneAt)], s: "phone" }), "syncPush stale").syncPush;
+if (stalePush.rejected[0]?.body !== '[{"reps":4}]') throw new Error(`stale push: ${JSON.stringify(stalePush)}`);
+const after = must(await gql(a, syncPull, { s: pulled.cursor }), "syncPull since").syncPull;
+if (after.units.length !== 1 || after.units[0].body !== '[{"reps":4}]') throw new Error(`pull since: ${JSON.stringify(after)}`);
+if (must(await gql(c, syncPull, {}), "C syncPull").syncPull.units.length !== 0) throw new Error("C pulled units");
+pass("A's program syncs: another client's pull and A's subscription see a push, a stale push gets the newer copy back, and C sees nothing");
+subA.close();
+subSpy.close();
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {
@@ -238,7 +268,10 @@ for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as 
     if ((e as Error).name !== "UserNotFoundException") throw e;
   }
 }
-pass("deleteAccount removes all three test users");
+const syncLeft = await db.send(new QueryCommand({ TableName: "AICoach-dev", KeyConditionExpression: "PK = :pk AND begins_with(SK, :s)",
+  ExpressionAttributeValues: { ":pk": `USER#${aUid}`, ":s": "SYNC#" } }));
+if (syncLeft.Items?.length) throw new Error("A's synced units survived deleteAccount");
+pass("deleteAccount removes all three test users, and A's synced program");
 
 // FIT-61: the stream-triggered cleanup removes the now-empty group and its invite.
 const leftovers = async () => {
