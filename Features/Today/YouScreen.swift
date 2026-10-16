@@ -4,6 +4,7 @@ import SwiftUI
 struct YouScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(Account.self) private var account
+    @State private var signingIn = false
 
     var body: some View {
         NavigationStack {
@@ -15,7 +16,16 @@ struct YouScreen: View {
                         NavigationLink { RedeemGiftView() } label: { Label("Redeem a gift", systemImage: "gift") }
                     }
                 }
-                // FIT-52: only once there's an account.
+                // FIT-126: signed out, a way in: the account keeps the program backed up and on the web.
+                if account.user == nil, account.isAvailable {
+                    Section {
+                        Button { signingIn = true } label: {
+                            Label("Sign In", systemImage: "person.crop.circle")
+                        }
+                    } footer: {
+                        Text("Back up your program and see it on the web.")
+                    }
+                }
                 if let user = account.user {
                     Section {
                         NavigationLink { AccountView() } label: {
@@ -30,6 +40,9 @@ struct YouScreen: View {
                 }
             }
             .navigationTitle("You")
+            .sheet(isPresented: $signingIn) {
+                SignInSheet(reason: "Sign in to back up your program and see it on the web.")
+            }
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
