@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
@@ -81,7 +82,7 @@ describe("auth", () => {
 
   it("the smoke-test client exists in dev and never in prod", () => {
     dev.hasResourceProperties("AWS::Cognito::UserPoolClient", { ClientName: "smoke-test", ExplicitAuthFlows: Match.arrayWith(["ALLOW_ADMIN_USER_PASSWORD_AUTH"]) });
-    expect(Object.values(prod.findResources("AWS::Cognito::UserPoolClient")).map((r) => r.Properties.ClientName)).toEqual(["ios"]);
+    expect(Object.values(prod.findResources("AWS::Cognito::UserPoolClient")).map((r) => r.Properties.ClientName)).toEqual(["ios", "web"]);
   });
 
   it("uses the Lite feature plan and a post-confirmation trigger", () => {
@@ -202,6 +203,48 @@ describe("ops", () => {
     dev.hasResourceProperties("AWS::Budgets::Budget", {
       Budget: Match.objectLike({ BudgetLimit: { Amount: 20, Unit: "USD" }, TimeUnit: "MONTHLY" }),
     });
+  });
+});
+
+describe("web dashboard (FIT-127)", () => {
+  const synthApp = () => {
+    const app = new App({
+      context: { "hosted-zone:account=111111111111:domainName=example.com:region=us-east-1": { Id: "/hostedzone/Z1", Name: "example.com." } },
+    });
+    return Template.fromStack(new AICoachStack(app, "AICoach-dev", {
+      env: { account: "111111111111", region: "us-east-1" }, stage: "dev", identityProviders: [], alertEmail: "a@example.com",
+      app: { zone: "example.com", host: "app.example.com", assets: fileURLToPath(new URL("./fixtures/web", import.meta.url)) },
+    }));
+  };
+
+  it("signs in with a public PKCE client that returns only to the dashboard or the local dev server", () => {
+    const t = synthApp();
+    t.hasResourceProperties("AWS::Cognito::UserPoolClient", {
+      ClientName: "web",
+      GenerateSecret: false,
+      AllowedOAuthFlows: ["code"],
+      CallbackURLs: ["https://app.example.com/", "http://localhost:5173/"],
+      ExplicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH"],
+    });
+  });
+
+  it("is served from a private bucket on its own host, with every path falling back to the app", () => {
+    const t = synthApp();
+    t.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: Match.objectLike({
+        Aliases: ["app.example.com"],
+        DefaultRootObject: "index.html",
+        CustomErrorResponses: [
+          Match.objectLike({ ErrorCode: 403, ResponseCode: 200, ResponsePagePath: "/index.html" }),
+          Match.objectLike({ ErrorCode: 404, ResponseCode: 200, ResponsePagePath: "/index.html" }),
+        ],
+      }),
+    });
+    t.hasOutput("AppUrl", { Value: "https://app.example.com" });
+  });
+
+  it("isn't set up for a stage without a host", () => {
+    dev.resourceCountIs("Custom::CDKBucketDeployment", 1); // the share cards only
   });
 });
 

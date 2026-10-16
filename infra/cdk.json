@@ -15,6 +15,10 @@
           "hosts": [
             "dev.barbrabell.com"
           ]
+        },
+        "app": {
+          "zone": "barbrabell.com",
+          "host": "app.dev.barbrabell.com"
         }
       },
       "prod": {
@@ -29,6 +33,10 @@
             "share.barbrabell.com",
             "join.barbrabell.com"
           ]
+        },
+        "app": {
+          "zone": "barbrabell.com",
+          "host": "app.barbrabell.com"
         }
       }
     }

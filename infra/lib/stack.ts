@@ -36,6 +36,8 @@ export interface AICoachStackProps extends StackProps {
    * starting with "join." takes invite codes at its root (join.{domain}/CODE); the others serve every page.
    */
   web?: { zone: string; hosts: string[] };
+  /** FIT-127: the web dashboard's host on a Route 53 zone, and its built files (web/dist). */
+  app?: { zone: string; host: string; assets: string };
 }
 
 const path = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
@@ -152,6 +154,23 @@ export class AICoachStack extends Stack {
     // Hosted-UI federation plus refresh only: no SRP or password flows on the public client.
     (appClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_REFRESH_TOKEN_AUTH"];
     providers.forEach((p) => appClient.node.addDependency(p));
+
+    // FIT-127: the web dashboard signs in through the same hosted UI, as a public client with PKCE.
+    const webOrigins = [...(props.app ? [`https://${props.app.host}/`] : []), "http://localhost:5173/"];
+    const webClient = userPool.addClient("Web", {
+      userPoolClientName: "web",
+      generateSecret: false,
+      preventUserExistenceErrors: true,
+      supportedIdentityProviders: clientProviders,
+      oAuth: {
+        flows: { authorizationCodeGrant: true },
+        scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
+        callbackUrls: webOrigins,
+        logoutUrls: webOrigins,
+      },
+    });
+    (webClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_REFRESH_TOKEN_AUTH"];
+    providers.forEach((p) => webClient.node.addDependency(p));
 
     // Dev only: lets the smoke test sign in admin-created test users without a browser.
     const testClient = isProd
@@ -422,6 +441,54 @@ export class AICoachStack extends Stack {
       new CfnOutput(this, "ShareOrigin", { value: shareOrigin });
     }
 
+    // ---- FIT-127: the web dashboard, a static app on its own host; config.json tells it where the API is ----
+    const webConfig = {
+      region: this.region,
+      clientId: webClient.userPoolClientId,
+      cognitoDomain: `${domainPrefix}.auth.${this.region}.amazoncognito.com`,
+      graphqlUrl: api.graphqlUrl,
+      providers: props.identityProviders,
+    };
+    if (props.app) {
+      const zone = route53.HostedZone.fromLookup(this, "AppZone", { domainName: props.app.zone });
+      const site = new s3.Bucket(this, "AppSite", {
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        removalPolicy,
+        autoDeleteObjects: !isProd,
+      });
+      const certificate = new acm.Certificate(this, "AppCertificate", {
+        domainName: props.app.host,
+        validation: acm.CertificateValidation.fromDns(zone),
+      });
+      // Every path is the app (it routes in the browser), so a missing file is index.html.
+      const index = { responseHttpStatus: 200, responsePagePath: "/index.html", ttl: Duration.seconds(0) };
+      const dashboard = new cloudfront.Distribution(this, "App", {
+        domainNames: [props.app.host],
+        certificate,
+        defaultRootObject: "index.html",
+        defaultBehavior: {
+          origin: origins.S3BucketOrigin.withOriginAccessControl(site),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+        },
+        errorResponses: [{ httpStatus: 403, ...index }, { httpStatus: 404, ...index }],
+        priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+      });
+      new s3deploy.BucketDeployment(this, "AppFiles", {
+        sources: [s3deploy.Source.asset(props.app.assets), s3deploy.Source.jsonData("config.json", webConfig)],
+        destinationBucket: site,
+        distribution: dashboard,
+        distributionPaths: ["/index.html", "/config.json"],
+      });
+      const target = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(dashboard));
+      new route53.ARecord(this, "AppRecord", { zone, recordName: props.app.host, target });
+      new route53.AaaaRecord(this, "AppRecord6", { zone, recordName: props.app.host, target });
+      new CfnOutput(this, "AppUrl", { value: `https://${props.app.host}` });
+    }
+
     // ---- FIT-110: what the sharing flywheel makes, counted by day ----
     const shareStats = fn("shareStats", {});
     table.grant(shareStats, "dynamodb:UpdateItem");
@@ -490,6 +557,7 @@ export class AICoachStack extends Stack {
     new CfnOutput(this, "Region", { value: this.region });
     new CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
     new CfnOutput(this, "AppClientId", { value: appClient.userPoolClientId });
+    new CfnOutput(this, "WebClientId", { value: webClient.userPoolClientId });
     new CfnOutput(this, "CognitoDomain", { value: `${domainPrefix}.auth.${this.region}.amazoncognito.com` });
     new CfnOutput(this, "IdentityProviders", { value: props.identityProviders.join(",") || "none" });
     new CfnOutput(this, "GraphqlUrl", { value: api.graphqlUrl });
