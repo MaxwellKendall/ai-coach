@@ -88,3 +88,38 @@ h3 { font-size: 17px; font-weight: 650; display: flex; align-items: center; gap:
   .day { grid-template-columns: 60px minmax(0, 1fr); padding: 16px; gap: 12px; }
   .session li { flex-direction: column; gap: 0; }
 }
+
+/* FIT-128: editing a session in place */
+.status { color: var(--muted); font-size: 14px; margin-top: 8px; }
+.session ul.edit li { align-items: center; gap: 12px; flex-wrap: wrap; }
+.session ul.edit .name { flex: 1 1 180px; min-width: 0; }
+.cells { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.cells .x, .cells .unit { color: var(--muted); font-size: 14px; }
+.num {
+  width: 56px; padding: 5px 6px; border: 1px solid transparent; border-radius: 8px; background: transparent;
+  font: inherit; color: inherit; text-align: right; -moz-appearance: textfield;
+}
+.num::-webkit-inner-spin-button, .num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.num:hover { border-color: var(--line); }
+.num:focus { outline: none; border-color: var(--text); background: var(--bg); }
+.tools { display: inline-flex; gap: 2px; opacity: 0.35; transition: opacity 0.15s; }
+.session li:hover .tools, .tools:focus-within { opacity: 1; }
+.tools button { width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
+.tools button:hover:not(:disabled) { background: var(--bg); color: var(--text); }
+.tools button:disabled { opacity: 0.3; cursor: default; }
+.add { margin-top: 10px; border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 14px; padding: 4px 0; }
+.add:hover { color: var(--text); }
+.picker { margin-top: 10px; display: grid; gap: 8px; justify-items: start; }
+.picker input { width: min(100%, 320px); padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font: inherit; color: inherit; }
+.picker ul { list-style: none; display: grid; gap: 0; width: min(100%, 320px); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 0; }
+.picker li { border: 0 !important; padding: 0 !important; }
+.picker li button { width: 100%; text-align: left; padding: 8px 12px; border: 0; background: var(--surface); }
+.picker li button:hover { background: var(--bg); }
+.earlier { margin-top: 40px; display: grid; gap: 10px; }
+.earlier h2 { margin-bottom: 4px; }
+.earlier summary { cursor: pointer; color: var(--muted); font-weight: 600; padding: 6px 0; }
+.earlier details[open] summary { color: var(--text); margin-bottom: 10px; }
+@media (max-width: 760px) {
+  .session ul.edit li { flex-direction: row; }
+  .tools { opacity: 1; }
+}

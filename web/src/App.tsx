@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { finishSignIn, idToken, signIn, signOut, user, type Config, type Provider, type User } from "./auth";
-import catalog from "./catalog.json";
-import { describe, week } from "./program";
-import { pullAll, type Unit } from "./sync";
+import { ProgramPage } from "./ProgramPage";
 
 const APP = "Rep & Recipe";
 
@@ -77,86 +75,32 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
         </div>
       </aside>
       <main className="content">
-        <Program config={config} me={me} />
+        <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} />} />
       </main>
     </div>
   );
 }
 
-const names = new Map(catalog.map((t) => [t.slug, t.name]));
-const weekday = new Intl.DateTimeFormat(undefined, { weekday: "short" });
-const monthDay = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" });
-
-function Program({ config, me }: { config: Config; me: User }) {
-  const [units, setUnits] = useState<Map<string, Unit>>();
-  const [error, setError] = useState<string>();
-  useEffect(() => {
-    pullAll(config).then(setUnits, (e: Error) => setError(e.message));
-  }, [config]);
-
-  const today = new Date();
-  const days = useMemo(() => (units ? week(units, today, names) : []), [units]);
-
-  if (error) return <p className="error" role="alert">Couldn't load your program: {error}</p>;
-  if (!units) return <p className="muted">Loading your program…</p>;
-
-  const hasPlan = [...units.keys()].some((k) => k.startsWith("plan#") && !units.get(k)!.deleted);
+function Empty({ config, me }: { config: Config; me: User }) {
   return (
     <>
       <header className="page">
-        <p className="eyebrow">Week of {monthDay.format(days[0].date)}</p>
         <h1>This week</h1>
       </header>
-      {!hasPlan ? (
-        <div className="empty">
-          <h2>Nothing here yet</h2>
+      <div className="empty">
+        <h2>Nothing here yet</h2>
+        <p className="muted">
+          Open {APP} on your iPhone, signed in as {me.email ?? me.name ?? "this account"}, and your program shows up here.
+        </p>
+        {me.provider && (
           <p className="muted">
-            Open {APP} on your iPhone, signed in as {me.email ?? me.name ?? "this account"}, and your program shows up here.
+            You're signed in with {me.provider === "google" ? "Google" : "Apple"}. If the app uses{" "}
+            {me.provider === "google" ? "Apple" : "Google"}, that's a separate account:{" "}
+            <button className="link" onClick={() => signOut(config)}>sign out</button> and continue with{" "}
+            {me.provider === "google" ? "Apple" : "Google"}.
           </p>
-          {me.provider && (
-            <p className="muted">
-              You're signed in with {me.provider === "google" ? "Google" : "Apple"}. If the app uses{" "}
-              {me.provider === "google" ? "Apple" : "Google"}, that's a separate account:{" "}
-              <button className="link" onClick={() => signOut(config)}>sign out</button> and continue with{" "}
-              {me.provider === "google" ? "Apple" : "Google"}.
-            </p>
-          )}
-        </div>
-      ) : (
-        <ol className="days">
-          {days.map((day) => {
-            const isToday = day.key === days.find((d) => d.date.toDateString() === today.toDateString())?.key;
-            return (
-              <li key={day.key} className={`day${isToday ? " today" : ""}${day.lines.length ? "" : " rest"}`}>
-                <div className="date">
-                  <span>{weekday.format(day.date)}</span>
-                  <strong>{day.date.getDate()}</strong>
-                </div>
-                <div className="session">
-                  {day.lines.length ? (
-                    <>
-                      <h3>
-                        {day.title ?? "Workout"}
-                        {day.done && <span className="done">Done</span>}
-                      </h3>
-                      <ul>
-                        {day.lines.map((line, i) => (
-                          <li key={i}>
-                            <span>{line.exercise}</span>
-                            <span className="muted">{describe(line)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : (
-                    <p className="muted">{day.done ? "Trained" : "Rest"}</p>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+        )}
+      </div>
     </>
   );
 }

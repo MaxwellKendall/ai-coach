@@ -58,3 +58,14 @@ export async function pullAll(config: Config): Promise<Map<string, Unit>> {
     if (!page.more) return units;
   }
 }
+
+/** FIT-128: a day's planned rows, as this browser has them now; false when the server kept a newer copy (the phone's). */
+export async function pushDay(config: Config, day: string, rows: PlanRow[]): Promise<boolean> {
+  const unit = { key: `plan#${day}`, updatedAt: new Date().toISOString(), deleted: rows.length === 0, body: rows.length ? JSON.stringify(rows) : null };
+  const { syncPush }: { syncPush: { rejected: { key: string }[] } } = await gql(
+    config,
+    `mutation($u: [SyncUnitInput!]!) { syncPush(units: $u, source: "web") { uid source changedAt rejected { key } } }`,
+    { u: [unit] },
+  );
+  return syncPush.rejected.length === 0;
+}
