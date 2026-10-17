@@ -3,7 +3,8 @@ import type { Config, User } from "./auth";
 import { HistoryView } from "./HistoryView";
 import { ProgramPage } from "./ProgramPage";
 import catalog from "./catalog.json";
-import { comments as loadComments, createClientInvite, myClients, postComment, pullAll, removeClient, type Comment, type Person, type Unit } from "./sync";
+import { SendProgram } from "./SendProgram";
+import { comments as loadComments, createClientInvite, myClients, postComment, programOffers, pullAll, removeClient, type Comment, type Offer, type Person, type Unit } from "./sync";
 import { byNeed, triage, type Triage } from "./triage";
 
 const names = new Map(catalog.map((t) => [t.slug, t.name]));
@@ -127,10 +128,17 @@ export function ClientPage({ config, me, uid, go }: {
   const [units, setUnits] = useState<Map<string, Unit>>();
   const [thread, setThread] = useState<Comment[]>([]);
   const [tab, setTab] = useState<"program" | "history">("program");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<Offer[]>([]);
+  const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     myClients(config).then((list) => setClient(list.find((c) => c.uid === uid) ?? null), (e: Error) => setError(e.message));
   }, [config, uid]);
+  // FIT-131: the programs sent to this client, and what they said.
+  useEffect(() => {
+    if (client) programOffers(config, uid).then(setSent, () => setSent([]));
+  }, [config, uid, client, sending]);
   useEffect(() => {
     if (tab === "history" && client) {
       pullAll(config, uid).then(setUnits, (e: Error) => setError(e.message));
@@ -155,9 +163,31 @@ export function ClientPage({ config, me, uid, go }: {
       </div>
     );
   }
+  if (sending) {
+    return (
+      <SendProgram config={config} client={client} onCancel={() => setSending(false)}
+                   onSent={(text) => { setMessage(text); setSending(false); }} />
+    );
+  }
+  const shortDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+  const startOf = (o: Offer) => { const [y, m, d] = o.start.split("-").map(Number); return shortDate.format(new Date(y, m - 1, d)); };
   return (
     <>
       <p className="crumb"><a href="/clients" onClick={go("/clients")}>Clients</a></p>
+      <div className="actions top">
+        <button className="button primary" onClick={() => { setMessage(undefined); setSending(true); }}>Send a program</button>
+        {message && <span className="status">{message}</span>}
+      </div>
+      {sent.length > 0 && (
+        <ul className="offers">
+          {sent.slice(0, 5).map((o) => (
+            <li key={o.id}>
+              <span>{o.weeks}-week program from {startOf(o)}{o.note ? ` · “${o.note}”` : ""}</span>
+              <span className={o.status}>{o.status === "sent" ? "Waiting for them" : o.status === "started" ? "Started" : "Declined"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "program"} onClick={() => setTab("program")}>Program</button>
         <button role="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}>History</button>

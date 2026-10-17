@@ -91,3 +91,20 @@ export const comments = (config: Config, uid?: string) =>
 export const postComment = (config: Config, day: string, text: string, uid?: string) =>
   gql<{ postComment: Comment }>(config, `mutation($u: ID, $d: String!, $t: String!) { postComment(uid: $u, day: $d, text: $t) { day at by byName text } }`,
     { u: uid ?? null, d: day, t: text }).then((d) => d.postComment);
+
+// FIT-131: programs a coach sends.
+export type Offer = {
+  id: string; coachUid: string; coachName: string | null; note: string; start: string; weeks: number;
+  days: string; addPerWeek: number; status: "sent" | "started" | "declined"; createdAt: string; answeredAt: string | null;
+};
+export type TemplateDay = { weekday: number; slot: string; rows: { template: string; targets: Measurement[]; note: string; group?: number; main: boolean }[] };
+
+export const sendProgram = (config: Config, uid: string, start: string, weeks: number, note: string, days: TemplateDay[], addPerWeek: number) =>
+  gql<{ sendProgram: Offer }>(config,
+    `mutation($u: ID!, $s: String!, $w: Int!, $n: String, $d: AWSJSON!, $a: Float) { sendProgram(uid: $u, start: $s, weeks: $w, note: $n, days: $d, addPerWeek: $a) { id status } }`,
+    { u: uid, s: start, w: weeks, n: note, d: JSON.stringify(days), a: addPerWeek }).then((d) => d.sendProgram);
+
+export const programOffers = (config: Config, uid: string) =>
+  gql<{ programOffers: Offer[] }>(config,
+    `query($u: ID) { programOffers(uid: $u) { id coachUid coachName note start weeks days addPerWeek status createdAt answeredAt } }`, { u: uid })
+    .then((d) => d.programOffers);

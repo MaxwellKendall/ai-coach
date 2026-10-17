@@ -84,6 +84,30 @@ struct PlannerTests {
         #expect(try context.fetchCount(FetchDescriptor<PlannedActivity>()) == count)
     }
 
+    /// FIT-131: a week a coach sent arrives (synced) before it begins; when it starts, nothing is added to it.
+    @Test func aCoachsWeekIsLeftAlone() throws {
+        let context = try store()
+        context.insert(Profile(age: 36, weightLb: 200))
+        let plan = Plan(weekContaining: date(10, 12), calendar: calendar, now: date(10, 8))
+        context.insert(plan)
+        let squat = try #require(try context.fetch(FetchDescriptor<Template>()).first { $0.slug == "back-squat" })
+        let session = PlannedActivity(kind: .workout, date: date(10, 14, hour: 7), slot: "Lower", templateRef: squat.id,
+                                      targets: [Measurement(metric: "sets", value: 3, unit: "sets")], adjustedReason: "From Sam")
+        session.pinned = true
+        plan.items.append(session)
+        try context.save()
+        #expect(Planner.isCoached(plan))
+
+        try Planner.ensureWeek(of: date(10, 12), in: context, calendar: calendar)
+        let workouts = try #require(try Planner.plan(weekOf: date(10, 12), in: context, calendar: calendar)).items.filter { $0.kind == .workout }
+        #expect(workouts.map(\.id) == [session.id])
+
+        session.adjustedReason = "Changed by Sam"
+        #expect(Planner.isCoached(plan))
+        session.adjustedReason = "edited"
+        #expect(!Planner.isCoached(plan))
+    }
+
     @Test func adjustOnlyTouchesRemainingDaysAndRoundTrips() throws {
         let context = try store()
         context.insert(Profile(age: 36, weightLb: 200))

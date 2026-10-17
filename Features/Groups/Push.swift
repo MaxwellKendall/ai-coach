@@ -36,6 +36,8 @@ final class Navigator {
     var gift: String?
     /// FIT-130: a coach's invite code, from its link, to allow.
     var coachInvite: String?
+    /// FIT-131: a program a coach sent, waiting for an answer.
+    var offer: Cloud.ProgramOffer?
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {

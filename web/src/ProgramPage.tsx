@@ -20,6 +20,9 @@ const rowsOf = (units: Map<string, Unit>, key: string): PlanRow[] => {
 export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
   config: Config; me: User; empty: React.ReactNode; uid?: string; heading?: string;
 }) {
+  // FIT-131: a coach's edits to a client's session say so on the phone ("Changed by Sam"), and keep the app's planner
+  // off the week (Planner.isCoached).
+  const reason = uid ? `Changed by ${me.name?.split(" ")[0] ?? "your coach"}` : undefined;
   const [units, setUnits] = useState<Map<string, Unit>>();
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<string>();
@@ -39,7 +42,8 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
   }, [load]);
 
   const save = useCallback(
-    async (key: string, rows: PlanRow[]) => {
+    async (key: string, edited: PlanRow[]) => {
+      const rows = reason ? edited.map((r) => (r.kind === "workout" ? { ...r, adjustedReason: reason } : r)) : edited;
       const body = rows.length ? JSON.stringify(rows) : null;
       edits.current += 1;
       setUnits((u) => new Map(u).set(`plan#${key}`, { key: `plan#${key}`, updatedAt: new Date().toISOString(), deleted: !body, body }));
@@ -54,7 +58,7 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
         await load();
       }
     },
-    [config, load, uid],
+    [config, load, uid, reason],
   );
 
   const today = new Date();
@@ -70,6 +74,19 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
       if (start < thisWeek) starts.add(start);
     }
     return [...starts].sort((a, b) => b - a).map((t) => new Date(t));
+  }, [units]);
+  // FIT-131: weeks already planned ahead (a program a coach sent), editable like this one.
+  const coming = useMemo(() => {
+    if (!units) return [];
+    const thisWeek = weekStart(today).getTime();
+    const starts = new Set<number>();
+    for (const [key, unit] of units) {
+      if (!key.startsWith("plan#") || unit.deleted) continue;
+      const [y, mo, d] = key.slice(5).split("-").map(Number);
+      const start = weekStart(new Date(y, mo - 1, d)).getTime();
+      if (start > thisWeek) starts.add(start);
+    }
+    return [...starts].sort((a, b) => a - b).map((t) => new Date(t));
   }, [units]);
 
   if (error) return <p className="error" role="alert">Couldn't load your program: {error}</p>;
@@ -107,6 +124,22 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
                    onDrop={(fromKey) => { const from = days.find((d) => d.key === fromKey); if (from && editable(from)) move(from, day); }} />
         ))}
       </ol>
+      {coming.map((start) => {
+        const weekDays = week(units, start, names);
+        return (
+          <section className="coming" key={start.getTime()}>
+            <h2>Week of {monthDay.format(start)}</h2>
+            <ol className="days">
+              {weekDays.map((day) => (
+                <DayCard key={day.key} day={day} today={false} editable={editable(day)}
+                         rows={rowsOf(units, day.key)} equipment={equipment} onSave={(rows) => save(day.key, rows)}
+                         warnings={checkDay(rowsOf(units, day.key), profile, exercises)}
+                         onDrop={(fromKey) => { const from = weekDays.find((d) => d.key === fromKey); if (from) move(from, day); }} />
+              ))}
+            </ol>
+          </section>
+        );
+      })}
       {earlier.length > 0 && (
         <section className="earlier">
           <h2>Earlier weeks</h2>
@@ -126,7 +159,7 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
   );
 }
 
-function DayCard({ day, today, editable, rows, equipment, onSave, warnings = [], onDrop }: {
+export function DayCard({ day, today, editable, rows, equipment, onSave, warnings = [], onDrop }: {
   day: Day; today: boolean; editable: boolean; rows: PlanRow[]; equipment?: Set<string>; onSave: (rows: PlanRow[]) => void;
   warnings?: string[]; onDrop?: (fromKey: string) => void;
 }) {

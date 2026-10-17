@@ -224,6 +224,47 @@ enum Cloud {
                       ["d": day, "t": text], at: "postComment")
     }
 
+    // MARK: Programs from a coach (FIT-131)
+
+    struct ProgramOffer: Decodable, Identifiable, Sendable {
+        var id: String
+        var coachUid: String
+        var coachName: String?
+        var note: String
+        var start: String
+        var weeks: Int
+        /// The template week, as JSON: [{weekday 0–6 from Sunday, slot, rows: [{template, targets, note, main}]}].
+        var days: String
+        var addPerWeek: Double
+        var status: String
+
+        struct Day: Decodable, Sendable {
+            struct Row: Decodable, Sendable {
+                var template: String
+                var targets: [Measurement]
+                var note: String?
+            }
+            var weekday: Int
+            var slot: String
+            var rows: [Row]
+        }
+
+        var week: [Day] { ((try? JSONDecoder().decode([Day].self, from: Data(days.utf8))) ?? []).sorted { $0.weekday < $1.weekday } }
+        var startDate: Date? { try? Date(start, strategy: .iso8601.year().month().day()) }
+    }
+
+    private static let offerFields = "id coachUid coachName note start weeks days addPerWeek status"
+
+    @MainActor static func programOffers() async throws -> [ProgramOffer] {
+        try await run("query { programOffers { \(offerFields) } }", at: "programOffers", query: true)
+    }
+
+    /// Start writes the program into my plan from its start day (on the server, then synced here); decline doesn't.
+    @MainActor static func answerProgram(_ id: String, start: Bool) async throws {
+        _ = try await run("mutation($i: ID!, $s: Boolean!, $o: Int) { answerProgram(id: $i, start: $s, offsetMinutes: $o) { id status } }",
+                          ["i": id, "s": start, "o": TimeZone.current.secondsFromGMT() / 60], at: "answerProgram", as: AnyDecodable?.self)
+    }
+
     // MARK: Shares (FIT-105/107)
 
     struct Share: Decodable, Sendable {

@@ -21,6 +21,7 @@ struct RootView: View {
     @State private var pendingSession: String?
     @State private var pendingProgram: String?
     @State private var pendingCoach: String?
+    @Environment(\.scenePhase) private var scenePhase
     @State private var joined: Cloud.GroupSummary?
 
     /// Graphite (FIT-27): monochrome, the label colour is the only accent.
@@ -91,6 +92,11 @@ struct RootView: View {
             await pro.refreshGift(signedIn: account.user != nil)
             // FIT-130: and from a coach, while coached.
             await pro.refreshCoaches(signedIn: account.user != nil)
+            await checkOffers()
+        }
+        // FIT-131: a program a coach sent waits until it's answered.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await checkOffers() } }
         }
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).
         .onOpenURL { url in
@@ -155,6 +161,10 @@ struct RootView: View {
                              set: { if $0 == nil { navigator.session = nil } })) { ref in
             JoinSessionSheet(id: ref.id).tint(Self.accent)
         }
+        .sheet(item: Binding(get: { onboarding == nil && navigator.coachInvite == nil ? navigator.offer : nil },
+                             set: { if $0 == nil { navigator.offer = nil } })) { offer in
+            ProgramOfferSheet(offer: offer).tint(Self.accent)
+        }
         .sheet(item: Binding(get: { onboarding == nil ? navigator.coachInvite.map(CoachInviteRef.init) : nil },
                              set: { if $0 == nil { navigator.coachInvite = nil } })) { ref in
             CoachInviteSheet(code: ref.id).tint(Self.accent)
@@ -188,7 +198,15 @@ struct RootView: View {
                 .tint(Self.accent)
         }
     }
+
+    /// FIT-131: the oldest program a coach sent that hasn't been answered, if any.
+    private func checkOffers() async {
+        guard account.user != nil, navigator.offer == nil,
+              let offers = try? await Cloud.programOffers() else { return }
+        navigator.offer = offers.filter { $0.status == "sent" }.last
+    }
 }
+
 
 /// FIT-130: a coach's invite code, as a sheet item.
 struct CoachInviteRef: Identifiable {
