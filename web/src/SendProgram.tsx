@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Config } from "./auth";
 import catalog from "./catalog.json";
+import { brief, choices, design, request, toWeek, type CatalogEntry } from "./design";
+import { checkDay, type Exercise, type Profile } from "./guard";
 import { DayCard } from "./ProgramPage";
 import { dayKey, lines, weekStart, type Day } from "./program";
 import { pullAll, sendProgram, type Person, type PlanRow, type TemplateDay, type Unit } from "./sync";
@@ -10,6 +12,7 @@ import { pullAll, sendProgram, type Person, type PlanRow, type TemplateDay, type
 // the client as an offer they start or decline in the app.
 
 const names = new Map(catalog.map((t) => [t.slug, t.name]));
+const exercises = new Map<string, Exercise>(catalog.map((t) => [t.slug, t]));
 const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 type Week = PlanRow[][]; // by weekday, Sunday first
@@ -34,7 +37,15 @@ export function SendProgram({ config, client, onSent, onCancel }: {
   const [template, setTemplate] = useState<Week>(() => Array.from({ length: 7 }, () => []));
   const [from, setFrom] = useState<"empty" | "theirs" | "mine">("empty");
   const [sending, setSending] = useState(false);
+  const [designing, setDesigning] = useState(false);
   const [error, setError] = useState<string>();
+  // The client's synced units: their profile and lifts for designing, and for the plan checks.
+  const [clientUnits, setClientUnits] = useState<Map<string, Unit>>();
+  useEffect(() => {
+    pullAll(config, client.uid).then(setClientUnits, () => setClientUnits(new Map()));
+  }, [config, client.uid]);
+  const profileBody = clientUnits?.get("profile")?.body;
+  const profile: Profile | undefined = profileBody ? JSON.parse(profileBody) : undefined;
 
   useEffect(() => {
     if (from === "empty") return setTemplate(Array.from({ length: 7 }, () => []));
@@ -57,6 +68,25 @@ export function SendProgram({ config, client, onSent, onCancel }: {
     next[to] = next[fromIndex].map((r) => ({ ...r, at: r.at + (to - fromIndex) * 86_400 }));
     next[fromIndex] = [];
     setTemplate(next);
+  };
+
+  // FIT-141: Claude Haiku lays out the week from the client's profile, goals and lifts, and the note.
+  const designWeek = async () => {
+    if (!clientUnits) return;
+    setDesigning(true);
+    setError(undefined);
+    try {
+      const about = brief(clientUnits, names);
+      const menu = choices(catalog as CatalogEntry[], about.profile);
+      const answer = await design(config, request(about.text, menu, note));
+      const week = toWeek(answer, menu, firstWeek);
+      if (!week.some((d) => d.length)) throw new Error("Claude didn't plan any sessions. Add a note on what you want and try again.");
+      setTemplate(week);
+    } catch (e) {
+      setError(`Couldn't design the week: ${(e as Error).message}`);
+    } finally {
+      setDesigning(false);
+    }
   };
 
   const send = async () => {
@@ -98,12 +128,20 @@ export function SendProgram({ config, client, onSent, onCancel }: {
             <option value="mine">My week now</option>
           </select>
         </label>
+        <div className="wide design">
+          <button className="button" disabled={designing || !clientUnits} onClick={designWeek}>
+            {designing ? "Designing…" : "Design it for me"}
+          </button>
+          <span className="muted">Claude lays out the week from their profile, goals and lifts, and your note. You can change anything after.</span>
+        </div>
         <label className="wide">Note for them <textarea rows={2} maxLength={500} value={note} placeholder="What this block is for"
           onChange={(e) => setNote(e.target.value)} /></label>
       </div>
       <ol className="days">
         {days.map((day, i) => (
-          <DayCard key={day.key} day={day} today={false} editable rows={template[i]} equipment={undefined}
+          <DayCard key={day.key} day={day} today={false} editable rows={template[i]}
+                   equipment={profile?.equipment ? new Set(profile.equipment) : undefined}
+                   warnings={checkDay(template[i], profile, exercises)}
                    onSave={(rows) => setTemplate((t) => t.map((r, j) => (j === i ? rows.map((x) => ({ ...x, slot: x.slot === "Workout" ? weekdays[i] : x.slot })) : r)))}
                    onDrop={(fromKey) => move(fromKey, i)} />
         ))}

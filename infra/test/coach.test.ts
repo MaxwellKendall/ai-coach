@@ -111,11 +111,14 @@ describe("a coach link (FIT-130)", () => {
     }
   });
 
-  it("gives the client Pro while it lasts", async () => {
+  it("gives the client Pro while it lasts, and the coach Claude for designing (FIT-141)", async () => {
     expect(await coach.coached("ann")).toBe(false);
+    expect(await coach.coaching("sam")).toBe(false);
     await linked();
     expect(await coach.coached("ann")).toBe(true);
     expect(await coach.coached("sam")).toBe(false);
+    expect(await coach.coaching("sam")).toBe(true);
+    expect(await coach.coaching("ann")).toBe(false);
   });
 
   it("ends at once from either side", async () => {

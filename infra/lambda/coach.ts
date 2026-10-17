@@ -51,6 +51,17 @@ export async function coached(uid: string) {
   return (Items?.length ?? 0) > 0;
 }
 
+/** Whether an account coaches anyone: Claude for program design is theirs during the coach beta (FIT-141). */
+export async function coaching(uid: string) {
+  const { Items } = await db.send(new QueryCommand({
+    TableName: TABLE(),
+    KeyConditionExpression: "PK = :pk AND begins_with(SK, :c)",
+    ExpressionAttributeValues: { ":pk": `USER#${uid}`, ":c": "CLIENT#" },
+    Limit: 1,
+  }));
+  return (Items?.length ?? 0) > 0;
+}
+
 export async function createInvite(coach: string, claims: Record<string, unknown> | undefined, now = new Date()) {
   const code = newCode();
   await db.send(new TransactWriteCommand({
