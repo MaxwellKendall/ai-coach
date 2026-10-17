@@ -56,7 +56,7 @@ final class Pro {
             if transaction.offer?.type == .introductory { trialEnds = transaction.expirationDate }
         }
         #if DEBUG
-        // `-pro YES`: Pro without buying, for trying Pro's screens in the simulator.
+        // `-pro YES`, or You › Pro (debug): Pro without buying, for trying Pro's screens.
         if UserDefaults.standard.bool(forKey: "pro") { active = true }
         #endif
         subscribed = active
