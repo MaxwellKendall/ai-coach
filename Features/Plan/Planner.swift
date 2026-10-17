@@ -84,7 +84,7 @@ enum Planner {
                        calendar: Calendar = .current) async {
         let monday = Week.start(of: date, calendar: calendar)
         guard model.isAvailable, !designing.weeks.contains(monday),
-              let plan = try? plan(weekOf: monday, in: context), plan.designedBy == nil,
+              let plan = try? plan(weekOf: monday, in: context), plan.designedBy == nil, !isCoached(plan),
               let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
               let templates = try? context.fetch(FetchDescriptor<Template>()),
               let entries = try? context.fetch(FetchDescriptor<LogEntry>()),
@@ -264,11 +264,18 @@ enum Planner {
             try generate(weekOf: date, in: context, calendar: calendar)
             return
         }
-        guard plan.updatedAt < plan.weekStart else { return }
+        // FIT-131: a coach's week is theirs; nothing is added to it.
+        guard plan.updatedAt < plan.weekStart, !isCoached(plan) else { return }
         let pinned = Dictionary(grouping: plan.items.filter { $0.kind == .workout }) { calendar.startOfDay(for: $0.date) }
             .filter { $0.value.allSatisfy(\.pinned) }.keys
         try replan(plan, with: preview(weekOf: date, in: context, calendar: calendar), keep: Set(pinned), today: date,
                    templates: try context.fetch(FetchDescriptor<Template>()), in: context, calendar: calendar)
+    }
+
+    /// FIT-131: a week a coach planned (a program they sent, "From Sam") or changed on the web ("Changed by Sam"). The
+    /// app's own planning leaves it alone: no sessions added on the profile's days, no redesign by the model.
+    static func isCoached(_ plan: Plan) -> Bool {
+        plan.items.contains { $0.kind == .workout && ($0.adjustedReason?.hasPrefix("From ") == true || $0.adjustedReason?.hasPrefix("Changed by ") == true) }
     }
 
     /// Idempotent: replaces whatever was planned for that week.

@@ -1,0 +1,179 @@
+{
+  "about": "FIT-129: the same logs through the app's progress rules (Training, Streak) and the web's (web/src/progress.ts). Dates are local days.",
+  "sets": [
+    {
+      "exercise": "bench-press",
+      "day": "2026-09-28",
+      "load_lb": 185,
+      "reps": 5,
+      "rpe": 8
+    },
+    {
+      "exercise": "bench-press",
+      "day": "2026-10-05",
+      "load_lb": 195,
+      "reps": 3,
+      "rpe": 9
+    },
+    {
+      "exercise": "bench-press",
+      "day": "2026-10-07",
+      "load_lb": 200,
+      "reps": 2
+    },
+    {
+      "exercise": "back-squat",
+      "day": "2026-09-30",
+      "load_lb": 225,
+      "reps": 12,
+      "rpe": 7
+    },
+    {
+      "exercise": "back-squat",
+      "day": "2026-10-09",
+      "load_lb": 245,
+      "reps": 5,
+      "rpe": 7
+    },
+    {
+      "exercise": "plank",
+      "day": "2026-10-12",
+      "duration_s": 45
+    }
+  ],
+  "expected1RM": {
+    "bench-press": 208.125,
+    "back-squat": 275.625
+  },
+  "expectedTrend": {
+    "bench-press": [
+      [
+        "2026-09-28",
+        208.125
+      ],
+      [
+        "2026-10-07",
+        208.125
+      ]
+    ],
+    "back-squat": [
+      [
+        "2026-10-09",
+        275.625
+      ]
+    ]
+  },
+  "programStart": "2026-09-28",
+  "today": "2026-10-15",
+  "plannedDays": [
+    "2026-09-28",
+    "2026-09-30",
+    "2026-10-02",
+    "2026-10-05",
+    "2026-10-07",
+    "2026-10-09",
+    "2026-10-12",
+    "2026-10-14",
+    "2026-10-16"
+  ],
+  "workoutDays": [
+    "2026-09-28",
+    "2026-09-30",
+    "2026-10-02",
+    "2026-10-05",
+    "2026-10-07",
+    "2026-10-10",
+    "2026-10-12",
+    "2026-10-14"
+  ],
+  "expectedStreakWeeks": 2,
+  "expectedThisWeek": "onTrack",
+  "plateau": {
+    "about": "FIT-140: logged on 3+ days in the 21 days before today, and none of them beat the best estimate from before.",
+    "today": "2026-10-30",
+    "sets": [
+      {
+        "exercise": "back-squat",
+        "day": "2026-09-20",
+        "load_lb": 245,
+        "reps": 5,
+        "rpe": 7
+      },
+      {
+        "exercise": "back-squat",
+        "day": "2026-10-12",
+        "load_lb": 240,
+        "reps": 5,
+        "rpe": 8
+      },
+      {
+        "exercise": "back-squat",
+        "day": "2026-10-19",
+        "load_lb": 245,
+        "reps": 4,
+        "rpe": 8
+      },
+      {
+        "exercise": "back-squat",
+        "day": "2026-10-26",
+        "load_lb": 240,
+        "reps": 5,
+        "rpe": 8
+      },
+      {
+        "exercise": "bench-press",
+        "day": "2026-09-20",
+        "load_lb": 185,
+        "reps": 5,
+        "rpe": 8
+      },
+      {
+        "exercise": "bench-press",
+        "day": "2026-10-12",
+        "load_lb": 185,
+        "reps": 5,
+        "rpe": 8
+      },
+      {
+        "exercise": "bench-press",
+        "day": "2026-10-19",
+        "load_lb": 190,
+        "reps": 5,
+        "rpe": 8
+      },
+      {
+        "exercise": "bench-press",
+        "day": "2026-10-26",
+        "load_lb": 185,
+        "reps": 5,
+        "rpe": 8
+      },
+      {
+        "exercise": "deadlift",
+        "day": "2026-09-20",
+        "load_lb": 315,
+        "reps": 5,
+        "rpe": 8
+      },
+      {
+        "exercise": "deadlift",
+        "day": "2026-10-19",
+        "load_lb": 305,
+        "reps": 5,
+        "rpe": 8
+      },
+      {
+        "exercise": "deadlift",
+        "day": "2026-10-26",
+        "load_lb": 305,
+        "reps": 5,
+        "rpe": 8
+      }
+    ],
+    "expected": {
+      "back-squat": true,
+      "bench-press": false,
+      "deadlift": false
+    }
+  }
+}

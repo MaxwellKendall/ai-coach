@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
+import { isCoachOf } from "./coach.ts";
 
 // FIT-126: the program and logs, synced both ways. The app (and the web) push changed units; the newest
 // updatedAt wins per unit. Every unit lives in the owner's partition, so deleteAccount removes it with the rest.
@@ -84,10 +85,24 @@ export async function pull(uid: string, since: string | null | undefined) {
   };
 }
 
+/** Whose units a call is about: the caller's own, or (FIT-130) a client's when the caller is their linked coach. */
+export async function owner(caller: string, asked: string | null | undefined) {
+  if (!asked || asked === caller) return caller;
+  if (await isCoachOf(caller, asked)) return asked;
+  throw new Error("Unauthorized: not this person's coach");
+}
+
+/** A coach changes the client's plan, never what the client logged, their goals or their profile. */
+export function coachMayWrite(units: UnitInput[]) {
+  if (units.some((u) => !u.key.startsWith("plan#"))) throw new Error("Unauthorized: a coach changes only the plan");
+}
+
 export async function handler(event: AppSyncResolverEvent<any>) {
-  const uid = (event.identity as AppSyncIdentityCognito).sub;
+  const caller = (event.identity as AppSyncIdentityCognito).sub;
+  const uid = await owner(caller, event.arguments.uid);
   switch (event.info.fieldName) {
     case "syncPush":
+      if (uid !== caller) coachMayWrite(event.arguments.units);
       return push(uid, event.arguments.units, event.arguments.source);
     case "syncPull":
       return pull(uid, event.arguments.since);

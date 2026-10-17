@@ -63,10 +63,10 @@ describe("auth", () => {
     }
   });
 
-  it("the iOS client allows only federated hosted-UI sign-in plus refresh", () => {
+  it("the iOS client allows federated hosted-UI sign-in, native Apple (custom auth, FIT-138) and refresh, no passwords", () => {
     prod.hasResourceProperties("AWS::Cognito::UserPoolClient", {
       ClientName: "ios",
-      ExplicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH"],
+      ExplicitAuthFlows: ["ALLOW_CUSTOM_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"],
       SupportedIdentityProviders: ["SignInWithApple", "Google"],
       AllowedOAuthFlows: ["code"],
       CallbackURLs: ["aicoach://auth/callback"],
@@ -85,11 +85,21 @@ describe("auth", () => {
     expect(Object.values(prod.findResources("AWS::Cognito::UserPoolClient")).map((r) => r.Properties.ClientName)).toEqual(["ios", "web"]);
   });
 
-  it("uses the Lite feature plan and a post-confirmation trigger", () => {
+  it("uses the Lite feature plan, a post-confirmation trigger, and custom auth for native Apple (FIT-138)", () => {
     dev.hasResourceProperties("AWS::Cognito::UserPool", {
       UserPoolTier: "LITE",
-      LambdaConfig: { PostConfirmation: Match.anyValue() },
+      LambdaConfig: {
+        PostConfirmation: Match.anyValue(),
+        PreSignUp: Match.anyValue(),
+        DefineAuthChallenge: Match.anyValue(),
+        CreateAuthChallenge: Match.anyValue(),
+        VerifyAuthChallengeResponse: Match.anyValue(),
+      },
     });
+  });
+
+  it("the web client stays on the hosted UI (FIT-127)", () => {
+    prod.hasResourceProperties("AWS::Cognito::UserPoolClient", { ClientName: "web", ExplicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH"] });
   });
 });
 
@@ -127,6 +137,9 @@ describe("resolvers", () => {
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
         "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.publishWeek", "Mutation.clearWeek", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
         "Mutation.redeemGift", "Query.giftedPro", "Mutation.syncPush", "Query.syncPull", "Subscription.onSync",
+        "Mutation.createClientInvite", "Query.coachInvite", "Mutation.acceptCoach", "Query.myCoaches", "Query.myClients",
+        "Mutation.unlinkCoach", "Mutation.removeClient", "Mutation.postComment", "Query.comments",
+        "Mutation.sendProgram", "Query.programOffers", "Mutation.answerProgram",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -138,10 +151,14 @@ describe("resolvers", () => {
 });
 
 describe("push", () => {
-  it("only runs for LIVE# items", () => {
+  it("only runs for LIVE# items and new COMMENT# (FIT-132) and OFFER# (FIT-131) items", () => {
     dev.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
       FilterCriteria: {
-        Filters: [{ Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "LIVE#" }] } } } }) }],
+        Filters: [
+          { Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "LIVE#" }] } } } }) },
+          { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "COMMENT#" }] } } } }) },
+          { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "OFFER#" }] } } } }) },
+        ],
       },
     });
   });
@@ -177,7 +194,7 @@ describe("least privilege", () => {
     expect(actionsOf(dev, /^groupCleanup/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem"]));
     expect(actionsOf(dev, /^groupCleanup/)).not.toContain("dynamodb:PutItem");
     // FIT-102: the AI proxy counts each user's requests and reads the Anthropic key; FIT-122: and reads a gift's Pro.
-    expect(actionsOf(dev, /^aiProxy/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:UpdateItem"]);
+    expect(actionsOf(dev, /^aiProxy/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:Query", "dynamodb:UpdateItem"]);
     // FIT-122: gifts are redeemed and refunded, never scanned or deleted.
     for (const name of [/^gifts/, /^stripeWebhook/]) {
       expect(actionsOf(dev, name)).not.toContain("dynamodb:DeleteItem");
@@ -185,8 +202,15 @@ describe("least privilege", () => {
       expect(actionsOf(dev, name)).toContain("secretsmanager:GetSecretValue");
     }
     expect(actionsOf(dev, /^aiProxy/)).toContain("secretsmanager:GetSecretValue");
+    // FIT-130: coach links are put and deleted one by one, never scanned.
+    expect(actionsOf(dev, /^coach/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
+    // FIT-131: programs are put, read and answered, never deleted or scanned.
+    expect(actionsOf(dev, /^programs/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:BatchGetItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem"]);
     // FIT-126: sync writes and reads units, never deletes or scans.
     expect(actionsOf(dev, /^sync/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
+    // FIT-138: appleStart finds, creates and links users and writes their profile; it never deletes them.
+    expect(actionsOf(dev, /^appleStart/).sort()).toEqual(["cognito-idp:AdminCreateUser", "cognito-idp:AdminGetUser", "cognito-idp:AdminLinkProviderForUser",
+      "cognito-idp:AdminSetUserPassword", "dynamodb:PutItem"]);
   });
 });
 

@@ -79,12 +79,133 @@ h3 { font-size: 17px; font-weight: 650; display: flex; align-items: center; gap:
 .done { font-size: 12px; font-weight: 650; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; }
 
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: 1fr; align-content: start; }
   .nav { position: static; height: auto; flex-direction: row; align-items: center; justify-content: space-between; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .nav nav { display: none; }
+  .nav { gap: 12px; }
+  .nav nav { display: flex; gap: 2px; margin-right: auto; }
+  .nav nav a { padding: 6px 10px; }
+  .nav .brand { font-size: 0; gap: 0; }
   .account { margin: 0; padding: 0; justify-items: end; }
   .who { display: none; }
   .content { padding: 24px 16px 48px; }
   .day { grid-template-columns: 60px minmax(0, 1fr); padding: 16px; gap: 12px; }
   .session li { flex-direction: column; gap: 0; }
 }
+
+/* FIT-128: editing a session in place */
+.status { color: var(--muted); font-size: 14px; margin-top: 8px; }
+.session ul.edit li { align-items: center; gap: 12px; flex-wrap: wrap; }
+.session ul.edit .name { flex: 1 1 180px; min-width: 0; }
+.cells { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.cells .x, .cells .unit { color: var(--muted); font-size: 14px; }
+.num {
+  width: 56px; padding: 5px 6px; border: 1px solid transparent; border-radius: 8px; background: transparent;
+  font: inherit; color: inherit; text-align: right; -moz-appearance: textfield;
+}
+.num::-webkit-inner-spin-button, .num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.num:hover { border-color: var(--line); }
+.num:focus { outline: none; border-color: var(--text); background: var(--bg); }
+.tools { display: inline-flex; gap: 2px; opacity: 0.35; transition: opacity 0.15s; }
+.session li:hover .tools, .tools:focus-within { opacity: 1; }
+.tools button { width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
+.tools button:hover:not(:disabled) { background: var(--bg); color: var(--text); }
+.tools button:disabled { opacity: 0.3; cursor: default; }
+.add { margin-top: 10px; border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 14px; padding: 4px 0; }
+.add:hover { color: var(--text); }
+.picker { margin-top: 10px; display: grid; gap: 8px; justify-items: start; }
+.picker input { width: min(100%, 320px); padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font: inherit; color: inherit; }
+.picker ul { list-style: none; display: grid; gap: 0; width: min(100%, 320px); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 0; }
+.picker li { border: 0 !important; padding: 0 !important; }
+.picker li button { width: 100%; text-align: left; padding: 8px 12px; border: 0; background: var(--surface); }
+.picker li button:hover { background: var(--bg); }
+.earlier { margin-top: 40px; display: grid; gap: 10px; }
+.earlier h2 { margin-bottom: 4px; }
+.earlier summary { cursor: pointer; color: var(--muted); font-weight: 600; padding: 6px 0; }
+.earlier details[open] summary { color: var(--text); margin-bottom: 10px; }
+@media (max-width: 760px) {
+  .session ul.edit li { flex-direction: row; }
+  .tools { opacity: 1; }
+}
+.warning, .session ul.warnings li { color: #b0541f; font-size: 14px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .warning, :root:not([data-theme="light"]) .session ul.warnings li { color: #f0a46b; } }
+.session ul.warnings { margin-top: 8px; gap: 2px; }
+.session ul.warnings li { border: 0; padding: 0; display: block; }
+.warning { margin-top: 8px; }
+h3.handle { cursor: grab; }
+h3.handle::before { content: "⠿"; color: var(--muted); font-size: 14px; margin-left: -2px; }
+.day.drop { border-color: var(--accent); border-style: dashed; background: var(--surface); }
+
+/* FIT-129: history and progress */
+.streak { font-weight: 650; margin: -12px 0 20px; }
+.progress { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 28px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.card strong { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.card .muted { font-size: 13px; }
+.spark { width: 100%; height: 30px; color: var(--accent); margin-top: 6px; }
+.days.history .day { grid-template-columns: 110px minmax(0, 1fr); }
+.days.history .date span { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); }
+.note { margin-top: 8px; color: var(--muted); font-style: italic; }
+@media (max-width: 760px) { .days.history .day { grid-template-columns: 1fr; gap: 6px; } }
+
+/* FIT-130: clients */
+.lede { margin-top: 6px; }
+.invite { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: grid; gap: 12px; justify-items: start; margin-bottom: 24px; }
+.invite .button { min-height: 44px; }
+.link-row { display: flex; gap: 8px; width: 100%; }
+.link-row input { flex: 1; min-width: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); font: inherit; color: inherit; }
+.clients { list-style: none; display: grid; gap: 8px; }
+.clients a { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; }
+.clients a:hover { border-color: var(--text); }
+.crumb { margin-bottom: 8px; font-size: 14px; }
+.crumb a { color: var(--muted); text-decoration: none; }
+.crumb a::before { content: "‹ "; }
+.tabs { display: inline-flex; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-bottom: 20px; }
+.tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 999px; font-weight: 600; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--button); color: var(--button-text); }
+.danger { margin-top: 40px; }
+
+/* FIT-132: triage and threads */
+.clients a { align-items: flex-start; flex-wrap: wrap; }
+.clients .who { display: grid; gap: 2px; }
+.clients .who .muted { font-size: 14px; }
+.flags { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 60%; }
+.flags li { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+.flags li.pain, .flags li.missed, .flags li.hard { color: #b0541f; border-color: currentColor; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .flags li.pain, :root:not([data-theme="light"]) .flags li.missed, :root:not([data-theme="light"]) .flags li.hard { color: #f0a46b; } }
+.thread { margin-top: 10px; display: grid; gap: 6px; justify-items: start; }
+.thread p { font-size: 15px; background: var(--bg); border-radius: 12px; padding: 8px 12px; max-width: 100%; }
+.thread p.mine { background: transparent; border: 1px solid var(--line); }
+.reply { display: grid; gap: 8px; width: 100%; }
+.reply textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); font: inherit; color: inherit; resize: vertical; }
+.reply > div { display: flex; gap: 12px; align-items: center; }
+.reply .button { min-height: 38px; padding: 0 18px; }
+@media (max-width: 760px) { .flags { max-width: 100%; justify-content: flex-start; } }
+.coming { margin-top: 32px; }
+.coming h2 { margin-bottom: 10px; }
+
+/* FIT-131: sending a program */
+.form { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px 16px; margin-bottom: 24px; }
+.form label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.form label.wide { grid-column: 1 / -1; }
+.form input, .form select, .form textarea { font: inherit; font-weight: 400; color: var(--text); padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.form .with-unit { display: flex; align-items: center; gap: 6px; color: var(--text); font-weight: 400; }
+.form .with-unit input { width: 90px; }
+.actions { display: flex; gap: 16px; align-items: center; margin-top: 24px; flex-wrap: wrap; }
+.offers { list-style: none; display: grid; gap: 6px; margin: 4px 0 24px; }
+.offers li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.offers .started { color: var(--text); font-weight: 600; }
+.offers .declined { color: #b0541f; }
+.offers .sent { color: var(--muted); }
+.actions.top { margin: 0 0 16px; }
+.empty.coach { margin-bottom: 12px; justify-items: start; }
+.empty .button { min-height: 44px; margin-top: 4px; text-decoration: none; }
+
+/* FIT-128: supersets and copying forward */
+.session ul.edit li.grouped { border-left: 3px solid var(--accent); padding-left: 10px; margin-left: -13px; }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); margin-right: 8px; }
+h3 .copy { margin-left: auto; font-size: 13px; font-weight: 600; border: 0; background: none; color: var(--muted); padding: 2px 0; }
+h3 .copy:hover { color: var(--text); }
+.form .design { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.form .design .button { min-height: 40px; }
+.form .design .muted { font-weight: 400; font-size: 14px; }
+.flags li.plateau { color: var(--text); border-color: var(--text); }

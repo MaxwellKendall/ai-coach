@@ -27,6 +27,7 @@ struct SessionRecordView: View {
         let summary = mine.first { $0.templateRef == nil }?.measurements ?? []
         VStack(spacing: 14) {
             stats(record, summary: summary)
+            CoachThread(date: day)
             if !record.blocks.isEmpty {
                 tabs(record)
                 SwipeDeck(index: $page, count: record.blocks.count, cornerRadius: 0) { index in

@@ -25,6 +25,8 @@ const config = {
     username_attributes: [],
     user_verification_types: [],
   },
+  // FIT-138: native Sign in with Apple's first step. Amplify ignores this section; Account reads it.
+  custom: { apple_start_url: out.AppleStartUrl },
   data: {
     aws_region: out.Region,
     url: out.GraphqlUrl,

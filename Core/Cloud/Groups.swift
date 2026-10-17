@@ -176,6 +176,95 @@ enum Cloud {
         return until.flatMap(date)
     }
 
+    // MARK: Coaches (FIT-130)
+
+    struct Person: Codable, Identifiable, Hashable, Sendable {
+        var uid: String
+        var name: String?
+        var since: String
+        var id: String { uid }
+        var title: String { name ?? "Your coach" }
+    }
+
+    /// The coach's name on an invite, or nil when it's been used or has expired.
+    @MainActor static func coachInvite(_ code: String) async throws -> String? {
+        try await run("query($c: String!) { coachInvite(code: $c) }", ["c": code], at: "coachInvite", as: String?.self, query: true)
+    }
+
+    @MainActor static func acceptCoach(_ code: String) async throws -> Person {
+        try await run("mutation($c: String!) { acceptCoach(code: $c) { uid name since } }", ["c": code], at: "acceptCoach")
+    }
+
+    @MainActor static func myCoaches() async throws -> [Person] {
+        try await run("query { myCoaches { uid name since } }", at: "myCoaches", query: true)
+    }
+
+    @MainActor static func unlinkCoach(_ uid: String) async throws {
+        _ = try await run("mutation($u: ID!) { unlinkCoach(uid: $u) }", ["u": uid], at: "unlinkCoach", as: Bool?.self)
+    }
+
+    // MARK: Session replies (FIT-132)
+
+    struct Comment: Decodable, Identifiable, Hashable, Sendable {
+        var day: String
+        var at: String
+        var by: String
+        var byName: String?
+        var text: String
+        var id: String { at + by }
+    }
+
+    /// A logged day's thread on my account: my coach's replies and mine. `day` is "2026-10-14".
+    @MainActor static func comments(day: String) async throws -> [Comment] {
+        try await run("query($d: String) { comments(day: $d) { day at by byName text } }", ["d": day], at: "comments", query: true)
+    }
+
+    @MainActor static func postComment(day: String, text: String) async throws -> Comment {
+        try await run("mutation($d: String!, $t: String!) { postComment(day: $d, text: $t) { day at by byName text } }",
+                      ["d": day, "t": text], at: "postComment")
+    }
+
+    // MARK: Programs from a coach (FIT-131)
+
+    struct ProgramOffer: Decodable, Identifiable, Sendable {
+        var id: String
+        var coachUid: String
+        var coachName: String?
+        var note: String
+        var start: String
+        var weeks: Int
+        /// The template week, as JSON: [{weekday 0–6 from Sunday, slot, rows: [{template, targets, note, main}]}].
+        var days: String
+        var addPerWeek: Double
+        var status: String
+
+        struct Day: Decodable, Sendable {
+            struct Row: Decodable, Sendable {
+                var template: String
+                var targets: [Measurement]
+                var note: String?
+            }
+            var weekday: Int
+            var slot: String
+            var rows: [Row]
+        }
+
+        var week: [Day] { ((try? JSONDecoder().decode([Day].self, from: Data(days.utf8))) ?? []).sorted { $0.weekday < $1.weekday } }
+        var startDate: Date? { try? Date(start, strategy: .iso8601.year().month().day()) }
+    }
+
+    private static let offerFields = "id coachUid coachName note start weeks days addPerWeek status"
+
+    @MainActor static func programOffers() async throws -> [ProgramOffer] {
+        try await run("query { programOffers { \(offerFields) } }", at: "programOffers", query: true)
+    }
+
+    /// Start writes the program into my plan from its start day (on the server, then synced here); decline doesn't.
+    @MainActor static func answerProgram(_ id: String, start: Bool) async throws {
+        _ = try await run("mutation($i: ID!, $s: Boolean!, $o: Int) { answerProgram(id: $i, start: $s, offsetMinutes: $o) { id status } }",
+                          ["i": id, "s": start, "o": TimeZone.current.secondsFromGMT() / 60], at: "answerProgram", as: AnyDecodable?.self)
+    }
+
     // MARK: Shares (FIT-105/107)
 
     struct Share: Decodable, Sendable {

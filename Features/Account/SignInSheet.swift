@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 /// FIT-52: Apple first (guideline 4.8), Google second, a hint under the one used last.
@@ -5,10 +6,12 @@ import SwiftUI
 struct SignInSheet: View {
     @Environment(Account.self) private var account
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
     var reason = "Sign in to share goals with a group."
 
     @State private var working: Account.Provider?
     @State private var failure: String?
+    @State private var apple = Account.AppleRequest()
 
     var body: some View {
         VStack(spacing: 12) {
@@ -38,7 +41,26 @@ struct SignInSheet: View {
         .interactiveDismissDisabled(working != nil)
     }
 
-    private func button(_ provider: Account.Provider) -> some View {
+    @ViewBuilder private func button(_ provider: Account.Provider) -> some View {
+        if provider == .apple, account.hasNativeApple {
+            // FIT-138: Apple's own button and sheet (Face ID), not a web page.
+            SignInWithAppleButton(.continue) { request in
+                apple = Account.AppleRequest()
+                apple.prepare(request)
+            } onCompletion: { result in
+                signInWithApple(result)
+            }
+            .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
+            .frame(height: 50)
+            .clipShape(.capsule)
+            .overlay { if working == .apple { Capsule().fill(.background.opacity(0.6)); ProgressView() } }
+            .disabled(working != nil)
+        } else {
+            webButton(provider)
+        }
+    }
+
+    private func webButton(_ provider: Account.Provider) -> some View {
         Button { signIn(provider) } label: {
             HStack(spacing: 12) {
                 if working == provider {
@@ -56,6 +78,28 @@ struct SignInSheet: View {
         }
         .buttonStyle(BrandButtonStyle(provider: provider))
         .disabled(working != nil)
+    }
+
+    private func signInWithApple(_ result: Result<ASAuthorization, Error>) {
+        guard case .success(let authorization) = result,
+              let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            if case .failure(let error) = result, (error as? ASAuthorizationError)?.code != .canceled {
+                failure = "Couldn't sign in with Apple. Try again."
+            }
+            return
+        }
+        working = .apple
+        failure = nil
+        let nonce = apple.nonce
+        Task {
+            defer { working = nil }
+            do {
+                try await account.signIn(apple: credential, nonce: nonce)
+                dismiss()
+            } catch {
+                failure = "Couldn't sign in with Apple. Try again."
+            }
+        }
     }
 
     private func signIn(_ provider: Account.Provider) {

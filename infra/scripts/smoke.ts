@@ -259,6 +259,50 @@ pass("A's program syncs: another client's pull and A's subscription see a push, 
 subA.close();
 subSpy.close();
 
+// FIT-130: A coaches B. B accepts A's invite; A reads and edits B's units; C can't; the invite is single use; B ends it.
+const bUidNow = JSON.parse(Buffer.from(b.split(".")[1], "base64url").toString()).sub;
+const invite = must(await gql(a, `mutation { createClientInvite { code url } }`), "createClientInvite").createClientInvite;
+if (!invite.url.endsWith(`/c/${invite.code}`)) throw new Error(`invite url ${invite.url}`);
+if (must(await gql(b, `query($c: String!) { coachInvite(code: $c) }`, { c: invite.code }), "coachInvite").coachInvite !== "Smoke A") throw new Error("coach name");
+const coachPage = await fetch(invite.url);
+if (coachPage.status !== 200 || !(await coachPage.text()).includes("Train with Smoke as your coach")) throw new Error(`coach invite page ${coachPage.status}`);
+must(await gql(b, `mutation($c: String!) { acceptCoach(code: $c) { uid name } }`, { c: invite.code }), "acceptCoach");
+if (!(await gql(c, `mutation($c: String!) { acceptCoach(code: $c) { uid } }`, { c: invite.code })).errors?.length) throw new Error("the invite worked twice");
+const clients = must(await gql(a, `query { myClients { uid name } }`), "myClients").myClients;
+if (clients.length !== 1 || clients[0].uid !== bUidNow) throw new Error(`clients ${JSON.stringify(clients)}`);
+must(await gql(b, `mutation($u: [SyncUnitInput!]!) { syncPush(units: $u, source: "phone") { uid } }`, { u: [unit('[{"reps":8}]', new Date().toISOString())] }), "B's own push");
+const asCoach = must(await gql(a, `query($u: ID) { syncPull(uid: $u) { units { key body } } }`, { u: bUidNow }), "coach pull").syncPull;
+if (asCoach.units.find((u: any) => u.key === day)?.body !== '[{"reps":8}]') throw new Error("the coach didn't see B's plan");
+await new Promise((r) => setTimeout(r, 1100));
+must(await gql(a, `mutation($u: [SyncUnitInput!]!, $o: ID) { syncPush(units: $u, source: "web", uid: $o) { uid } }`, { u: [unit('[{"reps":6}]', new Date().toISOString())], o: bUidNow }), "coach push");
+const seenByB = must(await gql(b, `query { syncPull { units { key body } } }`), "B pull").syncPull;
+if (seenByB.units.find((u: any) => u.key === day)?.body !== '[{"reps":6}]') throw new Error("B didn't get the coach's edit");
+if (!(await gql(c, `query($u: ID) { syncPull(uid: $u) { units { key } } }`, { u: bUidNow })).errors?.length) throw new Error("C read B's units");
+// FIT-132: A replies on B's session; B reads it; C can't post.
+const replyText = `Nice work ${Date.now()}`;
+must(await gql(a, `mutation($u: ID, $d: String!, $t: String!) { postComment(uid: $u, day: $d, text: $t) { at } }`, { u: bUidNow, d: "2026-10-16", t: replyText }), "postComment");
+const thread = must(await gql(b, `query { comments(day: "2026-10-16") { by byName text } }`), "comments").comments;
+if (!thread.some((c: any) => c.text === replyText && c.byName === "Smoke A")) throw new Error(`thread ${JSON.stringify(thread)}`);
+if (!(await gql(c, `mutation($u: ID) { postComment(uid: $u, day: "2026-10-16", text: "hi") { at } }`, { u: bUidNow })).errors?.length) throw new Error("C posted on B's session");
+// FIT-131: A sends B a 1-week program from next Sunday; B starts it; B's plan has A's session; A sees "started".
+const nextSunday = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() + 7 - d.getUTCDay()); return d.toISOString().slice(0, 10); })();
+const monday = (() => { const d = new Date(`${nextSunday}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+const programDays = [{ weekday: 1, slot: "Smoke lower", rows: [{ template: "back-squat", targets: [{ metric: "sets", value: 3, unit: "sets" }, { metric: "reps", value: 5, unit: "reps" }], main: true }] }];
+const sent = must(await gql(a, `mutation($u: ID!, $s: String!, $d: AWSJSON!) { sendProgram(uid: $u, start: $s, weeks: 1, note: "Try this", days: $d) { id status } }`,
+  { u: bUidNow, s: nextSunday, d: JSON.stringify(programDays) }), "sendProgram").sendProgram;
+const offered = must(await gql(b, `query { programOffers { id coachName weeks status } }`), "programOffers").programOffers;
+if (!offered.some((o: any) => o.id === sent.id && o.coachName === "Smoke A")) throw new Error(`offers ${JSON.stringify(offered)}`);
+must(await gql(b, `mutation($i: ID!) { answerProgram(id: $i, start: true, offsetMinutes: -240) { status } }`, { i: sent.id }), "answerProgram");
+const afterStart = must(await gql(b, `query { syncPull { units { key body } } }`), "B pull after start").syncPull;
+const mondayPlan = JSON.parse(afterStart.units.find((u: any) => u.key === `plan#${monday}`)?.body ?? "[]");
+if (mondayPlan[0]?.adjustedReason !== "From Smoke A" || mondayPlan[0]?.slot !== "Smoke lower") throw new Error(`B's plan ${JSON.stringify(mondayPlan)}`);
+const seenByCoach = must(await gql(a, `query($u: ID) { programOffers(uid: $u) { id status } }`, { u: bUidNow }), "coach offers").programOffers;
+if (seenByCoach.find((o: any) => o.id === sent.id)?.status !== "started") throw new Error(`coach sees ${JSON.stringify(seenByCoach)}`);
+pass("A sends B a program; B starts it, B's plan has A's session from its start, and A sees it started");
+must(await gql(b, `mutation($u: ID!) { unlinkCoach(uid: $u) }`, { u: aUid }), "unlinkCoach");
+if (!(await gql(a, `query($u: ID) { syncPull(uid: $u) { units { key } } }`, { u: bUidNow })).errors?.length) throw new Error("A still reads B after unlinking");
+pass("A coaches B through a single-use invite (with its page): A reads and edits B's plan and replies on B's session, C can't, and B's unlink ends A's access");
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {

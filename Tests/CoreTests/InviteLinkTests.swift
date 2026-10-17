@@ -50,4 +50,14 @@ struct SessionLinkTests {
         #expect(JoinSessionSheet.time("5:30 PM") == DateComponents(hour: 17, minute: 30))
         #expect(JoinSessionSheet.time("dawn") == nil)
     }
+
+    /// FIT-130: a coach's invite, barbrabell.com/c/CODE, on any of the app's hosts.
+    @Test func coachInvites() {
+        #expect(InviteLink.coach(from: URL(string: "https://dev.barbrabell.com/c/LT7JWBW6S2")!) == "LT7JWBW6S2")
+        #expect(InviteLink.coach(from: URL(string: "https://barbrabell.com/c/lt7jwbw6s2")!) == "LT7JWBW6S2")
+        #expect(InviteLink.coach(from: URL(string: "https://barbrabell.com/c/LT7JWBW6S")!) == nil)
+        #expect(InviteLink.coach(from: URL(string: "https://barbrabell.com/c/LT7JWBW6S0")!) == nil)
+        #expect(InviteLink.coach(from: URL(string: "https://example.com/c/LT7JWBW6S2")!) == nil)
+        #expect(InviteLink.code(from: URL(string: "https://barbrabell.com/c/LT7JWBW6S2")!) == nil)
+    }
 }

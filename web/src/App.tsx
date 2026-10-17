@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { finishSignIn, idToken, signIn, signOut, user, type Config, type Provider, type User } from "./auth";
-import catalog from "./catalog.json";
-import { describe, week } from "./program";
-import { pullAll, type Unit } from "./sync";
+import { ClientPage, ClientsPage } from "./ClientsPage";
+import { HistoryView } from "./HistoryView";
+import { ProgramPage } from "./ProgramPage";
+import { comments, postComment, pullAll, type Comment, type Unit } from "./sync";
 
 const APP = "Rep & Recipe";
 
@@ -46,7 +47,8 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
   return (
     <main className="signin">
       <div className="brand"><Logo />{APP}</div>
-      <h1>Your program, on a bigger screen</h1>
+      <h1>Your training, on a bigger screen</h1>
+      <p className="lede">Edit your program and look back at every session. Coach others? Invite your clients, write their programs and see how their training goes.</p>
       <p className="lede">Sign in with the account you use in the app.</p>
       <div className="buttons">
         {providers.map((p) => (
@@ -60,13 +62,36 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
   );
 }
 
+/** The address bar's path, kept in step with the nav without reloading the page. */
+export function usePath(): [string, (path: string) => (e?: React.MouseEvent) => void] {
+  const [path, setPath] = useState(location.pathname);
+  useEffect(() => {
+    const onPop = () => setPath(location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const go = (to: string) => (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    history.pushState(null, "", to);
+    setPath(to);
+    window.scrollTo(0, 0);
+  };
+  return [path, go];
+}
+
 function Dashboard({ config, me }: { config: Config; me: User }) {
+  const [path, go] = usePath();
+  const link = (to: string, label: string, active: boolean) => (
+    <a href={to} className={active ? "current" : undefined} aria-current={active ? "page" : undefined} onClick={go(to)}>{label}</a>
+  );
   return (
     <div className="shell">
       <aside className="nav">
         <div className="brand"><Logo />{APP}</div>
         <nav>
-          <a className="current" href="/" aria-current="page">Program</a>
+          {link("/", "Program", path === "/")}
+          {link("/history", "History", path.startsWith("/history"))}
+          {link("/clients", "Clients", path.startsWith("/clients"))}
         </nav>
         <div className="account">
           <div className="who">
@@ -77,86 +102,67 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
         </div>
       </aside>
       <main className="content">
-        <Program config={config} me={me} />
+        {path.startsWith("/history") ? (
+          <HistoryPage config={config} me={me} />
+        ) : path.startsWith("/clients/") ? (
+          <ClientPage key={path} config={config} me={me} uid={path.slice("/clients/".length)} go={go} />
+        ) : path.startsWith("/clients") ? (
+          <ClientsPage config={config} me={me} go={go} />
+        ) : (
+          <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} go={go} />} />
+        )}
       </main>
     </div>
   );
 }
 
-const names = new Map(catalog.map((t) => [t.slug, t.name]));
-const weekday = new Intl.DateTimeFormat(undefined, { weekday: "short" });
-const monthDay = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" });
-
-function Program({ config, me }: { config: Config; me: User }) {
+function HistoryPage({ config, me }: { config: Config; me: User }) {
   const [units, setUnits] = useState<Map<string, Unit>>();
+  const [thread, setThread] = useState<Comment[]>([]);
   const [error, setError] = useState<string>();
   useEffect(() => {
     pullAll(config).then(setUnits, (e: Error) => setError(e.message));
+    // FIT-132: a coach's replies, and mine.
+    comments(config).then(setThread, () => setThread([]));
   }, [config]);
+  return (
+    <>
+      <header className="page"><h1>History</h1></header>
+      {error ? <p className="error" role="alert">Couldn't load your history: {error}</p>
+        : units ? (
+          <HistoryView units={units} comments={thread} me={me.uid}
+                       onReply={thread.length ? async (day, text) => { const c = await postComment(config, day, text); setThread((t) => [...t, c]); } : undefined} />
+        ) : <p className="muted">Loading…</p>}
+    </>
+  );
+}
 
-  const today = new Date();
-  const days = useMemo(() => (units ? week(units, today, names) : []), [units]);
-
-  if (error) return <p className="error" role="alert">Couldn't load your program: {error}</p>;
-  if (!units) return <p className="muted">Loading your program…</p>;
-
-  const hasPlan = [...units.keys()].some((k) => k.startsWith("plan#") && !units.get(k)!.deleted);
+function Empty({ config, me, go }: { config: Config; me: User; go: (path: string) => (e?: React.MouseEvent) => void }) {
   return (
     <>
       <header className="page">
-        <p className="eyebrow">Week of {monthDay.format(days[0].date)}</p>
         <h1>This week</h1>
       </header>
-      {!hasPlan ? (
-        <div className="empty">
-          <h2>Nothing here yet</h2>
+      {/* FIT-130: a coach may not train with the app themselves; their work is on Clients. */}
+      <div className="empty coach">
+        <h2>Coaching clients?</h2>
+        <p className="muted">Invite them, write their programs and follow their training.</p>
+        <a className="button primary" href="/clients" onClick={go("/clients")}>Go to Clients</a>
+      </div>
+      <div className="empty">
+        <h2>Training yourself?</h2>
+        <p className="muted">
+          Open {APP} on your iPhone, signed in as {me.email ?? me.name ?? "this account"}, and your program shows up here.
+        </p>
+        {me.provider && (
           <p className="muted">
-            Open {APP} on your iPhone, signed in as {me.email ?? me.name ?? "this account"}, and your program shows up here.
+            You're signed in with {me.provider === "google" ? "Google" : "Apple"}. If the app uses{" "}
+            {me.provider === "google" ? "Apple" : "Google"}, that's a separate account:{" "}
+            <button className="link" onClick={() => signOut(config)}>sign out</button> and continue with{" "}
+            {me.provider === "google" ? "Apple" : "Google"}.
           </p>
-          {me.provider && (
-            <p className="muted">
-              You're signed in with {me.provider === "google" ? "Google" : "Apple"}. If the app uses{" "}
-              {me.provider === "google" ? "Apple" : "Google"}, that's a separate account:{" "}
-              <button className="link" onClick={() => signOut(config)}>sign out</button> and continue with{" "}
-              {me.provider === "google" ? "Apple" : "Google"}.
-            </p>
-          )}
-        </div>
-      ) : (
-        <ol className="days">
-          {days.map((day) => {
-            const isToday = day.key === days.find((d) => d.date.toDateString() === today.toDateString())?.key;
-            return (
-              <li key={day.key} className={`day${isToday ? " today" : ""}${day.lines.length ? "" : " rest"}`}>
-                <div className="date">
-                  <span>{weekday.format(day.date)}</span>
-                  <strong>{day.date.getDate()}</strong>
-                </div>
-                <div className="session">
-                  {day.lines.length ? (
-                    <>
-                      <h3>
-                        {day.title ?? "Workout"}
-                        {day.done && <span className="done">Done</span>}
-                      </h3>
-                      <ul>
-                        {day.lines.map((line, i) => (
-                          <li key={i}>
-                            <span>{line.exercise}</span>
-                            <span className="muted">{describe(line)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : (
-                    <p className="muted">{day.done ? "Trained" : "Rest"}</p>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+        )}
+      </div>
     </>
   );
 }

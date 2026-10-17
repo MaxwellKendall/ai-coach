@@ -27,6 +27,9 @@
     "username_attributes": [],
     "user_verification_types": []
   },
+  "custom": {
+    "apple_start_url": "https://y7kqhltg3uvpsy5wn3fedcjouq0kyiud.lambda-url.us-east-1.on.aws/"
+  },
   "data": {
     "aws_region": "us-east-1",
     "url": "https://vz3yc5prcvf2fmeqof3qw5v4ui.appsync-api.us-east-1.amazonaws.com/graphql",

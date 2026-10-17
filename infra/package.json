@@ -13,7 +13,8 @@
     "share-stats": "tsx scripts/shareStats.ts",
     "buddy": "tsx scripts/buddy.ts",
     "seed-review": "tsx scripts/seed-review.ts",
-    "dashboard-config": "tsx scripts/dashboardConfig.ts"
+    "dashboard-config": "tsx scripts/dashboardConfig.ts",
+    "sync-status": "tsx scripts/syncStatus.ts"
   },
   "devDependencies": {
     "@aws-appsync/utils": "^2.1.1",

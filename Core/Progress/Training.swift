@@ -43,6 +43,24 @@ enum Training {
         return best
     }
 
+    /// FIT-140: a lift has stalled when it was logged on `days` or more days in the `window` days before `today` and
+    /// none of them beat the best estimate from before. Held to the web's rule (web/src/progress.ts) by
+    /// Tests/Fixtures/progress-parity.json.
+    static func plateaued(_ sets: [LoggedSet], exercise: String, today: Date, window: Int = 21, days: Int = 3,
+                          calendar: Calendar = .current) -> Bool {
+        let end = calendar.startOfDay(for: today)
+        let start = calendar.date(byAdding: .day, value: -window, to: end)!
+        var before = 0.0, recent: [Date: Double] = [:]
+        for set in sets where set.exercise == exercise {
+            guard let load = set.value("load_lb"), let reps = set.value("reps"),
+                  let estimate = estimated1RM(loadLb: load, reps: reps, rpe: set.value("rpe")) else { continue }
+            let day = calendar.startOfDay(for: set.date)
+            if day < start { before = max(before, estimate) } else if day < end { recent[day] = max(recent[day] ?? 0, estimate) }
+        }
+        guard before > 0, recent.count >= days else { return false }
+        return recent.values.max()! <= before
+    }
+
     /// Best estimate so far, one point per training day. Like `estimated1RMs`, it never regresses.
     static func estimated1RMTrend(_ sets: [LoggedSet], exercise: String, calendar: Calendar = .current) -> [DatedValue] {
         var byDay: [Date: Double] = [:]

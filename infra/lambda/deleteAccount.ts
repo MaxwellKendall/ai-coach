@@ -48,7 +48,14 @@ export async function itemsToDelete(uid: string) {
       return [{ PK: pk, SK: `MEMBER#${uid}` }, { PK: pk, SK: `LIVE#${uid}` }, { PK: pk, SK: `WEEK#${uid}` }, ...progress, ...feed];
     }),
   );
-  return [...own, ...shares, ...perGroup.flat()].map(({ PK, SK }) => ({ PK, SK }));
+  // FIT-130: a coach link has an item in the other person's partition too.
+  const links = own.flatMap((i) => {
+    const sk = String(i.SK);
+    if (sk.startsWith("COACH#")) return [{ PK: `USER#${sk.slice(6)}`, SK: `CLIENT#${uid}` }];
+    if (sk.startsWith("CLIENT#")) return [{ PK: `USER#${sk.slice(7)}`, SK: `COACH#${uid}` }];
+    return [];
+  });
+  return [...own, ...shares, ...perGroup.flat(), ...links].map(({ PK, SK }) => ({ PK, SK }));
 }
 
 // App Store 5.1.1(v): in-app account deletion removes the account and the data tied to it.

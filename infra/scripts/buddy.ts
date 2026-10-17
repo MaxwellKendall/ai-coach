@@ -3,6 +3,8 @@
 //   AWS_PROFILE=aicoach-dev npm run buddy -- live GROUPID   opt in to live sharing and log a workout, a set every few seconds
 //   AWS_PROFILE=aicoach-dev npm run buddy -- program        sync a sample week (FIT-126) and write a session for the dashboard's
 //                                                       dev server to web/public/session.json (FIT-127; gitignored)
+//   AWS_PROFILE=aicoach-dev npm run buddy -- coach          FIT-130: Test Buddy coaches a second test account, Test Client, which
+//                                                       accepts the invite and syncs a sample week
 //   AWS_PROFILE=aicoach-dev npm run buddy -- delete         delete the buddy's account (and with it its group items)
 import { gql, must, signIn } from "./dev.ts";
 
@@ -65,6 +67,31 @@ if (command === "join") {
   }
   must(await gql(token, `mutation($g: ID!) { endLiveSession(groupId: $g) { ${fields} } }`, { g: arg }), "end");
   console.log("Workout ended.");
+} else if (command === "coach") {
+  const client = await signIn("smoke-client");
+  must(await gql(client, `mutation { updateProfile(displayName: "Test Client") { uid } }`), "client profile");
+  const invite = must(await gql(token, `mutation { createClientInvite { code url } }`), "invite").createClientInvite;
+  must(await gql(client, `mutation($c: String!) { acceptCoach(code: $c) { uid } }`, { c: invite.code }), "accept");
+  const today = new Date();
+  const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const at = (offset: number, hour: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset, hour).getTime() / 1000;
+  const m = (metric: string, value: number, unit = metric) => ({ metric, value, unit });
+  const plan = (offset: number, slot: string, rows: [string, object[]][]) => ({
+    key: `plan#${key(new Date(at(offset, 0) * 1000))}`,
+    rows: rows.map(([template, targets], i) => ({ id: crypto.randomUUID(), kind: "workout", at: at(offset, 7) + i, slot, template, targets, note: "", main: i === 0, pinned: false })),
+  });
+  const units = [
+    plan(-2, "Full body A", [["back-squat", [m("sets", 3), m("reps", 5), m("load_lb", 185, "lb")]], ["bench-press", [m("sets", 3), m("reps", 5), m("load_lb", 155, "lb")]]]),
+    plan(1, "Full body B", [["romanian-deadlift", [m("sets", 3), m("reps", 8), m("load_lb", 135, "lb")]], ["plank", [m("sets", 3), m("duration_s", 40, "s")]]]),
+    { key: `log#${key(new Date(at(-2, 0) * 1000))}`, rows: [
+      { id: crypto.randomUUID(), kind: "workout", at: at(-2, 8), template: "back-squat", measurements: [m("reps", 5, "reps"), m("load_lb", 185, "lb"), m("rpe", 8, "rpe")], note: "Knee felt a bit tight on the last set." },
+      { id: crypto.randomUUID(), kind: "workout", at: at(-2, 8) + 60, template: "bench-press", measurements: [m("reps", 5, "reps"), m("load_lb", 155, "lb"), m("rpe", 7, "rpe")], note: "" },
+    ] },
+  ].map((u) => ({ key: u.key, updatedAt: new Date().toISOString(), deleted: false, body: JSON.stringify(u.rows) }));
+  must(await gql(client, `mutation($u: [SyncUnitInput!]!) { syncPush(units: $u, source: "buddy") { changedAt } }`, { u: units }), "client sync");
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(new URL("../../web/public/session.json", import.meta.url), JSON.stringify({ id: token, refresh: "", expiresAt: Date.now() + 55 * 60_000 }));
+  console.log("Test Buddy now coaches Test Client (a sample week synced); the dashboard's dev session is Test Buddy's.");
 } else if (command === "program") {
   // This week, as the app syncs it: Monday and Friday planned, Monday logged.
   const today = new Date();
@@ -99,5 +126,5 @@ if (command === "join") {
   must(await gql(token, `mutation { deleteAccount }`), "delete");
   console.log("Test Buddy's account is deleted.");
 } else {
-  console.log("usage: npm run buddy -- join CODE | live GROUPID | program | delete");
+  console.log("usage: npm run buddy -- join CODE | live GROUPID | program | coach | delete");
 }

@@ -75,4 +75,15 @@ enum InviteLink {
     }
 
     static func gift(from url: URL) -> String? { url.scheme == "https" ? gift(url.absoluteString) : nil }
+
+    /// FIT-130: a coach's invite, barbrabell.com/c/LT7JWBW6S2: 10 letters and digits without 0, 1, I or O.
+    static func coach(from url: URL) -> String? {
+        guard url.scheme == "https", let host = url.host()?.lowercased(),
+              host == "barbrabell.com" || host.hasSuffix(".barbrabell.com") else { return nil }
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.count == 2, parts[0] == "c" else { return nil }
+        let code = parts[1].uppercased()
+        let alphabet = Set("23456789ABCDEFGHJKLMNPQRSTUVWXYZ")
+        return code.count == 10 && code.allSatisfy(alphabet.contains) ? code : nil
+    }
 }

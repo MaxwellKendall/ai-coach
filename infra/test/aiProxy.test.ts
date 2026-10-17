@@ -10,6 +10,11 @@ describe("aiProxy: the request it sends on", () => {
     expect(allowed).toEqual({ body: request });
   });
 
+  it("passes on a tool choice (FIT-141: the web's answer tool)", () => {
+    const choice = { type: "tool", name: "answer" };
+    expect(allowedRequest({ ...request, tool_choice: choice })).toEqual({ body: { ...request, tool_choice: choice } });
+  });
+
   it("allows Haiku only", () => {
     expect(allowedRequest(JSON.stringify({ ...request, model: "claude-opus-5-5" }))).toEqual({ error: "Only claude-haiku-5-5 is available." });
   });

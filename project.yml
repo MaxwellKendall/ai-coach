@@ -14,7 +14,7 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "2"
+    CURRENT_PROJECT_VERSION: "4"
     # Signing team for device builds and App Store archives.
     DEVELOPMENT_TEAM: 7GZKY29XJH
     CODE_SIGN_STYLE: Automatic
@@ -28,6 +28,8 @@ targets:
       path: App/AICoach.entitlements
       properties:
         aps-environment: development
+        # FIT-138: Apple's own Sign in with Apple sheet.
+        com.apple.developer.applesignin: [Default]
         # FIT-58: invite links open the app (Apple's file is served by the share pages, infra/lambda/sharePages.ts).
         com.apple.developer.associated-domains:
           - applinks:join.barbrabell.com
