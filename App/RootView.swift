@@ -20,6 +20,7 @@ struct RootView: View {
     @State private var pendingInvite: String?
     @State private var pendingSession: String?
     @State private var pendingProgram: String?
+    @State private var pendingCoach: String?
     @State private var joined: Cloud.GroupSummary?
 
     /// Graphite (FIT-27): monochrome, the label colour is the only accent.
@@ -86,13 +87,27 @@ struct RootView: View {
             NavigationStack { RedeemGiftView(code: ref.id) }.tint(Self.accent)
         }
         // FIT-122: Pro from a gift is the account's.
-        .task(id: account.user?.uid) { await pro.refreshGift(signedIn: account.user != nil) }
+        .task(id: account.user?.uid) {
+            await pro.refreshGift(signedIn: account.user != nil)
+            // FIT-130: and from a coach, while coached.
+            await pro.refreshCoaches(signedIn: account.user != nil)
+        }
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).
         .onOpenURL { url in
             guard account.isAvailable else { return }
             // FIT-122: a gift's link opens Redeem with its code; Redeem asks to sign in.
             if let gift = InviteLink.gift(from: url) {
                 navigator.gift = gift
+                return
+            }
+            // FIT-130: a coach's invite asks to allow them; it needs an account.
+            if let code = InviteLink.coach(from: url) {
+                if account.user == nil {
+                    pendingCoach = code
+                    signingInToJoin = true
+                } else {
+                    navigator.coachInvite = code
+                }
                 return
             }
             // FIT-113: a shared session; it waits for onboarding, if any, then asks before planning anything.
@@ -127,15 +142,22 @@ struct RootView: View {
             if account.user != nil, let code = pendingInvite { invite = Invite(code: code) }
             if account.user != nil, let session = pendingSession { navigator.session = session }
             if account.user != nil, let program = pendingProgram { navigator.program = program }
+            if account.user != nil, let code = pendingCoach { navigator.coachInvite = code }
+            pendingCoach = nil
             pendingInvite = nil
             pendingSession = nil
             pendingProgram = nil
         }) {
-            SignInSheet(reason: pendingSession != nil || pendingProgram != nil ? "Sign in to train together." : "Sign in to join the group.")
+            SignInSheet(reason: pendingCoach != nil ? "Sign in to train with your coach."
+                        : pendingSession != nil || pendingProgram != nil ? "Sign in to train together." : "Sign in to join the group.")
         }
         .sheet(item: Binding(get: { onboarding == nil ? navigator.session.map(SessionRef.init) : nil },
                              set: { if $0 == nil { navigator.session = nil } })) { ref in
             JoinSessionSheet(id: ref.id).tint(Self.accent)
+        }
+        .sheet(item: Binding(get: { onboarding == nil ? navigator.coachInvite.map(CoachInviteRef.init) : nil },
+                             set: { if $0 == nil { navigator.coachInvite = nil } })) { ref in
+            CoachInviteSheet(code: ref.id).tint(Self.accent)
         }
         .sheet(item: Binding(get: { onboarding == nil ? navigator.program.map(ProgramRef.init) : nil },
                              set: { if $0 == nil { navigator.program = nil } })) { ref in
@@ -166,6 +188,11 @@ struct RootView: View {
                 .tint(Self.accent)
         }
     }
+}
+
+/// FIT-130: a coach's invite code, as a sheet item.
+struct CoachInviteRef: Identifiable {
+    let id: String
 }
 
 /// FIT-58: the code from an invite link.

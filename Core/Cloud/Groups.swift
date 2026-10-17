@@ -176,6 +176,33 @@ enum Cloud {
         return until.flatMap(date)
     }
 
+    // MARK: Coaches (FIT-130)
+
+    struct Person: Codable, Identifiable, Hashable, Sendable {
+        var uid: String
+        var name: String?
+        var since: String
+        var id: String { uid }
+        var title: String { name ?? "Your coach" }
+    }
+
+    /// The coach's name on an invite, or nil when it's been used or has expired.
+    @MainActor static func coachInvite(_ code: String) async throws -> String? {
+        try await run("query($c: String!) { coachInvite(code: $c) }", ["c": code], at: "coachInvite", as: String?.self, query: true)
+    }
+
+    @MainActor static func acceptCoach(_ code: String) async throws -> Person {
+        try await run("mutation($c: String!) { acceptCoach(code: $c) { uid name since } }", ["c": code], at: "acceptCoach")
+    }
+
+    @MainActor static func myCoaches() async throws -> [Person] {
+        try await run("query { myCoaches { uid name since } }", at: "myCoaches", query: true)
+    }
+
+    @MainActor static func unlinkCoach(_ uid: String) async throws {
+        _ = try await run("mutation($u: ID!) { unlinkCoach(uid: $u) }", ["u": uid], at: "unlinkCoach", as: Bool?.self)
+    }
+
     // MARK: Shares (FIT-105/107)
 
     struct Share: Decodable, Sendable {

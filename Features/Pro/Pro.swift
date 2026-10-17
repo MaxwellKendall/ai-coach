@@ -18,7 +18,10 @@ final class Pro {
     private(set) var subscribed = false
     /// FIT-122: Pro from a gift redeemed on the account, until then. Kept on the phone so it holds offline.
     private(set) var giftUntil: Date? = UserDefaults.standard.object(forKey: giftKey) as? Date
-    var active: Bool { subscribed || giftUntil.map { $0 > .now } == true }
+    /// FIT-130: the coaches this account has; a coached client has Pro while linked (free during the beta).
+    private(set) var coaches: [Cloud.Person] = (UserDefaults.standard.data(forKey: coachesKey))
+        .flatMap { try? JSONDecoder().decode([Cloud.Person].self, from: $0) } ?? []
+    var active: Bool { subscribed || giftUntil.map { $0 > .now } == true || !coaches.isEmpty }
     /// When the free trial ends, while in one.
     private(set) var trialEnds: Date?
     /// Whether this Apple Account can still have the free trial; someone whose Pro lapsed can't.
@@ -62,6 +65,22 @@ final class Pro {
             trialEligible = await subscription.isEligibleForIntroOffer
         }
         await remind()
+    }
+
+    // MARK: Coaches (FIT-130)
+
+    private static let coachesKey = "pro.coaches"
+
+    /// The account's coaches, from the server; signed out, none. Offline, the last answer stands.
+    func refreshCoaches(signedIn: Bool) async {
+        guard signedIn else { return setCoaches([]) }
+        guard let coaches = try? await Cloud.myCoaches() else { return }
+        setCoaches(coaches)
+    }
+
+    func setCoaches(_ coaches: [Cloud.Person]) {
+        self.coaches = coaches
+        UserDefaults.standard.set(try? JSONEncoder().encode(coaches), forKey: Self.coachesKey)
     }
 
     // MARK: Gifts (FIT-122)
