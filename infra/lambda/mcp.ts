@@ -11,6 +11,7 @@ import {
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
 import * as progress from "./progress.ts";
+import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
@@ -923,7 +924,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
       const asked = message.params?.protocolVersion;
       return reply({
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, prompts: {} },
         serverInfo: { name: "Barbrabell", version: "0.1.0" },
         instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs.",
       });
@@ -932,6 +933,13 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
       return reply({});
     case "tools/list":
       return reply({ tools });
+    case "prompts/list":
+      return reply({ prompts: listedPrompts() });
+    case "prompts/get": {
+      const got = renderPrompt(String(message.params?.name ?? ""), message.params?.arguments ?? {});
+      if (!got) return { jsonrpc: "2.0", id: message.id ?? null, error: { code: -32602, message: `Unknown prompt: ${message.params?.name}` } };
+      return reply(got);
+    }
     case "tools/call": {
       try {
         const text = await callTool(message.params?.name, message.params?.arguments ?? {}, account, store, now);

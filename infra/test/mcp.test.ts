@@ -129,6 +129,26 @@ describe("mcp", () => {
     expect(writes.filter((n) => by[n].annotations.destructiveHint)).toEqual(["log_session", "set_goal", "delete_log", "stop_sharing"]);
   });
 
+  it("offers the coaching routines as prompts (FIT-175)", async () => {
+    const store = memory({}, data());
+    const init: any = await answer({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }, me, store);
+    expect(init.result.capabilities).toEqual({ tools: {}, prompts: {} });
+    const list: any = await answer({ jsonrpc: "2.0", id: 2, method: "prompts/list" }, me, store);
+    expect(list.result.prompts.map((p: any) => p.name)).toEqual(["set_me_up", "plan_next_week", "weekly_review", "log_today", "change_today"]);
+    expect(list.result.prompts[3]).toEqual({ name: "log_today", title: "Log today", description: expect.any(String), arguments: [{ name: "what", description: expect.any(String) }] });
+    const got: any = await answer({ jsonrpc: "2.0", id: 3, method: "prompts/get", params: { name: "log_today", arguments: { what: "squats felt heavy" } } }, me, store);
+    expect(got.result.messages).toEqual([{ role: "user", content: { type: "text", text: expect.stringMatching(/They said: "squats felt heavy"[\s\S]*log_session/) } }]);
+    const setup: any = await answer({ jsonrpc: "2.0", id: 4, method: "prompts/get", params: { name: "set_me_up" } }, me, store);
+    expect(setup.result.messages[0].content.text).toMatch(/1RM[\s\S]*No program or weights without these/);
+    // Every tool a prompt names exists.
+    const names = new Set(((await answer({ jsonrpc: "2.0", id: 5, method: "tools/list" }, me, store)) as any).result.tools.map((t: any) => t.name));
+    for (const p of list.result.prompts) {
+      const text = ((await answer({ jsonrpc: "2.0", id: 6, method: "prompts/get", params: { name: p.name } }, me, store)) as any).result.messages[0].content.text as string;
+      for (const used of text.match(/\b[a-z]+_[a-z_]+\b/g) ?? []) if (/^(get|set|log|propose|swap|find|add|delete|clear|share|stop|create|edit)_/.test(used) && !["starting_sets", "injured_areas", "as_planned"].includes(used)) expect(names).toContain(used);
+    }
+    expect(((await answer({ jsonrpc: "2.0", id: 7, method: "prompts/get", params: { name: "nope" } }, me, store)) as any).error.code).toBe(-32602);
+  });
+
   it("refuses an unknown link and answers notifications with 202", async () => {
     const token = "x".repeat(43);
     const store = memory({ [hashToken(token)]: me }, data());
