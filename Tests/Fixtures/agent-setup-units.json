@@ -192,6 +192,55 @@
         }
       ],
       "note": "Knees fine."
+    },
+    {
+      "at": 1792231200,
+      "id": "00000000-0000-4000-8000-000000000015",
+      "kind": "bodyweight",
+      "measurements": [
+        {
+          "metric": "weight_lb",
+          "unit": "lb",
+          "value": 195.4
+        }
+      ],
+      "note": ""
+    },
+    {
+      "at": 1792231200,
+      "id": "00000000-0000-4000-8000-000000000016",
+      "kind": "sleep",
+      "measurements": [
+        {
+          "metric": "sleep_h",
+          "unit": "h",
+          "value": 7.5
+        },
+        {
+          "metric": "sleep_quality",
+          "unit": "/5",
+          "value": 4
+        }
+      ],
+      "note": ""
+    },
+    {
+      "at": 1792236600,
+      "id": "00000000-0000-4000-8000-000000000017",
+      "kind": "meal",
+      "measurements": [
+        {
+          "metric": "kcal",
+          "unit": "kcal",
+          "value": 520
+        },
+        {
+          "metric": "protein_g",
+          "unit": "g",
+          "value": 40
+        }
+      ],
+      "note": "Oats and whey"
     }
   ],
   "plan#2026-10-17": [

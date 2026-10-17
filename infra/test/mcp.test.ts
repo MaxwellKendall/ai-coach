@@ -106,7 +106,7 @@ describe("mcp", () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
     const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program"];
-    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program"];
+    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
@@ -268,6 +268,35 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect([dayOf(new Date(later.targetDate * 1000), tz), later.deloadEveryWeeks, later.travelWeeks]).toEqual(["2027-03-06", 4, []]);
   });
 
+  it("logs weight, sleep and meals beside the workout, and body-weight goals follow the weigh-ins (FIT-166)", async () => {
+    const units = data();
+    units.me["goal#3"] = encode({ kind: "body", metric: "weight_lb", target: 180, unit: "lb", status: "active" });
+    units.me["log#2026-09-15"] = encode([{ id: "W", kind: "bodyweight", at: at("2026-09-15"), measurements: [{ metric: "weight_lb", value: 191, unit: "lb" }], note: "" }]);
+    const store = memory({}, units);
+    await expect(callTool("log_daily", {}, me, store, now)).rejects.toThrow(/Nothing to log/);
+
+    // "I weighed 186 this morning and slept 6 hours."
+    const out = await callTool("log_daily", { weight_lb: 186, sleep_hours: 6, time: "06:45" }, me, store, now);
+    expect(out).toMatch(/Weight 186 lb\n  Sleep 6 h/);
+    await callTool("log_daily", { meals: [{ name: "Eggs and toast", kcal: 450, protein_g: 28 }, { name: "Chicken bowl", kcal: 700, protein_g: 52, time: "12:30" }] }, me, store, now);
+    await callTool("log_daily", { weight_lb: 185.6 }, me, store, now); // a second weigh-in replaces the first
+    const log = JSON.parse(units.me["log#2026-10-17"]);
+    expect(log.filter((r: any) => r.kind === "bodyweight")).toMatchObject([{ measurements: [{ metric: "weight_lb", value: 185.6, unit: "lb" }] }]);
+    expect(log.find((r: any) => r.kind === "sleep")).toMatchObject({ at: at("2026-10-17", 405), measurements: [{ metric: "sleep_h", value: 6, unit: "h" }] });
+    expect(log.filter((r: any) => r.kind === "meal").map((r: any) => r.note)).toEqual(["Eggs and toast", "Chicken bowl"]);
+
+    const day = await callTool("get_day", {}, me, store, now);
+    expect(day).toMatch(/Weight 185.6 lb\nSleep 6 h\nMeals: Eggs and toast 450 kcal 28 g protein; Chicken bowl 700 kcal 52 g protein — 1150 kcal, 80 g protein in all/);
+    const ctx = await callTool("get_context", {}, me, store, now);
+    expect(ctx).toMatch(/Body weight 180 lb — weighed 185.6 lb on 2026-10-17 \(-5.4 in 4 weeks\)/);
+    expect(ctx).toMatch(/Weight, sleep and meals, the last 7 days:\nSaturday 2026-10-17: Weight 185.6 lb\. Sleep 6 h\. Meals:/);
+
+    // Logging the workout after keeps them.
+    await callTool("log_session", { as_planned: true }, me, store, now);
+    expect(JSON.parse(units.me["log#2026-10-17"]).filter((r: any) => r.kind !== "workout")).toHaveLength(4);
+    await expect(callTool("log_daily", { date: "2026-10-18", weight_lb: 185 }, me, store, now)).rejects.toThrow(/hasn't happened/);
+  });
+
   it("holds a proposed week to their weekly ceiling", async () => {
     const units: Record<string, Record<string, string>> = { new: { profile: encode({ ...profile, maxWeeklySets: 10 }) } };
     const store = memory({}, units);
@@ -295,6 +324,7 @@ describe("what the app reads (FIT-150)", () => {
     ] }, a, store, now);
     await callTool("apply", { proposal_id: week.match(/Proposal (\S+)/)![1] }, a, store, now);
     await callTool("log_session", { as_planned: true, rpe: 7, effort: 6, note: "Knees fine." }, a, store, now);
+    await callTool("log_daily", { weight_lb: 195.4, sleep_hours: 7.5, sleep_quality: 4, time: "06:00", meals: [{ name: "Oats and whey", kcal: 520, protein_g: 40, time: "07:30" }] }, a, store, now);
     // Ids are random: the fixture keeps the shape, numbered in order.
     let n = 0;
     const ids = new Map<string, string>();

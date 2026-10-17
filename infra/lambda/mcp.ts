@@ -5,7 +5,7 @@ import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda
 import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
 import { push } from "./sync.ts";
 import {
-  addDays, AREAS, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
+  addDays, AREAS, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
   nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
@@ -161,6 +161,23 @@ export const tools = [
     inputSchema: { type: "object", properties: { date: DATE, note: { type: "string" } }, required: ["note"] },
   },
   {
+    name: "log_daily",
+    title: "Log weight, sleep or meals",
+    annotations: { title: "Log weight, sleep or meals", ...write(false, false) },
+    description: "Log what they tell you about the rest of the day: a weigh-in, last night's sleep (hours, and quality 1–5 if they say), or meals with kcal and protein (estimate from what they ate when they don't know, and say it's an estimate). Several in one call. A weigh-in or sleep replaces that day's own; meals add up. Body-weight goals follow the weigh-ins.",
+    inputSchema: { type: "object", properties: {
+      date: DATE,
+      weight_lb: { type: "number", description: "Body weight in pounds." },
+      sleep_hours: { type: "number", minimum: 0, maximum: 24 },
+      sleep_quality: { type: "integer", minimum: 1, maximum: 5 },
+      time: { type: "string", description: "When, 24-hour HH:MM, for the weigh-in or sleep. Defaults to now today, or noon on another day." },
+      meals: { type: "array", items: { type: "object", properties: {
+        name: { type: "string", description: "What they ate, in their words." }, kcal: { type: "number" }, protein_g: { type: "number" },
+        time: { type: "string", description: "HH:MM" },
+      }, required: ["name"] } },
+    } },
+  },
+  {
     name: "propose_session",
     title: "Propose a session",
     annotations: { title: "Propose a session", ...READ },
@@ -296,6 +313,11 @@ function context(units: Units, today: string, back: number, ahead: number, tz: s
         const best = Math.max(0, ...sets.filter((s) => s.exercise === slug && s.reps !== undefined).map((s) => s.reps!));
         now = best ? ` — best set so far ${best} reps` : " — no sets logged yet";
       }
+      if (g.metric === "weight_lb") {
+        const all = weighIns(units), last = all.at(-1), month = all.filter((w) => w.day <= addDays(today, -28)).at(-1);
+        now = last ? ` — weighed ${last.lb} lb on ${last.day}${month ? ` (${last.lb - month.lb >= 0 ? "+" : ""}${Math.round((last.lb - month.lb) * 10) / 10} in 4 weeks)` : ""}`
+          : profile?.weightLb ? ` — ${profile.weightLb} lb at setup, no weigh-ins yet` : "";
+      }
       const label = bySlug.has(slug) ? nameOf(slug) : g.metric === "weight_lb" ? "Body weight" : g.metric;
       out.push(`- ${label} ${g.target} ${g.unit}${by}${now} [goal_id ${g.id}]`);
     }
@@ -324,6 +346,8 @@ function context(units: Units, today: string, back: number, ahead: number, tz: s
     out.push(`${weekday(day)} ${day}${title ? ` — ${title}` : ""}${l.effort ? ` (effort ${l.effort}/10)` : ""}:`, ...l.lines.map((x) => `  ${x}`), ...(l.note ? [`  Note: ${l.note}`] : []));
   }
   if (!any) out.push("  Nothing.");
+  const daily = Array.from({ length: 7 }, (_, i) => addDays(today, -i)).map((d) => [d, describeDaily(logOf(units, d))] as const).filter(([, l]) => l.length);
+  if (daily.length) out.push("", "Weight, sleep and meals, the last 7 days:", ...daily.map(([d, l]) => `${weekday(d)} ${d}: ${l.join(". ")}.`));
   return out.join("\n");
 }
 
@@ -406,7 +430,8 @@ export async function callTool(name: string, args: Args, account: Account, store
       const units = await store.units(uid);
       const s = describeSession(planOf(units, day)), l = describeLog(logOf(units, day));
       return [`${weekday(day)} ${day}`, s.lines.length ? `Planned${s.title ? ` — ${s.title}` : ""}:\n${s.lines.map((x) => `  ${x}`).join("\n")}` : "Nothing planned.",
-        l.lines.length ? `Logged:\n${l.lines.map((x) => `  ${x}`).join("\n")}${l.note ? `\n  Note: ${l.note}` : ""}` : "Nothing logged."].join("\n");
+        l.lines.length ? `Logged:\n${l.lines.map((x) => `  ${x}`).join("\n")}${l.note ? `\n  Note: ${l.note}` : ""}` : "No workout logged.",
+        ...describeDaily(logOf(units, day))].join("\n");
     }
     case "find_exercises": {
       const found = find(String(args.query ?? ""), profileOf(await store.units(uid)));
@@ -438,6 +463,23 @@ export async function callTool(name: string, args: Args, account: Account, store
       summary.note = [summary.note, String(args.note).trim()].filter(Boolean).join(" ");
       await store.write(uid, [{ key: `log#${day}`, body: encode(log) }], account.agent);
       return `Noted on ${day}: ${summary.note}`;
+    }
+    case "log_daily": {
+      if (day > today) throw new Error(`${day} hasn't happened yet.`);
+      const input = args as DailyInput;
+      if (input.weight_lb === undefined && input.sleep_hours === undefined && input.sleep_quality === undefined && !input.meals?.length) {
+        throw new Error("Nothing to log: give weight_lb, sleep_hours or meals.");
+      }
+      const at = (time?: string) => {
+        if (time === undefined) return day === today ? Math.floor(now.getTime() / 1000) : epoch(day, 12 * 60, tz);
+        const match = /^(\d{1,2}):(\d{2})$/.exec(time);
+        if (!match) throw new Error("time is 24-hour HH:MM.");
+        return epoch(day, Number(match[1]) * 60 + Number(match[2]), tz);
+      };
+      const units = await store.units(uid);
+      const log = dailyRows(logOf(units, day), input, at);
+      await store.write(uid, [{ key: `log#${day}`, body: encode(log) }], account.agent);
+      return `Logged on ${day}:\n${describeDaily(log).map((l) => `  ${l}`).join("\n")}\nIt shows on their phone at its next sync.`;
     }
     case "propose_session":
       return propose(uid, tz, today, [{ date: day, title: args.title, exercises: args.exercises }], String(args.reason), store);

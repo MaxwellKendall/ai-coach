@@ -51,7 +51,16 @@ struct AgentSetupTests {
         #expect(Set(planned.compactMap(\.slot)) == ["Lower A", "Upper A"])
 
         let logged = try context.fetch(FetchDescriptor<LogEntry>())
-        #expect(logged.filter { $0.templateRef != nil }.count == 7)
+        #expect(logged.filter { $0.kind == .workout && $0.templateRef != nil }.count == 7)
         #expect(logged.contains { $0.templateRef == nil && $0.note == "Knees fine." })
+
+        // FIT-166: log_daily's weigh-in, sleep and meal, as the Progress tab's weigh-ins read them (WeekReport).
+        let weighIns = logged.filter { $0.kind == .bodyweight }.compactMap { entry in
+            entry.measurements.first { $0.metric == "weight_lb" }.map { DatedValue(date: entry.timestamp, value: $0.value) }
+        }
+        #expect(GoalProgress.current("weight_lb", sets: [], weighIns: weighIns, since: .distantPast) == 195.4)
+        #expect(logged.first { $0.kind == .sleep }?.measurements.map(\.metric) == ["sleep_h", "sleep_quality"])
+        let meal = try #require(logged.first { $0.kind == .meal })
+        #expect(meal.note == "Oats and whey" && meal.measurements.first { $0.metric == "protein_g" }?.value == 40)
     }
 }

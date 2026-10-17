@@ -23,7 +23,7 @@ export type Units = Map<string, string>;
 export const WARMUP = "warm-up"; // TrainingGenerator.warmupNote
 const UNITS: Record<string, string> = {
   sets: "sets", reps: "reps", duration_s: "s", distance_m: "m", load_lb: "lb", load_lb_hand: "lb/hand", rpe: "RPE",
-  effort: "/10", completion_rate: "ratio",
+  effort: "/10", completion_rate: "ratio", weight_lb: "lb", sleep_h: "h", sleep_quality: "/5", kcal: "kcal", protein_g: "g",
 };
 const m = (metric: string, value: number): Measurement => ({ metric, value, unit: UNITS[metric] ?? "" });
 const value = (list: Measurement[], metric: string) => list.find((x) => x.metric === metric)?.value;
@@ -180,6 +180,75 @@ export function describeLog(log: LogRow[]) {
     note: notes.join(" "),
     effort: summary ? value(summary.measurements, "effort") : undefined,
   };
+}
+
+// ---- FIT-166: weight, sleep and meals, as LogDraftEntry saves them ----
+
+export type DailyInput = {
+  weight_lb?: number; sleep_hours?: number; sleep_quality?: number; time?: string;
+  meals?: { name: string; kcal?: number; protein_g?: number; time?: string }[];
+};
+
+/**
+ * A day's log with these added: a weigh-in (kind bodyweight, weight_lb) and a night's sleep (kind sleep, sleep_h and
+ * sleep_quality 1–5) replace that day's own, a meal (kind meal, its name as the note, kcal, protein_g) is added. The
+ * workout rows stay as they are. `at` gives the moment for an HH:MM, or the default one.
+ */
+export function dailyRows(log: LogRow[], input: DailyInput, at: (time?: string) => number): LogRow[] {
+  let out = [...log];
+  const add = (kind: string, ms: (Measurement | undefined)[], note: string, time?: string) =>
+    out.push({ id: uuid(), kind, at: at(time), measurements: ms.filter((x): x is Measurement => !!x), note });
+  if (input.weight_lb !== undefined) {
+    if (!(input.weight_lb > 50 && input.weight_lb < 700)) throw new Error("weight_lb is their body weight in pounds.");
+    out = out.filter((r) => r.kind !== "bodyweight");
+    add("bodyweight", [m("weight_lb", input.weight_lb)], "", input.time);
+  }
+  if (input.sleep_hours !== undefined || input.sleep_quality !== undefined) {
+    if (input.sleep_hours === undefined || input.sleep_hours < 0 || input.sleep_hours > 24) throw new Error("sleep_hours is how long they slept, 0–24.");
+    out = out.filter((r) => r.kind !== "sleep");
+    const quality = input.sleep_quality === undefined ? undefined : m("sleep_quality", Math.min(5, Math.max(1, Math.round(input.sleep_quality))));
+    add("sleep", [m("sleep_h", input.sleep_hours), quality], "", input.time);
+  }
+  for (const meal of input.meals ?? []) {
+    if (!meal.name?.trim()) throw new Error("Each meal needs a name, as they said it.");
+    add("meal", [meal.kcal === undefined ? undefined : m("kcal", Math.round(meal.kcal)), meal.protein_g === undefined ? undefined : m("protein_g", Math.round(meal.protein_g))],
+      meal.name.trim(), meal.time);
+  }
+  return out;
+}
+
+/** Weight, sleep and meals in a day's log, one line each, meals with the day's totals. */
+export function describeDaily(log: LogRow[]): string[] {
+  const out: string[] = [];
+  const weight = log.filter((r) => r.kind === "bodyweight").map((r) => value(r.measurements, "weight_lb")).find((v) => v !== undefined);
+  if (weight !== undefined) out.push(`Weight ${weight} lb`);
+  for (const r of log.filter((r) => r.kind === "sleep")) {
+    const q = value(r.measurements, "sleep_quality");
+    out.push(`Sleep ${value(r.measurements, "sleep_h") ?? "?"} h${q ? ` (quality ${q}/5)` : ""}`);
+  }
+  const meals = log.filter((r) => r.kind === "meal").sort((a, b) => a.at - b.at);
+  if (meals.length) {
+    const kcal = meals.reduce((n, r) => n + (value(r.measurements, "kcal") ?? 0), 0);
+    const protein = meals.reduce((n, r) => n + (value(r.measurements, "protein_g") ?? 0), 0);
+    const one = (r: LogRow) => [r.note || "Meal", value(r.measurements, "kcal") !== undefined ? `${value(r.measurements, "kcal")} kcal` : "",
+      value(r.measurements, "protein_g") !== undefined ? `${value(r.measurements, "protein_g")} g protein` : ""].filter(Boolean).join(" ");
+    out.push(`Meals: ${meals.map(one).join("; ")} — ${kcal} kcal, ${protein} g protein in all`);
+  }
+  return out;
+}
+
+/** Every weigh-in, oldest first (GoalProgress's weighIns). */
+export function weighIns(units: Units): { day: string; lb: number }[] {
+  const out: { day: string; lb: number }[] = [];
+  for (const [key] of units) {
+    if (!key.startsWith("log#")) continue;
+    const day = key.slice(4);
+    for (const r of logOf(units, day).filter((r) => r.kind === "bodyweight")) {
+      const lb = value(r.measurements, "weight_lb");
+      if (lb !== undefined) out.push({ day, lb });
+    }
+  }
+  return out.sort((a, b) => a.day.localeCompare(b.day));
 }
 
 export type LoggedSet = { day: string; exercise: string; load?: number; reps?: number; rpe?: number };
