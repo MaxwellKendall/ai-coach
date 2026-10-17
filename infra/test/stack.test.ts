@@ -137,6 +137,8 @@ describe("resolvers", () => {
         "Mutation.setShareLive", "Mutation.addGroupGoal", "Mutation.publishProgress", "Mutation.publishLiveSet",
         "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.publishWeek", "Mutation.clearWeek", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
         "Mutation.redeemGift", "Query.giftedPro", "Mutation.syncPush", "Query.syncPull", "Subscription.onSync",
+        "Mutation.createClientInvite", "Query.coachInvite", "Mutation.acceptCoach", "Query.myCoaches", "Query.myClients",
+        "Mutation.unlinkCoach", "Mutation.removeClient",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -187,7 +189,7 @@ describe("least privilege", () => {
     expect(actionsOf(dev, /^groupCleanup/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem"]));
     expect(actionsOf(dev, /^groupCleanup/)).not.toContain("dynamodb:PutItem");
     // FIT-102: the AI proxy counts each user's requests and reads the Anthropic key; FIT-122: and reads a gift's Pro.
-    expect(actionsOf(dev, /^aiProxy/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:UpdateItem"]);
+    expect(actionsOf(dev, /^aiProxy/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:Query", "dynamodb:UpdateItem"]);
     // FIT-122: gifts are redeemed and refunded, never scanned or deleted.
     for (const name of [/^gifts/, /^stripeWebhook/]) {
       expect(actionsOf(dev, name)).not.toContain("dynamodb:DeleteItem");
@@ -195,6 +197,8 @@ describe("least privilege", () => {
       expect(actionsOf(dev, name)).toContain("secretsmanager:GetSecretValue");
     }
     expect(actionsOf(dev, /^aiProxy/)).toContain("secretsmanager:GetSecretValue");
+    // FIT-130: coach links are put and deleted one by one, never scanned.
+    expect(actionsOf(dev, /^coach/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
     // FIT-126: sync writes and reads units, never deletes or scans.
     expect(actionsOf(dev, /^sync/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
     // FIT-138: appleStart finds, creates and links users and writes their profile; it never deletes them.

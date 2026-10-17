@@ -107,8 +107,11 @@ describe("push and pull", () => {
     expect((await pull("a", null)).units).toEqual([expect.objectContaining({ deleted: true, body: null })]);
   });
 
-  it("the handler uses the caller's identity, never an argument", async () => {
-    await handler({ identity: { sub: "a" }, info: { fieldName: "syncPush" }, arguments: { units: [plan("{}")], uid: "b" } } as any);
+  it("the handler uses the caller's identity, and refuses someone else's uid unless they're the caller's client (FIT-130)", async () => {
+    await handler({ identity: { sub: "a" }, info: { fieldName: "syncPush" }, arguments: { units: [plan("{}")] } } as any);
+    expect([...table.keys()]).toEqual(["USER#a|SYNC#plan#2026-10-16"]);
+    await expect(handler({ identity: { sub: "a" }, info: { fieldName: "syncPush" }, arguments: { units: [plan("{}")], uid: "b" } } as any))
+      .rejects.toThrow(/Unauthorized/);
     expect([...table.keys()]).toEqual(["USER#a|SYNC#plan#2026-10-16"]);
   });
 });

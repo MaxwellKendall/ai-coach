@@ -3,6 +3,7 @@ import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { checkEntitlement } from "./entitlement.ts";
+import { coached } from "./coach.ts";
 import { giftedUntil } from "./gifts.ts";
 
 /**
@@ -97,7 +98,8 @@ export async function handler(event: AppSyncResolverEvent<{ request: unknown; en
   if ("error" in allowed) throw new Error(allowed.error);
   const now = new Date();
   // FIT-122: or Pro from a redeemed gift, on the account.
-  const pro = checkEntitlement(event.arguments.entitlement, now).pro || (await giftedUntil(uid, now)) !== undefined;
+  // FIT-130: or a coach's client, free during the beta.
+  const pro = checkEntitlement(event.arguments.entitlement, now).pro || (await giftedUntil(uid, now)) !== undefined || (await coached(uid));
   if (!pro && !(await allowance(uid, "AIFREE", limits.freeRequests))) {
     throw new Error(`${PRO_REQUIRED}: start your free trial so your coach can keep planning.`);
   }

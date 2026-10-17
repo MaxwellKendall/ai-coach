@@ -55,6 +55,11 @@ export const store: Store = {
     const s = await shared(id, "session");
     return s && readSession(s.payload, s.name);
   },
+  async coachInvite(code) {
+    const { Item } = await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `COACHINVITE#${code}`, SK: "META" } }));
+    if (!Item || Item.expiresAt <= Date.now() / 1000) return undefined;
+    return { coach: (Item.coachName as string | null) ?? "Your coach" };
+  },
   async invite(code) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `INVITE#${code}`, SK: "META" } }));
     if (!Item) return undefined;

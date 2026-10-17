@@ -345,7 +345,8 @@ export class AICoachStack extends Stack {
     // FIT-123: without Pro, a few requests per account for good; dev has room for testing with StoreKit's local
     // config, whose Xcode-signed transactions aren't Apple's.
     const aiProxy = fn("aiProxy", { ANTHROPIC_SECRET: anthropicSecret.secretName, FREE_REQUESTS: isProd ? "40" : "1000" });
-    table.grant(aiProxy, "dynamodb:UpdateItem", "dynamodb:GetItem");
+    // Query: whether the account has a coach (FIT-130).
+    table.grant(aiProxy, "dynamodb:UpdateItem", "dynamodb:GetItem", "dynamodb:Query");
     anthropicSecret.grantRead(aiProxy);
     api.addLambdaDataSource("AiProxySource", aiProxy).createResolver("AiMessages", {
       typeName: "Mutation",
@@ -354,10 +355,20 @@ export class AICoachStack extends Stack {
 
     // ---- FIT-126: the program and logs, synced both ways ----
     const sync = fn("sync", {});
+    // GetItem also checks a coach's link (FIT-130).
     table.grant(sync, "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:Query");
     const syncSource = api.addLambdaDataSource("SyncSource", sync);
     syncSource.createResolver("SyncPush", { typeName: "Mutation", fieldName: "syncPush" });
     syncSource.createResolver("SyncPull", { typeName: "Query", fieldName: "syncPull" });
+
+    // ---- FIT-130: coaches and clients ----
+    const coach = fn("coach", { SHARE_ORIGIN: shareOrigin || "https://example.invalid" });
+    table.grant(coach, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:DeleteItem");
+    const coachSource = api.addLambdaDataSource("CoachSource", coach);
+    for (const [typeName, fieldName] of [["Mutation", "createClientInvite"], ["Query", "coachInvite"], ["Mutation", "acceptCoach"],
+      ["Query", "myCoaches"], ["Query", "myClients"], ["Mutation", "unlinkCoach"], ["Mutation", "removeClient"]]) {
+      coachSource.createResolver(`Coach${fieldName}`, { typeName, fieldName });
+    }
     api.addNoneDataSource("None").createResolver("OnSync", {
       typeName: "Subscription",
       fieldName: "onSync",
