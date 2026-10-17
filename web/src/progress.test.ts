@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { estimated1RMs, estimated1RMTrend, streak, type LoggedSet } from "./progress";
+import { estimated1RMs, estimated1RMTrend, plateaued, streak, type LoggedSet } from "./progress";
 
 // FIT-129: the app's ProgressParityTests reads the same file; both must agree with it.
 const fixture = JSON.parse(readFileSync(new URL("../../Tests/Fixtures/progress-parity.json", import.meta.url), "utf8"));
@@ -13,6 +13,15 @@ describe("progress, the same as the app's (FIT-129)", () => {
     expect(estimated1RMs(sets)).toEqual(fixture.expected1RM);
     for (const [exercise, points] of Object.entries(fixture.expectedTrend)) {
       expect(estimated1RMTrend(sets, exercise)).toEqual(points);
+    }
+  });
+
+  it("knows a stalled lift (FIT-140)", () => {
+    const plateauSets: LoggedSet[] = fixture.plateau.sets.map((s: Record<string, unknown>) => ({
+      day: s.day, exercise: s.exercise, value: (m: string) => s[m] as number | undefined,
+    }));
+    for (const [exercise, expected] of Object.entries(fixture.plateau.expected)) {
+      expect(plateaued(plateauSets, exercise, fixture.plateau.today), exercise).toBe(expected);
     }
   });
 

@@ -38,6 +38,22 @@ export function estimated1RMTrend(sets: LoggedSet[], exercise: string): [string,
   return [...byDay.keys()].sort().map((day) => [day, (best = Math.max(best, byDay.get(day)!))]);
 }
 
+/** FIT-140: Training.plateaued: logged on `days`+ days in the `window` days before today, none beating the best before. */
+export function plateaued(sets: LoggedSet[], exercise: string, today: string, window = 21, days = 3): boolean {
+  const [y, m, d] = today.split("-").map(Number);
+  const start = new Date(y, m - 1, d - window);
+  const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+  let before = 0;
+  const recent = new Map<string, number>();
+  for (const set of sets.filter((s) => s.exercise === exercise)) {
+    const e = estimate(set);
+    if (e === undefined) continue;
+    if (set.day < startKey) before = Math.max(before, e);
+    else if (set.day < today) recent.set(set.day, Math.max(recent.get(set.day) ?? 0, e));
+  }
+  return before > 0 && recent.size >= days && Math.max(...recent.values()) <= before;
+}
+
 const parse = (key: string) => {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d);

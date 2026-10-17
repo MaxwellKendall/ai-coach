@@ -39,6 +39,12 @@ describe("which clients need their coach (FIT-132)", () => {
     expect(triage(hard, [], names, "sam", now).flags).toEqual([{ kind: "hard", text: "RPE 9+ on Back Squat" }]);
   });
 
+  it("flags a main lift with no new best in three weeks (FIT-140)", () => {
+    const sq = (day: string, load: number): [string, Unit] => log(day, { measurements: [{ metric: "load_lb", value: load, unit: "lb" }, { metric: "reps", value: 5, unit: "reps" }] });
+    const stalled = new Map([plan("2026-10-14"), sq("2026-09-14", 245), sq("2026-09-30", 240), sq("2026-10-07", 240), sq("2026-10-14", 240)]);
+    expect(triage(stalled, [], names, "sam", now).flags).toContainEqual({ kind: "plateau", text: "No new best on Back Squat in 3 weeks" });
+  });
+
   it("flags two quiet weeks", () => {
     const quiet = new Map([plan("2026-10-14"), log("2026-09-20")]);
     expect(triage(quiet, [], names, "sam", now).flags).toContainEqual({ kind: "quiet", text: "Nothing logged in over two weeks" });

@@ -23,6 +23,13 @@ struct ProgressParityTests {
         var workoutDays: [String]
         var expectedStreakWeeks: Int
         var expectedThisWeek: String
+        var plateau: Plateau
+
+        struct Plateau: Decodable {
+            var today: String
+            var sets: [Set]
+            var expected: [String: Bool]
+        }
 
         enum Value: Decodable {
             case day(String), number(Double)
@@ -45,8 +52,10 @@ struct ProgressParityTests {
         return calendar.date(from: DateComponents(year: p[0], month: p[1], day: p[2]))!
     }
 
-    var sets: [LoggedSet] {
-        fixture.sets.map { s in
+    var sets: [LoggedSet] { loggedSets(fixture.sets) }
+
+    func loggedSets(_ sets: [Fixture.Set]) -> [LoggedSet] {
+        sets.map { s in
             LoggedSet(date: day(s.day), exercise: s.exercise, measurements: [
                 s.load_lb.map { Measurement(metric: "load_lb", value: $0, unit: "lb") },
                 s.reps.map { Measurement(metric: "reps", value: $0, unit: "reps") },
@@ -73,5 +82,13 @@ struct ProgressParityTests {
         #expect(status.weeks == fixture.expectedStreakWeeks)
         #expect(status.thisWeek == .onTrack)
         #expect(fixture.expectedThisWeek == "onTrack")
+    }
+
+    @Test func plateausMatchTheWeb() {
+        let sets = loggedSets(fixture.plateau.sets)
+        for (exercise, expected) in fixture.plateau.expected {
+            #expect(Training.plateaued(sets, exercise: exercise, today: day(fixture.plateau.today), calendar: calendar) == expected,
+                    "\(exercise)")
+        }
     }
 }

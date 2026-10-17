@@ -208,3 +208,4 @@ h3 .copy:hover { color: var(--text); }
 .form .design { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .form .design .button { min-height: 40px; }
 .form .design .muted { font-weight: 400; font-size: 14px; }
+.flags li.plateau { color: var(--text); border-color: var(--text); }

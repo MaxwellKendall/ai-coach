@@ -1,5 +1,5 @@
 import { dayKey, weekStart } from "./program";
-import { streakNow, trainingDays } from "./progress";
+import { loggedSets, plateaued, streakNow, trainingDays } from "./progress";
 import type { LogRow, PlanRow, Unit } from "./sync";
 
 // FIT-132: which clients need their coach, from their synced units, never stored. A flag is something a coach acts
@@ -7,7 +7,7 @@ import type { LogRow, PlanRow, Unit } from "./sync";
 // words, WeeklyReview.hurts, come first), or nothing logged in two weeks. Flagged clients first.
 
 export type Comment = { day: string; at: string; by: string; byName: string | null; text: string };
-export type Flag = { kind: "pain" | "note" | "missed" | "hard" | "quiet"; text: string };
+export type Flag = { kind: "pain" | "note" | "missed" | "hard" | "plateau" | "quiet"; text: string };
 export type Triage = {
   done: number;
   planned: number;
@@ -61,6 +61,13 @@ export function triage(units: Map<string, Unit>, comments: Comment[], names: Map
   }
   if (hard.size) flags.push({ kind: "hard", text: `RPE 9+ on ${[...hard].join(", ")}` });
 
+  // FIT-140: a main lift with no new best in three weeks of training it.
+  const sets = loggedSets(units);
+  const mainLifts = new Set<string>();
+  for (const [key, unit] of units) if (key.startsWith("plan#")) for (const r of rows<PlanRow>(unit)) if (r.main && r.template) mainLifts.add(r.template);
+  const stalled = [...mainLifts].filter((slug) => plateaued(sets, slug, today)).map((slug) => names.get(slug) ?? slug);
+  if (stalled.length) flags.push({ kind: "plateau", text: `No new best on ${stalled.join(", ")} in 3 weeks` });
+
   // Planned but nothing logged for two weeks.
   if (planned.some((d) => d < today) && (!lastSession || lastSession < dayKey(shift(now, -14)))) {
     flags.push({ kind: "quiet", text: lastSession ? "Nothing logged in over two weeks" : "Nothing logged yet" });
@@ -75,7 +82,7 @@ export function triage(units: Map<string, Unit>, comments: Comment[], names: Map
   };
 }
 
-const order: Flag["kind"][] = ["pain", "missed", "hard", "quiet", "note"];
+const order: Flag["kind"][] = ["pain", "missed", "hard", "plateau", "quiet", "note"];
 /** Clients who need the coach first: by their most pressing flag, then by how many. */
 export function byNeed<T extends { triage?: Triage }>(clients: T[]): T[] {
   const rank = (t?: Triage) => (t && t.flags.length ? Math.min(...t.flags.map((f) => order.indexOf(f.kind))) : order.length);
