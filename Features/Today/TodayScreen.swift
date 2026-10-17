@@ -549,7 +549,9 @@ struct TodayScreen: View {
                 VoiceLog.record(said, "Today sorted it as \(kind.map { String(describing: $0) } ?? "nothing it understood")")
                 switch kind {
                 // FIT-120: changing the plan, or logging it as planned, is Pro; logging anything else stays free.
-                case .change?, .edit?, .didWorkout? where !pro.active:
+                // One `where` per pattern: on `case a, b, c where …` it guards only `c`, which sent every edit to the
+                // offer, Pro or not.
+                case .change? where !pro.active, .edit? where !pro.active, .didWorkout? where !pro.active:
                     VoiceLog.record(said, "stopped: Pro offer shown")
                     pro.paywall = true
                 case .change(let change)?: propose(change, said: said)
