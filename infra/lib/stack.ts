@@ -366,7 +366,8 @@ export class AICoachStack extends Stack {
     table.grant(coach, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:DeleteItem");
     const coachSource = api.addLambdaDataSource("CoachSource", coach);
     for (const [typeName, fieldName] of [["Mutation", "createClientInvite"], ["Query", "coachInvite"], ["Mutation", "acceptCoach"],
-      ["Query", "myCoaches"], ["Query", "myClients"], ["Mutation", "unlinkCoach"], ["Mutation", "removeClient"]]) {
+      ["Query", "myCoaches"], ["Query", "myClients"], ["Mutation", "unlinkCoach"], ["Mutation", "removeClient"],
+      ["Mutation", "postComment"], ["Query", "comments"]]) {
       coachSource.createResolver(`Coach${fieldName}`, { typeName, fieldName });
     }
     api.addNoneDataSource("None").createResolver("OnSync", {
@@ -394,6 +395,11 @@ export class AICoachStack extends Stack {
           lambda.FilterCriteria.filter({
             eventName: lambda.FilterRule.or("INSERT", "MODIFY"),
             dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("LIVE#") } } },
+          }),
+          // FIT-132: a coach's reply on a session.
+          lambda.FilterCriteria.filter({
+            eventName: lambda.FilterRule.isEqual("INSERT"),
+            dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("COMMENT#") } } },
           }),
         ],
       }),

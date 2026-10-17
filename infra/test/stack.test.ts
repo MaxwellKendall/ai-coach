@@ -138,7 +138,7 @@ describe("resolvers", () => {
         "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.publishWeek", "Mutation.clearWeek", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
         "Mutation.redeemGift", "Query.giftedPro", "Mutation.syncPush", "Query.syncPull", "Subscription.onSync",
         "Mutation.createClientInvite", "Query.coachInvite", "Mutation.acceptCoach", "Query.myCoaches", "Query.myClients",
-        "Mutation.unlinkCoach", "Mutation.removeClient",
+        "Mutation.unlinkCoach", "Mutation.removeClient", "Mutation.postComment", "Query.comments",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -150,10 +150,13 @@ describe("resolvers", () => {
 });
 
 describe("push", () => {
-  it("only runs for LIVE# items", () => {
+  it("only runs for LIVE# items and new COMMENT# items (FIT-132)", () => {
     dev.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
       FilterCriteria: {
-        Filters: [{ Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "LIVE#" }] } } } }) }],
+        Filters: [
+          { Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "LIVE#" }] } } } }) },
+          { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "COMMENT#" }] } } } }) },
+        ],
       },
     });
   });

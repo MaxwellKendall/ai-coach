@@ -127,3 +127,36 @@ describe("a coach link (FIT-130)", () => {
     expect(await as("sam", "myClients")).toEqual([{ uid: "ann", name: "Ann", since: now.toISOString() }]);
   });
 });
+
+describe("replies on a session (FIT-132)", () => {
+  async function linked() {
+    const { code } = await coach.createInvite("sam", undefined, now);
+    await coach.accept("ann", code, undefined, now);
+  }
+
+  it("are written by the client or their coach, into the client's account, and read by both", async () => {
+    await linked();
+    const reply = await coach.postComment("sam", undefined, "ann", "2026-10-14", "  Good squats. Ice the knee.  ", now);
+    expect(reply).toMatchObject({ day: "2026-10-14", by: "sam", byName: "Sam Coach", text: "Good squats. Ice the knee." });
+    await coach.postComment("ann", undefined, undefined, "2026-10-14", "Will do", later(0.01));
+    expect([...table.keys()].filter((k) => k.includes("COMMENT#")).every((k) => k.startsWith("USER#ann|"))).toBe(true);
+    const thread = await coach.comments("ann", undefined, "2026-10-14");
+    expect(thread.map((c) => c.text)).toEqual(["Good squats. Ice the knee.", "Will do"]);
+    expect(await coach.comments("sam", "ann")).toHaveLength(2);
+  });
+
+  it("refuse anyone else, an empty or long reply, and a bad day", async () => {
+    await linked();
+    await expect(coach.postComment("bob", undefined, "ann", "2026-10-14", "hi", now)).rejects.toThrow(/don't coach/);
+    await expect(coach.comments("bob", "ann")).rejects.toThrow(/don't coach/);
+    await expect(coach.postComment("sam", undefined, "ann", "2026-10-14", "   ", now)).rejects.toThrow(/Write something/);
+    await expect(coach.postComment("sam", undefined, "ann", "2026-10-14", "x".repeat(1001), now)).rejects.toThrow(/too long/);
+    await expect(coach.postComment("sam", undefined, "ann", "Oct 14", "hi", now)).rejects.toThrow(/Not a day/);
+  });
+
+  it("go to the client's phone as \"Sam replied on Wednesday's session\"", async () => {
+    const { replyText } = await import("../lambda/push.ts");
+    expect(replyText("Sam", "2026-10-14", "Good squats.")).toEqual({ title: "Sam replied on Wednesday's session", body: "Good squats." });
+    expect(replyText(null, "2026-10-14", "x".repeat(200)).body).toHaveLength(178);
+  });
+});

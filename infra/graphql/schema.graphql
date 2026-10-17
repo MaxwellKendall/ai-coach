@@ -147,6 +147,14 @@ type Person {
   since: AWSDateTime!
 }
 
+type Comment {
+  day: String!
+  at: AWSDateTime!
+  by: ID!
+  byName: String
+  text: String!
+}
+
 type ClientInvite {
   code: String!
   url: String!
@@ -167,6 +175,8 @@ type Query {
   "FIT-130: who coaches me, and whom I coach."
   myCoaches: [Person!]!
   myClients: [Person!]!
+  "FIT-132: replies on logged sessions: a day's thread, or all of them; mine, or a client's (uid) for their coach."
+  comments(uid: ID, day: String): [Comment!]!
   "FIT-113: a shared item by its id, so the app can open a session someone shared."
   share(id: ID!): SharedItem
   me: Profile
@@ -186,6 +196,8 @@ type Mutation {
   "FIT-130: end a link, as the client (unlinkCoach) or the coach (removeClient)."
   unlinkCoach(uid: ID!): Boolean
   removeClient(uid: ID!): Boolean
+  "FIT-132: reply on a logged session (day YYYY-MM-DD): my own, or a client's (uid) as their coach."
+  postComment(uid: ID, day: String!, text: String!): Comment
   "FIT-105: save a win, recap or program to share; returns its link."
   createShare(kind: String!, payload: AWSJSON!): Share
   "FIT-107: a short-lived URL to upload the share's card (PNG), for link previews."

@@ -37,10 +37,37 @@ async function query(pk: string, prefix: string) {
   return out.Items ?? [];
 }
 
+/** FIT-132: "Sam replied on Wednesday's session", with the reply. */
+export function replyText(byName: string | null | undefined, day: string, text: string) {
+  const [y, m, d] = day.split("-").map(Number);
+  const weekday = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+  return { title: `${byName ?? "Your coach"} replied on ${weekday}'s session`, body: text.length > 180 ? `${text.slice(0, 177)}…` : text };
+}
+
+async function key() {
+  apnsKey ??= JSON.parse((await secrets.send(new GetSecretValueCommand({ SecretId: process.env.APNS_SECRET }))).SecretString!);
+  return apnsKey!;
+}
+
+async function replied(comment: { owner: string; by: string; byName?: string | null; day: string; text: string }) {
+  // Only a coach's reply goes to the client's phone; the client's own words are on it already.
+  if (comment.by === comment.owner) return;
+  const devices = await query(`USER#${comment.owner}`, "DEVICE#");
+  if (devices.length === 0) return;
+  const statuses = await sendAlerts(process.env.APNS_HOST!, await key(), devices.map((d) => d.token as string),
+    replyText(comment.byName, comment.day, comment.text), { day: comment.day });
+  const dead = devices.filter((d) => statuses.get(d.token) === 410);
+  await Promise.all(dead.map((d) => db.send(new DeleteCommand({ TableName: TABLE, Key: { PK: d.PK, SK: d.SK } }))));
+}
+
 export async function handler(event: DynamoDBStreamEvent) {
   for (const record of event.Records) {
     const image = record.dynamodb;
     if (!image?.NewImage) continue;
+    if (String(image.Keys?.SK?.S ?? "").startsWith("COMMENT#")) {
+      await replied(unmarshall(image.NewImage as never) as never);
+      continue;
+    }
     const live = unmarshall(image.NewImage as never) as Live;
     const old = image.OldImage ? (unmarshall(image.OldImage as never) as Live) : undefined;
     if (!startsSession(old, live)) continue;
@@ -51,10 +78,9 @@ export async function handler(event: DynamoDBStreamEvent) {
     const devices = (await Promise.all(others.map((m) => query(`USER#${m.uid}`, "DEVICE#")))).flat();
     if (devices.length === 0) continue;
 
-    apnsKey ??= JSON.parse((await secrets.send(new GetSecretValueCommand({ SecretId: process.env.APNS_SECRET }))).SecretString!);
     const statuses = await sendAlerts(
       process.env.APNS_HOST!,
-      apnsKey!,
+      await key(),
       devices.map((d) => d.token as string),
       alertText(starter?.displayName, live, starter?.groupName),
       { groupId: live.groupId },

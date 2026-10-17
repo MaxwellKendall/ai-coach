@@ -121,6 +121,43 @@ export async function unlink(coach: string, client: string) {
   return true;
 }
 
+// FIT-132: replies on a session, one thread per logged day, in the client's partition (so they go with the account).
+export type Comment = { day: string; at: string; by: string; byName: string | null; text: string };
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The account a thread is in: the caller's own, or a client's when the caller is their coach. */
+async function threadOwner(caller: string, asked?: string) {
+  if (!asked || asked === caller) return caller;
+  if (await isCoachOf(caller, asked)) return asked;
+  throw new CoachError("You don't coach this person.");
+}
+
+export async function postComment(caller: string, claims: Record<string, unknown> | undefined, uid: string | undefined,
+                                  day: string, text: string, now = new Date()): Promise<Comment> {
+  const owner = await threadOwner(caller, uid);
+  const body = text.trim();
+  if (!DAY.test(day)) throw new CoachError("Not a day.");
+  if (!body) throw new CoachError("Write something first.");
+  if (body.length > 1000) throw new CoachError("That's too long for a reply (1,000 characters).");
+  const comment: Comment = { day, at: now.toISOString(), by: caller, byName: await nameOf(caller, claims), text: body };
+  await db.send(new TransactWriteCommand({
+    TransactItems: [{ Put: { TableName: TABLE(), Item: { PK: `USER#${owner}`, SK: `COMMENT#${day}#${comment.at}#${caller}`, owner, ...comment } } }],
+  }));
+  return comment;
+}
+
+/** A day's thread, or every thread on the account, oldest first. */
+export async function comments(caller: string, uid: string | undefined, day?: string): Promise<Comment[]> {
+  const owner = await threadOwner(caller, uid);
+  if (day && !DAY.test(day)) throw new CoachError("Not a day.");
+  const { Items } = await db.send(new QueryCommand({
+    TableName: TABLE(),
+    KeyConditionExpression: "PK = :pk AND begins_with(SK, :p)",
+    ExpressionAttributeValues: { ":pk": `USER#${owner}`, ":p": day ? `COMMENT#${day}#` : "COMMENT#" },
+  }));
+  return (Items ?? []).map((i) => ({ day: i.day, at: i.at, by: i.by, byName: i.byName ?? null, text: i.text }));
+}
+
 export async function handler(event: AppSyncResolverEvent<Record<string, string>>) {
   const identity = event.identity as AppSyncIdentityCognito;
   const me = identity.sub;
@@ -134,6 +171,8 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
       case "myClients": return await list(me, "CLIENT#");
       case "unlinkCoach": return await unlink(args.uid, me);
       case "removeClient": return await unlink(me, args.uid);
+      case "postComment": return await postComment(me, identity.claims, args.uid, args.day, args.text);
+      case "comments": return await comments(me, args.uid, args.day);
       default: throw new Error(`Unknown field ${event.info.fieldName}`);
     }
   } catch (e) {

@@ -278,9 +278,14 @@ must(await gql(a, `mutation($u: [SyncUnitInput!]!, $o: ID) { syncPush(units: $u,
 const seenByB = must(await gql(b, `query { syncPull { units { key body } } }`), "B pull").syncPull;
 if (seenByB.units.find((u: any) => u.key === day)?.body !== '[{"reps":6}]') throw new Error("B didn't get the coach's edit");
 if (!(await gql(c, `query($u: ID) { syncPull(uid: $u) { units { key } } }`, { u: bUidNow })).errors?.length) throw new Error("C read B's units");
+// FIT-132: A replies on B's session; B reads it; C can't post.
+must(await gql(a, `mutation($u: ID, $d: String!, $t: String!) { postComment(uid: $u, day: $d, text: $t) { at } }`, { u: bUidNow, d: "2026-10-16", t: "Nice work." }), "postComment");
+const thread = must(await gql(b, `query { comments(day: "2026-10-16") { by byName text } }`), "comments").comments;
+if (thread.length !== 1 || thread[0].text !== "Nice work." || thread[0].byName !== "Smoke A") throw new Error(`thread ${JSON.stringify(thread)}`);
+if (!(await gql(c, `mutation($u: ID) { postComment(uid: $u, day: "2026-10-16", text: "hi") { at } }`, { u: bUidNow })).errors?.length) throw new Error("C posted on B's session");
 must(await gql(b, `mutation($u: ID!) { unlinkCoach(uid: $u) }`, { u: aUid }), "unlinkCoach");
 if (!(await gql(a, `query($u: ID) { syncPull(uid: $u) { units { key } } }`, { u: bUidNow })).errors?.length) throw new Error("A still reads B after unlinking");
-pass("A coaches B through a single-use invite (with its page): A reads and edits B's plan, C can't, and B's unlink ends A's access");
+pass("A coaches B through a single-use invite (with its page): A reads and edits B's plan and replies on B's session, C can't, and B's unlink ends A's access");
 
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
