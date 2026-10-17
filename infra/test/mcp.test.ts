@@ -1,4 +1,5 @@
 import type { LambdaFunctionURLEvent } from "aws-lambda";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { answer, callTool, hashToken, serve, type Account, type Store } from "../lambda/mcp.ts";
 import { checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
@@ -105,7 +106,7 @@ describe("mcp", () => {
   it("annotates every tool: reads, writes, the destructive ones, nothing open-world", async () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
-    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program"];
+    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review"];
     const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
@@ -295,6 +296,39 @@ describe("agent-first onboarding (FIT-150)", () => {
     await callTool("log_session", { as_planned: true }, me, store, now);
     expect(JSON.parse(units.me["log#2026-10-17"]).filter((r: any) => r.kind !== "workout")).toHaveLength(4);
     await expect(callTool("log_daily", { date: "2026-10-18", weight_lb: 185 }, me, store, now)).rejects.toThrow(/hasn't happened/);
+  });
+
+  it("gives progress and the week's review as the app derives them (FIT-167)", async () => {
+    const fixture = JSON.parse(readFileSync(new URL("../../Tests/Fixtures/progress-units.json", import.meta.url), "utf8"));
+    const units = { me: Object.fromEntries(Object.entries(fixture.units).map(([k, v]) => [k, encode(v)])) };
+    const store = memory({}, units);
+    const review = await callTool("get_week_review", { date: "2026-10-10" }, me, store, new Date("2026-10-10T16:00:00Z"));
+    expect(review).toMatch(/^Week of Sunday 2026-10-04 to Saturday 2026-10-10, program week 4 of 16\.\n3 of 3 workouts\. Squat up 17 lb\. 2 goals to check in on\. 3 things worth a look\./);
+    expect(review).toMatch(/Numbers: 3 of 3 workouts, 18 working sets \(6 push, 6 pull\)\. Protein 143 g a day\. 2,400 kcal a day\. Sleep 6\.8 h a night\./);
+    expect(review).toMatch(/- Back squat max: 225 → 242 of 250 lb, ahead of pace\./);
+    expect(review).toMatch(/Check-in: well ahead; offer to raise the target to 355 lb \(12 weeks left\)\. Only if they agree: set_goal change/);
+    expect(review).toMatch(/- Knee came up in 3 notes\. Sep 21, Sep 30 and Oct 7\..*set_profile can add knee to injured_areas/);
+    expect(review).toMatch(/- Went well: All 3 workouts done\./);
+    expect(review).not.toMatch(/Romanian/);
+
+    const p = await callTool("get_progress", {}, me, store, new Date("2026-10-17T16:00:00Z"));
+    expect(p).toMatch(/Program week 5 of 16, ending 2027-01-02\./);
+    expect(p).toMatch(/- Back squat max: target 250 lb by 2027-01-02 \[goal_id [^\]]+\]\n  Now 242 lb, from 205 at the start: 82% of the way\.\n  Ahead of pace\./);
+    expect(p).toMatch(/  Best set: 215 lb × 5 reps on 2026-10-12\./);
+    expect(p).toMatch(/Romanian Deadlift max: target 200 lb/);
+    expect(p).toMatch(/Streak: Do Friday’s session today to make it 3 weeks in a row\./);
+    expect(p).toMatch(/Wins, newest first:\n- 2026-10-12: personal best, Back squat max 242 lb \(was 236\)\./);
+    expect(p).toMatch(/- 2026-10-10: 2 weeks in a row, every planned session done/);
+  });
+
+  it("gives a new goal its starting point, as onboarding does", async () => {
+    const units: Record<string, Record<string, string>> = { new: { profile: encode({ ...profile, weightLb: 196, starts: [{ exercise: "back-squat", measurements: [{ metric: "reps", value: 5, unit: "reps" }, { metric: "load_lb", value: 185, unit: "lb" }] }] }) } };
+    const store = memory({}, units);
+    for (const goal of [{ type: "lift_max", exercise: "Back Squat", target: 250 }, { type: "body_weight", target: 185 }, { type: "reps", exercise: "Pull-up", target: 10 }]) {
+      await callTool("set_goal", { action: "add", ...goal }, fresh, store, now);
+    }
+    const goals = Object.entries(units.new).filter(([k]) => k.startsWith("goal#")).map(([, v]) => JSON.parse(v));
+    expect(Object.fromEntries(goals.map((g) => [g.metric, g.baseline ?? null]))).toEqual({ "back-squat.1rm_lb": 208, weight_lb: 196, "pull-up.reps": null });
   });
 
   it("holds a proposed week to their weekly ceiling", async () => {

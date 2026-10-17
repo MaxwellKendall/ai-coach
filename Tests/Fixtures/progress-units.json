@@ -1,0 +1,4098 @@
+{
+  "about": "FIT-167: an account's synced units and what infra/lambda/progress.ts derives; ProgressUnitsTests checks the app gets the same.",
+  "tz": "America/New_York",
+  "reviewAt": "2026-10-10T12:00",
+  "today": "2026-10-17",
+  "units": {
+    "profile": {
+      "age": 36,
+      "avoidExercises": [],
+      "cookWindows": [],
+      "daysPerWeek": 3,
+      "equipment": [
+        "barbell",
+        "rack",
+        "bench",
+        "dumbbells",
+        "pull_up_bar"
+      ],
+      "fineAreas": {},
+      "injuredAreas": [],
+      "maxWeeklySets": 60,
+      "programStart": 1789272000,
+      "sessionMinutes": 45,
+      "starts": [],
+      "style": "powerbuilding",
+      "targetDate": 1798866000,
+      "trainingDays": [
+        0,
+        2,
+        4
+      ],
+      "travelWeeks": [],
+      "warmups": true,
+      "weightLb": 200,
+      "workoutTime": 420
+    },
+    "goal#00000000-0000-4000-8000-000000000001": {
+      "baseline": 205,
+      "deadline": 1798909200,
+      "kind": "training",
+      "metric": "back-squat.1rm_lb",
+      "status": "active",
+      "target": 250,
+      "unit": "lb"
+    },
+    "goal#00000000-0000-4000-8000-000000000002": {
+      "baseline": 6,
+      "deadline": 1798909200,
+      "kind": "training",
+      "metric": "pull-up.reps",
+      "status": "active",
+      "target": 10,
+      "unit": "reps"
+    },
+    "goal#00000000-0000-4000-8000-000000000003": {
+      "baseline": 200,
+      "deadline": 1798909200,
+      "kind": "body",
+      "metric": "weight_lb",
+      "status": "active",
+      "target": 185,
+      "unit": "lb"
+    },
+    "goal#00000000-0000-4000-8000-000000000004": {
+      "baseline": 150,
+      "deadline": 1798909200,
+      "kind": "training",
+      "metric": "romanian-deadlift.1rm_lb",
+      "status": "active",
+      "target": 200,
+      "unit": "lb"
+    },
+    "plan#2026-09-14": [
+      {
+        "id": "00000000-0000-4000-8000-000000000005",
+        "kind": "workout",
+        "at": 1789383600,
+        "slot": "Session",
+        "template": "back-squat",
+        "note": "",
+        "main": true,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "kind": "workout",
+        "at": 1789383600,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-09-14": [
+      {
+        "at": 1789383600,
+        "id": "00000000-0000-4000-8000-000000000007",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 185,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000005",
+        "template": "back-squat"
+      },
+      {
+        "at": 1789383601,
+        "id": "00000000-0000-4000-8000-000000000008",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 185,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000005",
+        "template": "back-squat"
+      },
+      {
+        "at": 1789383602,
+        "id": "00000000-0000-4000-8000-000000000009",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 185,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000005",
+        "template": "back-squat"
+      },
+      {
+        "at": 1789383603,
+        "id": "00000000-0000-4000-8000-000000000010",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 135,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000006",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789383604,
+        "id": "00000000-0000-4000-8000-000000000011",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 135,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000006",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789383605,
+        "id": "00000000-0000-4000-8000-000000000012",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 135,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000006",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789383700,
+        "id": "00000000-0000-4000-8000-000000000013",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1789380000,
+        "id": "00000000-0000-4000-8000-000000000014",
+        "kind": "bodyweight",
+        "measurements": [
+          {
+            "metric": "weight_lb",
+            "value": 200,
+            "unit": "lb"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1789380300,
+        "id": "00000000-0000-4000-8000-000000000015",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1789387200,
+        "id": "00000000-0000-4000-8000-000000000016",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1789401600,
+        "id": "00000000-0000-4000-8000-000000000017",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1789426800,
+        "id": "00000000-0000-4000-8000-000000000018",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-09-16": [
+      {
+        "id": "00000000-0000-4000-8000-000000000019",
+        "kind": "workout",
+        "at": 1789556400,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "kind": "workout",
+        "at": 1789556400,
+        "slot": "Session",
+        "template": "bent-over-barbell-row",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 8,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-09-16": [
+      {
+        "at": 1789556400,
+        "id": "00000000-0000-4000-8000-000000000021",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 135,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000019",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789556401,
+        "id": "00000000-0000-4000-8000-000000000022",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 135,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000019",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789556402,
+        "id": "00000000-0000-4000-8000-000000000023",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 135,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000019",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789556403,
+        "id": "00000000-0000-4000-8000-000000000024",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 115,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000020",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1789556404,
+        "id": "00000000-0000-4000-8000-000000000025",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 115,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000020",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1789556405,
+        "id": "00000000-0000-4000-8000-000000000026",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 115,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000020",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1789556500,
+        "id": "00000000-0000-4000-8000-000000000027",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1789553100,
+        "id": "00000000-0000-4000-8000-000000000028",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1789560000,
+        "id": "00000000-0000-4000-8000-000000000029",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1789574400,
+        "id": "00000000-0000-4000-8000-000000000030",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1789599600,
+        "id": "00000000-0000-4000-8000-000000000031",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-09-18": [
+      {
+        "id": "00000000-0000-4000-8000-000000000032",
+        "kind": "workout",
+        "at": 1789729200,
+        "slot": "Session",
+        "template": "deadlift",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000033",
+        "kind": "workout",
+        "at": 1789729200,
+        "slot": "Session",
+        "template": "pull-up",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-09-18": [
+      {
+        "at": 1789729200,
+        "id": "00000000-0000-4000-8000-000000000034",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 225,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000032",
+        "template": "deadlift"
+      },
+      {
+        "at": 1789729201,
+        "id": "00000000-0000-4000-8000-000000000035",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 225,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000032",
+        "template": "deadlift"
+      },
+      {
+        "at": 1789729202,
+        "id": "00000000-0000-4000-8000-000000000036",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 225,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000032",
+        "template": "deadlift"
+      },
+      {
+        "at": 1789729203,
+        "id": "00000000-0000-4000-8000-000000000037",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000033",
+        "template": "pull-up"
+      },
+      {
+        "at": 1789729204,
+        "id": "00000000-0000-4000-8000-000000000038",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000033",
+        "template": "pull-up"
+      },
+      {
+        "at": 1789729205,
+        "id": "00000000-0000-4000-8000-000000000039",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000033",
+        "template": "pull-up"
+      },
+      {
+        "at": 1789729300,
+        "id": "00000000-0000-4000-8000-000000000040",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1789725900,
+        "id": "00000000-0000-4000-8000-000000000041",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1789732800,
+        "id": "00000000-0000-4000-8000-000000000042",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1789747200,
+        "id": "00000000-0000-4000-8000-000000000043",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1789772400,
+        "id": "00000000-0000-4000-8000-000000000044",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-09-21": [
+      {
+        "id": "00000000-0000-4000-8000-000000000045",
+        "kind": "workout",
+        "at": 1789988400,
+        "slot": "Session",
+        "template": "back-squat",
+        "note": "",
+        "main": true,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000046",
+        "kind": "workout",
+        "at": 1789988400,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-09-21": [
+      {
+        "at": 1789988400,
+        "id": "00000000-0000-4000-8000-000000000047",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 195,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000045",
+        "template": "back-squat"
+      },
+      {
+        "at": 1789988401,
+        "id": "00000000-0000-4000-8000-000000000048",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 195,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000045",
+        "template": "back-squat"
+      },
+      {
+        "at": 1789988402,
+        "id": "00000000-0000-4000-8000-000000000049",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 195,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000045",
+        "template": "back-squat"
+      },
+      {
+        "at": 1789988403,
+        "id": "00000000-0000-4000-8000-000000000050",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 140,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000046",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789988404,
+        "id": "00000000-0000-4000-8000-000000000051",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 140,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000046",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789988405,
+        "id": "00000000-0000-4000-8000-000000000052",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 140,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000046",
+        "template": "bench-press"
+      },
+      {
+        "at": 1789988500,
+        "id": "00000000-0000-4000-8000-000000000053",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Knee a bit sore on squats"
+      },
+      {
+        "at": 1789984800,
+        "id": "00000000-0000-4000-8000-000000000054",
+        "kind": "bodyweight",
+        "measurements": [
+          {
+            "metric": "weight_lb",
+            "value": 199.2,
+            "unit": "lb"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1789985100,
+        "id": "00000000-0000-4000-8000-000000000055",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1789992000,
+        "id": "00000000-0000-4000-8000-000000000056",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1790006400,
+        "id": "00000000-0000-4000-8000-000000000057",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1790031600,
+        "id": "00000000-0000-4000-8000-000000000058",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-09-23": [
+      {
+        "id": "00000000-0000-4000-8000-000000000059",
+        "kind": "workout",
+        "at": 1790161200,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000060",
+        "kind": "workout",
+        "at": 1790161200,
+        "slot": "Session",
+        "template": "bent-over-barbell-row",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 8,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-09-23": [
+      {
+        "at": 1790161200,
+        "id": "00000000-0000-4000-8000-000000000061",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 140,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000059",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790161201,
+        "id": "00000000-0000-4000-8000-000000000062",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 140,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000059",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790161202,
+        "id": "00000000-0000-4000-8000-000000000063",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 140,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000059",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790161203,
+        "id": "00000000-0000-4000-8000-000000000064",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 120,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000060",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1790161204,
+        "id": "00000000-0000-4000-8000-000000000065",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 120,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000060",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1790161205,
+        "id": "00000000-0000-4000-8000-000000000066",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 120,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000060",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1790161300,
+        "id": "00000000-0000-4000-8000-000000000067",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1790157900,
+        "id": "00000000-0000-4000-8000-000000000068",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1790164800,
+        "id": "00000000-0000-4000-8000-000000000069",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1790179200,
+        "id": "00000000-0000-4000-8000-000000000070",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1790204400,
+        "id": "00000000-0000-4000-8000-000000000071",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-09-25": [
+      {
+        "id": "00000000-0000-4000-8000-000000000072",
+        "kind": "workout",
+        "at": 1790334000,
+        "slot": "Session",
+        "template": "deadlift",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000073",
+        "kind": "workout",
+        "at": 1790334000,
+        "slot": "Session",
+        "template": "pull-up",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "plan#2026-09-28": [
+      {
+        "id": "00000000-0000-4000-8000-000000000074",
+        "kind": "workout",
+        "at": 1790593200,
+        "slot": "Session",
+        "template": "back-squat",
+        "note": "",
+        "main": true,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000075",
+        "kind": "workout",
+        "at": 1790593200,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-09-28": [
+      {
+        "at": 1790593200,
+        "id": "00000000-0000-4000-8000-000000000076",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 200,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000074",
+        "template": "back-squat"
+      },
+      {
+        "at": 1790593201,
+        "id": "00000000-0000-4000-8000-000000000077",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 200,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000074",
+        "template": "back-squat"
+      },
+      {
+        "at": 1790593202,
+        "id": "00000000-0000-4000-8000-000000000078",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 200,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000074",
+        "template": "back-squat"
+      },
+      {
+        "at": 1790593203,
+        "id": "00000000-0000-4000-8000-000000000079",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000075",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790593204,
+        "id": "00000000-0000-4000-8000-000000000080",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000075",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790593205,
+        "id": "00000000-0000-4000-8000-000000000081",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000075",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790593300,
+        "id": "00000000-0000-4000-8000-000000000082",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1790589600,
+        "id": "00000000-0000-4000-8000-000000000083",
+        "kind": "bodyweight",
+        "measurements": [
+          {
+            "metric": "weight_lb",
+            "value": 198.4,
+            "unit": "lb"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1790589900,
+        "id": "00000000-0000-4000-8000-000000000084",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1790596800,
+        "id": "00000000-0000-4000-8000-000000000085",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1790611200,
+        "id": "00000000-0000-4000-8000-000000000086",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1790636400,
+        "id": "00000000-0000-4000-8000-000000000087",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-09-30": [
+      {
+        "id": "00000000-0000-4000-8000-000000000088",
+        "kind": "workout",
+        "at": 1790766000,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000089",
+        "kind": "workout",
+        "at": 1790766000,
+        "slot": "Session",
+        "template": "bent-over-barbell-row",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 8,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-09-30": [
+      {
+        "at": 1790766000,
+        "id": "00000000-0000-4000-8000-000000000090",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000088",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790766001,
+        "id": "00000000-0000-4000-8000-000000000091",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000088",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790766002,
+        "id": "00000000-0000-4000-8000-000000000092",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000088",
+        "template": "bench-press"
+      },
+      {
+        "at": 1790766003,
+        "id": "00000000-0000-4000-8000-000000000093",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 125,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000089",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1790766004,
+        "id": "00000000-0000-4000-8000-000000000094",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 125,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000089",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1790766005,
+        "id": "00000000-0000-4000-8000-000000000095",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 125,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000089",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1790766100,
+        "id": "00000000-0000-4000-8000-000000000096",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Knee a bit sore on squats"
+      },
+      {
+        "at": 1790762700,
+        "id": "00000000-0000-4000-8000-000000000097",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1790769600,
+        "id": "00000000-0000-4000-8000-000000000098",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1790784000,
+        "id": "00000000-0000-4000-8000-000000000099",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1790809200,
+        "id": "00000000-0000-4000-8000-000000000100",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-10-02": [
+      {
+        "id": "00000000-0000-4000-8000-000000000101",
+        "kind": "workout",
+        "at": 1790938800,
+        "slot": "Session",
+        "template": "deadlift",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000102",
+        "kind": "workout",
+        "at": 1790938800,
+        "slot": "Session",
+        "template": "pull-up",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-10-02": [
+      {
+        "at": 1790938800,
+        "id": "00000000-0000-4000-8000-000000000103",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 245,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000101",
+        "template": "deadlift"
+      },
+      {
+        "at": 1790938801,
+        "id": "00000000-0000-4000-8000-000000000104",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 245,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000101",
+        "template": "deadlift"
+      },
+      {
+        "at": 1790938802,
+        "id": "00000000-0000-4000-8000-000000000105",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 245,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000101",
+        "template": "deadlift"
+      },
+      {
+        "at": 1790938803,
+        "id": "00000000-0000-4000-8000-000000000106",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 7,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000102",
+        "template": "pull-up"
+      },
+      {
+        "at": 1790938804,
+        "id": "00000000-0000-4000-8000-000000000107",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000102",
+        "template": "pull-up"
+      },
+      {
+        "at": 1790938805,
+        "id": "00000000-0000-4000-8000-000000000108",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000102",
+        "template": "pull-up"
+      },
+      {
+        "at": 1790938900,
+        "id": "00000000-0000-4000-8000-000000000109",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1790935500,
+        "id": "00000000-0000-4000-8000-000000000110",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1790942400,
+        "id": "00000000-0000-4000-8000-000000000111",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1790956800,
+        "id": "00000000-0000-4000-8000-000000000112",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1790982000,
+        "id": "00000000-0000-4000-8000-000000000113",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-10-05": [
+      {
+        "id": "00000000-0000-4000-8000-000000000114",
+        "kind": "workout",
+        "at": 1791198000,
+        "slot": "Session",
+        "template": "back-squat",
+        "note": "",
+        "main": true,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000115",
+        "kind": "workout",
+        "at": 1791198000,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-10-05": [
+      {
+        "at": 1791198000,
+        "id": "00000000-0000-4000-8000-000000000116",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 210,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000114",
+        "template": "back-squat"
+      },
+      {
+        "at": 1791198001,
+        "id": "00000000-0000-4000-8000-000000000117",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 210,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000114",
+        "template": "back-squat"
+      },
+      {
+        "at": 1791198002,
+        "id": "00000000-0000-4000-8000-000000000118",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 210,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000114",
+        "template": "back-squat"
+      },
+      {
+        "at": 1791198003,
+        "id": "00000000-0000-4000-8000-000000000119",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000115",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791198004,
+        "id": "00000000-0000-4000-8000-000000000120",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000115",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791198005,
+        "id": "00000000-0000-4000-8000-000000000121",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000115",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791198100,
+        "id": "00000000-0000-4000-8000-000000000122",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1791194400,
+        "id": "00000000-0000-4000-8000-000000000123",
+        "kind": "bodyweight",
+        "measurements": [
+          {
+            "metric": "weight_lb",
+            "value": 197.6,
+            "unit": "lb"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1791194700,
+        "id": "00000000-0000-4000-8000-000000000124",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1791201600,
+        "id": "00000000-0000-4000-8000-000000000125",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1791216000,
+        "id": "00000000-0000-4000-8000-000000000126",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 10,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1791241200,
+        "id": "00000000-0000-4000-8000-000000000127",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-10-07": [
+      {
+        "id": "00000000-0000-4000-8000-000000000128",
+        "kind": "workout",
+        "at": 1791370800,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000129",
+        "kind": "workout",
+        "at": 1791370800,
+        "slot": "Session",
+        "template": "bent-over-barbell-row",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 8,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-10-07": [
+      {
+        "at": 1791370800,
+        "id": "00000000-0000-4000-8000-000000000130",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000128",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791370801,
+        "id": "00000000-0000-4000-8000-000000000131",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000128",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791370802,
+        "id": "00000000-0000-4000-8000-000000000132",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 145,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000128",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791370803,
+        "id": "00000000-0000-4000-8000-000000000133",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 125,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000129",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1791370804,
+        "id": "00000000-0000-4000-8000-000000000134",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 125,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000129",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1791370805,
+        "id": "00000000-0000-4000-8000-000000000135",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 125,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000129",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1791370900,
+        "id": "00000000-0000-4000-8000-000000000136",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Knee a bit sore on squats"
+      },
+      {
+        "at": 1791367500,
+        "id": "00000000-0000-4000-8000-000000000137",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 5.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1791374400,
+        "id": "00000000-0000-4000-8000-000000000138",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1791388800,
+        "id": "00000000-0000-4000-8000-000000000139",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1791414000,
+        "id": "00000000-0000-4000-8000-000000000140",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-10-09": [
+      {
+        "id": "00000000-0000-4000-8000-000000000141",
+        "kind": "workout",
+        "at": 1791543600,
+        "slot": "Session",
+        "template": "deadlift",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000142",
+        "kind": "workout",
+        "at": 1791543600,
+        "slot": "Session",
+        "template": "pull-up",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-10-09": [
+      {
+        "at": 1791543600,
+        "id": "00000000-0000-4000-8000-000000000143",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 255,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000141",
+        "template": "deadlift"
+      },
+      {
+        "at": 1791543601,
+        "id": "00000000-0000-4000-8000-000000000144",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 255,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000141",
+        "template": "deadlift"
+      },
+      {
+        "at": 1791543602,
+        "id": "00000000-0000-4000-8000-000000000145",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 255,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000141",
+        "template": "deadlift"
+      },
+      {
+        "at": 1791543603,
+        "id": "00000000-0000-4000-8000-000000000146",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 8,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000142",
+        "template": "pull-up"
+      },
+      {
+        "at": 1791543604,
+        "id": "00000000-0000-4000-8000-000000000147",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 7,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000142",
+        "template": "pull-up"
+      },
+      {
+        "at": 1791543605,
+        "id": "00000000-0000-4000-8000-000000000148",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 7,
+            "unit": "reps"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000142",
+        "template": "pull-up"
+      },
+      {
+        "at": 1791543700,
+        "id": "00000000-0000-4000-8000-000000000149",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1791540300,
+        "id": "00000000-0000-4000-8000-000000000150",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1791547200,
+        "id": "00000000-0000-4000-8000-000000000151",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1791561600,
+        "id": "00000000-0000-4000-8000-000000000152",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1791586800,
+        "id": "00000000-0000-4000-8000-000000000153",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-10-12": [
+      {
+        "id": "00000000-0000-4000-8000-000000000154",
+        "kind": "workout",
+        "at": 1791802800,
+        "slot": "Session",
+        "template": "back-squat",
+        "note": "",
+        "main": true,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000155",
+        "kind": "workout",
+        "at": 1791802800,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-10-12": [
+      {
+        "at": 1791802800,
+        "id": "00000000-0000-4000-8000-000000000156",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 215,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000154",
+        "template": "back-squat"
+      },
+      {
+        "at": 1791802801,
+        "id": "00000000-0000-4000-8000-000000000157",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 215,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000154",
+        "template": "back-squat"
+      },
+      {
+        "at": 1791802802,
+        "id": "00000000-0000-4000-8000-000000000158",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 215,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000154",
+        "template": "back-squat"
+      },
+      {
+        "at": 1791802803,
+        "id": "00000000-0000-4000-8000-000000000159",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 150,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000155",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791802804,
+        "id": "00000000-0000-4000-8000-000000000160",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 150,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000155",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791802805,
+        "id": "00000000-0000-4000-8000-000000000161",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 150,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000155",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791802900,
+        "id": "00000000-0000-4000-8000-000000000162",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1791799200,
+        "id": "00000000-0000-4000-8000-000000000163",
+        "kind": "bodyweight",
+        "measurements": [
+          {
+            "metric": "weight_lb",
+            "value": 196.8,
+            "unit": "lb"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1791799500,
+        "id": "00000000-0000-4000-8000-000000000164",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1791806400,
+        "id": "00000000-0000-4000-8000-000000000165",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1791820800,
+        "id": "00000000-0000-4000-8000-000000000166",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1791846000,
+        "id": "00000000-0000-4000-8000-000000000167",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-10-14": [
+      {
+        "id": "00000000-0000-4000-8000-000000000168",
+        "kind": "workout",
+        "at": 1791975600,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000169",
+        "kind": "workout",
+        "at": 1791975600,
+        "slot": "Session",
+        "template": "bent-over-barbell-row",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 8,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "log#2026-10-14": [
+      {
+        "at": 1791975600,
+        "id": "00000000-0000-4000-8000-000000000170",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 150,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000168",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791975601,
+        "id": "00000000-0000-4000-8000-000000000171",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 150,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000168",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791975602,
+        "id": "00000000-0000-4000-8000-000000000172",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 150,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000168",
+        "template": "bench-press"
+      },
+      {
+        "at": 1791975603,
+        "id": "00000000-0000-4000-8000-000000000173",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 130,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000169",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1791975604,
+        "id": "00000000-0000-4000-8000-000000000174",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 130,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000169",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1791975605,
+        "id": "00000000-0000-4000-8000-000000000175",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          },
+          {
+            "metric": "load_lb",
+            "value": 130,
+            "unit": "lb"
+          },
+          {
+            "metric": "rpe",
+            "value": 7.5,
+            "unit": "RPE"
+          }
+        ],
+        "note": "Session",
+        "plannedRef": "00000000-0000-4000-8000-000000000169",
+        "template": "bent-over-barbell-row"
+      },
+      {
+        "at": 1791975700,
+        "id": "00000000-0000-4000-8000-000000000176",
+        "kind": "workout",
+        "measurements": [
+          {
+            "metric": "effort",
+            "value": 7,
+            "unit": "/10"
+          }
+        ],
+        "note": "Good"
+      },
+      {
+        "at": 1791972300,
+        "id": "00000000-0000-4000-8000-000000000177",
+        "kind": "sleep",
+        "measurements": [
+          {
+            "metric": "sleep_h",
+            "value": 7.5,
+            "unit": "h"
+          }
+        ],
+        "note": ""
+      },
+      {
+        "at": 1791979200,
+        "id": "00000000-0000-4000-8000-000000000178",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 700,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 40,
+            "unit": "g"
+          }
+        ],
+        "note": "Breakfast"
+      },
+      {
+        "at": 1791993600,
+        "id": "00000000-0000-4000-8000-000000000179",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 800,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Lunch"
+      },
+      {
+        "at": 1792018800,
+        "id": "00000000-0000-4000-8000-000000000180",
+        "kind": "meal",
+        "measurements": [
+          {
+            "metric": "kcal",
+            "value": 900,
+            "unit": "kcal"
+          },
+          {
+            "metric": "protein_g",
+            "value": 60,
+            "unit": "g"
+          }
+        ],
+        "note": "Dinner"
+      }
+    ],
+    "plan#2026-10-16": [
+      {
+        "id": "00000000-0000-4000-8000-000000000181",
+        "kind": "workout",
+        "at": 1792148400,
+        "slot": "Session",
+        "template": "deadlift",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000182",
+        "kind": "workout",
+        "at": 1792148400,
+        "slot": "Session",
+        "template": "pull-up",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "plan#2026-10-19": [
+      {
+        "id": "00000000-0000-4000-8000-000000000183",
+        "kind": "workout",
+        "at": 1792407600,
+        "slot": "Session",
+        "template": "back-squat",
+        "note": "",
+        "main": true,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000184",
+        "kind": "workout",
+        "at": 1792407600,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "plan#2026-10-21": [
+      {
+        "id": "00000000-0000-4000-8000-000000000185",
+        "kind": "workout",
+        "at": 1792580400,
+        "slot": "Session",
+        "template": "bench-press",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000186",
+        "kind": "workout",
+        "at": 1792580400,
+        "slot": "Session",
+        "template": "bent-over-barbell-row",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 8,
+            "unit": "reps"
+          }
+        ]
+      }
+    ],
+    "plan#2026-10-23": [
+      {
+        "id": "00000000-0000-4000-8000-000000000187",
+        "kind": "workout",
+        "at": 1792753200,
+        "slot": "Session",
+        "template": "deadlift",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 5,
+            "unit": "reps"
+          }
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000188",
+        "kind": "workout",
+        "at": 1792753200,
+        "slot": "Session",
+        "template": "pull-up",
+        "note": "",
+        "main": false,
+        "pinned": false,
+        "targets": [
+          {
+            "metric": "sets",
+            "value": 3,
+            "unit": "sets"
+          },
+          {
+            "metric": "reps",
+            "value": 6,
+            "unit": "reps"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "review": {
+      "from": "2026-10-04",
+      "programWeek": 3,
+      "programWeeks": 16,
+      "numbers": {
+        "workoutsDone": 3,
+        "workoutsPlanned": 3,
+        "sets": 18,
+        "protein": 143.33,
+        "kcal": 2400,
+        "sleep": 6.83,
+        "weight": 197.6,
+        "weightChange": -0.8,
+        "push": 6,
+        "pull": 6
+      },
+      "goals": [
+        {
+          "metric": "back-squat.1rm_lb",
+          "from": 225,
+          "to": 242,
+          "pace": "ahead",
+          "forecast": 354.4,
+          "perWeek": 0.67,
+          "checkIn": {
+            "proposed": 355,
+            "ahead": true,
+            "weeksLeft": 12
+          }
+        },
+        {
+          "metric": "pull-up.reps",
+          "from": 7,
+          "to": 8,
+          "pace": "ahead",
+          "forecast": 14.08,
+          "perWeek": 0.17,
+          "checkIn": {
+            "proposed": 14,
+            "ahead": true,
+            "weeksLeft": 12
+          }
+        },
+        {
+          "metric": "weight_lb",
+          "from": 198.4,
+          "to": 196.8,
+          "pace": "onPace",
+          "forecast": 187.08,
+          "perWeek": -0.99,
+          "checkIn": null
+        }
+      ],
+      "alerts": [
+        {
+          "title": "Protein under 120 g around 1 workout",
+          "detail": "Monday 110 g.",
+          "area": null
+        },
+        {
+          "title": "Under 6 h of sleep before 1 workout",
+          "detail": "Wednesday 5.5 h. Say so on the day and it’ll go easier.",
+          "area": null
+        },
+        {
+          "title": "Knee came up in 3 notes",
+          "detail": "Sep 21, Sep 30 and Oct 7. Plans can go easier on it until you say it’s fine.",
+          "area": "knee"
+        }
+      ],
+      "headline": "3 of 3 workouts. Squat up 17 lb.",
+      "subline": "2 goals to check in on. 3 things worth a look."
+    },
+    "wins": [
+      {
+        "key": "pr:back-squat.1rm_lb:242",
+        "day": "2026-10-12",
+        "value": 242,
+        "previous": 236
+      },
+      {
+        "key": "milestone:back-squat.1rm_lb:75",
+        "day": "2026-10-12",
+        "value": 242,
+        "previous": null
+      },
+      {
+        "key": "streak:2",
+        "day": "2026-10-10",
+        "value": 2,
+        "previous": null
+      },
+      {
+        "key": "pr:pull-up.reps:8",
+        "day": "2026-10-09",
+        "value": 8,
+        "previous": 7
+      },
+      {
+        "key": "milestone:pull-up.reps:50",
+        "day": "2026-10-09",
+        "value": 8,
+        "previous": null
+      },
+      {
+        "key": "pr:back-squat.1rm_lb:236",
+        "day": "2026-10-05",
+        "value": 236,
+        "previous": 225
+      },
+      {
+        "key": "milestone:back-squat.1rm_lb:50",
+        "day": "2026-10-05",
+        "value": 236,
+        "previous": null
+      },
+      {
+        "key": "pr:pull-up.reps:7",
+        "day": "2026-10-02",
+        "value": 7,
+        "previous": 6
+      },
+      {
+        "key": "milestone:pull-up.reps:25",
+        "day": "2026-10-02",
+        "value": 7,
+        "previous": null
+      },
+      {
+        "key": "pr:back-squat.1rm_lb:225",
+        "day": "2026-09-28",
+        "value": 225,
+        "previous": 219
+      },
+      {
+        "key": "pr:back-squat.1rm_lb:219",
+        "day": "2026-09-21",
+        "value": 219,
+        "previous": 208
+      },
+      {
+        "key": "milestone:back-squat.1rm_lb:25",
+        "day": "2026-09-21",
+        "value": 219,
+        "previous": null
+      },
+      {
+        "key": "pr:back-squat.1rm_lb:208",
+        "day": "2026-09-14",
+        "value": 208,
+        "previous": 205
+      }
+    ],
+    "streak": {
+      "weeks": 2,
+      "thisWeek": "atRisk",
+      "line": "Do Friday’s session today to make it 3 weeks in a row"
+    }
+  }
+}

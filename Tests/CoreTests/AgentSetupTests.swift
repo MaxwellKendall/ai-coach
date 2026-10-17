@@ -44,6 +44,8 @@ struct AgentSetupTests {
         let goals = try context.fetch(FetchDescriptor<Goal>())
         #expect(Set(goals.map(\.metric)) == ["back-squat.1rm_lb", "pull-up.reps"])
         #expect(goals.allSatisfy { $0.status == .active })
+        // FIT-167: set_goal starts a lift goal where the starting set puts it (185 × 5), as onboarding does.
+        #expect(goals.first { $0.metric == "back-squat.1rm_lb" }?.baseline == 208)
 
         let planned = try context.fetch(FetchDescriptor<PlannedActivity>())
         #expect(planned.count == 4)

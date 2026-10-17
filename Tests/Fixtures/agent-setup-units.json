@@ -1,5 +1,6 @@
 {
   "goal#00000000-0000-4000-8000-000000000001": {
+    "baseline": 208,
     "deadline": 1803920400,
     "kind": "training",
     "metric": "back-squat.1rm_lb",

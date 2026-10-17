@@ -9,6 +9,7 @@ import {
   nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
+import * as progress from "./progress.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
 /**
@@ -225,6 +226,20 @@ export const tools = [
     } },
   },
   {
+    name: "get_progress",
+    title: "Get progress",
+    annotations: { title: "Get progress", ...READ },
+    description: "Where each goal stands, as their phone's Progress tab shows it: now against where it started, the pace the program expects (behind, on pace, ahead), where it lands by the end at this rate, what it needs each week, the best set behind it and its trend; the weekly streak line; and the wins (personal bests, 25/50/75/100% milestones, streaks). Use it to celebrate and to coach.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_week_review",
+    title: "Get the week's review",
+    annotations: { title: "Get the week's review", ...READ },
+    description: "The weekly review the app shows on Sundays, for the week (Sunday to Saturday) holding `date`: workouts done of planned, sets, push and pull, protein, kcal and sleep averages, weight change, each goal's week and pace, the alerts (low protein or sleep around sessions, an area their notes keep naming, a missing movement) and, every 4th program week, a check-in proposing a new target for a goal well ahead or behind. Write them your take from its facts; goals are theirs, so change one only if they agree.",
+    inputSchema: { type: "object", properties: { date: DATE } },
+  },
+  {
     name: "set_profile",
     title: "Set profile",
     annotations: { title: "Set profile", ...write(false, true) },
@@ -348,6 +363,94 @@ function context(units: Units, today: string, back: number, ahead: number, tz: s
   if (!any) out.push("  Nothing.");
   const daily = Array.from({ length: 7 }, (_, i) => addDays(today, -i)).map((d) => [d, describeDaily(logOf(units, d))] as const).filter(([, l]) => l.length);
   if (daily.length) out.push("", "Weight, sleep and meals, the last 7 days:", ...daily.map(([d, l]) => `${weekday(d)} ${d}: ${l.join(". ")}.`));
+  return out.join("\n");
+}
+
+/**
+ * Where a new goal starts, as onboarding's answers.baseline: their logs if any, else the starting set (Brzycki
+ * rounded, or reps), else the profile's weight. The app's wins and pace count from it.
+ */
+function baselineOf(units: Units, metric: string): number | undefined {
+  const logged = progress.current(metric, progress.logSets(units), progress.weighIns(units), -Infinity);
+  if (logged !== undefined) return logged;
+  const profile = profileOf(units) as Record<string, any> | undefined;
+  if (metric === "weight_lb") return profile?.weightLb;
+  const [slug, kind] = metric.split(".");
+  const start = (profile?.starts ?? []).find((s: { exercise: string }) => s.exercise === slug);
+  const v = (m: string) => start?.measurements.find((x: { metric: string }) => x.metric === m)?.value as number | undefined;
+  if (kind === "1rm_lb" && v("load_lb") !== undefined && v("reps") !== undefined) return Math.round(progress.estimatedMax(v("load_lb")!, v("reps")!));
+  return kind === "reps" ? v("reps") : undefined;
+}
+
+const PACE: Record<progress.Pace, string> = { starting: "just starting", behind: "behind the program's pace", onPace: "on pace", ahead: "ahead of pace" };
+
+function describeProgress(units: Units, today: string, nowSec: number, tz: string) {
+  const profile = profileOf(units);
+  const program = programOf(profile, tz);
+  const sets = progress.logSets(units), weighs = progress.weighIns(units);
+  const since = profile?.programStart ?? -Infinity;
+  const goals = goalsOf(units).filter((g) => g.status === "active");
+  const out: string[] = [];
+  const week = program ? Math.max(0, Math.min(program.weeks.length - 1, weekIndex(today, program.start))) : 0;
+  const end = profile?.targetDate;
+  if (program) out.push(`Program week ${week + 1} of ${program.weeks.length}, ending ${program.target}. Counted from the program's start, ${program.start}.`);
+  else out.push("No program yet, so this counts all their logs and there's no pace to compare with (set_program).");
+  out.push("", goals.length ? "Goals:" : "No goals yet (set_goal).");
+  for (const g of goals) {
+    const option = progress.GOAL_OPTIONS.find((o) => o.metric === g.metric);
+    const name = option?.name ?? (g.metric.endsWith(".1rm_lb") ? `${nameOf(g.metric.split(".")[0])} max` : g.metric.endsWith(".reps") ? `${nameOf(g.metric.split(".")[0])} in a row` : g.metric);
+    const first = g.baseline ?? g.target;
+    const now = progress.current(g.metric, sets, weighs, since);
+    const n = progress.number;
+    const lines = [`- ${name}: target ${n(g.target)} ${g.unit}${g.deadline ? ` by ${dayOf(new Date(g.deadline * 1000), tz)}` : ""} [goal_id ${g.id}]`];
+    if (now === undefined) lines.push("  Nothing logged toward it yet.");
+    else {
+      lines.push(`  Now ${n(now)} ${g.unit}${g.baseline !== undefined ? `, from ${n(first)} at the start: ${Math.round(progress.fraction(first, now, g.target) * 100)}% of the way` : ""}.`);
+      if (program && end && profile?.programStart && option) {
+        const p = progress.pace(first, now, g.target, week, program.weeks);
+        const fc = progress.forecast(first, now, profile.programStart, nowSec, end);
+        lines.push(`  ${PACE[p][0].toUpperCase()}${PACE[p].slice(1)}.${fc !== undefined ? ` At this rate, ${n(Math.round(fc * 10) / 10)} ${g.unit} by ${program.target}.` : ""} Needs ${n(Math.round(progress.perWeek(now, g.target, nowSec, end) * 10) / 10)} ${g.unit} a week from here.`);
+      }
+      const top = progress.best(g.metric, sets, since);
+      if (top) {
+        const v = (m: string) => top.measurements.find((x) => x.metric === m)?.value;
+        lines.push(`  Best set: ${v("load_lb") !== undefined ? `${v("load_lb")} lb × ` : ""}${v("reps")} reps on ${top.day}.`);
+      }
+      const points = progress.trend(g.metric, sets, weighs, since).slice(-8);
+      if (points.length > 1) lines.push(`  Trend: ${points.map((p) => `${p.day} ${n(p.value)}`).join(", ")}.`);
+    }
+    out.push(...lines);
+  }
+  if (program && profile?.programStart && end) {
+    const s = progress.streak(program.start, progress.plannedDays(units), progress.workoutDays(units), today);
+    out.push("", `Streak: ${progress.streakLine(s, today) ?? (s.thisWeek.kind === "broken" ? "this week's sessions can't all be done now, so the streak restarts next week" : `${s.weeks} full week(s) so far; the app shows it from 2`)}.`);
+    const tracked = goals.filter((g) => g.baseline !== undefined && progress.GOAL_OPTIONS.some((o) => o.metric === g.metric))
+      .map((g) => ({ metric: g.metric, unit: g.unit, baseline: g.baseline!, target: g.target }));
+    const won = progress.wins(tracked, sets, weighs, program.start, profile.programStart, end, progress.plannedDays(units), progress.workoutDays(units), today, tz);
+    out.push("", won.length ? `Wins, newest first:\n${won.slice(0, 12).map((w) => `- ${progress.describeWin(w)}`).join("\n")}` : "No wins yet.");
+  }
+  return out.join("\n");
+}
+
+function describeReview(units: Units, day: string, nowSec: number, tz: string) {
+  const r = progress.weekReport(units, day, nowSec, tz);
+  const n = progress.number, x = r.numbers;
+  const out = [`Week of ${weekday(r.from)} ${r.from} to ${weekday(r.to)} ${r.to}${r.programWeek !== undefined ? `, program week ${r.programWeek + 1} of ${r.programWeeks}` : ""}.`,
+    `${progress.headline(r).replace(/^Your week$/, "Nothing logged yet this week.")} ${progress.subline(r)}`, "",
+    `Numbers: ${x.workoutsDone} of ${x.workoutsPlanned} workouts, ${x.sets} working sets (${x.push} push, ${x.pull} pull).`
+      + (x.protein !== undefined ? ` Protein ${Math.round(x.protein)} g a day.` : "") + (x.kcal !== undefined ? ` ${Math.round(x.kcal).toLocaleString("en-US")} kcal a day.` : "")
+      + (x.sleep !== undefined ? ` Sleep ${n(x.sleep)} h a night.` : "") + " (Averages over the days logged.)"
+      + (x.weight !== undefined ? ` Weight ${n(x.weight)} lb${x.weightChange !== undefined ? ` (${x.weightChange >= 0 ? "+" : ""}${n(Math.round(x.weightChange * 10) / 10)} on the week before)` : ""}.` : "")];
+  if (r.goals.length) {
+    out.push("", "Goals this week:");
+    for (const g of r.goals) {
+      out.push(`- ${g.option.name}: ${n(Math.round(g.from * 10) / 10)} → ${n(Math.round(g.to * 10) / 10)} of ${n(g.goal.target)} ${g.goal.unit}, ${PACE[g.pace]}.${g.forecast !== undefined ? ` At this rate ${n(Math.round(g.forecast * 10) / 10)} by the end.` : ""}`);
+      if (g.checkIn) out.push(`  Check-in: ${g.checkIn.ahead ? "well ahead; offer to raise" : "behind; offer to keep it, or move"} the target to ${n(g.checkIn.proposed)} ${g.goal.unit} (${g.checkIn.weeksLeft} weeks left). Only if they agree: set_goal change, goal_id ${g.id}.`);
+    }
+  }
+  out.push("", r.alerts.length ? `Alerts:\n${r.alerts.map((a) => `- ${a.title}. ${a.detail}${a.area ? ` (If it's an injury, set_profile can add ${a.area} to injured_areas.)` : ""}`).join("\n")}` : "No alerts.");
+  const f = progress.facts(r);
+  out.push("", "Facts for your take:", ...(f.length ? f.map((x) => `- ${x}`) : ["- Nothing to go on yet."]));
   return out.join("\n");
 }
 
@@ -506,6 +609,10 @@ export async function callTool(name: string, args: Args, account: Account, store
       await store.put(uid, `undo#${day}`, { used: true }, 1);
       return `Put back ${day}'s session as it was.`;
     }
+    case "get_progress":
+      return describeProgress(await store.units(uid), today, Math.floor(now.getTime() / 1000), tz);
+    case "get_week_review":
+      return describeReview(await store.units(uid), day, Math.floor(now.getTime() / 1000), tz);
     case "get_program":
       return describeProgram(await store.units(uid), today, tz);
     case "set_program": {
@@ -561,6 +668,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (args.action === "add") {
         if (args.target === undefined || !args.type) throw new Error("A new goal needs its type and target.");
         const body = goalBody(args as GoalInput, deadline);
+        body.baseline = baselineOf(units, body.metric);
         const id = randomUUID().toUpperCase();
         await store.write(uid, [{ key: `goal#${id}`, body: encode(body) }], account.agent);
         return `Added: ${body.metric} ${body.target} ${body.unit}${by ? ` by ${by}` : ""} [goal_id ${id}].`;
