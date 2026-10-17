@@ -309,7 +309,7 @@ if (plan.status !== "none") throw new Error(`A's coach plan ${JSON.stringify(pla
 const checkout = must(await gql(a, `mutation { startCoachPlan(interval: "month") }`), "startCoachPlan").startCoachPlan;
 if (plan.onSale ? !String(checkout).startsWith("https://checkout.stripe.com/") : checkout !== null) throw new Error(`checkout ${checkout}`);
 if (!(await gql(a, `mutation { startCoachPlan(interval: "week") }`)).errors?.length) throw new Error("a weekly plan was accepted");
-pass(plan.onSale ? "the coach plan opens a test-mode Checkout" : "the coach plan isn't on sale yet (no Stripe secret), and says so");
+pass(plan.onSale ? "the coach plan opens a test-mode Checkout" : "the coach plan isn't on sale yet (no Stripe secret or no coach prices), and says so");
 
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
