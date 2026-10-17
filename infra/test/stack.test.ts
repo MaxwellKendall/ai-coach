@@ -139,6 +139,7 @@ describe("resolvers", () => {
         "Mutation.redeemGift", "Query.giftedPro", "Mutation.syncPush", "Query.syncPull", "Subscription.onSync",
         "Mutation.createClientInvite", "Query.coachInvite", "Mutation.acceptCoach", "Query.myCoaches", "Query.myClients",
         "Mutation.unlinkCoach", "Mutation.removeClient", "Mutation.postComment", "Query.comments",
+        "Mutation.sendProgram", "Query.programOffers", "Mutation.answerProgram",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -150,12 +151,13 @@ describe("resolvers", () => {
 });
 
 describe("push", () => {
-  it("only runs for LIVE# items and new COMMENT# items (FIT-132)", () => {
+  it("only runs for LIVE# items and new COMMENT# (FIT-132) and OFFER# (FIT-131) items", () => {
     dev.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
       FilterCriteria: {
         Filters: [
           { Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "LIVE#" }] } } } }) },
           { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "COMMENT#" }] } } } }) },
+          { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "OFFER#" }] } } } }) },
         ],
       },
     });
@@ -202,6 +204,8 @@ describe("least privilege", () => {
     expect(actionsOf(dev, /^aiProxy/)).toContain("secretsmanager:GetSecretValue");
     // FIT-130: coach links are put and deleted one by one, never scanned.
     expect(actionsOf(dev, /^coach/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
+    // FIT-131: programs are put, read and answered, never deleted or scanned.
+    expect(actionsOf(dev, /^programs/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:BatchGetItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem"]);
     // FIT-126: sync writes and reads units, never deletes or scans.
     expect(actionsOf(dev, /^sync/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
     // FIT-138: appleStart finds, creates and links users and writes their profile; it never deletes them.

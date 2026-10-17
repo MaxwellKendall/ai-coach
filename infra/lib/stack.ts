@@ -370,6 +370,13 @@ export class AICoachStack extends Stack {
       ["Mutation", "postComment"], ["Query", "comments"]]) {
       coachSource.createResolver(`Coach${fieldName}`, { typeName, fieldName });
     }
+    // FIT-131: programs a coach sends; starting one writes the client's synced plan.
+    const programs = fn("programs", {});
+    table.grant(programs, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:BatchGetItem");
+    const programsSource = api.addLambdaDataSource("ProgramsSource", programs);
+    for (const [typeName, fieldName] of [["Mutation", "sendProgram"], ["Query", "programOffers"], ["Mutation", "answerProgram"]]) {
+      programsSource.createResolver(`Programs${fieldName}`, { typeName, fieldName });
+    }
     api.addNoneDataSource("None").createResolver("OnSync", {
       typeName: "Subscription",
       fieldName: "onSync",
@@ -400,6 +407,11 @@ export class AICoachStack extends Stack {
           lambda.FilterCriteria.filter({
             eventName: lambda.FilterRule.isEqual("INSERT"),
             dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("COMMENT#") } } },
+          }),
+          // FIT-131: a program sent to a client.
+          lambda.FilterCriteria.filter({
+            eventName: lambda.FilterRule.isEqual("INSERT"),
+            dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("OFFER#") } } },
           }),
         ],
       }),

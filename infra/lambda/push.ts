@@ -60,12 +60,30 @@ async function replied(comment: { owner: string; by: string; byName?: string | n
   await Promise.all(dead.map((d) => db.send(new DeleteCommand({ TableName: TABLE, Key: { PK: d.PK, SK: d.SK } }))));
 }
 
+/** FIT-131: "Sam sent you a 4-week program". */
+export function offerText(coachName: string | null | undefined, weeks: number, note: string) {
+  return { title: `${coachName ?? "Your coach"} sent you a ${weeks}-week program`, body: note || "Open the app to see it and start." };
+}
+
+async function offered(offer: { owner: string; coachName?: string | null; weeks: number; note: string }) {
+  const devices = await query(`USER#${offer.owner}`, "DEVICE#");
+  if (devices.length === 0) return;
+  const statuses = await sendAlerts(process.env.APNS_HOST!, await key(), devices.map((d) => d.token as string),
+    offerText(offer.coachName, offer.weeks, offer.note), { offer: "1" });
+  const dead = devices.filter((d) => statuses.get(d.token) === 410);
+  await Promise.all(dead.map((d) => db.send(new DeleteCommand({ TableName: TABLE, Key: { PK: d.PK, SK: d.SK } }))));
+}
+
 export async function handler(event: DynamoDBStreamEvent) {
   for (const record of event.Records) {
     const image = record.dynamodb;
     if (!image?.NewImage) continue;
     if (String(image.Keys?.SK?.S ?? "").startsWith("COMMENT#")) {
       await replied(unmarshall(image.NewImage as never) as never);
+      continue;
+    }
+    if (String(image.Keys?.SK?.S ?? "").startsWith("OFFER#")) {
+      await offered(unmarshall(image.NewImage as never) as never);
       continue;
     }
     const live = unmarshall(image.NewImage as never) as Live;

@@ -155,6 +155,22 @@ type Comment {
   text: String!
 }
 
+type ProgramOffer {
+  id: ID!
+  coachUid: ID!
+  coachName: String
+  note: String!
+  start: String!
+  weeks: Int!
+  "The template week, as sent (AWSJSON)."
+  days: AWSJSON!
+  addPerWeek: Float!
+  "sent, started or declined"
+  status: String!
+  createdAt: AWSDateTime!
+  answeredAt: AWSDateTime
+}
+
 type ClientInvite {
   code: String!
   url: String!
@@ -177,6 +193,8 @@ type Query {
   myClients: [Person!]!
   "FIT-132: replies on logged sessions: a day's thread, or all of them; mine, or a client's (uid) for their coach."
   comments(uid: ID, day: String): [Comment!]!
+  "FIT-131: programs sent to me, or (uid) the ones I sent a client, newest first."
+  programOffers(uid: ID): [ProgramOffer!]!
   "FIT-113: a shared item by its id, so the app can open a session someone shared."
   share(id: ID!): SharedItem
   me: Profile
@@ -198,6 +216,10 @@ type Mutation {
   removeClient(uid: ID!): Boolean
   "FIT-132: reply on a logged session (day YYYY-MM-DD): my own, or a client's (uid) as their coach."
   postComment(uid: ID, day: String!, text: String!): Comment
+  "FIT-131: send a client a program: days is a template week as JSON ([{weekday 0-6 from Sunday, slot, rows}]), repeated for weeks from start."
+  sendProgram(uid: ID!, start: String!, weeks: Int!, note: String, days: AWSJSON!, addPerWeek: Float): ProgramOffer
+  "FIT-131: the client starts (writes it into their plan from its start day) or declines a program. offsetMinutes: their time zone, east of UTC."
+  answerProgram(id: ID!, start: Boolean!, offsetMinutes: Int): ProgramOffer
   "FIT-105: save a win, recap or program to share; returns its link."
   createShare(kind: String!, payload: AWSJSON!): Share
   "FIT-107: a short-lived URL to upload the share's card (PNG), for link previews."
