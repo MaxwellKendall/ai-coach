@@ -96,9 +96,17 @@ const SESSION = {
   }, required: ["exercise", "sets"] },
 };
 
+// MCP tool annotations (FIT-156). Clients take a missing destructiveHint as true, so writes say it.
+// The propose tools only store a proposal, so they count as reads. Nothing reaches outside the account.
+const READ = { readOnlyHint: true, openWorldHint: false };
+const write = (destructive: boolean, idempotent: boolean) =>
+  ({ readOnlyHint: false, destructiveHint: destructive, idempotentHint: idempotent, openWorldHint: false });
+
 export const tools = [
   {
     name: "get_context",
+    title: "Get training context",
+    annotations: { title: "Get training context", ...READ },
     description: "Start here. The person's goals with deadlines and where they stand, their profile (age, equipment, injuries, never list, schedule), the planned sessions from today on, and recent logged sessions with RPE and notes, plus estimated maxes for the lifts they train. Read it before suggesting, logging or changing anything.",
     inputSchema: { type: "object", properties: {
       days_back: { type: "integer", minimum: 1, maximum: 120, description: "How many past days of logs to include (default 21)." },
@@ -107,21 +115,29 @@ export const tools = [
   },
   {
     name: "get_day",
+    title: "Get a day",
+    annotations: { title: "Get a day", ...READ },
     description: "One day in full: the planned session (each exercise with sets, reps or seconds, load and RPE) and what was logged.",
     inputSchema: { type: "object", properties: { date: DATE } },
   },
   {
     name: "find_exercises",
+    title: "Find exercises",
+    annotations: { title: "Find exercises", ...READ },
     description: "Search the exercise catalog (700 exercises) by name words, movement pattern (squat, hinge, horizontal_push, vertical_pull, lunge, carry, core…) or muscle. Only exercises their equipment allows and not on their never list.",
     inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
   },
   {
     name: "swap_options",
+    title: "Swap options",
+    annotations: { title: "Swap options", ...READ },
     description: "Alternatives for an exercise: the same movement with their equipment, best first. Use it when they want to replace one exercise.",
     inputSchema: { type: "object", properties: { exercise: EXERCISE }, required: ["exercise"] },
   },
   {
     name: "log_session",
+    title: "Log a session",
+    annotations: { title: "Log a session", ...write(true, false) },
     description: "Log a workout they did: each set with load, reps (or seconds) and RPE, and a note on how it went (soreness, sleep, how it felt). as_planned logs the day's planned sets; add sets to record what differed. A day already logged needs replace: true. Confirm the numbers with them first when unsure.",
     inputSchema: { type: "object", properties: {
       date: DATE,
@@ -138,11 +154,15 @@ export const tools = [
   },
   {
     name: "add_note",
+    title: "Add a note",
+    annotations: { title: "Add a note", ...write(false, false) },
     description: "Add context to a day already logged, in their words (\"left knee sore on the last set\", \"slept 5 hours\").",
     inputSchema: { type: "object", properties: { date: DATE, note: { type: "string" } }, required: ["note"] },
   },
   {
     name: "propose_session",
+    title: "Propose a session",
+    annotations: { title: "Propose a session", ...READ },
     description: "Propose a new session for a day not yet logged (today or later): the whole list of exercises, in order. Nothing changes until apply. Base it on get_context: their goals, recent logs and RPE, notes, equipment and injuries; keep the goal lifts progressing. Returns what changes and any plan-rule problems to fix first.",
     inputSchema: { type: "object", properties: {
       date: DATE,
@@ -153,6 +173,8 @@ export const tools = [
   },
   {
     name: "propose_week",
+    title: "Propose a week",
+    annotations: { title: "Propose a week", ...READ },
     description: "Propose several days at once, such as the first week after setup or next week from their logs: each day's whole session, or an empty exercises list for a rest day. Days already logged or past are refused. Checked by the plan rules and their weekly set ceiling; nothing changes until apply. Plan the days they said they train, each fitting their minutes.",
     inputSchema: { type: "object", properties: {
       reason: { type: "string", description: "One sentence on the week's aim, shown to them in the app." },
@@ -163,6 +185,8 @@ export const tools = [
   },
   {
     name: "set_profile",
+    title: "Set profile",
+    annotations: { title: "Set profile", ...write(false, true) },
     description: "Save what they tell you about themselves, merging into what's there. Call it as each answer comes in during setup, and whenever something changes. A new profile needs age and weight_lb first.",
     inputSchema: { type: "object", properties: {
       age: { type: "integer", minimum: 13, maximum: 100 },
@@ -182,6 +206,8 @@ export const tools = [
   },
   {
     name: "set_goal",
+    title: "Set a goal",
+    annotations: { title: "Set a goal", ...write(true, false) },
     description: "Add, change or drop a goal. Goals have a target and ideally a date: a lift max (\"squat 225\"), reps in a row (\"10 pull-ups\") or body weight (\"190 lb\"). get_context lists goals with their ids.",
     inputSchema: { type: "object", properties: {
       action: { type: "string", enum: ["add", "change", "drop"] },
@@ -194,11 +220,15 @@ export const tools = [
   },
   {
     name: "apply",
+    title: "Apply a proposal",
+    annotations: { title: "Apply a proposal", ...write(false, false) },
     description: "Apply a proposal from propose_session after they agree. It replaces that day's session on their phone.",
     inputSchema: { type: "object", properties: { proposal_id: { type: "string" } }, required: ["proposal_id"] },
   },
   {
     name: "undo",
+    title: "Undo an apply",
+    annotations: { title: "Undo an apply", ...write(false, false) },
     description: "Put back the session a day had before the last apply.",
     inputSchema: { type: "object", properties: { date: DATE }, required: ["date"] },
   },

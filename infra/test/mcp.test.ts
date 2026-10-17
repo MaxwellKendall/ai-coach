@@ -102,6 +102,21 @@ describe("mcp", () => {
     expect(text).toMatch(/Pull-up 8 reps — no sets logged yet/);
   });
 
+  it("annotates every tool: reads, writes, the destructive ones, nothing open-world", async () => {
+    const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
+    const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
+    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week"];
+    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo"];
+    expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
+    for (const t of list.result.tools) {
+      expect(t.title).toBeTruthy();
+      expect(t.annotations).toMatchObject({ title: t.title, openWorldHint: false });
+    }
+    for (const n of reads) expect(by[n].annotations.readOnlyHint).toBe(true);
+    for (const n of writes) expect(by[n].annotations.readOnlyHint).toBe(false);
+    expect(writes.filter((n) => by[n].annotations.destructiveHint)).toEqual(["log_session", "set_goal"]);
+  });
+
   it("refuses an unknown link and answers notifications with 202", async () => {
     const token = "x".repeat(43);
     const store = memory({ [hashToken(token)]: me }, data());
