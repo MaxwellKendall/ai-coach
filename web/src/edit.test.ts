@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLine, editLine, editLines, editOf, moveDay, moveLine, removeLine } from "./edit";
+import { addLine, copyDay, editLine, editLines, editOf, groupWithNext, moveDay, moveLine, removeLine, ungroup } from "./edit";
 import { describe as text, lines, WARMUP } from "./program";
 import type { PlanRow } from "./sync";
 
@@ -88,5 +88,38 @@ describe("moving a session to another day (FIT-128)", () => {
     expect(out.map((r) => r.id)).toEqual(rows.map((r) => r.id));
     expect(out.map((r) => r.at - 2 * day)).toEqual(rows.map((r) => r.at));
     expect(out.every((r) => r.pinned)).toBe(true);
+  });
+});
+
+describe("copying a session forward (FIT-128)", () => {
+  it("makes new rows a week on, at the same time, pinned, without the day's kitchen", () => {
+    const rows = [...session(), row("", [], { kind: "cook" })];
+    let k = 0;
+    const out = copyDay(rows, start, start + 7 * 86_400, () => `c${++k}`);
+    expect(out.map((r) => r.id)).toEqual(["c1", "c2", "c3", "c4"]);
+    expect(out.map((r) => r.at - 7 * 86_400)).toEqual(rows.slice(0, 4).map((r) => r.at));
+    expect(out.every((r) => r.pinned && r.kind === "workout")).toBe(true);
+  });
+});
+
+describe("supersets (FIT-128)", () => {
+  it("group a line with the next, and come apart again", () => {
+    const rows = session();
+    const [, rowLine] = editLines(rows);
+    const grouped = groupWithNext(rows, rowLine);
+    const lines = editLines(grouped);
+    expect(lines.map((l) => l.group)).toEqual([undefined, 1, 1]);
+    // Taking one out of a pair leaves no group at all.
+    const apart = ungroup(grouped, lines[1]);
+    expect(editLines(apart).map((l) => l.group)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("join an existing group, and the last line has nothing to join", () => {
+    const rows = session();
+    const lines = editLines(rows);
+    const two = groupWithNext(rows, lines[0]);
+    const three = groupWithNext(two, editLines(two)[1]);
+    expect(editLines(three).map((l) => l.group)).toEqual([1, 1, 1]);
+    expect(groupWithNext(rows, lines[2])).toBe(rows);
   });
 });

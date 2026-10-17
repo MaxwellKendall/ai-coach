@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Config, User } from "./auth";
 import catalog from "./catalog.json";
-import { addLine, editLine, editLines, editOf, moveDay, moveLine, removeLine, type Edit, type EditLine } from "./edit";
+import { addLine, copyDay, editLine, editLines, editOf, groupWithNext, moveDay, moveLine, removeLine, ungroup, type Edit, type EditLine } from "./edit";
 import { checkDay, checkWeek, type Exercise, type Profile } from "./guard";
 import { dayKey, describe, week, weekStart, type Day } from "./program";
 import { pullAll, pushDay, type PlanRow, type Unit } from "./sync";
@@ -101,6 +101,14 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
   const equipment = profile?.equipment ? new Set(profile.equipment) : undefined;
   const weekWarning = checkWeek(days.map((d) => rowsOf(units, d.key)), profile);
   const editable = (day: Day) => day.key >= todayKey && !day.done;
+  // FIT-128: a session copied to the same day next week, when that day has nothing planned.
+  const copyForward = (day: Day) => {
+    const next = new Date(day.date.getFullYear(), day.date.getMonth(), day.date.getDate() + 7);
+    const nextKey = dayKey(next);
+    if (rowsOf(units, nextKey).some((r) => r.kind === "workout")) return undefined;
+    return () => save(nextKey, [...copyDay(rowsOf(units, day.key), day.date.getTime() / 1000, next.getTime() / 1000),
+                                ...rowsOf(units, nextKey)]);
+  };
   // FIT-128: a session dragged onto a rest day moves there (both days sync).
   const move = async (from: Day, to: Day) => {
     const rows = rowsOf(units, from.key);
@@ -120,6 +128,7 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
         {days.map((day) => (
           <DayCard key={day.key} day={day} today={day.key === todayKey} editable={editable(day)}
                    rows={rowsOf(units, day.key)} equipment={equipment} onSave={(rows) => save(day.key, rows)}
+                   onCopy={editable(day) ? copyForward(day) : undefined}
                    warnings={editable(day) ? checkDay(rowsOf(units, day.key), profile, exercises) : []}
                    onDrop={(fromKey) => { const from = days.find((d) => d.key === fromKey); if (from && editable(from)) move(from, day); }} />
         ))}
@@ -133,6 +142,7 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
               {weekDays.map((day) => (
                 <DayCard key={day.key} day={day} today={false} editable={editable(day)}
                          rows={rowsOf(units, day.key)} equipment={equipment} onSave={(rows) => save(day.key, rows)}
+                         onCopy={editable(day) ? copyForward(day) : undefined}
                          warnings={checkDay(rowsOf(units, day.key), profile, exercises)}
                          onDrop={(fromKey) => { const from = weekDays.find((d) => d.key === fromKey); if (from) move(from, day); }} />
               ))}
@@ -159,9 +169,9 @@ export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
   );
 }
 
-export function DayCard({ day, today, editable, rows, equipment, onSave, warnings = [], onDrop }: {
+export function DayCard({ day, today, editable, rows, equipment, onSave, warnings = [], onDrop, onCopy }: {
   day: Day; today: boolean; editable: boolean; rows: PlanRow[]; equipment?: Set<string>; onSave: (rows: PlanRow[]) => void;
-  warnings?: string[]; onDrop?: (fromKey: string) => void;
+  warnings?: string[]; onDrop?: (fromKey: string) => void; onCopy?: () => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [over, setOver] = useState(false);
@@ -184,6 +194,7 @@ export function DayCard({ day, today, editable, rows, equipment, onSave, warning
               onDragStart={(e) => { e.dataTransfer.setData("text/x-day", day.key); e.dataTransfer.effectAllowed = "move"; }}>
             {day.title ?? "Workout"}
             {day.done && <span className="done">Done</span>}
+            {onCopy && lines.length > 0 && <button className="copy" onClick={onCopy}>Copy to next week</button>}
           </h3>
         )}
         {empty && !adding && <p className="muted">{day.done ? "Trained" : "Rest"}</p>}
@@ -193,6 +204,9 @@ export function DayCard({ day, today, editable, rows, equipment, onSave, warning
               <ul className="edit">
                 {lines.map((line, i) => (
                   <LineRow key={line.ids[0]} line={line} first={i === 0} last={i === lines.length - 1}
+                           grouped={line.group !== undefined}
+                           startsGroup={line.group !== undefined && lines[i - 1]?.group !== line.group}
+                           onGroup={() => onSave(line.group !== undefined ? ungroup(rows, line) : groupWithNext(rows, line))}
                            onEdit={(edit) => onSave(editLine(rows, line, edit))}
                            onMove={(by) => onSave(moveLine(rows, line, by))}
                            onRemove={() => onSave(removeLine(rows, line))} />
@@ -244,8 +258,9 @@ function NumberCell({ value, label, step = 1, onCommit }: {
   );
 }
 
-function LineRow({ line, first, last, onEdit, onMove, onRemove }: {
-  line: EditLine; first: boolean; last: boolean; onEdit: (e: Edit) => void; onMove: (by: -1 | 1) => void; onRemove: () => void;
+function LineRow({ line, first, last, grouped, startsGroup, onGroup, onEdit, onMove, onRemove }: {
+  line: EditLine; first: boolean; last: boolean; grouped: boolean; startsGroup: boolean; onGroup: () => void;
+  onEdit: (e: Edit) => void; onMove: (by: -1 | 1) => void; onRemove: () => void;
 }) {
   const edit = editOf(line);
   const name = (line.template && names.get(line.template)) ?? line.template ?? "Exercise";
@@ -253,8 +268,8 @@ function LineRow({ line, first, last, onEdit, onMove, onRemove }: {
   const perHand = line.targets.some((t) => t.metric === "load_lb_hand");
   const set = (patch: Partial<Edit>) => onEdit({ ...edit, ...patch });
   return (
-    <li>
-      <span className="name">{name}</span>
+    <li className={grouped ? "grouped" : undefined}>
+      <span className="name">{startsGroup && <span className="tag">Superset</span>}{name}</span>
       <span className="cells">
         <NumberCell label={`${name} sets`} value={edit.sets} onCommit={(v) => set({ sets: v ?? 1 })} />
         <span className="x">×</span>
@@ -272,6 +287,9 @@ function LineRow({ line, first, last, onEdit, onMove, onRemove }: {
       <span className="tools">
         <button aria-label={`Move ${name} up`} disabled={first} onClick={() => onMove(-1)}>↑</button>
         <button aria-label={`Move ${name} down`} disabled={last} onClick={() => onMove(1)}>↓</button>
+        <button aria-label={grouped ? `Take ${name} out of the superset` : `Superset ${name} with the next exercise`}
+                title={grouped ? "Take out of the superset" : "Superset with the next exercise"}
+                disabled={!grouped && last} onClick={onGroup}>{grouped ? "⊖" : "⊕"}</button>
         <button aria-label={`Remove ${name}`} onClick={onRemove}>✕</button>
       </span>
     </li>

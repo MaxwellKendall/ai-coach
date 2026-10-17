@@ -10,6 +10,8 @@ export type Edit = { sets: number; reps?: number; seconds?: number; load?: numbe
 export type EditLine = {
   /** Rows this line stands for, in order. */
   ids: string[];
+  /** A superset or circuit: lines sharing a group are done together in rounds (FIT-21). */
+  group?: number;
   template?: string;
   sets: number;
   targets: Measurement[];
@@ -28,11 +30,11 @@ export function editLines(rows: PlanRow[]): EditLine[] {
     const targets = row.targets.filter((m) => m.metric !== "sets");
     const sets = value(row.targets, "sets") ?? 1;
     const last = out[out.length - 1];
-    if (last && last.template === row.template && same(last.targets, targets) && last.note === row.note) {
+    if (last && last.template === row.template && same(last.targets, targets) && last.note === row.note && last.group === (row.group ?? undefined)) {
       last.ids.push(row.id);
       last.sets += sets;
     } else {
-      out.push({ ids: [row.id], template: row.template, sets, targets, note: row.note });
+      out.push({ ids: [row.id], template: row.template, sets, targets, note: row.note, group: row.group ?? undefined });
     }
   }
   return out;
@@ -143,4 +145,29 @@ export function editOf(line: EditLine): Edit {
 /** A session moved to another day: the same rows at the same time of day, pinned. */
 export function moveDay(rows: PlanRow[], fromStart: number, toStart: number): PlanRow[] {
   return pin(rows.map((row) => ({ ...row, at: row.at - fromStart + toStart })));
+}
+
+/** A session copied to another day (a week on, say): new rows at the same time of day, pinned so planning keeps them. */
+export function copyDay(rows: PlanRow[], fromStart: number, toStart: number, newId: () => string = () => crypto.randomUUID()): PlanRow[] {
+  return pin(rows.filter((r) => r.kind === "workout").map((row) => ({ ...row, id: newId(), at: row.at - fromStart + toStart })));
+}
+
+/** FIT-128: a line done together with the next one, as a superset (the app's `group`, FIT-21). */
+export function groupWithNext(rows: PlanRow[], line: EditLine): PlanRow[] {
+  const lines = editLines(rows);
+  const at = lines.findIndex((l) => l.ids[0] === line.ids[0]);
+  const next = lines[at + 1];
+  if (at < 0 || !next) return rows;
+  const group = line.group ?? next.group ?? Math.max(0, ...rows.map((r) => r.group ?? 0)) + 1;
+  const members = new Set([...line.ids, ...next.ids, ...lines.filter((l) => l.group !== undefined && (l.group === line.group || l.group === next.group)).flatMap((l) => l.ids)]);
+  return pin(rows.map((r) => (members.has(r.id) ? { ...r, group } : r)));
+}
+
+/** A line taken out of its superset; a group left with one line isn't a group. */
+export function ungroup(rows: PlanRow[], line: EditLine): PlanRow[] {
+  const mine = new Set(line.ids);
+  let out = rows.map((r) => (mine.has(r.id) ? { ...r, group: undefined } : r));
+  const left = out.filter((r) => r.group === line.group && r.kind === "workout");
+  if (new Set(left.map((r) => r.template)).size <= 1) out = out.map((r) => (r.group === line.group ? { ...r, group: undefined } : r));
+  return pin(out);
 }
