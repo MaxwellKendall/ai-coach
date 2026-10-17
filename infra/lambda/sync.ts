@@ -14,7 +14,8 @@ export type Unit = UnitInput & { changedAt: string };
 export const MAX_UNITS = 25;
 export const MAX_BODY = 100_000;
 export const PAGE = 100;
-const KEY = /^((plan|log)#\d{4}-\d{2}-\d{2}|goal#[0-9A-Fa-f-]{36}|profile)$/;
+// FIT-173: template#slug is an exercise the user made (SyncUnits.TemplateBody).
+const KEY = /^((plan|log)#\d{4}-\d{2}-\d{2}|goal#[0-9A-Fa-f-]{36}|template#[a-z0-9]+(-[a-z0-9]+)*|profile)$/;
 
 /** A unit the server will store, or why not. updatedAt in the future is taken as now, so a wrong clock can't win for good. */
 export function checked(unit: UnitInput, now: Date): UnitInput {

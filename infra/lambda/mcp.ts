@@ -6,7 +6,7 @@ import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda
 import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
 import { push } from "./sync.ts";
 import {
-  addDays, AREAS, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
+  addDays, AREAS, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
   nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
@@ -173,6 +173,30 @@ export const tools = [
     annotations: { title: "Swap options", ...READ },
     description: "Alternatives for an exercise: the same movement with their equipment, best first. Use it when they want to replace one exercise.",
     inputSchema: { type: "object", properties: { exercise: EXERCISE }, required: ["exercise"] },
+  },
+  {
+    name: "create_exercise",
+    title: "Create an exercise",
+    annotations: { title: "Create an exercise", ...write(false, false) },
+    description: "Add an exercise of their own that the catalog doesn't have (check find_exercises first). Then plan and log it like any other; it shows by name on their phone, in the plan and the library.",
+    inputSchema: { type: "object", properties: {
+      name: { type: "string", description: "As they call it, e.g. \"Landmine Press\"." },
+      pattern: { type: "string", enum: PATTERNS, description: "Its movement pattern, which the plan rules and the review count." },
+      equipment: { type: "array", items: { type: "string", enum: EQUIPMENT }, description: "What it needs; [] for bodyweight." },
+      muscles: { type: "array", items: { type: "string", enum: MUSCLES } },
+      cues: { type: "array", items: { type: "string" }, description: "Short coaching cues, one each." },
+    }, required: ["name", "pattern", "equipment"] },
+  },
+  {
+    name: "edit_exercise",
+    title: "Edit their exercise",
+    annotations: { title: "Edit their exercise", ...write(false, true) },
+    description: "Change one of their own exercises: its name, pattern, equipment, muscles or cues. Catalog exercises can't be changed.",
+    inputSchema: { type: "object", properties: {
+      exercise: EXERCISE,
+      name: { type: "string" }, pattern: { type: "string", enum: PATTERNS }, equipment: { type: "array", items: { type: "string", enum: EQUIPMENT } },
+      muscles: { type: "array", items: { type: "string", enum: MUSCLES } }, cues: { type: "array", items: { type: "string" } },
+    }, required: ["exercise"] },
   },
   {
     name: "log_session",
@@ -534,6 +558,12 @@ function describeReview(units: Units, day: string, nowSec: number, tz: string) {
   return out.join("\n");
 }
 
+/** An exercise's slug by its exact name or slug, without resolve's looser matching. */
+function resolveLoose(said: string) {
+  const s = said.trim().toLowerCase();
+  return catalog.find((e) => e.slug === s || e.name.toLowerCase() === s)?.slug;
+}
+
 /** Every win since the program started, as get_progress lists them (WinFeed.wins). */
 function progressWins(units: Units, today: string, tz: string) {
   const profile = profileOf(units), program = programOf(profile, tz);
@@ -611,6 +641,7 @@ async function propose(uid: string, tz: string, today: string, days: DayInput[],
 
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
   const { uid, tz } = account;
+  useAccountExercises(await store.units(uid)); // FIT-173: their own exercises, beside the catalog
   const today = dayOf(now, tz);
   const day = (args.date as string | undefined) ?? today;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error(`Not a date: ${day}. Use YYYY-MM-DD.`);
@@ -634,6 +665,23 @@ export async function callTool(name: string, args: Args, account: Account, store
       const e = resolve(String(args.exercise));
       const list = swapOptions(e.slug, profileOf(await store.units(uid)));
       return list.length ? `Instead of ${e.name}:\n${list.map((x) => `${x.name} (${x.slug}) — ${x.equipment.join(", ") || "bodyweight"}`).join("\n")}` : `No alternatives for ${e.name} with their equipment.`;
+    }
+    case "create_exercise": {
+      const fields = args as ExerciseFields;
+      const taken = bySlug.get(resolveLoose(String(fields.name ?? "")) ?? "");
+      if (taken) throw new Error(`${taken.name} is already ${isOwn(taken.slug) ? "one of theirs" : "in the catalog"}; plan it by that name.`);
+      const body = exerciseBody(undefined, fields);
+      const slug = slugFor(body.name, new Set(catalog.map((e) => e.slug)));
+      await store.write(uid, [{ key: `template#${slug}`, body: encode(body) }], account.agent);
+      return `Added ${body.name} (${slug}). Plan and log it by name; it shows on their phone at its next sync.`;
+    }
+    case "edit_exercise": {
+      const units = await store.units(uid);
+      const slug = resolveLoose(String(args.exercise ?? ""));
+      if (!slug || !isOwn(slug)) throw new Error("Only their own exercises can be changed (create_exercise makes one).");
+      const body = exerciseBody(JSON.parse(units.get(`template#${slug}`)!), args as ExerciseFields);
+      await store.write(uid, [{ key: `template#${slug}`, body: encode(body) }], account.agent);
+      return `Saved ${body.name}.`;
     }
     case "log_session": {
       const units = await store.units(uid);

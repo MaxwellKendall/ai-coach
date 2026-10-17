@@ -5,7 +5,23 @@ import SwiftData
 /// FIT-126: the program and logs as units the server keeps a copy of: a day's planned activity (`plan#2026-10-16`), a
 /// day's log entries (`log#…`), each goal (`goal#UUID`) and the profile. Bodies are canonical JSON, so the same data
 /// is always the same bytes; the phone works out what changed by comparing them with what the server last agreed to.
+/// FIT-173: exercises the user made (`template#slug`) too; the bundled catalog is the same everywhere and never synced.
 enum SyncUnits {
+    struct TemplateBody: Codable, Equatable {
+        var kind: TemplateKind
+        var name: String
+        var attributes: [TemplateAttribute]
+    }
+
+    private struct Slugged: Decodable { var slug: String }
+
+    /// Slugs of the bundled catalog (Resources/Seed), which every install has.
+    static let bundledSlugs: Set<String> = Set(["exercises", "recipes"].flatMap { name -> [String] in
+        guard let url = Bundle.main.url(forResource: name, withExtension: "json"), let data = try? Data(contentsOf: url),
+              let rows = try? JSONDecoder().decode([Slugged].self, from: data) else { return [] }
+        return rows.map(\.slug)
+    })
+
     struct PlanRow: Codable, Equatable {
         var id: UUID
         var kind: ActivityKind
@@ -116,6 +132,9 @@ enum SyncUnits {
         }
         if let profile = try context.fetch(FetchDescriptor<Profile>()).first {
             units["profile"] = encode(profileBody(profile))
+        }
+        for template in try context.fetch(FetchDescriptor<Template>()) where template.kind == .exercise && !bundledSlugs.contains(template.slug) {
+            units["template#\(template.slug)"] = encode(TemplateBody(kind: template.kind, name: template.name, attributes: template.attributes))
         }
         return units
     }
@@ -242,6 +261,25 @@ enum SyncUnits {
             target.deadline = g.deadline
             target.baseline = g.baseline
             target.status = g.status
+            target.updatedAt = now
+        } else if key.hasPrefix("template#") {
+            // Applied before the plans and logs that name it (SyncEngine), so their rows find it by slug.
+            let slug = String(key.dropFirst(9))
+            guard !slug.isEmpty, !bundledSlugs.contains(slug) else { return }
+            let template = try context.fetch(FetchDescriptor<Template>(predicate: #Predicate { $0.slug == slug })).first
+            guard let body else {
+                if let template { context.delete(template) }
+                return
+            }
+            let b = try decode(TemplateBody.self, body)
+            let target = template ?? {
+                let new = Template(kind: b.kind, name: b.name, slug: slug, now: now)
+                context.insert(new)
+                return new
+            }()
+            target.kind = b.kind
+            target.name = b.name
+            target.attributes = b.attributes
             target.updatedAt = now
         } else if key == "profile", let body {
             let b = try decode(ProfileBody.self, body)

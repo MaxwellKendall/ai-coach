@@ -18,31 +18,6 @@
   "log#2026-10-17": [
     {
       "at": 1792233000,
-      "id": "00000000-0000-4000-8000-000000000007",
-      "kind": "workout",
-      "measurements": [
-        {
-          "metric": "reps",
-          "unit": "reps",
-          "value": 5
-        },
-        {
-          "metric": "load_lb",
-          "unit": "lb",
-          "value": 175
-        },
-        {
-          "metric": "rpe",
-          "unit": "RPE",
-          "value": 7
-        }
-      ],
-      "note": "Lower A",
-      "plannedRef": "00000000-0000-4000-8000-000000000003",
-      "template": "back-squat"
-    },
-    {
-      "at": 1792233001,
       "id": "00000000-0000-4000-8000-000000000008",
       "kind": "workout",
       "measurements": [
@@ -67,7 +42,7 @@
       "template": "back-squat"
     },
     {
-      "at": 1792233002,
+      "at": 1792233001,
       "id": "00000000-0000-4000-8000-000000000009",
       "kind": "workout",
       "measurements": [
@@ -92,7 +67,7 @@
       "template": "back-squat"
     },
     {
-      "at": 1792233003,
+      "at": 1792233002,
       "id": "00000000-0000-4000-8000-000000000010",
       "kind": "workout",
       "measurements": [
@@ -117,14 +92,19 @@
       "template": "back-squat"
     },
     {
-      "at": 1792233004,
+      "at": 1792233003,
       "id": "00000000-0000-4000-8000-000000000011",
       "kind": "workout",
       "measurements": [
         {
-          "metric": "duration_s",
-          "unit": "s",
-          "value": 45
+          "metric": "reps",
+          "unit": "reps",
+          "value": 5
+        },
+        {
+          "metric": "load_lb",
+          "unit": "lb",
+          "value": 175
         },
         {
           "metric": "rpe",
@@ -133,11 +113,11 @@
         }
       ],
       "note": "Lower A",
-      "plannedRef": "00000000-0000-4000-8000-000000000004",
-      "template": "plank"
+      "plannedRef": "00000000-0000-4000-8000-000000000003",
+      "template": "back-squat"
     },
     {
-      "at": 1792233005,
+      "at": 1792233004,
       "id": "00000000-0000-4000-8000-000000000012",
       "kind": "workout",
       "measurements": [
@@ -157,7 +137,7 @@
       "template": "plank"
     },
     {
-      "at": 1792233006,
+      "at": 1792233005,
       "id": "00000000-0000-4000-8000-000000000013",
       "kind": "workout",
       "measurements": [
@@ -177,8 +157,28 @@
       "template": "plank"
     },
     {
-      "at": 1792233007,
+      "at": 1792233006,
       "id": "00000000-0000-4000-8000-000000000014",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "duration_s",
+          "unit": "s",
+          "value": 45
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000004",
+      "template": "plank"
+    },
+    {
+      "at": 1792233007,
+      "id": "00000000-0000-4000-8000-000000000015",
       "kind": "workout",
       "measurements": [
         {
@@ -196,7 +196,7 @@
     },
     {
       "at": 1792231200,
-      "id": "00000000-0000-4000-8000-000000000015",
+      "id": "00000000-0000-4000-8000-000000000016",
       "kind": "bodyweight",
       "measurements": [
         {
@@ -209,7 +209,7 @@
     },
     {
       "at": 1792231200,
-      "id": "00000000-0000-4000-8000-000000000016",
+      "id": "00000000-0000-4000-8000-000000000017",
       "kind": "sleep",
       "measurements": [
         {
@@ -227,7 +227,7 @@
     },
     {
       "at": 1792236600,
-      "id": "00000000-0000-4000-8000-000000000017",
+      "id": "00000000-0000-4000-8000-000000000018",
       "kind": "meal",
       "measurements": [
         {
@@ -355,6 +355,34 @@
         }
       ],
       "template": "pull-up"
+    },
+    {
+      "adjustedReason": "First week.",
+      "at": 1792405802,
+      "id": "00000000-0000-4000-8000-000000000007",
+      "kind": "workout",
+      "main": false,
+      "note": "",
+      "pinned": true,
+      "slot": "Upper A",
+      "targets": [
+        {
+          "metric": "sets",
+          "unit": "sets",
+          "value": 3
+        },
+        {
+          "metric": "reps",
+          "unit": "reps",
+          "value": 8
+        },
+        {
+          "metric": "load_lb",
+          "unit": "lb",
+          "value": 45
+        }
+      ],
+      "template": "landmine-press"
     }
   ],
   "profile": {
@@ -408,5 +436,29 @@
     "warmups": true,
     "weightLb": 196,
     "workoutTime": 390
+  },
+  "template#landmine-press": {
+    "attributes": [
+      {
+        "key": "equipment",
+        "values": [
+          "barbell"
+        ]
+      },
+      {
+        "key": "movement_pattern",
+        "values": [
+          "push"
+        ]
+      },
+      {
+        "key": "muscles_primary",
+        "values": [
+          "anterior_deltoids"
+        ]
+      }
+    ],
+    "kind": "exercise",
+    "name": "Landmine Press"
   }
 }

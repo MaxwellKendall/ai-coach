@@ -40,6 +40,71 @@ export const catalog: Exercise[] = (seed as SeedTemplate[]).map((t) => ({
   muscles: attr(t, "muscles_primary"), substitutes: attr(t, "substitutes"), aliases: attr(t, "aliases"),
 }));
 export const bySlug = new Map(catalog.map((e) => [e.slug, e]));
+
+// ---- FIT-173: the person's own exercises (template#slug units, as SyncUnits.TemplateBody) ----
+
+export const PATTERNS = [...new Set(catalog.flatMap((e) => (e.pattern ? [e.pattern] : [])))].sort();
+export const MUSCLES = [...new Set(catalog.flatMap((e) => e.muscles))].sort();
+const bundled = new Set(catalog.map((e) => e.slug));
+let own: Exercise[] = [];
+
+/** Whether a slug is one of the person's own exercises (loaded by useAccountExercises). */
+export const isOwn = (slug: string) => own.some((e) => e.slug === slug);
+
+/**
+ * Adds the account's own exercises to the catalog for this call, so every lookup, search and rule sees them. A Lambda
+ * runs one event at a time, so the last account's are simply swapped out.
+ */
+export function useAccountExercises(units: Units) {
+  for (const e of own) bySlug.delete(e.slug);
+  catalog.splice(catalog.length - own.length, own.length);
+  own = [...units].filter(([k]) => k.startsWith("template#") && !bundled.has(k.slice(9))).flatMap(([k, body]) => {
+    const t = JSON.parse(body) as { kind: string; name: string; attributes: { key: string; values: string[] }[] };
+    return t.kind === "exercise" ? [toExercise({ slug: k.slice(9), name: t.name, attributes: t.attributes })] : [];
+  });
+  catalog.push(...own);
+  for (const e of own) bySlug.set(e.slug, e);
+}
+
+function toExercise(t: SeedTemplate): Exercise {
+  return { slug: t.slug, name: t.name, pattern: attr(t, "movement_pattern")[0], equipment: attr(t, "equipment"), tags: attr(t, "tags"),
+    muscles: attr(t, "muscles_primary"), substitutes: attr(t, "substitutes"), aliases: attr(t, "aliases") };
+}
+
+/** Slug.unique: "Landmine Press" → "landmine-press", numbered past any taken. */
+export function slugFor(name: string, taken: Set<string>) {
+  const base = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join("-") || "item";
+  let slug = base;
+  for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
+  return slug;
+}
+
+export type ExerciseFields = { name?: string; pattern?: string; equipment?: string[]; muscles?: string[]; cues?: string[] };
+
+/** A template body for an exercise of their own, the fields checked against the catalog's own lists. */
+export function exerciseBody(current: { name: string; attributes: { key: string; values: string[] }[] } | undefined, input: ExerciseFields) {
+  const name = (input.name ?? current?.name ?? "").trim();
+  if (!name || name.length > 60) throw new Error("An exercise needs a name (60 characters at most).");
+  const attributes = new Map((current?.attributes ?? []).map((a) => [a.key, a.values]));
+  if (input.pattern !== undefined) {
+    if (!PATTERNS.includes(input.pattern)) throw new Error(`pattern is one of ${PATTERNS.join(", ")}.`);
+    attributes.set("movement_pattern", [input.pattern]);
+  }
+  if (input.equipment !== undefined) {
+    const bad = input.equipment.filter((e) => !EQUIPMENT.includes(e));
+    if (bad.length) throw new Error(`Unknown equipment ${bad.join(", ")}. Use: ${EQUIPMENT.join(", ")}; [] for bodyweight.`);
+    attributes.set("equipment", [...new Set(input.equipment)]);
+  }
+  if (input.muscles !== undefined) {
+    const bad = input.muscles.filter((x) => !MUSCLES.includes(x));
+    if (bad.length) throw new Error(`Unknown muscles ${bad.join(", ")}. Use: ${MUSCLES.join(", ")}.`);
+    attributes.set("muscles_primary", [...new Set(input.muscles)]);
+  }
+  if (input.cues !== undefined) attributes.set("cues", input.cues.map((c) => c.trim()).filter(Boolean));
+  if (!attributes.get("movement_pattern")?.length) throw new Error(`Say its movement pattern: ${PATTERNS.join(", ")}.`);
+  if (!attributes.has("equipment")) attributes.set("equipment", []);
+  return { kind: "exercise", name, attributes: [...attributes].map(([key, values]) => ({ key, values })).sort((a, b) => a.key.localeCompare(b.key)) };
+}
 export const nameOf = (slug?: string) => (slug && bySlug.get(slug)?.name) ?? slug ?? "Exercise";
 
 const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean)

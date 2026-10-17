@@ -51,10 +51,10 @@ beforeEach(() => {
 
 describe("sync units", () => {
   it("accept only the known keys", () => {
-    for (const key of ["plan#2026-10-16", "log#2026-01-02", "goal#3F2504E0-4F89-11D3-9A0C-0305E82C3301", "profile"]) {
+    for (const key of ["plan#2026-10-16", "log#2026-01-02", "goal#3F2504E0-4F89-11D3-9A0C-0305E82C3301", "profile", "template#landmine-press"]) {
       expect(checked({ key, updatedAt: t0.toISOString(), deleted: true }, t0).key).toBe(key);
     }
-    for (const key of ["plan#2026-10", "PROFILE", "goal#x", "plan#2026-10-16#x", "../SHARE#1"]) {
+    for (const key of ["plan#2026-10", "PROFILE", "goal#x", "plan#2026-10-16#x", "../SHARE#1", "template#", "template#Landmine", "template#a/b", "template#-x"]) {
       expect(() => checked({ key, updatedAt: t0.toISOString(), deleted: true }, t0)).toThrow();
     }
   });

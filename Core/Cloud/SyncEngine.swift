@@ -111,7 +111,8 @@ final class SyncEngine {
     private func apply(_ units: [SyncState.Unit], into context: ModelContext, force: Bool) throws {
         let wanted = units.filter { force || state.shouldApply($0) }
         guard !wanted.isEmpty else { return }
-        for unit in wanted {
+        // FIT-173: exercises first, so the plans and logs that name them find them.
+        for unit in wanted.filter({ $0.key.hasPrefix("template#") }) + wanted.filter({ !$0.key.hasPrefix("template#") }) {
             try SyncUnits.apply(unit.key, body: unit.body, in: context)
         }
         try context.save()

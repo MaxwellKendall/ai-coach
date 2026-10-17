@@ -117,7 +117,7 @@ describe("mcp", () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
     const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
-    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing"];
+    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
@@ -420,6 +420,32 @@ describe("agent-first onboarding (FIT-150)", () => {
     await expect(callTool("stop_sharing", { link: id(recap)[2] }, me, store, at)).rejects.toThrow(/isn't one of their/);
   });
 
+  it("makes an exercise of their own, finds and plans it, and edits only theirs (FIT-173)", async () => {
+    const units = data();
+    const store = memory({}, units);
+    await expect(callTool("create_exercise", { name: "Back Squat", pattern: "squat", equipment: ["barbell"] }, me, store, now)).rejects.toThrow(/already in the catalog/);
+    await expect(callTool("create_exercise", { name: "Landmine Press", pattern: "wiggle", equipment: [] }, me, store, now)).rejects.toThrow(/pattern is one of/);
+    expect(await callTool("create_exercise", { name: "Landmine Press", pattern: "push", equipment: ["barbell"], muscles: ["anterior_deltoids"], cues: ["Ribs down"] }, me, store, now))
+      .toMatch(/Added Landmine Press \(landmine-press\)/);
+    expect(JSON.parse(units.me["template#landmine-press"])).toEqual({ kind: "exercise", name: "Landmine Press", attributes: [
+      { key: "cues", values: ["Ribs down"] }, { key: "equipment", values: ["barbell"] }, { key: "movement_pattern", values: ["push"] }, { key: "muscles_primary", values: ["anterior_deltoids"] }] });
+    await expect(callTool("create_exercise", { name: "landmine press", pattern: "push", equipment: [] }, me, store, now)).rejects.toThrow(/already one of theirs/);
+    expect(await callTool("find_exercises", { query: "landmine" }, me, store, now)).toMatch(/Landmine Press \(landmine-press\) — push; barbell/);
+
+    const week = await callTool("propose_session", { date: "2026-10-19", title: "Upper", reason: "x", exercises: [{ exercise: "Landmine Press", sets: 3, reps: 8, weight_lb: 45 }] }, me, store, now);
+    expect(week).toMatch(/\+ Landmine Press: 3 × 8 @ 45 lb/);
+    expect(week).toMatch(/passes the plan rules/);
+    await callTool("apply", { proposal_id: week.match(/Proposal (\S+)/)![1] }, me, store, now);
+    expect(JSON.parse(units.me["plan#2026-10-19"])[0].template).toBe("landmine-press");
+    expect(await callTool("get_day", { date: "2026-10-19" }, me, store, now)).toMatch(/Landmine Press \(landmine-press\): 3 × 8 @ 45 lb/);
+
+    await callTool("edit_exercise", { exercise: "landmine-press", name: "Landmine Shoulder Press" }, me, store, now);
+    expect(JSON.parse(units.me["template#landmine-press"]).name).toBe("Landmine Shoulder Press");
+    await expect(callTool("edit_exercise", { exercise: "Back Squat", name: "Squat" }, me, store, now)).rejects.toThrow(/Only their own/);
+    // Another account doesn't see it.
+    expect(await callTool("find_exercises", { query: "landmine" }, fresh, memory({}, {}), now)).not.toMatch(/landmine-press/);
+  });
+
   it("holds a proposed week to their weekly ceiling", async () => {
     const units: Record<string, Record<string, string>> = { new: { profile: encode({ ...profile, maxWeeklySets: 10 }) } };
     const store = memory({}, units);
@@ -441,9 +467,11 @@ describe("what the app reads (FIT-150)", () => {
     await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, a, store, now);
     await callTool("set_goal", { action: "add", type: "reps", exercise: "Pull-up", target: 10 }, a, store, now);
     await callTool("set_program", { weeks: 16, trip: { from: "2026-11-02", to: "2026-11-07" } }, a, store, now);
+    await callTool("create_exercise", { name: "Landmine Press", pattern: "push", equipment: ["barbell"], muscles: ["anterior_deltoids"] }, a, store, now);
     const week = await callTool("propose_week", { reason: "First week.", days: [
       { date: "2026-10-17", title: "Lower A", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 175, rpe: 7 }, { exercise: "Plank", sets: 3, seconds: 45 }] },
-      { date: "2026-10-19", title: "Upper A", exercises: [{ exercise: "Dumbbell Bench Press", sets: 3, reps: 10, weight_lb_per_hand: 50, superset: 1 }, { exercise: "Pull-up", sets: 3, reps: 5, superset: 1 }] },
+      { date: "2026-10-19", title: "Upper A", exercises: [{ exercise: "Dumbbell Bench Press", sets: 3, reps: 10, weight_lb_per_hand: 50, superset: 1 }, { exercise: "Pull-up", sets: 3, reps: 5, superset: 1 },
+        { exercise: "Landmine Press", sets: 3, reps: 8, weight_lb: 45 }] },
     ] }, a, store, now);
     await callTool("apply", { proposal_id: week.match(/Proposal (\S+)/)![1] }, a, store, now);
     await callTool("log_session", { as_planned: true, rpe: 7, effort: 6, note: "Knees fine." }, a, store, now);

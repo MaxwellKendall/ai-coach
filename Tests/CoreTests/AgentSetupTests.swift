@@ -16,7 +16,8 @@ struct AgentSetupTests {
         for slug in ["back-squat", "plank", "dumbbell-bench-press", "pull-up"] {
             context.insert(Template(kind: .exercise, name: slug, slug: slug))
         }
-        for (key, value) in json {
+        // Exercises first, as SyncEngine applies them, so the plans that name them find them.
+        for (key, value) in json.sorted(by: { ($0.key.hasPrefix("template#") ? 0 : 1, $0.key) < ($1.key.hasPrefix("template#") ? 0 : 1, $1.key) }) {
             let body = String(decoding: try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]), as: UTF8.self)
             try SyncUnits.apply(key, body: body, in: context)
         }
@@ -47,8 +48,17 @@ struct AgentSetupTests {
         // FIT-167: set_goal starts a lift goal where the starting set puts it (185 × 5), as onboarding does.
         #expect(goals.first { $0.metric == "back-squat.1rm_lb" }?.baseline == 208)
 
+        // FIT-173: create_exercise's Landmine Press is in the library and planned by name.
+        let landmine = try #require(try context.fetch(FetchDescriptor<Template>()).first { $0.slug == "landmine-press" })
+        #expect(landmine.name == "Landmine Press" && landmine.values("movement_pattern") == ["push"])
+        let units = try SyncUnits.all(in: context)
+        #expect(units.keys.filter { $0.hasPrefix("template#") } == ["template#landmine-press"])
+        let sent = try JSONSerialization.jsonObject(with: Data(units["template#landmine-press"]!.utf8)) as? NSDictionary
+        #expect(sent == json["template#landmine-press"] as? NSDictionary)
+
         let planned = try context.fetch(FetchDescriptor<PlannedActivity>())
-        #expect(planned.count == 4)
+        #expect(planned.count == 5)
+        #expect(planned.contains { $0.templateRef == landmine.id })
         #expect(planned.allSatisfy { $0.pinned && $0.templateRef != nil })
         #expect(Set(planned.compactMap(\.slot)) == ["Lower A", "Upper A"])
 
