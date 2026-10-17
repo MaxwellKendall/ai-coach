@@ -29,6 +29,19 @@ npm --prefix ../web run dev                      # http://localhost:5173 (the we
 npm --prefix ../web test
 ```
 
+## Coaches (FIT-130 to FIT-132)
+
+`lambda/coach.ts` handles coach invites (`COACHINVITE#CODE`, single use, 14 days), links (`USER#client COACH#coach` and
+`USER#coach CLIENT#client`) and session replies (`USER#client COMMENT#day#at#by`). `lambda/programs.ts` handles programs
+a coach sends (`USER#client OFFER#id`); starting one writes the client's `plan#` sync units. `sync.ts` lets a linked
+coach read a client's units and write only their `plan#` days. The push Lambda also sends a coach's replies and new
+programs to the client's phone.
+
+```bash
+AWS_PROFILE=aicoach-dev npm run buddy -- coach   # Test Buddy coaches Test Client (sample week), session for the web dev server
+AWS_PROFILE=aicoach-dev npm run sync-status      # each account's synced units
+```
+
 ## Accounts
 
 Decision (FIT-57, 2026-10-03, author): dev and prod share one account, `397614038040` (profile
@@ -79,6 +92,10 @@ won't arrive. The budget email needs no confirmation.
    Apple Services ID and to the Google OAuth client.
 3. `npx cdk deploy --profile aicoach-dev -c stage=prod`, then confirm the SNS email for `AICoach-prod-alerts`.
 4. `AWS_PROFILE=aicoach-dev npm run outputs prod` and commit `Resources/amplify_outputs.prod.json`.
+
+**Deploy everything on main (the dashboard included):** `npm --prefix ../web run build`, then
+`npx cdk diff --profile aicoach-dev -c stage=prod` and read it, then `npx cdk deploy --profile aicoach-dev -c stage=prod`,
+then `AWS_PROFILE=aicoach-dev npm run outputs prod` and commit `Resources/amplify_outputs.prod.json` if it changed.
 
 **Deploy a change:** `npx cdk diff --profile aicoach-dev -c stage=prod`, read it, then `cdk deploy` with the
 same flags. Anything that replaces the table or user pool is a stop: it would lose users and data.
