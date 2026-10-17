@@ -154,6 +154,7 @@ describe("mcp", () => {
     const units = data();
     const store = memory({}, units);
     const before = units.me["plan#2026-10-17"];
+    await callTool("set_profile", { starting_sets: [{ exercise: "Bench Press", weight_lb: 185, reps: 5 }] }, me, store, now);
     const proposed = await callTool("propose_session", {
       title: "Upper · chest first", reason: "They asked for chest.",
       exercises: [{ exercise: "Bench Press", sets: 4, reps: 6, weight_lb: 170, rpe: 7 }, { exercise: "Dumbbell Bench Press", sets: 3, reps: 10, weight_lb_per_hand: 50 }],
@@ -397,6 +398,8 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(readSession(sp, "Sam")).toBeDefined();
 
     await expect(callTool("share", { kind: "program" }, me, store, at)).rejects.toThrow(/set_program with phases/);
+    await expect(callTool("set_program", { weeks: 16 }, me, store, at)).rejects.toThrow(/Romanian Deadlift: a 1RM/);
+    await callTool("set_profile", { starting_sets: [{ exercise: "Romanian Deadlift", weight_lb: 185, reps: 8 }] }, me, store, at);
     await callTool("set_program", { phases: [
       { phase: "base", focus: "Volume and technique.", main_lifts: ["back squat", "Bench Press"], main_reps: 8, accessory_reps: 12 },
       { phase: "build", focus: "Heavier", main_lifts: ["Back Squat", "Deadlift"], main_reps: 5, accessory_reps: 10 },
@@ -446,6 +449,29 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(await callTool("find_exercises", { query: "landmine" }, fresh, memory({}, {}), now)).not.toMatch(/landmine-press/);
   });
 
+  it("won't lay out a program or weight a main lift without their maxes, and holds weights to them (FIT-174)", async () => {
+    const units: Record<string, Record<string, string>> = {};
+    const store = memory({}, units);
+    await callTool("set_profile", { age: 41, weight_lb: 196, training_days: ["Mon", "Wed", "Sat"] }, fresh, store, now);
+    await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 275, by: "2027-03-01" }, fresh, store, now);
+    await callTool("set_goal", { action: "add", type: "reps", exercise: "Pull-up", target: 12 }, fresh, store, now);
+    expect(await callTool("get_context", {}, fresh, store, now)).toMatch(/NOT SET UP YET[\s\S]*Back Squat: a 1RM \(tested or estimated\) or a recent heavy set, weight × reps; Pull-up: most reps in a row now/);
+    await expect(callTool("set_program", { weeks: 16 }, fresh, store, now)).rejects.toThrow(/Back Squat: a 1RM[\s\S]*Pull-up: most reps/);
+    const blind = await callTool("propose_session", { date: "2026-10-19", title: "Lower", reason: "x", exercises: [
+      { exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 185, rpe: 7 }, { exercise: "Romanian Deadlift", sets: 3, reps: 8, weight_lb: 135, rpe: 7 }] }, fresh, store, now);
+    expect(blind).toMatch(/Back Squat is a main lift with a weight but no known max/);
+    expect(blind).toMatch(/Check with them:[\s\S]*Romanian Deadlift at 135 lb is a guess/);
+
+    // Their 1RM: 225. Brzycki gives 200 for 5, plus 5 lb.
+    await callTool("set_profile", { starting_sets: [{ exercise: "Back Squat", weight_lb: 225, reps: 1 }, { exercise: "Pull-up", reps: 7 }] }, fresh, store, now);
+    expect(await callTool("get_context", {}, fresh, store, now)).not.toMatch(/NOT SET UP YET/);
+    await callTool("set_program", { weeks: 16 }, fresh, store, now);
+    const heavy = await callTool("propose_session", { date: "2026-10-19", title: "Lower", reason: "x", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 215, rpe: 7 }] }, fresh, store, now);
+    expect(heavy).toMatch(/Back Squat: 215 lb for 5 is over the most their starting point gives for 5 reps; at most 205 lb\./);
+    const right = await callTool("propose_session", { date: "2026-10-19", title: "Lower", reason: "x", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 200, rpe: 7 }] }, fresh, store, now);
+    expect(right).toMatch(/passes the plan rules/);
+  });
+
   it("holds a proposed week to their weekly ceiling", async () => {
     const units: Record<string, Record<string, string>> = { new: { profile: encode({ ...profile, maxWeeklySets: 10 }) } };
     const store = memory({}, units);
@@ -463,7 +489,7 @@ describe("what the app reads (FIT-150)", () => {
     const store = memory({}, units);
     const a: Account = { uid: "a", tz, agent: "claude" };
     await callTool("set_profile", { age: 41, weight_lb: 196, training_days: ["Mon", "Wed", "Sat"], workout_time: "06:30", equipment: ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"],
-      injured_areas: ["knees"], never: ["Bench Press"], starting_sets: [{ exercise: "Back Squat", weight_lb: 185, reps: 5 }] }, a, store, now);
+      injured_areas: ["knees"], never: ["Bench Press"], starting_sets: [{ exercise: "Back Squat", weight_lb: 185, reps: 5 }, { exercise: "Pull-up", reps: 6 }] }, a, store, now);
     await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, a, store, now);
     await callTool("set_goal", { action: "add", type: "reps", exercise: "Pull-up", target: 10 }, a, store, now);
     await callTool("set_program", { weeks: 16, trip: { from: "2026-11-02", to: "2026-11-07" } }, a, store, now);

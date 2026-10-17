@@ -6,7 +6,7 @@ import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda
 import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
 import { push } from "./sync.ts";
 import {
-  addDays, AREAS, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
+  addDays, AREAS, checkLoads, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
   nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
@@ -361,7 +361,7 @@ export const tools = [
       never: { type: "array", items: { type: "string" }, description: "Exercises they won't do, by name." },
       style: { type: "string", enum: STYLES, description: "powerbuilding (strength and size, the default), powerlifting, hypertrophy, functional." },
       max_weekly_sets: { type: "integer", minimum: 10, maximum: 120, description: "A ceiling on working sets a week (default 60)." },
-      starting_sets: { type: "array", description: "A recent set per goal lift, so the first loads fit.", items: { type: "object", properties: {
+      starting_sets: { type: "array", description: "Where they are now, per goal lift and any main lift: their 1RM (weight_lb with reps 1, tested or their best estimate) or a recent heavy set (weight × reps). Required before set_program, and weights are held to it.", items: { type: "object", properties: {
         exercise: EXERCISE, weight_lb: { type: "number" }, reps: { type: "integer" }, seconds: { type: "integer" },
       }, required: ["exercise"] } },
     } },
@@ -415,7 +415,7 @@ function context(units: Units, today: string, back: number, ahead: number, tz: s
   }
   const sets = loggedSets(units);
   const goals = goalsOf(units);
-  const needs = missing(profile, goals);
+  const needs = missing(profile, goals, units);
   if (needs.length) {
     out.push("", "NOT SET UP YET. Before planning, ask them, one topic at a time, and save each answer (set_profile, set_goal):", ...needs.map((n) => `- ${n}`),
       "Then set_program to their goal date, propose_week for the days from today to the end of next week, and apply when they agree.");
@@ -626,6 +626,9 @@ async function propose(uid: string, tz: string, today: string, days: DayInput[],
     problems.push(...checkDay(after, profile, week && isLight(week.week) ? 1 : undefined).map((p) => `${d.date}: ${p}`));
     if (week && profile) problems.push(...checkProgramDay(after, profile, week.week).map((p) => `${d.date}: ${p}`));
     notes.push(...cautions(after, profile).map((c) => `${d.date}: ${c}`));
+    const loads = checkLoads(after, units, profile);
+    problems.push(...loads.problems.map((p) => `${d.date}: ${p}`));
+    notes.push(...loads.cautions.map((c) => `${d.date}: ${c}`));
   }
   const sundays = new Set([...next.keys()].map((d) => addDays(d, -new Date(`${d}T12:00:00Z`).getUTCDay())));
   for (const sunday of sundays) {
@@ -822,6 +825,9 @@ export async function callTool(name: string, args: Args, account: Account, store
       const current = units.get("profile");
       if (!current) throw new Error("Set up their profile first (set_profile: age and weight).");
       const p = JSON.parse(current);
+      // FIT-174: the weights come from where they are now, so no program until each goal lift has it.
+      const unknown = unknownMaxes(goalsOf(units), units, p);
+      if (unknown.length) throw new Error(`Ask them first, then save with set_profile starting_sets (a 1RM is weight_lb with reps 1):\n${unknown.map((u) => `- ${u}`).join("\n")}`);
       const old = programOf(p, tz);
       const date = (v: unknown, name: string) => {
         if (v === undefined) return undefined;
@@ -872,10 +878,10 @@ export async function callTool(name: string, args: Args, account: Account, store
       }
       const merged = mergeProfile(current ? JSON.parse(current) : undefined, args as ProfileInput);
       await store.write(uid, [{ key: "profile", body: encode(merged) }], account.agent);
-      const days = (merged.trainingDays as number[]).map((d) => WEEKDAYS[d]).join(", ");
+      const days = ((merged.trainingDays ?? []) as number[]).map((d) => WEEKDAYS[d]).join(", ");
       return `Saved. Age ${merged.age}, ${merged.weightLb} lb; trains ${days}, ${merged.sessionMinutes} min at ${String(Math.floor(merged.workoutTime / 60)).padStart(2, "0")}:${String(merged.workoutTime % 60).padStart(2, "0")}; `
-        + `equipment ${(merged.equipment as string[]).join(", ") || "none"}; injured ${(merged.injuredAreas as string[]).join(", ") || "none"}; never ${(merged.avoidExercises as string[]).map(nameOf).join(", ") || "none"}; `
-        + `${merged.style}; ${merged.starts.length} starting set(s).`;
+        + `equipment ${((merged.equipment ?? []) as string[]).join(", ") || "none"}; injured ${((merged.injuredAreas ?? []) as string[]).join(", ") || "none"}; never ${((merged.avoidExercises ?? []) as string[]).map(nameOf).join(", ") || "none"}; `
+        + `${merged.style}; ${(merged.starts ?? []).length} starting set(s).`;
     }
     case "set_goal": {
       const units = await store.units(uid);
@@ -919,7 +925,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
         capabilities: { tools: {} },
         serverInfo: { name: "Barbrabell", version: "0.1.0" },
-        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, a recent set per goal lift), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs.",
+        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs.",
       });
     }
     case "ping":

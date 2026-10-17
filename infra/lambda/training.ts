@@ -554,11 +554,101 @@ export function goalBody(input: GoalInput, deadline: number | undefined, baselin
 }
 
 /** What a new account still needs before the first week can be planned. */
-export function missing(profile: Profile | undefined, goals: Goal[]): string[] {
+export function missing(profile: Profile | undefined, goals: Goal[], units: Units = new Map()): string[] {
   const out: string[] = [];
   if (!profile) out.push("profile: age and body weight, training days, minutes per session, usual time, equipment, injuries, exercises they never do");
   if (!goals.length) out.push("goals: what they want to reach and by when (a lift max, reps, or body weight)");
+  const unknown = unknownMaxes(goals, units, profile);
+  if (unknown.length) out.push(`where they are now, so the weights are right (FIT-174): ${unknown.join("; ")}. Save each with set_profile starting_sets (a 1RM is weight_lb with reps 1)`);
   return out;
+}
+
+// ---- FIT-174: no program or weights without their maxes; loads held to them (PlanGuard rule 3) ----
+
+/** PlanGuard.maxJump: at most 10% over the last top set. */
+const MAX_JUMP = 1.1;
+
+/** Every logged set of an exercise with `metric`, oldest first. */
+function setsOf(units: Units, slug: string, metric: string) {
+  const out: { day: string; load: number; reps?: number; rpe?: number }[] = [];
+  for (const key of [...units.keys()].filter((k) => k.startsWith("log#")).sort()) {
+    for (const r of logOf(units, key.slice(4)).filter((r) => r.kind === "workout" && r.template === slug)) {
+      const load = value(r.measurements, metric);
+      if (load !== undefined) out.push({ day: key.slice(4), load, reps: value(r.measurements, "reps"), rpe: value(r.measurements, "rpe") });
+    }
+  }
+  return out;
+}
+
+const startOf = (profile: Profile | undefined, slug: string) =>
+  ((profile as Record<string, any> | undefined)?.starts ?? []).find((s: { exercise: string }) => s.exercise === slug) as { measurements: Measurement[] } | undefined;
+
+/** Whether a weight for this exercise has something to go on: its own logged sets, or (for load_lb) a starting set. */
+export function knowsMax(units: Units, profile: Profile | undefined, slug: string, metric = "load_lb") {
+  const start = startOf(profile, slug);
+  return setsOf(units, slug, metric).length > 0 || (metric === "load_lb" && value(start?.measurements ?? [], "load_lb") !== undefined && value(start?.measurements ?? [], "reps") !== undefined);
+}
+
+/** Goal lifts with nothing to set weights from: a max goal with no loaded set or starting set, a reps goal with no reps. */
+export function unknownMaxes(goals: Goal[], units: Units, profile: Profile | undefined): string[] {
+  return goals.filter((g) => g.status === "active").flatMap((g) => {
+    const [slug, kind] = g.metric.split(".");
+    if (kind === "1rm_lb" && !knowsMax(units, profile, slug)) return [`${nameOf(slug)}: a 1RM (tested or estimated) or a recent heavy set, weight × reps`];
+    if (kind === "reps" && !setsOf(units, slug, "reps").length && value(startOf(profile, slug)?.measurements ?? [], "reps") === undefined) return [`${nameOf(slug)}: most reps in a row now`];
+    return [];
+  });
+}
+
+/**
+ * PlanGuard.ceiling: the most a planned load can be for its reps. Brzycki from the best known max plus 5 lb (history
+ * with RPE-adjusted reps, else the starting set), and 10% over the last top set of the two weeks before the last log.
+ */
+export function loadCeiling(units: Units, profile: Profile | undefined, slug: string, metric: string, reps?: number) {
+  const sets = setsOf(units, slug, metric);
+  const ceilings: { load: number; why: string }[] = [];
+  const reserve = (rpe?: number) => 10 - Math.min(Math.max(rpe ?? 8, 6), 10);
+  const brzycki = (load: number, r: number) => (load * 36) / (37 - Math.min(r, 36));
+  if (reps !== undefined) {
+    const fromLogs = sets.filter((x) => x.reps !== undefined && x.reps >= 1 && x.reps <= 10).map((x) => brzycki(x.load, x.reps! + reserve(x.rpe)));
+    const start = startOf(profile, slug), sl = value(start?.measurements ?? [], "load_lb"), sr = value(start?.measurements ?? [], "reps");
+    const best = fromLogs.length ? Math.max(...fromLogs) : undefined;
+    const max = best ?? (metric === "load_lb" && sl !== undefined && sr !== undefined ? brzycki(sl, sr) : undefined);
+    if (max !== undefined) ceilings.push({ load: (max * (37 - Math.min(reps, 36))) / 36 + 5, why: `the most their ${best === undefined ? "starting point" : "history"} gives for ${reps} reps` });
+  }
+  const last = sets.at(-1)?.day;
+  if (last) {
+    const since = addDays(last, -14);
+    const top = Math.max(...sets.filter((x) => x.day >= since).map((x) => {
+      if (reps === undefined || x.reps === undefined || x.reps === reps) return x.load;
+      const r = reserve(x.rpe);
+      return (x.load * (37 - Math.min(reps + r, 36))) / (37 - Math.min(x.reps + r, 36));
+    }));
+    ceilings.push({ load: top * MAX_JUMP, why: "10% over their last top set" });
+  }
+  return ceilings.reduce<{ load: number; why: string } | undefined>((a, c) => (!a || c.load < a.load ? c : a), undefined);
+}
+
+/** Loads over their ceiling, and weighted main lifts with no max to go on: plan-rule problems. */
+export function checkLoads(plan: PlanRow[], units: Units, profile: Profile | undefined): { problems: string[]; cautions: string[] } {
+  const problems: string[] = [], notes: string[] = [];
+  for (const r of plan.filter(working)) {
+    if (!r.template) continue;
+    const metric = value(r.targets, "load_lb") !== undefined ? "load_lb" : value(r.targets, "load_lb_hand") !== undefined ? "load_lb_hand" : undefined;
+    if (!metric) continue;
+    const load = value(r.targets, metric)!, reps = value(r.targets, "reps"), name = nameOf(r.template);
+    if (!knowsMax(units, profile, r.template, metric)) {
+      if (r.main) problems.push(`${name} is a main lift with a weight but no known max. Ask for their 1RM or a recent heavy set first (set_profile starting_sets).`);
+      else notes.push(`${name} at ${load} lb${metric === "load_lb_hand" ? " each" : ""} is a guess: nothing logged to go on.`);
+      continue;
+    }
+    const c = loadCeiling(units, profile, r.template, metric, reps);
+    const barbell = (bySlug.get(r.template)?.equipment ?? []).some((k) => BARBELL.includes(k));
+    if (c && load > c.load) {
+      const capped = barbell ? Math.floor(c.load / 5) * 5 : Math.floor(c.load);
+      problems.push(`${name}: ${load} lb${reps ? ` for ${reps}` : ""} is over ${c.why}; at most ${capped} lb${metric === "load_lb_hand" ? " each" : ""}.`);
+    }
+  }
+  return { problems: [...new Set(problems)], cautions: [...new Set(notes)] };
 }
 
 /** Soft cautions that don't block apply: an exercise that loads an area they said is injured. */

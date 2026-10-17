@@ -9,6 +9,7 @@
     "unit": "lb"
   },
   "goal#00000000-0000-4000-8000-000000000002": {
+    "baseline": 6,
     "kind": "training",
     "metric": "pull-up.reps",
     "status": "active",
@@ -419,6 +420,16 @@
             "metric": "load_lb",
             "unit": "lb",
             "value": 185
+          }
+        ]
+      },
+      {
+        "exercise": "pull-up",
+        "measurements": [
+          {
+            "metric": "reps",
+            "unit": "reps",
+            "value": 6
           }
         ]
       }
