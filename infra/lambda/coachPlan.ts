@@ -116,6 +116,30 @@ export async function saveSubscription(sub: Subscription, eventAt: number): Prom
 
 export class PlanError extends Error {}
 
+let prices: { at: number; ids: Partial<Record<Interval, string>> } | undefined;
+/** The plan's price ids by lookup key, looked up at most every 5 minutes; none until the author has made them (FIT-143). */
+export async function planPrices(key: string, now = Date.now()): Promise<Partial<Record<Interval, string>>> {
+  if (!prices || now - prices.at > 5 * 60_000) {
+    const query = Object.values(LOOKUP_KEYS).map((k) => `lookup_keys[]=${k}`).join("&");
+    const found = await stripe<{ data: { id: string; lookup_key: string | null }[] }>(key, `prices?active=true&${query}`);
+    const ids: Partial<Record<Interval, string>> = {};
+    for (const [interval, lookup] of Object.entries(LOOKUP_KEYS) as [Interval, string][]) {
+      const price = found.data.find((p) => p.lookup_key === lookup);
+      if (price) ids[interval] = price.id;
+    }
+    prices = { at: now, ids };
+  }
+  return prices.ids;
+}
+
+/** On sale once there's a Stripe secret and both prices. */
+export async function onSale(): Promise<boolean> {
+  const keys = await stripeConfig();
+  if (!keys) return false;
+  const ids = await planPrices(keys.secretKey);
+  return Boolean(ids.month && ids.year);
+}
+
 /** The account's Stripe customer, made once and kept. */
 async function customerFor(key: string, uid: string, email?: string): Promise<string> {
   const known = (await planRecord(uid))?.customer;
@@ -146,14 +170,13 @@ export async function start(uid: string, interval: string, email?: string, origi
   if (current?.status && !["canceled", "incomplete_expired"].includes(current.status)) {
     throw new PlanError("You already have the coach plan. Use Manage billing to change it.");
   }
-  const lookup = LOOKUP_KEYS[interval];
-  const prices = await stripe<{ data: { id: string }[] }>(keys.secretKey, `prices?active=true&lookup_keys[]=${lookup}`);
-  if (!prices.data[0]) {
-    console.error("No price with lookup key", lookup);
+  const price = (await planPrices(keys.secretKey))[interval];
+  if (!price) {
+    console.error("No price with lookup key", LOOKUP_KEYS[interval]);
     return undefined;
   }
   const customer = await customerFor(keys.secretKey, uid, email);
-  const session = await stripe<{ url: string }>(keys.secretKey, "checkout/sessions", checkoutParams(uid, customer, prices.data[0].id, origin));
+  const session = await stripe<{ url: string }>(keys.secretKey, "checkout/sessions", checkoutParams(uid, customer, price, origin));
   return session.url;
 }
 
@@ -171,7 +194,7 @@ export async function handler(event: AppSyncResolverEvent<{ interval?: string }>
   if (!identity?.sub) throw new Error("Sign in first.");
   switch (event.info.fieldName) {
     case "coachPlan":
-      return shownPlan(Boolean(await stripeConfig()), await planRecord(identity.sub));
+      return shownPlan(await onSale(), await planRecord(identity.sub));
     case "startCoachPlan":
       return (await start(identity.sub, event.arguments.interval ?? "", identity.claims?.email as string | undefined)) ?? null;
     case "coachBillingPortal":

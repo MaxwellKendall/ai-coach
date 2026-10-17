@@ -303,6 +303,14 @@ must(await gql(b, `mutation($u: ID!) { unlinkCoach(uid: $u) }`, { u: aUid }), "u
 if (!(await gql(a, `query($u: ID) { syncPull(uid: $u) { units { key } } }`, { u: bUidNow })).errors?.length) throw new Error("A still reads B after unlinking");
 pass("A coaches B through a single-use invite (with its page): A reads and edits B's plan and replies on B's session, C can't, and B's unlink ends A's access");
 
+// FIT-144: the coach plan. Without the Stripe secret it isn't on sale; with it, a test-mode Checkout opens.
+const plan = must(await gql(a, `query { coachPlan { onSale status cancelsAtEnd } }`), "coachPlan").coachPlan;
+if (plan.status !== "none") throw new Error(`A's coach plan ${JSON.stringify(plan)}`);
+const checkout = must(await gql(a, `mutation { startCoachPlan(interval: "month") }`), "startCoachPlan").startCoachPlan;
+if (plan.onSale ? !String(checkout).startsWith("https://checkout.stripe.com/") : checkout !== null) throw new Error(`checkout ${checkout}`);
+if (!(await gql(a, `mutation { startCoachPlan(interval: "week") }`)).errors?.length) throw new Error("a weekly plan was accepted");
+pass(plan.onSale ? "the coach plan opens a test-mode Checkout" : "the coach plan isn't on sale yet (no Stripe secret), and says so");
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {
