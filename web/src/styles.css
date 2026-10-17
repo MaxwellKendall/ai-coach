@@ -146,3 +146,20 @@ h3.handle::before { content: "⠿"; color: var(--muted); font-size: 14px; margin
 .days.history .date span { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); }
 .note { margin-top: 8px; color: var(--muted); font-style: italic; }
 @media (max-width: 760px) { .days.history .day { grid-template-columns: 1fr; gap: 6px; } }
+
+/* FIT-130: clients */
+.lede { margin-top: 6px; }
+.invite { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: grid; gap: 12px; justify-items: start; margin-bottom: 24px; }
+.invite .button { min-height: 44px; }
+.link-row { display: flex; gap: 8px; width: 100%; }
+.link-row input { flex: 1; min-width: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); font: inherit; color: inherit; }
+.clients { list-style: none; display: grid; gap: 8px; }
+.clients a { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; }
+.clients a:hover { border-color: var(--text); }
+.crumb { margin-bottom: 8px; font-size: 14px; }
+.crumb a { color: var(--muted); text-decoration: none; }
+.crumb a::before { content: "‹ "; }
+.tabs { display: inline-flex; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-bottom: 20px; }
+.tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 999px; font-weight: 600; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--button); color: var(--button-text); }
+.danger { margin-top: 40px; }

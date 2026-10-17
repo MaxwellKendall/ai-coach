@@ -43,15 +43,15 @@ export async function gql<T>(config: Config, query: string, variables: Record<st
   return json.data as T;
 }
 
-/** Every unit the account has, newest copy of each. */
-export async function pullAll(config: Config): Promise<Map<string, Unit>> {
+/** Every unit the account has, newest copy of each; `uid` is a client's (FIT-130), for their coach. */
+export async function pullAll(config: Config, uid?: string): Promise<Map<string, Unit>> {
   const units = new Map<string, Unit>();
   let since: string | null = null;
   for (;;) {
     const { syncPull: page }: { syncPull: { units: Unit[]; cursor: string | null; more: boolean } } = await gql(
       config,
-      `query($s: String) { syncPull(since: $s) { units { key updatedAt deleted body } cursor more } }`,
-      { s: since },
+      `query($s: String, $u: ID) { syncPull(since: $s, uid: $u) { units { key updatedAt deleted body } cursor more } }`,
+      { s: since, u: uid ?? null },
     );
     for (const unit of page.units) units.set(unit.key, unit);
     since = page.cursor;
@@ -60,12 +60,24 @@ export async function pullAll(config: Config): Promise<Map<string, Unit>> {
 }
 
 /** FIT-128: a day's planned rows, as this browser has them now; false when the server kept a newer copy (the phone's). */
-export async function pushDay(config: Config, day: string, rows: PlanRow[]): Promise<boolean> {
+export async function pushDay(config: Config, day: string, rows: PlanRow[], uid?: string): Promise<boolean> {
   const unit = { key: `plan#${day}`, updatedAt: new Date().toISOString(), deleted: rows.length === 0, body: rows.length ? JSON.stringify(rows) : null };
   const { syncPush }: { syncPush: { rejected: { key: string }[] } } = await gql(
     config,
-    `mutation($u: [SyncUnitInput!]!) { syncPush(units: $u, source: "web") { uid source changedAt rejected { key } } }`,
-    { u: [unit] },
+    `mutation($u: [SyncUnitInput!]!, $o: ID) { syncPush(units: $u, source: "web", uid: $o) { uid source changedAt rejected { key } } }`,
+    { u: [unit], o: uid ?? null },
   );
   return syncPush.rejected.length === 0;
 }
+
+// FIT-130: coaches and clients.
+export type Person = { uid: string; name: string | null; since: string };
+
+export const myClients = (config: Config) =>
+  gql<{ myClients: Person[] }>(config, `query { myClients { uid name since } }`).then((d) => d.myClients);
+
+export const createClientInvite = (config: Config) =>
+  gql<{ createClientInvite: { code: string; url: string } }>(config, `mutation { createClientInvite { code url } }`).then((d) => d.createClientInvite);
+
+export const removeClient = (config: Config, uid: string) =>
+  gql(config, `mutation($u: ID!) { removeClient(uid: $u) }`, { u: uid });

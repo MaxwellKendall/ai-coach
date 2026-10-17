@@ -17,7 +17,9 @@ const rowsOf = (units: Map<string, Unit>, key: string): PlanRow[] => {
 };
 
 /** FIT-128: the program, this week editable in place, earlier weeks to look back on. Each edit syncs as it's made. */
-export function ProgramPage({ config, me, empty }: { config: Config; me: User; empty: React.ReactNode }) {
+export function ProgramPage({ config, me, empty, uid, heading = "This week" }: {
+  config: Config; me: User; empty: React.ReactNode; uid?: string; heading?: string;
+}) {
   const [units, setUnits] = useState<Map<string, Unit>>();
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<string>();
@@ -26,8 +28,8 @@ export function ProgramPage({ config, me, empty }: { config: Config; me: User; e
   const edits = useRef(0);
   const load = useCallback(() => {
     const at = edits.current;
-    return pullAll(config).then((u) => { if (edits.current === at) setUnits(u); }, (e: Error) => setError(e.message));
-  }, [config]);
+    return pullAll(config, uid).then((u) => { if (edits.current === at) setUnits(u); }, (e: Error) => setError(e.message));
+  }, [config, uid]);
   useEffect(() => {
     load();
     // Back on this tab: the phone may have changed something.
@@ -43,15 +45,16 @@ export function ProgramPage({ config, me, empty }: { config: Config; me: User; e
       setUnits((u) => new Map(u).set(`plan#${key}`, { key: `plan#${key}`, updatedAt: new Date().toISOString(), deleted: !body, body }));
       setStatus("Saving…");
       try {
-        const kept = await pushDay(config, key, rows);
-        setStatus(kept ? "Saved. It's on your phone the next time the app is open." : "Changed on your phone in the meantime; showing that.");
+        const kept = await pushDay(config, key, rows, uid);
+        const phone = uid ? "their phone" : "your phone";
+        setStatus(kept ? `Saved. It's on ${phone} the next time the app is open.` : `Changed on ${phone} in the meantime; showing that.`);
         if (!kept) await load();
       } catch (e) {
         setStatus(`Couldn't save: ${(e as Error).message}`);
         await load();
       }
     },
-    [config, load],
+    [config, load, uid],
   );
 
   const today = new Date();
@@ -92,7 +95,7 @@ export function ProgramPage({ config, me, empty }: { config: Config; me: User; e
     <>
       <header className="page">
         <p className="eyebrow">Week of {monthDay.format(days[0].date)}</p>
-        <h1>This week</h1>
+        <h1>{heading}</h1>
         {status && <p className="status" role="status">{status}</p>}
         {weekWarning && <p className="warning">{weekWarning}</p>}
       </header>

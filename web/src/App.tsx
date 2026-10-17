@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { finishSignIn, idToken, signIn, signOut, user, type Config, type Provider, type User } from "./auth";
+import { ClientPage, ClientsPage } from "./ClientsPage";
 import { HistoryView } from "./HistoryView";
 import { ProgramPage } from "./ProgramPage";
 import { pullAll, type Unit } from "./sync";
@@ -89,6 +90,7 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
         <nav>
           {link("/", "Program", path === "/")}
           {link("/history", "History", path.startsWith("/history"))}
+          {link("/clients", "Clients", path.startsWith("/clients"))}
         </nav>
         <div className="account">
           <div className="who">
@@ -101,6 +103,10 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
       <main className="content">
         {path.startsWith("/history") ? (
           <HistoryPage config={config} />
+        ) : path.startsWith("/clients/") ? (
+          <ClientPage key={path} config={config} me={me} uid={path.slice("/clients/".length)} go={go} />
+        ) : path.startsWith("/clients") ? (
+          <ClientsPage config={config} go={go} />
         ) : (
           <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} />} />
         )}
