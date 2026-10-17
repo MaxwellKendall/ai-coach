@@ -47,7 +47,8 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
   return (
     <main className="signin">
       <div className="brand"><Logo />{APP}</div>
-      <h1>Your program, on a bigger screen</h1>
+      <h1>Your training, on a bigger screen</h1>
+      <p className="lede">Edit your program and look back at every session. Coach others? Invite your clients, write their programs and see how their training goes.</p>
       <p className="lede">Sign in with the account you use in the app.</p>
       <div className="buttons">
         {providers.map((p) => (
@@ -108,7 +109,7 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
         ) : path.startsWith("/clients") ? (
           <ClientsPage config={config} me={me} go={go} />
         ) : (
-          <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} />} />
+          <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} go={go} />} />
         )}
       </main>
     </div>
@@ -136,14 +137,20 @@ function HistoryPage({ config, me }: { config: Config; me: User }) {
   );
 }
 
-function Empty({ config, me }: { config: Config; me: User }) {
+function Empty({ config, me, go }: { config: Config; me: User; go: (path: string) => (e?: React.MouseEvent) => void }) {
   return (
     <>
       <header className="page">
         <h1>This week</h1>
       </header>
+      {/* FIT-130: a coach may not train with the app themselves; their work is on Clients. */}
+      <div className="empty coach">
+        <h2>Coaching clients?</h2>
+        <p className="muted">Invite them, write their programs and follow their training.</p>
+        <a className="button primary" href="/clients" onClick={go("/clients")}>Go to Clients</a>
+      </div>
       <div className="empty">
-        <h2>Nothing here yet</h2>
+        <h2>Training yourself?</h2>
         <p className="muted">
           Open {APP} on your iPhone, signed in as {me.email ?? me.name ?? "this account"}, and your program shows up here.
         </p>

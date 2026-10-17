@@ -197,3 +197,5 @@ h3.handle::before { content: "⠿"; color: var(--muted); font-size: 14px; margin
 .offers .declined { color: #b0541f; }
 .offers .sent { color: var(--muted); }
 .actions.top { margin: 0 0 16px; }
+.empty.coach { margin-bottom: 12px; justify-items: start; }
+.empty .button { min-height: 44px; margin-top: 4px; text-decoration: none; }
