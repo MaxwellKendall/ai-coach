@@ -91,8 +91,11 @@ export class AICoachStack extends Stack {
         architecture: lambda.Architecture.ARM_64,
         timeout: Duration.seconds(10),
         logGroup: new logs.LogGroup(this, `Apple${handler}Logs`, { retention: logs.RetentionDays.ONE_MONTH, removalPolicy }),
+        environment: { TABLE: table.tableName },
       });
     const verifyAuthChallengeResponse = appleTrigger("verifyChallenge");
+    // FIT-137: Verify accepts an account the Apple user linked their sign-in to.
+    table.grant(verifyAuthChallengeResponse, "dynamodb:GetItem");
 
     const userPool = new cognito.UserPool(this, "Users", {
       userPoolName: `AICoach-${stage}`,
@@ -177,7 +180,7 @@ export class AICoachStack extends Stack {
       USER_POOL_ID: userPool.userPoolId,
       APPLE_PROVIDER: props.identityProviders.includes("apple") ? "SignInWithApple" : "",
     });
-    table.grant(appleStart, "dynamodb:PutItem");
+    table.grant(appleStart, "dynamodb:PutItem", "dynamodb:GetItem");
     appleStart.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["cognito-idp:AdminGetUser", "cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword", "cognito-idp:AdminLinkProviderForUser"],
@@ -352,6 +355,14 @@ export class AICoachStack extends Stack {
       typeName: "Mutation",
       fieldName: "aiMessages",
     });
+
+    // ---- FIT-137: linking Apple and Google sign-ins into one account ----
+    const accounts = fn("accounts", { USER_POOL_ID: userPool.userPoolId, CLIENT_IDS: [appClient.userPoolClientId, webClient.userPoolClientId].join(",") });
+    table.grant(accounts, "dynamodb:Query", "dynamodb:PutItem", "dynamodb:DeleteItem");
+    accounts.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["cognito-idp:AdminDeleteUser", "cognito-idp:AdminLinkProviderForUser"], resources: [userPool.userPoolArn],
+    }));
+    api.addLambdaDataSource("AccountsSource", accounts).createResolver("LinkAccount", { typeName: "Mutation", fieldName: "linkAccount" });
 
     // ---- FIT-126: the program and logs, synced both ways ----
     const sync = fn("sync", {});

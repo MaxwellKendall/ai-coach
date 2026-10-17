@@ -209,3 +209,9 @@ h3 .copy:hover { color: var(--text); }
 .form .design .button { min-height: 40px; }
 .form .design .muted { font-weight: 400; font-size: 14px; }
 .flags li.plateau { color: var(--text); border-color: var(--text); }
+
+/* FIT-137: the account's sign-ins */
+.account-page { gap: 12px; }
+.signins { list-style: none; display: grid; gap: 8px; }
+.signins li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.signins .button { min-height: 38px; }

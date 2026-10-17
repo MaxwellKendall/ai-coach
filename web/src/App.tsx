@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { finishSignIn, idToken, signIn, signOut, user, type Config, type Provider, type User } from "./auth";
+import { finishSignIn, idToken, signIn, signOut, startLink, user, type Config, type Provider, type User } from "./auth";
 import { ClientPage, ClientsPage } from "./ClientsPage";
 import { HistoryView } from "./HistoryView";
 import { ProgramPage } from "./ProgramPage";
@@ -17,7 +17,7 @@ function Logo() {
   );
 }
 
-type State = { phase: "loading" } | { phase: "out"; error?: string } | { phase: "in"; me: User };
+type State = { phase: "loading" } | { phase: "out"; error?: string } | { phase: "in"; me: User; notice?: string };
 
 export default function App() {
   const [config, setConfig] = useState<Config>();
@@ -27,19 +27,22 @@ export default function App() {
     (async () => {
       const loaded: Config = await (await fetch("/config.json")).json();
       setConfig(loaded);
+      let notice: string | undefined;
       try {
-        await finishSignIn(loaded);
+        notice = await finishSignIn(loaded);
       } catch (error) {
-        return setState({ phase: "out", error: (error as Error).message });
+        // A link that failed leaves the account signed in; say why.
+        const token = await idToken(loaded);
+        return setState(token ? { phase: "in", me: user(token), notice: (error as Error).message } : { phase: "out", error: (error as Error).message });
       }
       const token = await idToken(loaded);
-      setState(token ? { phase: "in", me: user(token) } : { phase: "out" });
+      setState(token ? { phase: "in", me: user(token), notice } : { phase: "out" });
     })().catch(() => setState({ phase: "out", error: "Couldn't reach the server. Check your connection and reload." }));
   }, []);
 
   if (!config || state.phase === "loading") return null;
   if (state.phase === "out") return <SignIn config={config} error={state.error} />;
-  return <Dashboard config={config} me={state.me} />;
+  return <Dashboard config={config} me={state.me} notice={state.notice} />;
 }
 
 function SignIn({ config, error }: { config: Config; error?: string }) {
@@ -79,8 +82,10 @@ export function usePath(): [string, (path: string) => (e?: React.MouseEvent) => 
   return [path, go];
 }
 
-function Dashboard({ config, me }: { config: Config; me: User }) {
+function Dashboard({ config, me, notice }: { config: Config; me: User; notice?: string }) {
   const [path, go] = usePath();
+  // FIT-137: back from linking, the Account page says how it went.
+  useEffect(() => { if (notice) go("/account")(); }, [notice]);
   const link = (to: string, label: string, active: boolean) => (
     <a href={to} className={active ? "current" : undefined} aria-current={active ? "page" : undefined} onClick={go(to)}>{label}</a>
   );
@@ -92,6 +97,7 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
           {link("/", "Program", path === "/")}
           {link("/history", "History", path.startsWith("/history"))}
           {link("/clients", "Clients", path.startsWith("/clients"))}
+          {link("/account", "Account", path.startsWith("/account"))}
         </nav>
         <div className="account">
           <div className="who">
@@ -102,7 +108,9 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
         </div>
       </aside>
       <main className="content">
-        {path.startsWith("/history") ? (
+        {path.startsWith("/account") ? (
+          <AccountPage config={config} me={me} notice={notice} />
+        ) : path.startsWith("/history") ? (
           <HistoryPage config={config} me={me} />
         ) : path.startsWith("/clients/") ? (
           <ClientPage key={path} config={config} me={me} uid={path.slice("/clients/".length)} go={go} />
@@ -157,11 +165,41 @@ function Empty({ config, me, go }: { config: Config; me: User; go: (path: string
         {me.provider && (
           <p className="muted">
             You're signed in with {me.provider === "google" ? "Google" : "Apple"}. If the app uses{" "}
-            {me.provider === "google" ? "Apple" : "Google"}, that's a separate account:{" "}
-            <button className="link" onClick={() => signOut(config)}>sign out</button> and continue with{" "}
-            {me.provider === "google" ? "Apple" : "Google"}.
+            {me.provider === "google" ? "Apple" : "Google"},{" "}
+            <button className="link" onClick={() => startLink(config, me.provider === "google" ? "apple" : "google")}>
+              link your {me.provider === "google" ? "Apple" : "Google"} sign-in</button> and they'll be one account.
           </p>
         )}
+      </div>
+    </>
+  );
+}
+
+/** FIT-137: the sign-ins on this account, and linking the other one. */
+function AccountPage({ config, me, notice }: { config: Config; me: User; notice?: string }) {
+  const all: Provider[] = (["apple", "google"] as Provider[]).filter((p) => config.providers.includes(p));
+  const label = (p: Provider) => (p === "google" ? "Google" : "Apple");
+  return (
+    <>
+      <header className="page">
+        <h1>Account</h1>
+        {notice && <p className="status" role="status">{notice}</p>}
+      </header>
+      <div className="empty account-page">
+        <p><strong>{me.name ?? me.email ?? "Your account"}</strong>{me.name && me.email ? <span className="muted"> · {me.email}</span> : null}</p>
+        <ul className="signins">
+          {all.map((p) => (
+            <li key={p}>
+              <span>{label(p)}</span>
+              {me.linked.includes(p) ? (
+                <span className="muted">Signs in to this account</span>
+              ) : (
+                <button className="button" onClick={() => startLink(config, p)}>Link {label(p)}</button>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="muted">Linked sign-ins open the same account, in the app and here. Linking asks you to sign in once with that provider.</p>
       </div>
     </>
   );

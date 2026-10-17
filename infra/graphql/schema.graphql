@@ -207,6 +207,8 @@ type Query {
 type Mutation {
   "FIT-126: store my changed units (at most 25); a unit older than the server's copy is rejected. source names the writer."
   syncPush(units: [SyncUnitInput!]!, source: String, uid: ID): SyncPush
+  "FIT-137: link the account a fresh sign-in made (its ID token) to mine: Apple or Google, then one account. Returns the provider linked."
+  linkAccount(token: String!): String
   "FIT-130: a single-use link for someone to make me their coach (14 days)."
   createClientInvite: ClientInvite
   "FIT-130: make the invite's coach mine; returns the coach."
