@@ -18,6 +18,7 @@ const site: Site = {
   origin: process.env.SHARE_ORIGIN!,
   appStoreUrl: process.env.APP_STORE_URL || undefined,
   appId: process.env.APP_ID!,
+  mcpUrl: process.env.MCP_URL || undefined,
 };
 
 const first = (name: unknown) => (typeof name === "string" && name.trim() ? name.trim().split(/\s+/)[0] : undefined);

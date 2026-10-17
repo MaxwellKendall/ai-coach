@@ -289,6 +289,21 @@ describe("share pages (FIT-105)", () => {
     }));
   };
 
+  it("serve the MCP server and its OAuth sign-in on the primary host, POSTs included (FIT-151)", () => {
+    const t = synthWeb();
+    t.hasResourceProperties("AWS::Cognito::UserPoolClient", {
+      ClientName: "mcp", GenerateSecret: false, AllowedOAuthFlows: ["code"], CallbackURLs: ["https://example.com/oauth/callback"],
+    });
+    const behaviors = Object.values(t.findResources("AWS::CloudFront::Distribution"))
+      .flatMap((d) => d.Properties.DistributionConfig.CacheBehaviors ?? [])
+      .filter((b: any) => ["/mcp", "/mcp/*", "/oauth/*", "/.well-known/oauth-*"].includes(b.PathPattern));
+    expect(behaviors).toHaveLength(4);
+    for (const b of behaviors) expect(b.AllowedMethods).toContain("POST");
+    t.hasResourceProperties("AWS::Lambda::Function", {
+      Environment: { Variables: Match.objectLike({ PUBLIC_ORIGIN: "https://example.com", PROVIDERS: "" }) },
+    });
+  });
+
   it("serve every host from one CDN, with a certificate for each, and the Lambda reachable only through it", () => {
     const t = synthWeb();
     t.hasResourceProperties("AWS::CertificateManager::Certificate", {
@@ -303,7 +318,7 @@ describe("share pages (FIT-105)", () => {
     t.resourceCountIs("AWS::Route53::RecordSet", 6);
     // FIT-107: cards come from the private bucket, through the same distribution.
     t.hasResourceProperties("AWS::CloudFront::Distribution", {
-      DistributionConfig: Match.objectLike({ CacheBehaviors: [Match.objectLike({ PathPattern: "/cards/*" })] }),
+      DistributionConfig: Match.objectLike({ CacheBehaviors: Match.arrayWith([Match.objectLike({ PathPattern: "/cards/*" })]) }),
     });
     t.hasResourceProperties("AWS::S3::Bucket", {
       PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },

@@ -41,6 +41,7 @@ programs to the client's phone.
 AWS_PROFILE=aicoach-dev npm run buddy -- coach   # Test Buddy coaches Test Client (sample week), session for the web dev server
 AWS_PROFILE=aicoach-dev npm run sync-status      # each account's synced units
 AWS_PROFILE=aicoach-dev npm run mcp-token -- dev <end of uid> America/New_York claude  # FIT-149: an agent's connection link (revoke: -- dev revoke <token>)
+# FIT-151: agents normally connect at https://{web host}/mcp and sign in by OAuth (Apple or Google); /claude says how.
 ```
 
 ## Accounts

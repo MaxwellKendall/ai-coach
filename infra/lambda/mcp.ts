@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
+import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
 import { push } from "./sync.ts";
 import {
   addDays, AREAS, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
@@ -15,8 +16,8 @@ import {
  * writes the account's FIT-126 sync units, so the phone shows its changes on its next sync. Plan changes are proposed,
  * checked by the plan rules, then applied, with Undo.
  *
- * Auth, for now: a long random token in the URL (/mcp/TOKEN) names one account and its time zone; only its hash is
- * stored (MCPTOKEN#sha256). OAuth for any agent comes next.
+ * Auth: an OAuth bearer token (FIT-151, oauth.ts), or a long random token in the URL (/mcp/TOKEN, FIT-149). Either names
+ * one account and its time zone; only its hash is stored (MCPTOKEN#sha256).
  */
 
 export type Account = { uid: string; tz: string; agent: string };
@@ -34,7 +35,8 @@ const TABLE = () => process.env.TABLE!;
 export const dynamoStore: Store = {
   async account(hash) {
     const out = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `MCPTOKEN#${hash}`, SK: "MCPTOKEN" } }));
-    return out.Item && !out.Item.revoked ? { uid: out.Item.uid, tz: out.Item.tz, agent: out.Item.agent ?? "agent" } : undefined;
+    const item = live(out.Item);
+    return item && !item.revoked ? { uid: item.uid, tz: item.tz, agent: item.agent ?? "agent" } : undefined;
   },
   async units(uid) {
     const units: Units = new Map();
@@ -60,6 +62,22 @@ export const dynamoStore: Store = {
     await db.send(new PutCommand({
       TableName: TABLE(), Item: { PK: `USER#${uid}`, SK: `MCP#${key}`, ...item, expiresAt: Math.floor(Date.now() / 1000) + days * 86_400 },
     }));
+  },
+};
+
+/** FIT-151: what's past its expiry reads as gone, since DynamoDB's TTL deletes it only eventually. */
+const live = (item?: Record<string, any>) => (item && !(item.expiresAt && item.expiresAt * 1000 < Date.now()) ? item : undefined);
+
+export const authStore: AuthStore = {
+  async put(key, item, seconds) {
+    const expiry = seconds ? { expiresAt: Math.floor(Date.now() / 1000) + seconds } : {};
+    await db.send(new PutCommand({ TableName: TABLE(), Item: { PK: key, SK: key.split("#")[0], ...item, ...expiry } }));
+  },
+  async get(key) {
+    return live((await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: key, SK: key.split("#")[0] } }))).Item);
+  },
+  async take(key) {
+    return live((await db.send(new DeleteCommand({ TableName: TABLE(), Key: { PK: key, SK: key.split("#")[0] }, ReturnValues: "ALL_OLD" }))).Attributes);
   },
 };
 
@@ -438,10 +456,16 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
 const json = (statusCode: number, body?: unknown): LambdaFunctionURLResult =>
   ({ statusCode, headers: { "Content-Type": "application/json" }, body: body === undefined ? "" : JSON.stringify(body) });
 
-export async function serve(event: LambdaFunctionURLEvent, store: Store): Promise<LambdaFunctionURLResult> {
-  const token = event.rawPath.split("/").filter(Boolean).pop() ?? "";
+export async function serve(event: LambdaFunctionURLEvent, store: Store, origin?: string): Promise<LambdaFunctionURLResult> {
+  const bearer = /^Bearer\s+(\S+)$/i.exec(event.headers?.authorization ?? "")?.[1];
+  const parts = event.rawPath.split("/").filter(Boolean);
+  const token = bearer ?? (parts.length === 2 && parts[0] === "mcp" ? parts[1] : "");
   const account = token.length >= 32 ? await store.account(hashToken(token)) : undefined;
-  if (!account) return json(401, { error: "Unknown or revoked connection link." });
+  if (!account) {
+    // A link names its own account; anything else signs in (or refreshes) by OAuth.
+    const link = !bearer && parts.length === 2;
+    return origin && !link ? unauthorized(origin) : json(401, { error: "Unknown or revoked connection link." });
+  }
   if (event.requestContext.http.method !== "POST") return { statusCode: 405, headers: { Allow: "POST" }, body: "" };
   let parsed: Rpc | Rpc[];
   try {
@@ -456,4 +480,32 @@ export async function serve(event: LambdaFunctionURLEvent, store: Store): Promis
   return json(200, Array.isArray(parsed) ? answers : answers[0]);
 }
 
-export const handler = (event: LambdaFunctionURLEvent) => serve(event, dynamoStore);
+// ---- FIT-151: sign-in through Cognito's hosted UI ----
+
+const ORIGIN = process.env.PUBLIC_ORIGIN ?? "";
+const COGNITO = `https://${process.env.COGNITO_DOMAIN}`;
+const CLIENT_ID = process.env.COGNITO_CLIENT_ID ?? "";
+
+export const config: Config = {
+  origin: ORIGIN,
+  site: { appName: "Rep & Recipe", origin: process.env.SHARE_ORIGIN || ORIGIN, appId: "" },
+  providers: (process.env.PROVIDERS ?? "").split(",").filter(Boolean),
+  authorizeUrl: (params) => `${COGNITO}/oauth2/authorize?${new URLSearchParams({ client_id: CLIENT_ID, ...params })}`,
+  async exchange(code, verifier, redirectUri) {
+    const response = await fetch(`${COGNITO}/oauth2/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "authorization_code", client_id: CLIENT_ID, code, code_verifier: verifier, redirect_uri: redirectUri }),
+    });
+    if (!response.ok) throw new Error(`Cognito token exchange failed (${response.status}): ${await response.text()}`);
+    const { id_token } = (await response.json()) as { id_token: string };
+    // Straight from Cognito's token endpoint over TLS, so its signature needn't be checked (OIDC Core 3.1.3.7).
+    const claims = JSON.parse(Buffer.from(id_token.split(".")[1], "base64url").toString());
+    if (claims.aud !== CLIENT_ID || typeof claims.sub !== "string") throw new Error("Unexpected id token");
+    return { uid: claims.sub };
+  },
+};
+
+export async function handler(event: LambdaFunctionURLEvent) {
+  return (ORIGIN && (await oauth(event, authStore, config))) || serve(event, dynamoStore, ORIGIN || undefined);
+}

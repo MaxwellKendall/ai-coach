@@ -99,6 +99,8 @@ export interface Site {
   appStoreUrl?: string;
   /** Team ID and bundle ID, for Apple's app-site-association file. */
   appId: string;
+  /** FIT-152: the MCP server's address, for /claude. */
+  mcpUrl?: string;
 }
 
 export interface Page {
@@ -273,6 +275,7 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
     const invite = await store.coachInvite?.(id.toUpperCase());
     if (invite) return html(coachInvitePage(invite.coach, path, site));
   }
+  if (path === "/claude" && site.mcpUrl) return html(claudePage(site, site.mcpUrl));
   if (path === "/") return html(homePage(site));
   return { ...html(missingPage(site)), status: 404 };
 }
@@ -566,7 +569,43 @@ function homePage(site: Site) {
     path: "/",
     body: `<section class="hero"><h1>Your training, written for you</h1>
       <p class="lede">Tell ${esc(site.appName)} what you're training for. It writes the program, sets every weight, and moves it along as you log.</p>
-      ${actions(site, [])}</section>${how(site)}`,
+      ${actions(site, [site.mcpUrl && { href: "/claude", label: "Train with Claude" }])}</section>${how(site)}`,
+  });
+}
+
+/** FIT-152: connecting Claude (or any MCP agent) to the training, on the person's own Claude. */
+function claudePage(site: Site, mcpUrl: string) {
+  const says = [
+    "Set me up.",
+    "Log today: squats 225 for 5, 5 and 4 at RPE 8. Left knee a bit sore.",
+    "I only have 30 minutes and dumbbells today.",
+    "Plan next week. I'm traveling Thursday.",
+    "Am I on track for my squat goal?",
+  ];
+  return layout(site, {
+    title: "Train with Claude",
+    description: `Connect ${site.appName} to Claude: it plans your weeks from your goals, logs what you lift and changes a session on the spot.`,
+    path: "/claude",
+    body: `
+      <section class="hero left">
+        <p class="eyebrow">Train with Claude</p>
+        <h1>Claude as your strength coach</h1>
+        <p class="lede">Connect ${esc(site.appName)} to Claude. It plans your weeks from your goals, logs each set with RPE and how it felt, and rewrites today's session when the day changes. Every plan keeps your lifts progressing and stays inside rules for your age, equipment and injuries.</p>
+        <ol class="steps">
+          <li><b>Copy the connector address</b>
+            <button class="code url" type="button" data-copy="${esc(mcpUrl)}" aria-label="Copy the connector address">${esc(mcpUrl)}<small>Copy</small></button></li>
+          <li><b>Add it to Claude</b><span>On claude.ai, open Settings › Connectors › Add custom connector. Name it ${esc(site.appName)} and paste the address.</span></li>
+          <li><b>Connect and sign in</b><span>Choose Connect, then Apple or Google. New here? That makes your account.</span></li>
+          <li><b>Say “Set me up”</b><span>Claude asks about your goals, schedule, equipment and injuries, one at a time, then plans your first week.</span></li>
+        </ol>
+        <div class="actions"><a class="button primary" href="https://claude.ai/settings/connectors">Open Claude's connectors</a></div>
+        <p class="fine">Once added, it's in the Claude app on your phone too. It runs on your own Claude, so there's nothing to pay here.</p>
+      </section>
+      <section class="block">
+        <h2>Then just say it</h2>
+        <ul class="says">${says.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+        <p class="fine">Claude shows each change to your plan before it's saved, and can undo it. Other agents that speak MCP connect at the same address.</p>
+      </section>`,
   });
 }
 
@@ -741,5 +780,10 @@ h3{font-size:17px}
 .code{grid-column:2;margin-top:8px;display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;
   font:700 26px var(--round);letter-spacing:.18em;color:var(--text);background:var(--surface);border:1.5px dashed var(--muted);border-radius:14px;cursor:pointer}
 .code small{font:600 14px var(--sans);letter-spacing:0;color:var(--accent)}
+.code.url{font:600 15px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0;gap:12px;text-align:left;overflow-wrap:anywhere}
+.code.url small{flex:none}
+.hero.left .steps{max-width:none}
+.says{list-style:none;display:grid;gap:8px}
+.says li{background:var(--surface);border:1px solid var(--line);border-radius:18px 18px 18px 6px;padding:10px 14px;font-size:15px;width:fit-content;max-width:100%}
 @media (min-width:700px){h1{font-size:38px}.days{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
 `;

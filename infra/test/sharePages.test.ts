@@ -107,3 +107,17 @@ describe("view counts (FIT-110)", () => {
     expect(counted).toEqual(["w"]);
   });
 });
+
+describe("Train with Claude (FIT-152)", () => {
+  const store = {} as Store;
+  it("shows the connector address to copy and the steps, and the home page links to it", async () => {
+    const withMcp = { ...site, mcpUrl: "https://example.com/mcp" };
+    const page = await route("/claude", store, withMcp);
+    expect(page.status).toBe(200);
+    expect(page.body).toContain('data-copy="https://example.com/mcp"');
+    expect(page.body).toContain("Add custom connector");
+    expect(page.body).toContain("Set me up");
+    expect((await route("/", store, withMcp)).body).toContain('href="/claude"');
+    expect((await route("/claude", store, site)).status).toBe(404);
+  });
+});

@@ -189,11 +189,32 @@ export class AICoachStack extends Stack {
     );
     const appleStartUrl = appleStart.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
-    // FIT-149: the training as MCP tools for any agent, on the agent's own tokens. The URL carries the connection's
-    // token (only its hash is stored); OAuth comes next.
+    // FIT-149: the training as MCP tools for any agent, on the agent's own tokens. FIT-151: agents sign in by OAuth, the
+    // person through the hosted UI with Apple or Google; it's served on the web host (below), which is the issuer.
+    const mcpHost = props.web?.hosts[0];
     const mcp = fn("mcp", {});
-    table.grant(mcp, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query");
+    table.grant(mcp, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:DeleteItem");
     const mcpUrl = mcp.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
+    if (mcpHost) {
+      const mcpClient = userPool.addClient("Mcp", {
+        userPoolClientName: "mcp",
+        generateSecret: false,
+        preventUserExistenceErrors: true,
+        supportedIdentityProviders: clientProviders,
+        oAuth: {
+          flows: { authorizationCodeGrant: true },
+          scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
+          callbackUrls: [`https://${mcpHost}/oauth/callback`],
+        },
+      });
+      (mcpClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_REFRESH_TOKEN_AUTH"];
+      providers.forEach((p) => mcpClient.node.addDependency(p));
+      mcp.addEnvironment("PUBLIC_ORIGIN", `https://${mcpHost}`);
+      mcp.addEnvironment("COGNITO_DOMAIN", `${domainPrefix}.auth.${this.region}.amazoncognito.com`);
+      mcp.addEnvironment("COGNITO_CLIENT_ID", mcpClient.userPoolClientId);
+      mcp.addEnvironment("PROVIDERS", props.identityProviders.join(","));
+      new CfnOutput(this, "McpConnectorUrl", { value: `https://${mcpHost}/mcp` });
+    }
 
     // FIT-127: the web dashboard signs in through the same hosted UI, as a public client with PKCE.
     const webOrigins = [...(props.app ? [`https://${props.app.host}/`] : []), "http://localhost:5173/"];
@@ -473,6 +494,7 @@ export class AICoachStack extends Stack {
         SHARE_ORIGIN: shareOrigin,
         APP_ID: "7GZKY29XJH.com.maxwellkendall.aicoach",
         APP_STORE_URL: "",
+        MCP_URL: `https://${mcpHost}/mcp`,
         ...giftEnv,
       });
       // PutItem: the thanks page saves a paid gift if Stripe's webhook hasn't yet.
@@ -488,6 +510,23 @@ export class AICoachStack extends Stack {
   return r;
 }`),
       });
+      // Function URLs rename a WWW-Authenticate header, which tells agents where to sign in; this names it back.
+      const wwwAuthenticate = new cloudfront.Function(this, "McpWwwAuthenticate", {
+        runtime: cloudfront.FunctionRuntime.JS_2_0,
+        code: cloudfront.FunctionCode.fromInline(`function handler(event) {
+  var h = event.response.headers, r = h["x-amzn-remapped-www-authenticate"];
+  if (r) { h["www-authenticate"] = { value: r.value }; delete h["x-amzn-remapped-www-authenticate"]; }
+  return event.response;
+}`),
+      });
+      const mcpBehavior: cloudfront.BehaviorOptions = {
+        origin: new origins.FunctionUrlOrigin(mcpUrl),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        functionAssociations: [{ function: wwwAuthenticate, eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE }],
+      };
       const web = new cloudfront.Distribution(this, "Web", {
         domainNames: props.web.hosts,
         certificate,
@@ -509,6 +548,8 @@ export class AICoachStack extends Stack {
             viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           },
+          // FIT-151: the MCP server and its sign-in. No origin access control, which would pass only GETs.
+          ...Object.fromEntries(["/mcp", "/mcp/*", "/oauth/*", "/.well-known/oauth-*"].map((p) => [p, mcpBehavior])),
         },
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       });
