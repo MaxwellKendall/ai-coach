@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { finishSignIn, idToken, signIn, signOut, user, type Config, type Provider, type User } from "./auth";
+import { HistoryView } from "./HistoryView";
 import { ProgramPage } from "./ProgramPage";
+import { pullAll, type Unit } from "./sync";
 
 const APP = "Rep & Recipe";
 
@@ -58,13 +60,35 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
   );
 }
 
+/** The address bar's path, kept in step with the nav without reloading the page. */
+export function usePath(): [string, (path: string) => (e?: React.MouseEvent) => void] {
+  const [path, setPath] = useState(location.pathname);
+  useEffect(() => {
+    const onPop = () => setPath(location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const go = (to: string) => (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    history.pushState(null, "", to);
+    setPath(to);
+    window.scrollTo(0, 0);
+  };
+  return [path, go];
+}
+
 function Dashboard({ config, me }: { config: Config; me: User }) {
+  const [path, go] = usePath();
+  const link = (to: string, label: string, active: boolean) => (
+    <a href={to} className={active ? "current" : undefined} aria-current={active ? "page" : undefined} onClick={go(to)}>{label}</a>
+  );
   return (
     <div className="shell">
       <aside className="nav">
         <div className="brand"><Logo />{APP}</div>
         <nav>
-          <a className="current" href="/" aria-current="page">Program</a>
+          {link("/", "Program", path === "/")}
+          {link("/history", "History", path.startsWith("/history"))}
         </nav>
         <div className="account">
           <div className="who">
@@ -75,9 +99,28 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
         </div>
       </aside>
       <main className="content">
-        <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} />} />
+        {path.startsWith("/history") ? (
+          <HistoryPage config={config} />
+        ) : (
+          <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} />} />
+        )}
       </main>
     </div>
+  );
+}
+
+function HistoryPage({ config }: { config: Config }) {
+  const [units, setUnits] = useState<Map<string, Unit>>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    pullAll(config).then(setUnits, (e: Error) => setError(e.message));
+  }, [config]);
+  return (
+    <>
+      <header className="page"><h1>History</h1></header>
+      {error ? <p className="error" role="alert">Couldn't load your history: {error}</p>
+        : units ? <HistoryView units={units} /> : <p className="muted">Loading…</p>}
+    </>
   );
 }
 
