@@ -9,7 +9,7 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
 const keys = vi.fn();
 vi.mock("../lambda/gifts.ts", () => ({ stripeConfig: () => keys() }));
 
-const { checkoutParams, portal, recordFrom, saveSubscription, shownPlan, start } = await import("../lambda/coachPlan.ts");
+const { checkoutParams, onSale, planPrices, portal, recordFrom, saveSubscription, shownPlan, start } = await import("../lambda/coachPlan.ts");
 const { form } = await import("../lambda/stripe.ts");
 
 const sub = {
@@ -42,11 +42,11 @@ describe("checkout for the coach plan", () => {
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
       calls.push(`${init.method} ${url.replace("https://api.stripe.com/v1/", "")}`);
       const path = url.replace("https://api.stripe.com/v1/", "");
-      const body = path.startsWith("prices") ? { data: [{ id: "price_y" }] } : path === "customers" ? { id: "cus_new" } : { url: "https://checkout.stripe.com/c/1" };
+      const body = path.startsWith("prices") ? { data: [{ id: "price_m", lookup_key: "coach_monthly" }, { id: "price_y", lookup_key: "coach_yearly" }] } : path === "customers" ? { id: "cus_new" } : { url: "https://checkout.stripe.com/c/1" };
       return new Response(JSON.stringify(body));
     });
     expect(await start("sam", "year", "sam@example.com", "https://app.example.com")).toBe("https://checkout.stripe.com/c/1");
-    expect(calls).toEqual(["GET prices?active=true&lookup_keys[]=coach_yearly", "POST customers", "POST checkout/sessions"]);
+    expect(calls).toEqual(["GET prices?active=true&lookup_keys[]=coach_monthly&lookup_keys[]=coach_yearly", "POST customers", "POST checkout/sessions"]);
     // The customer is saved only if the account has none yet.
     expect(send.mock.calls[2][0].input).toMatchObject({ UpdateExpression: "SET customer = :c", ConditionExpression: "attribute_not_exists(customer)" });
   });
@@ -72,6 +72,23 @@ describe("checkout for the coach plan", () => {
     expect(decodeURIComponent(sent)).toBe("customer=cus_1&return_url=https://app.example.com/billing");
     send.mockResolvedValue({});
     expect(await portal("ann")).toBeUndefined();
+  });
+});
+
+describe("on sale", () => {
+  it("needs the Stripe secret and both prices, looked up at most every 5 minutes", async () => {
+    keys.mockResolvedValue(undefined);
+    expect(await onSale()).toBe(false);
+    // Later than the cache the checkout test left.
+    const t = Date.now() + 3_600_000;
+    let lookups = 0;
+    const answer = (data: unknown[]) => vi.stubGlobal("fetch", async () => (lookups++, new Response(JSON.stringify({ data }))));
+    answer([{ id: "price_m", lookup_key: "coach_monthly" }]);
+    expect(await planPrices("sk", t)).toEqual({ month: "price_m" });
+    answer([{ id: "price_m", lookup_key: "coach_monthly" }, { id: "price_y", lookup_key: "coach_yearly" }]);
+    expect(await planPrices("sk", t + 60_000)).toEqual({ month: "price_m" });
+    expect(await planPrices("sk", t + 6 * 60_000)).toEqual({ month: "price_m", year: "price_y" });
+    expect(lookups).toBe(2);
   });
 });
 
