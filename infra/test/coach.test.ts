@@ -42,7 +42,7 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
 process.env.TABLE = "AICoach-test";
 process.env.SHARE_ORIGIN = "https://dev.example.com";
 const coach = await import("../lambda/coach.ts");
-const { owner } = await import("../lambda/sync.ts");
+const { owner, coachMayWrite } = await import("../lambda/sync.ts");
 const now = new Date("2026-10-17T03:00:00Z");
 const later = (days: number) => new Date(now.getTime() + days * 86_400_000);
 
@@ -101,6 +101,14 @@ describe("a coach link (FIT-130)", () => {
     await expect(owner("bob", "ann")).rejects.toThrow(/Unauthorized/);
     // The link goes one way: the client doesn't get the coach's units.
     await expect(owner("ann", "sam")).rejects.toThrow(/Unauthorized/);
+  });
+
+  it("lets the coach change only the plan, never logs, goals or the profile", () => {
+    const at = "2026-10-16T12:00:00.000Z";
+    expect(() => coachMayWrite([{ key: "plan#2026-10-16", updatedAt: at, deleted: false, body: "[]" }])).not.toThrow();
+    for (const key of ["log#2026-10-16", "goal#3F2504E0-4F89-11D3-9A0C-0305E82C3301", "profile"]) {
+      expect(() => coachMayWrite([{ key, updatedAt: at, deleted: false, body: "[]" }])).toThrow(/only the plan/);
+    }
   });
 
   it("gives the client Pro while it lasts", async () => {

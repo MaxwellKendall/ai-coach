@@ -92,10 +92,17 @@ export async function owner(caller: string, asked: string | null | undefined) {
   throw new Error("Unauthorized: not this person's coach");
 }
 
+/** A coach changes the client's plan, never what the client logged, their goals or their profile. */
+export function coachMayWrite(units: UnitInput[]) {
+  if (units.some((u) => !u.key.startsWith("plan#"))) throw new Error("Unauthorized: a coach changes only the plan");
+}
+
 export async function handler(event: AppSyncResolverEvent<any>) {
-  const uid = await owner((event.identity as AppSyncIdentityCognito).sub, event.arguments.uid);
+  const caller = (event.identity as AppSyncIdentityCognito).sub;
+  const uid = await owner(caller, event.arguments.uid);
   switch (event.info.fieldName) {
     case "syncPush":
+      if (uid !== caller) coachMayWrite(event.arguments.units);
       return push(uid, event.arguments.units, event.arguments.source);
     case "syncPull":
       return pull(uid, event.arguments.since);
