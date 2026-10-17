@@ -3,7 +3,7 @@ import { finishSignIn, idToken, signIn, signOut, user, type Config, type Provide
 import { ClientPage, ClientsPage } from "./ClientsPage";
 import { HistoryView } from "./HistoryView";
 import { ProgramPage } from "./ProgramPage";
-import { pullAll, type Unit } from "./sync";
+import { comments, postComment, pullAll, type Comment, type Unit } from "./sync";
 
 const APP = "Rep & Recipe";
 
@@ -102,11 +102,11 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
       </aside>
       <main className="content">
         {path.startsWith("/history") ? (
-          <HistoryPage config={config} />
+          <HistoryPage config={config} me={me} />
         ) : path.startsWith("/clients/") ? (
           <ClientPage key={path} config={config} me={me} uid={path.slice("/clients/".length)} go={go} />
         ) : path.startsWith("/clients") ? (
-          <ClientsPage config={config} go={go} />
+          <ClientsPage config={config} me={me} go={go} />
         ) : (
           <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} />} />
         )}
@@ -115,17 +115,23 @@ function Dashboard({ config, me }: { config: Config; me: User }) {
   );
 }
 
-function HistoryPage({ config }: { config: Config }) {
+function HistoryPage({ config, me }: { config: Config; me: User }) {
   const [units, setUnits] = useState<Map<string, Unit>>();
+  const [thread, setThread] = useState<Comment[]>([]);
   const [error, setError] = useState<string>();
   useEffect(() => {
     pullAll(config).then(setUnits, (e: Error) => setError(e.message));
+    // FIT-132: a coach's replies, and mine.
+    comments(config).then(setThread, () => setThread([]));
   }, [config]);
   return (
     <>
       <header className="page"><h1>History</h1></header>
       {error ? <p className="error" role="alert">Couldn't load your history: {error}</p>
-        : units ? <HistoryView units={units} /> : <p className="muted">Loading…</p>}
+        : units ? (
+          <HistoryView units={units} comments={thread} me={me.uid}
+                       onReply={thread.length ? async (day, text) => { const c = await postComment(config, day, text); setThread((t) => [...t, c]); } : undefined} />
+        ) : <p className="muted">Loading…</p>}
     </>
   );
 }

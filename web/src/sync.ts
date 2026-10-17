@@ -81,3 +81,13 @@ export const createClientInvite = (config: Config) =>
 
 export const removeClient = (config: Config, uid: string) =>
   gql(config, `mutation($u: ID!) { removeClient(uid: $u) }`, { u: uid });
+
+// FIT-132: replies on a session.
+export type Comment = { day: string; at: string; by: string; byName: string | null; text: string };
+
+export const comments = (config: Config, uid?: string) =>
+  gql<{ comments: Comment[] }>(config, `query($u: ID) { comments(uid: $u) { day at by byName text } }`, { u: uid ?? null }).then((d) => d.comments);
+
+export const postComment = (config: Config, day: string, text: string, uid?: string) =>
+  gql<{ postComment: Comment }>(config, `mutation($u: ID, $d: String!, $t: String!) { postComment(uid: $u, day: $d, text: $t) { day at by byName text } }`,
+    { u: uid ?? null, d: day, t: text }).then((d) => d.postComment);

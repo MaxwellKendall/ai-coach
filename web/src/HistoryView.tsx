@@ -1,6 +1,7 @@
 import catalog from "./catalog.json";
 import { estimated1RMs, estimated1RMTrend, loggedSets, streakLine, streakNow } from "./progress";
-import type { LogRow, PlanRow, Unit } from "./sync";
+import { useState } from "react";
+import type { Comment, LogRow, PlanRow, Unit } from "./sync";
 
 // FIT-129: what was logged, newest first, and how the lifts and goals are moving. Derived from the synced units, never
 // stored. Takes any account's units, so a coach's client page (FIT-132) shows the same thing.
@@ -39,7 +40,54 @@ function Sparkline({ points }: { points: [string, number][] }) {
   );
 }
 
-export function HistoryView({ units }: { units: Map<string, Unit> }) {
+/** FIT-132: a session's thread, and a reply box when replying is allowed. */
+function Thread({ day, comments, me, onReply }: { day: string; comments: Comment[]; me?: string; onReply?: (day: string, text: string) => Promise<void> }) {
+  const [text, setText] = useState("");
+  const [open, setOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string>();
+  const send = async () => {
+    if (!onReply || !text.trim()) return;
+    setSending(true);
+    setError(undefined);
+    try {
+      await onReply(day, text);
+      setText("");
+      setOpen(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <div className="thread">
+      {comments.map((c) => (
+        <p key={c.at + c.by} className={c.by === me ? "mine" : undefined}>
+          <strong>{c.by === me ? "You" : c.byName ?? "Coach"}</strong> {c.text}
+        </p>
+      ))}
+      {onReply && (open ? (
+        <div className="reply">
+          <textarea autoFocus rows={2} maxLength={1000} placeholder="Reply on this session" value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); if (e.key === "Escape") setOpen(false); }} />
+          <div>
+            <button className="button primary" disabled={sending || !text.trim()} onClick={send}>{sending ? "Sending…" : "Send"}</button>
+            <button className="link" onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+          {error && <p className="error">{error}</p>}
+        </div>
+      ) : (
+        <button className="add" onClick={() => setOpen(true)}>Reply</button>
+      ))}
+    </div>
+  );
+}
+
+export function HistoryView({ units, comments = [], me, onReply }: {
+  units: Map<string, Unit>; comments?: Comment[]; me?: string; onReply?: (day: string, text: string) => Promise<void>;
+}) {
   const sets = loggedSets(units);
   const maxes = estimated1RMs(sets);
   const streak = streakLine(streakNow(units));
@@ -120,6 +168,7 @@ export function HistoryView({ units }: { units: Map<string, Unit> }) {
                   ))}
                 </ul>
                 {notes.length > 0 && <p className="note">“{[...new Set(notes)].join(" ")}”</p>}
+                <Thread day={day.key} comments={comments.filter((c) => c.day === day.key)} me={me} onReply={onReply} />
               </div>
             </li>
           );
