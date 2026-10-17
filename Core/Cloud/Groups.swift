@@ -203,6 +203,27 @@ enum Cloud {
         _ = try await run("mutation($u: ID!) { unlinkCoach(uid: $u) }", ["u": uid], at: "unlinkCoach", as: Bool?.self)
     }
 
+    // MARK: Session replies (FIT-132)
+
+    struct Comment: Decodable, Identifiable, Hashable, Sendable {
+        var day: String
+        var at: String
+        var by: String
+        var byName: String?
+        var text: String
+        var id: String { at + by }
+    }
+
+    /// A logged day's thread on my account: my coach's replies and mine. `day` is "2026-10-14".
+    @MainActor static func comments(day: String) async throws -> [Comment] {
+        try await run("query($d: String) { comments(day: $d) { day at by byName text } }", ["d": day], at: "comments", query: true)
+    }
+
+    @MainActor static func postComment(day: String, text: String) async throws -> Comment {
+        try await run("mutation($d: String!, $t: String!) { postComment(day: $d, text: $t) { day at by byName text } }",
+                      ["d": day, "t": text], at: "postComment")
+    }
+
     // MARK: Shares (FIT-105/107)
 
     struct Share: Decodable, Sendable {
