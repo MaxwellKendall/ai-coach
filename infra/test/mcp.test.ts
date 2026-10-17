@@ -106,8 +106,8 @@ describe("mcp", () => {
   it("annotates every tool: reads, writes, the destructive ones, nothing open-world", async () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
-    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review"];
-    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily"];
+    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
+    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
@@ -115,7 +115,7 @@ describe("mcp", () => {
     }
     for (const n of reads) expect(by[n].annotations.readOnlyHint).toBe(true);
     for (const n of writes) expect(by[n].annotations.readOnlyHint).toBe(false);
-    expect(writes.filter((n) => by[n].annotations.destructiveHint)).toEqual(["log_session", "set_goal"]);
+    expect(writes.filter((n) => by[n].annotations.destructiveHint)).toEqual(["log_session", "set_goal", "delete_log"]);
   });
 
   it("refuses an unknown link and answers notifications with 202", async () => {
@@ -329,6 +329,30 @@ describe("agent-first onboarding (FIT-150)", () => {
     }
     const goals = Object.entries(units.new).filter(([k]) => k.startsWith("goal#")).map(([, v]) => JSON.parse(v));
     expect(Object.fromEntries(goals.map((g) => [g.metric, g.baseline ?? null]))).toEqual({ "back-squat.1rm_lb": 208, weight_lb: 196, "pull-up.reps": null });
+  });
+
+  it("deletes what was logged by mistake, once they agree, and clears a day with undo (FIT-168)", async () => {
+    const units = data();
+    const store = memory({}, units);
+    await callTool("log_daily", { date: "2026-10-15", weight_lb: 190, meals: [{ name: "Chicken bowl", kcal: 700 }, { name: "Chicken soup", kcal: 300 }] }, me, store, now);
+    await expect(callTool("delete_log", { date: "2026-10-15", what: "workout" }, me, store, now)).rejects.toThrow(/confirm: true/);
+    await expect(callTool("delete_log", { date: "2026-10-15", what: "meal", meal: "chicken", confirm: true }, me, store, now)).rejects.toThrow(/Which meal\? .*Chicken bowl; Chicken soup/);
+    expect(await callTool("delete_log", { date: "2026-10-15", what: "meal", meal: "chicken soup", confirm: true }, me, store, now)).toMatch(/Deleted from 2026-10-15:\n  Meals: Chicken soup 300 kcal/);
+    expect(await callTool("delete_log", { date: "2026-10-15", what: "workout", confirm: true }, me, store, now)).toMatch(/Back Squat: 200×5 @7/);
+    const left = JSON.parse(units.me["log#2026-10-15"]);
+    expect(left.map((r: any) => r.kind).sort()).toEqual(["bodyweight", "meal"]);
+    await expect(callTool("delete_log", { date: "2026-10-15", what: "sleep", confirm: true }, me, store, now)).rejects.toThrow(/No sleep logged/);
+    await callTool("delete_log", { date: "2026-10-15", what: "all", confirm: true }, me, store, now);
+    expect(units.me["log#2026-10-15"]).toBeUndefined();
+
+    const before = units.me["plan#2026-10-17"];
+    const proposal = await callTool("clear_day", { reason: "Sick today." }, me, store, now);
+    expect(proposal).toMatch(/Saturday 2026-10-17 — rest:\n  − Back Squat/);
+    await callTool("apply", { proposal_id: proposal.match(/Proposal (\S+)/)![1] }, me, store, now);
+    expect(units.me["plan#2026-10-17"]).toBeUndefined();
+    await callTool("undo", {}, me, store, now);
+    expect(units.me["plan#2026-10-17"]).toBe(before);
+    await expect(callTool("clear_day", { date: "2026-10-18", reason: "x" }, me, store, now)).rejects.toThrow(/Nothing is planned/);
   });
 
   it("holds a proposed week to their weekly ceiling", async () => {

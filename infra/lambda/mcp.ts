@@ -179,6 +179,25 @@ export const tools = [
     } },
   },
   {
+    name: "delete_log",
+    title: "Delete from a day's log",
+    annotations: { title: "Delete from a day's log", ...write(true, true) },
+    description: "Remove something logged by mistake: the day's workout (every set and its note), the weigh-in, the night's sleep, one meal by name, or everything that day. It can't be undone, so say exactly what goes and ask first; confirm must be true. To correct a workout instead, log_session with replace.",
+    inputSchema: { type: "object", properties: {
+      date: DATE,
+      what: { type: "string", enum: ["workout", "weight", "sleep", "meal", "all"] },
+      meal: { type: "string", description: "For a meal: its name as get_day shows it." },
+      confirm: { type: "boolean", description: "true once they've agreed." },
+    }, required: ["what", "confirm"] },
+  },
+  {
+    name: "clear_day",
+    title: "Make a day a rest day",
+    annotations: { title: "Make a day a rest day", ...READ },
+    description: "Propose taking a planned session off a day (today or later), making it a rest day. Nothing changes until apply, and undo puts it back.",
+    inputSchema: { type: "object", properties: { date: DATE, reason: { type: "string", description: "One sentence on why." } }, required: ["reason"] },
+  },
+  {
     name: "propose_session",
     title: "Propose a session",
     annotations: { title: "Propose a session", ...READ },
@@ -583,6 +602,33 @@ export async function callTool(name: string, args: Args, account: Account, store
       const log = dailyRows(logOf(units, day), input, at);
       await store.write(uid, [{ key: `log#${day}`, body: encode(log) }], account.agent);
       return `Logged on ${day}:\n${describeDaily(log).map((l) => `  ${l}`).join("\n")}\nIt shows on their phone at its next sync.`;
+    }
+    case "delete_log": {
+      if (args.confirm !== true) throw new Error("Ask them first, then call again with confirm: true.");
+      const units = await store.units(uid);
+      const log = logOf(units, day);
+      if (!log.length) throw new Error(`Nothing is logged on ${day}.`);
+      const kinds: Record<string, string> = { workout: "workout", weight: "bodyweight", sleep: "sleep", meal: "meal" };
+      let gone: typeof log;
+      if (args.what === "all") gone = log;
+      else if (args.what === "meal") {
+        const name = String(args.meal ?? "").trim().toLowerCase();
+        const meals = log.filter((r) => r.kind === "meal");
+        const named = meals.filter((r) => r.note.toLowerCase() === name);
+        gone = named.length ? named : meals.filter((r) => name && r.note.toLowerCase().includes(name));
+        if (gone.length !== 1) throw new Error(meals.length ? `Which meal? ${day} has: ${meals.map((r) => r.note || "Meal").join("; ")}.` : `No meals logged on ${day}.`);
+      } else if (kinds[args.what]) gone = log.filter((r) => r.kind === kinds[args.what]);
+      else throw new Error("what is workout, weight, sleep, meal or all.");
+      if (!gone.length) throw new Error(`No ${args.what} logged on ${day}.`);
+      const kept = log.filter((r) => !gone.includes(r));
+      await store.write(uid, [{ key: `log#${day}`, body: kept.length ? encode(kept) : null }], account.agent);
+      const said = args.what === "workout" ? describeLog(gone).lines : describeDaily(gone);
+      return `Deleted from ${day}${said.length ? `:\n${said.map((l) => `  ${l}`).join("\n")}` : ` (${gone.length} entr${gone.length === 1 ? "y" : "ies"}).`}\nIt goes from their phone at its next sync.`;
+    }
+    case "clear_day": {
+      const units = await store.units(uid);
+      if (!planOf(units, day).some((r) => r.kind === "workout")) throw new Error(`Nothing is planned on ${day}.`);
+      return propose(uid, tz, today, [{ date: day, exercises: [] }], String(args.reason), store);
     }
     case "propose_session":
       return propose(uid, tz, today, [{ date: day, title: args.title, exercises: args.exercises }], String(args.reason), store);
