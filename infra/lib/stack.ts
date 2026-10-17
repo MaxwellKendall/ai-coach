@@ -343,6 +343,15 @@ export class AICoachStack extends Stack {
     const webhookUrl = stripeWebhook.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
     new CfnOutput(this, "StripeWebhookUrl", { value: webhookUrl.url });
 
+    // ---- FIT-144: the coach plan, a Stripe subscription; the webhook above keeps it up to date ----
+    const coachPlan = fn("coachPlan", { STRIPE_SECRET: stripeSecret.secretName, APP_ORIGIN: props.app ? `https://${props.app.host}` : "http://localhost:5173" });
+    table.grant(coachPlan, "dynamodb:GetItem", "dynamodb:UpdateItem");
+    stripeSecret.grantRead(coachPlan);
+    const coachPlanSource = api.addLambdaDataSource("CoachPlanSource", coachPlan);
+    coachPlanSource.createResolver("CoachPlanGet", { typeName: "Query", fieldName: "coachPlan" });
+    coachPlanSource.createResolver("CoachPlanStart", { typeName: "Mutation", fieldName: "startCoachPlan" });
+    coachPlanSource.createResolver("CoachPlanPortal", { typeName: "Mutation", fieldName: "coachBillingPortal" });
+
     // ---- FIT-102: Claude for the app, with the key kept here ----
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(this, "AnthropicSecret", `aicoach/${stage}/anthropic`);
     // FIT-123: without Pro, a few requests per account for good; dev has room for testing with StoreKit's local

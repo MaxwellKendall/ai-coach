@@ -140,6 +140,7 @@ describe("resolvers", () => {
         "Mutation.createClientInvite", "Query.coachInvite", "Mutation.acceptCoach", "Query.myCoaches", "Query.myClients",
         "Mutation.unlinkCoach", "Mutation.removeClient", "Mutation.postComment", "Query.comments",
         "Mutation.sendProgram", "Query.programOffers", "Mutation.answerProgram", "Mutation.linkAccount",
+        "Query.coachPlan", "Mutation.startCoachPlan", "Mutation.coachBillingPortal",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -202,8 +203,11 @@ describe("least privilege", () => {
       expect(actionsOf(dev, name)).toContain("secretsmanager:GetSecretValue");
     }
     expect(actionsOf(dev, /^aiProxy/)).toContain("secretsmanager:GetSecretValue");
+    // FIT-144: the coach plan reads and updates its own record, and reads the Stripe key.
+    expect(actionsOf(dev, /^coachPlan/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:UpdateItem"]);
+    expect(actionsOf(dev, /^coachPlan/)).toContain("secretsmanager:GetSecretValue");
     // FIT-130: coach links are put and deleted one by one, never scanned.
-    expect(actionsOf(dev, /^coach/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
+    expect(actionsOf(dev, /^coach(?!Plan)/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
     // FIT-137: linking deletes the empty account Cognito made and links its identity; nothing else in the pool.
     expect(actionsOf(dev, /^accounts/).filter((a) => a.startsWith("cognito-idp:")).sort()).toEqual(["cognito-idp:AdminDeleteUser", "cognito-idp:AdminLinkProviderForUser"]);
     // FIT-131: programs are put, read and answered, never deleted or scanned.
