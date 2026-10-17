@@ -194,7 +194,7 @@ export class AICoachStack extends Stack {
     // person through the hosted UI with Apple or Google; it's served on the web host (below), which is the issuer.
     const mcpHost = props.web?.hosts[0];
     const mcp = fn("mcp", {});
-    table.grant(mcp, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:DeleteItem");
+    table.grant(mcp, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:DeleteItem", "dynamodb:UpdateItem");
     const mcpUrl = mcp.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
     if (mcpHost) {
       const mcpClient = userPool.addClient("Mcp", {
@@ -249,6 +249,7 @@ export class AICoachStack extends Stack {
     // FIT-105: where shared links point. Without a domain (a stage not set up yet), the API still saves shares.
     const shareHost = props.web && (props.web.hosts.find((h) => h.startsWith("share.")) ?? props.web.hosts[0]);
     const shareOrigin = shareHost ? `https://${shareHost}` : "";
+    mcp.addEnvironment("SHARE_ORIGIN", shareOrigin); // FIT-169: links an agent shares, as createShare makes them
 
     // ---- AppSync ----
     const api = new appsync.GraphqlApi(this, "Api", {
@@ -340,6 +341,8 @@ export class AICoachStack extends Stack {
     table.grant(shares, "dynamodb:GetItem", "dynamodb:DeleteItem");
     cards.grantPut(shares, "cards/*");
     cards.grantDelete(shares, "cards/*");
+    mcp.addEnvironment("CARDS_BUCKET", cards.bucketName); // FIT-169: stop_sharing takes the card down too
+    cards.grantDelete(mcp, "cards/*");
     const sharesSource = api.addLambdaDataSource("SharesSource", shares);
     for (const fieldName of ["shareImageUpload", "deleteShare"]) {
       sharesSource.createResolver(`Shares${fieldName}`, { typeName: "Mutation", fieldName });

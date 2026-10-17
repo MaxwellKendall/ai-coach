@@ -194,6 +194,8 @@ export function streakLine(s: { weeks: number; thisWeek: ThisWeek }, today: stri
 export type Win = {
   kind: "pr" | "milestone" | "streak"; day: string; key: string; metric: string; unit: string; value: number;
   previous?: number; target?: number; percent?: number; weeksLeft?: number; workouts?: number;
+  /** The goal's value on each day it changed, from the start, for the card's line. */
+  trend?: number[];
 };
 
 /** Every win since the program started, newest first (Wins.detect). */
@@ -203,17 +205,18 @@ export function wins(goals: { metric: string; unit: string; baseline: number; ta
   const left = (day: string) => Math.max(0, Math.floor((end - epoch(day, 0, tz)) / (7 * 86_400)));
   for (const g of goals) {
     let top = g.baseline;
-    const crossed = new Set<number>();
+    const crossed = new Set<number>(), values = [g.baseline];
     for (const p of trend(g.metric, sets, weighs, since)) {
+      values.push(p.value);
       if (g.metric !== "weight_lb" && p.value > top) {
-        out.push({ kind: "pr", day: p.day, key: `pr:${g.metric}:${round(p.value)}`, metric: g.metric, unit: g.unit, value: p.value, previous: top, target: g.target, weeksLeft: left(p.day) });
+        out.push({ kind: "pr", day: p.day, key: `pr:${g.metric}:${round(p.value)}`, metric: g.metric, unit: g.unit, value: p.value, previous: top, target: g.target, weeksLeft: left(p.day), trend: [...values] });
         top = p.value;
       }
       const done = fraction(g.baseline, p.value, g.target);
       for (const percent of [25, 50, 75, 100]) {
         if (crossed.has(percent) || done < percent / 100) continue;
         crossed.add(percent);
-        out.push({ kind: "milestone", day: p.day, key: `milestone:${g.metric}:${percent}`, metric: g.metric, unit: g.unit, value: p.value, target: g.target, percent, weeksLeft: left(p.day) });
+        out.push({ kind: "milestone", day: p.day, key: `milestone:${g.metric}:${percent}`, metric: g.metric, unit: g.unit, value: p.value, target: g.target, percent, weeksLeft: left(p.day), trend: [...values] });
       }
     }
   }

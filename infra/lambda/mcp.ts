@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
 import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
 import { push } from "./sync.ts";
@@ -10,6 +11,7 @@ import {
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
 import * as progress from "./progress.ts";
+import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
 /**
@@ -29,9 +31,18 @@ export interface Store {
   write(uid: string, units: { key: string; body: string | null }[], source: string): Promise<void>;
   get(uid: string, key: string): Promise<Record<string, any> | undefined>;
   put(uid: string, key: string, item: Record<string, any>, days: number): Promise<void>;
+  /** FIT-169: save a share as createShare does (resolvers/createShare.js), and take one down as deleteShare does. */
+  share(uid: string, kind: ShareKind, payload: Record<string, unknown>): Promise<{ id: string; url: string }>;
+  unshare(uid: string, id: string): Promise<boolean>;
+  /** Their display name, as updateProfile sets it: shown on what they share. */
+  setName(uid: string, name: string): Promise<void>;
 }
 
+export type ShareKind = "win" | "recap" | "program" | "session";
+const SHARE_PATHS: Record<ShareKind, string> = { win: "w", recap: "r", program: "p", session: "s" };
+
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const s3 = new S3Client({});
 const TABLE = () => process.env.TABLE!;
 
 export const dynamoStore: Store = {
@@ -64,6 +75,33 @@ export const dynamoStore: Store = {
     await db.send(new PutCommand({
       TableName: TABLE(), Item: { PK: `USER#${uid}`, SK: `MCP#${key}`, ...item, expiresAt: Math.floor(Date.now() / 1000) + days * 86_400 },
     }));
+  },
+  async share(uid, kind, payload) {
+    const body = JSON.stringify(payload);
+    if (body.length > 8000) throw new Error("That's too much to share.");
+    const profile = (await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROFILE" } }))).Item;
+    const id = randomUUID().replace(/-/g, "").slice(0, 12);
+    await db.send(new PutCommand({
+      TableName: TABLE(), ConditionExpression: "attribute_not_exists(PK)",
+      // Found again through the user, so deleting the account deletes it (deleteAccount).
+      Item: { PK: `SHARE#${id}`, SK: "META", kind, uid, name: profile?.displayName ?? null, payload: body, createdAt: new Date().toISOString(), GSI1PK: `USER#${uid}`, GSI1SK: `SHARE#${id}` },
+    }));
+    return { id, url: `${process.env.SHARE_ORIGIN}/${SHARE_PATHS[kind]}/${id}` };
+  },
+  async setName(uid, name) {
+    const now = new Date().toISOString();
+    await db.send(new UpdateCommand({
+      TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROFILE" },
+      UpdateExpression: "SET displayName = :n, updatedAt = :u, createdAt = if_not_exists(createdAt, :u), #id = :id",
+      ExpressionAttributeNames: { "#id": "uid" }, ExpressionAttributeValues: { ":n": name, ":u": now, ":id": uid },
+    }));
+  },
+  async unshare(uid, id) {
+    const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
+    if (!Item || Item.uid !== uid) return false;
+    await db.send(new DeleteCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
+    await s3.send(new DeleteObjectCommand({ Bucket: process.env.CARDS_BUCKET!, Key: `cards/${id}.png` }));
+    return true;
   },
 };
 
@@ -242,6 +280,11 @@ export const tools = [
         from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" },
       }, required: ["from", "to"] },
       clear_trips: { type: "boolean", description: "Remove every trip." },
+      phases: { type: "array", maxItems: 3, description: "The program's brief, one per phase it has: its focus, its 2–4 main lifts (the goal lifts among them) and reps. The app's Program tab and a shared program show it.", items: { type: "object", properties: {
+        phase: { type: "string", enum: ["base", "build", "peak"] }, focus: { type: "string", description: "A few words." },
+        main_lifts: { type: "array", minItems: 1, maxItems: 4, items: EXERCISE }, main_reps: { type: "integer", minimum: 1, maximum: 15 },
+        accessory_reps: { type: "integer", minimum: 5, maximum: 20 },
+      }, required: ["phase", "focus", "main_lifts", "main_reps", "accessory_reps"] } },
     } },
   },
   {
@@ -259,11 +302,31 @@ export const tools = [
     inputSchema: { type: "object", properties: { date: DATE } },
   },
   {
+    name: "share",
+    title: "Share a link",
+    annotations: { title: "Share a link", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: "Make a public link to paste anywhere, as the app's Share does: a win (its id from get_progress), a week's recap (the week holding date), a planned session (date) for a friend to train with them, or the program (it needs the program's phases, set_program). Anyone with the link can see it: ask before sharing, and whether to show weights (without them, changes go as percents). The page shows their display name and a text preview; the app's card image isn't made here.",
+    inputSchema: { type: "object", properties: {
+      kind: { type: "string", enum: ["win", "recap", "session", "program"] },
+      win: { type: "string", description: "For a win: its id, as get_progress lists it." },
+      date: DATE,
+      show_weights: { type: "boolean", description: "Show weights and maxes (default true, as the app)." },
+    }, required: ["kind"] },
+  },
+  {
+    name: "stop_sharing",
+    title: "Stop sharing a link",
+    annotations: { title: "Stop sharing a link", ...write(true, true) },
+    description: "Take a shared link down: its page then says it has expired.",
+    inputSchema: { type: "object", properties: { link: { type: "string", description: "The link, or its id." } }, required: ["link"] },
+  },
+  {
     name: "set_profile",
     title: "Set profile",
     annotations: { title: "Set profile", ...write(false, true) },
     description: "Save what they tell you about themselves, merging into what's there. Call it as each answer comes in during setup, and whenever something changes. A new profile needs age and weight_lb first.",
     inputSchema: { type: "object", properties: {
+      name: { type: "string", description: "What to call them, as their shared pages show it (their first name, say)." },
       age: { type: "integer", minimum: 13, maximum: 100 },
       weight_lb: { type: "number" },
       training_days: { type: "array", items: { type: "string", enum: WEEKDAYS }, description: "The weekdays they train." },
@@ -443,10 +506,8 @@ function describeProgress(units: Units, today: string, nowSec: number, tz: strin
   if (program && profile?.programStart && end) {
     const s = progress.streak(program.start, progress.plannedDays(units), progress.workoutDays(units), today);
     out.push("", `Streak: ${progress.streakLine(s, today) ?? (s.thisWeek.kind === "broken" ? "this week's sessions can't all be done now, so the streak restarts next week" : `${s.weeks} full week(s) so far; the app shows it from 2`)}.`);
-    const tracked = goals.filter((g) => g.baseline !== undefined && progress.GOAL_OPTIONS.some((o) => o.metric === g.metric))
-      .map((g) => ({ metric: g.metric, unit: g.unit, baseline: g.baseline!, target: g.target }));
-    const won = progress.wins(tracked, sets, weighs, program.start, profile.programStart, end, progress.plannedDays(units), progress.workoutDays(units), today, tz);
-    out.push("", won.length ? `Wins, newest first:\n${won.slice(0, 12).map((w) => `- ${progress.describeWin(w)}`).join("\n")}` : "No wins yet.");
+    const won = progressWins(units, today, tz);
+    out.push("", won.length ? `Wins, newest first (share one by its id):\n${won.slice(0, 12).map((w) => `- ${progress.describeWin(w)} [win ${w.key}]`).join("\n")}` : "No wins yet.");
   }
   return out.join("\n");
 }
@@ -471,6 +532,16 @@ function describeReview(units: Units, day: string, nowSec: number, tz: string) {
   const f = progress.facts(r);
   out.push("", "Facts for your take:", ...(f.length ? f.map((x) => `- ${x}`) : ["- Nothing to go on yet."]));
   return out.join("\n");
+}
+
+/** Every win since the program started, as get_progress lists them (WinFeed.wins). */
+function progressWins(units: Units, today: string, tz: string) {
+  const profile = profileOf(units), program = programOf(profile, tz);
+  if (!profile?.programStart || !profile.targetDate || !program) return [];
+  const tracked = goalsOf(units).filter((g) => g.status === "active" && g.baseline !== undefined && progress.GOAL_OPTIONS.some((o) => o.metric === g.metric))
+    .map((g) => ({ metric: g.metric, unit: g.unit, baseline: g.baseline!, target: g.target }));
+  return progress.wins(tracked, progress.logSets(units), progress.weighIns(units), program.start, profile.programStart, profile.targetDate,
+    progress.plannedDays(units), progress.workoutDays(units), today, tz);
 }
 
 /** Every program week with its kind, aim and what's planned so far. */
@@ -659,6 +730,43 @@ export async function callTool(name: string, args: Args, account: Account, store
       return describeProgress(await store.units(uid), today, Math.floor(now.getTime() / 1000), tz);
     case "get_week_review":
       return describeReview(await store.units(uid), day, Math.floor(now.getTime() / 1000), tz);
+    case "share": {
+      const kind = args.kind as ShareKind, show = args.show_weights !== false;
+      const units = await store.units(uid);
+      const profile = profileOf(units);
+      let payload: Record<string, unknown> | undefined, what = "";
+      if (kind === "win") {
+        const program = programOf(profile, tz);
+        if (!program || !profile?.programStart || !profile.targetDate) throw new Error("Wins count from a program's start; there's no program yet.");
+        const won = progressWins(units, today, tz);
+        const win = won.find((w) => w.key === args.win);
+        if (!win) throw new Error(`No win with that id. get_progress lists them${won.length ? `, e.g. ${won[0].key}` : ""}.`);
+        payload = winPayload(win, show);
+        what = progress.describeWin(win);
+      } else if (kind === "recap") {
+        const r = progress.weekReport(units, day, Math.floor(now.getTime() / 1000), tz);
+        const program = programOf(profile, tz);
+        payload = program && recapPayload(r, program.weeks, progressWins(units, today, tz), programSessions(units, program.start, today), show);
+        if (!payload) throw new Error("A recap is a week of a program; there's no program yet.");
+        what = `Week ${payload.week} of ${payload.weeks}: ${(payload.sessions as any).done} of ${(payload.sessions as any).planned} sessions, ${payload.bests} new best(s)`;
+      } else if (kind === "session") {
+        const rows = planOf(units, day);
+        if (!rows.some((r) => r.kind === "workout")) throw new Error(`Nothing is planned on ${day}.`);
+        payload = sessionPayload(rows, day, tz, show);
+        what = `${payload.title} on ${weekday(day)} ${day}`;
+      } else if (kind === "program") {
+        payload = programPayload(units, profile as any, goalsOf(units), today, tz);
+        if (!payload) throw new Error("A shared program needs the program and its phases: set_program with phases first.");
+        what = String(payload.name);
+      } else throw new Error("kind is win, recap, session or program.");
+      const made = await store.share(uid, kind, payload);
+      return `Shared ${what}.\n${made.url}\nAnyone with the link can see it. stop_sharing takes it down.`;
+    }
+    case "stop_sharing": {
+      const id = /([0-9a-f]{12})\/?$/.exec(String(args.link ?? "").trim())?.[1];
+      if (!id || !(await store.unshare(uid, id))) throw new Error("That isn't one of their shared links.");
+      return "Stopped sharing it: the link now says it has expired.";
+    }
     case "get_program":
       return describeProgram(await store.units(uid), today, tz);
     case "set_program": {
@@ -688,6 +796,15 @@ export async function callTool(name: string, args: Args, account: Account, store
         trips = [...new Set([...trips, ...added])].sort((a, b) => a - b);
       }
       p.travelWeeks = trips;
+      if (args.phases) {
+        // As ProgramBrief.Stored. Main lifts by catalog name, as ProgramBrief.checked keeps them.
+        const brief: Brief = { phases: (args.phases as any[]).map((x) => ({
+          phase: String(x.phase), focus: String(x.focus).trim().replace(/[. \n]+$/, ""), mainLifts: [...new Set((x.main_lifts as string[]).map((l) => resolve(l).name))],
+          mainReps: Math.round(x.main_reps), accessoryReps: Math.round(x.accessory_reps),
+        })) };
+        if (brief.phases.some((x) => !["base", "build", "peak"].includes(x.phase))) throw new Error("Each phase is base, build or peak.");
+        p.brief = { brief, key: "", model: account.agent };
+      }
       if (args.deload_every !== undefined) {
         if (args.deload_every === 0) delete p.deloadEveryWeeks;
         else p.deloadEveryWeeks = Math.max(2, Math.round(args.deload_every));
@@ -699,6 +816,12 @@ export async function callTool(name: string, args: Args, account: Account, store
     case "set_profile": {
       const units = await store.units(uid);
       const current = units.get("profile");
+      const name = typeof args.name === "string" ? args.name.trim().slice(0, 40) : "";
+      if (name) await store.setName(uid, name);
+      if (Object.keys(args).every((k) => k === "name")) {
+        if (!name) throw new Error("Nothing to save.");
+        return `Saved: they're ${name} on what they share.`;
+      }
       const merged = mergeProfile(current ? JSON.parse(current) : undefined, args as ProfileInput);
       await store.write(uid, [{ key: "profile", body: encode(merged) }], account.agent);
       const days = (merged.trainingDays as number[]).map((d) => WEEKDAYS[d]).join(", ");

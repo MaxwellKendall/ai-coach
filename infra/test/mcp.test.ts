@@ -2,6 +2,7 @@ import type { LambdaFunctionURLEvent } from "aws-lambda";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { answer, callTool, hashToken, serve, type Account, type Store } from "../lambda/mcp.ts";
+import { readProgram, readRecap, readSession, readWin } from "../lambda/sharePages.ts";
 import { checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
 
 const tz = "America/New_York";
@@ -14,9 +15,18 @@ const row = (template: string, sets: number, extra: Partial<PlanRow> = {}, t = a
   note: "", main: template === "back-squat", pinned: false, ...extra,
 });
 
-function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"] } {
+function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }> } {
   const extra = new Map<string, Record<string, any>>();
+  const shared = new Map<string, { uid: string; kind: string; payload: any }>();
   return {
+    shared,
+    async share(uid, kind, payload) {
+      const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+      shared.set(id, { uid, kind, payload: JSON.parse(JSON.stringify(payload)) });
+      return { id, url: `https://example.com/${{ win: "w", recap: "r", program: "p", session: "s" }[kind]}/${id}` };
+    },
+    async unshare(uid, id) { return shared.get(id)?.uid === uid && shared.delete(id); },
+    async setName(uid, name) { extra.set(`${uid}/name`, { name }); },
     async account(hash) { return accounts[hash]; },
     async units(uid) { return new Map(Object.entries(units[uid] ?? {})); },
     async write(uid, list) {
@@ -107,15 +117,16 @@ describe("mcp", () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
     const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
-    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log"];
+    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
-      expect(t.annotations).toMatchObject({ title: t.title, openWorldHint: false });
+      // A share is a public page (FIT-169); everything else stays in the account.
+      expect(t.annotations).toMatchObject({ title: t.title, openWorldHint: t.name === "share" });
     }
     for (const n of reads) expect(by[n].annotations.readOnlyHint).toBe(true);
     for (const n of writes) expect(by[n].annotations.readOnlyHint).toBe(false);
-    expect(writes.filter((n) => by[n].annotations.destructiveHint)).toEqual(["log_session", "set_goal", "delete_log"]);
+    expect(writes.filter((n) => by[n].annotations.destructiveHint)).toEqual(["log_session", "set_goal", "delete_log", "stop_sharing"]);
   });
 
   it("refuses an unknown link and answers notifications with 202", async () => {
@@ -195,6 +206,8 @@ describe("agent-first onboarding (FIT-150)", () => {
       injured_areas: ["knees"], never: ["Bench Press"], starting_sets: [{ exercise: "back squat", weight_lb: 185, reps: 5 }],
     }, fresh, store, now);
     expect(saved).toMatch(/trains Mon, Wed, Sat, 50 min at 06:30/);
+    expect(await callTool("set_profile", { name: "Sam" }, fresh, store, now)).toMatch(/they're Sam on what they share/);
+    expect(await store.get("new", "name")).toEqual({ name: "Sam" });
     const profile = JSON.parse(units.new.profile);
     expect(profile).toMatchObject({ age: 41, weightLb: 196, trainingDays: [0, 2, 5], daysPerWeek: 3, workoutTime: 390, avoidExercises: ["bench-press"],
       cookWindows: [], fineAreas: {}, travelWeeks: [], warmups: true, style: "powerbuilding", maxWeeklySets: 60 });
@@ -317,7 +330,7 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(p).toMatch(/  Best set: 215 lb × 5 reps on 2026-10-12\./);
     expect(p).toMatch(/Romanian Deadlift max: target 200 lb/);
     expect(p).toMatch(/Streak: Do Friday’s session today to make it 3 weeks in a row\./);
-    expect(p).toMatch(/Wins, newest first:\n- 2026-10-12: personal best, Back squat max 242 lb \(was 236\)\./);
+    expect(p).toMatch(/Wins, newest first \(share one by its id\):\n- 2026-10-12: personal best, Back squat max 242 lb \(was 236\)\./);
     expect(p).toMatch(/- 2026-10-10: 2 weeks in a row, every planned session done/);
   });
 
@@ -353,6 +366,58 @@ describe("agent-first onboarding (FIT-150)", () => {
     await callTool("undo", {}, me, store, now);
     expect(units.me["plan#2026-10-17"]).toBe(before);
     await expect(callTool("clear_day", { date: "2026-10-18", reason: "x" }, me, store, now)).rejects.toThrow(/Nothing is planned/);
+  });
+
+  it("shares a win, a week's recap, a session and the program as the app saves them, and stops sharing (FIT-169)", async () => {
+    const fixture = JSON.parse(readFileSync(new URL("../../Tests/Fixtures/progress-units.json", import.meta.url), "utf8"));
+    const units = { me: Object.fromEntries(Object.entries(fixture.units).map(([k, v]) => [k, encode(v)])) };
+    const store = memory({}, units);
+    const at = new Date("2026-10-17T16:00:00Z");
+    const id = (out: string) => out.match(/\/(\w)\/([0-9a-f]{12})/)!;
+
+    const recap = await callTool("share", { kind: "recap", date: "2026-10-10" }, me, store, at);
+    expect(recap).toMatch(/Shared Week 4 of 16: 3 of 3 sessions, 2 new best\(s\)\.\nhttps:\/\/example\.com\/r\//);
+    const r = store.shared.get(id(recap)[2])!;
+    expect(r.payload).toEqual({ week: 4, weeks: 16, phase: "base", sessions: { done: 3, planned: 3 }, bests: 2, showNumbers: true,
+      lifts: [{ metric: "Back squat", from: 225, to: 242, unit: "lb" }, { metric: "Pull-ups", from: 7, to: 8, unit: "reps" }] });
+    expect(readRecap(r.payload, "Sam")).toBeDefined();
+
+    const progressOut = await callTool("get_progress", {}, me, store, at);
+    const winId = progressOut.match(/\[win (pr:back-squat\.1rm_lb:\d+)\]/)![1];
+    const hidden = await callTool("share", { kind: "win", win: winId, show_weights: false }, me, store, at);
+    const w = store.shared.get(id(hidden)[2])!.payload;
+    expect(w).toMatchObject({ kind: "pr", metric: "Back squat", unit: "%", previous: 100, value: 102.5, showNumbers: false, style: "dark", date: "2026-10-12" });
+    expect(readWin(w, "Sam")).toBeDefined();
+    await expect(callTool("share", { kind: "win", win: "nope" }, me, store, at)).rejects.toThrow(/No win with that id/);
+
+    const session = await callTool("share", { kind: "session", date: "2026-10-19" }, me, store, at);
+    const sp = store.shared.get(id(session)[2])!.payload;
+    expect(sp).toMatchObject({ title: "Session", date: "2026-10-19", time: "7:00 AM", minutes: 20, exercises: [
+      { exercise: "back-squat", name: "Back Squat", sets: 3, reps: 5 }, { exercise: "bench-press", name: "Bench Press", sets: 3, reps: 5 }] });
+    expect(readSession(sp, "Sam")).toBeDefined();
+
+    await expect(callTool("share", { kind: "program" }, me, store, at)).rejects.toThrow(/set_program with phases/);
+    await callTool("set_program", { phases: [
+      { phase: "base", focus: "Volume and technique.", main_lifts: ["back squat", "Bench Press"], main_reps: 8, accessory_reps: 12 },
+      { phase: "build", focus: "Heavier", main_lifts: ["Back Squat", "Deadlift"], main_reps: 5, accessory_reps: 10 },
+      { phase: "peak", focus: "Heavy singles", main_lifts: ["Back Squat"], main_reps: 3, accessory_reps: 8 },
+    ] }, me, store, at);
+    expect(JSON.parse(units.me.profile).brief).toEqual({ key: "", model: "claude", brief: { phases: [
+      { phase: "base", focus: "Volume and technique", mainLifts: ["Back Squat", "Bench Press"], mainReps: 8, accessoryReps: 12 },
+      { phase: "build", focus: "Heavier", mainLifts: ["Back Squat", "Deadlift"], mainReps: 5, accessoryReps: 10 },
+      { phase: "peak", focus: "Heavy singles", mainLifts: ["Back Squat"], mainReps: 3, accessoryReps: 8 }] } });
+    const program = await callTool("share", { kind: "program" }, me, store, at);
+    const pp = store.shared.get(id(program)[2])!.payload;
+    expect(pp).toMatchObject({ name: "Squat 250 by Jan 2", weeks: 16, days: 3, equipment: "Full gym", goals: ["Squat 250 by Jan 2", "10 pull-ups by Jan 2", "Get to 185 lb by Jan 2"],
+            // Deloads (weeks 6 and 12) and the test week aren't a phase's hard weeks.
+      phases: [{ phase: "base", from: 1, to: 5, mainReps: 8 }, { phase: "build", from: 7, to: 11 }, { phase: "peak", from: 13, to: 15 }] });
+    expect(pp.sampleWeek[0]).toEqual({ day: "Monday", title: "Session", items: ["Back Squat 3 × 5", "Bench Press 3 × 5"] });
+    expect(pp.sampleWeek).toHaveLength(3);
+    expect(readProgram(pp, "Sam")).toBeDefined();
+
+    expect(await callTool("stop_sharing", { link: recap.match(/https:\S+/)![0] }, me, store, at)).toMatch(/expired/);
+    expect(store.shared.has(id(recap)[2])).toBe(false);
+    await expect(callTool("stop_sharing", { link: id(recap)[2] }, me, store, at)).rejects.toThrow(/isn't one of their/);
   });
 
   it("holds a proposed week to their weekly ceiling", async () => {
