@@ -18,7 +18,7 @@ const PENDING = "aicoach.signin";
 /** FIT-137: while linking another sign-in, the account's own tokens wait here. */
 const LINKING = "aicoach.linking";
 
-const redirectUri = () => `${location.origin}/`;
+const redirectUri = () => `${location.origin}${import.meta.env.BASE_URL}`;
 
 function base64url(bytes: Uint8Array) {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

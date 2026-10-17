@@ -19,8 +19,9 @@ test/                vitest: CDK template assertions, resolver and Lambda unit t
 
 `web/` is the dashboard: Vite + React + TypeScript (author, 2026-10-16: web dependencies are fine there; CLAUDE.md's
 rule is for the iOS app). It signs in through the same Cognito hosted UI as the app, with its own public `web` client
-(PKCE), and talks to AppSync directly. CDK serves `web/dist` from a private bucket behind CloudFront at
-`stages.{stage}.app.host` (dev `app.dev.barbrabell.com`, prod `app.barbrabell.com`) and writes its `config.json`.
+(PKCE), and talks to AppSync directly. CDK serves `web/dist` from a private bucket at `/app` on the site's first host, on the same CloudFront distribution
+as the share pages and the MCP server (dev `dev.barbrabell.com/app`, prod `barbrabell.com/app`; author, 2026-10-17),
+and writes its `config.json`. `stages.{stage}.app: true` turns it on.
 
 ```bash
 npm --prefix ../web run build                    # before every cdk deploy: the stack uploads web/dist

@@ -243,7 +243,8 @@ describe("web dashboard (FIT-127)", () => {
     });
     return Template.fromStack(new AICoachStack(app, "AICoach-dev", {
       env: { account: "111111111111", region: "us-east-1" }, stage: "dev", identityProviders: [], alertEmail: "a@example.com",
-      app: { zone: "example.com", host: "app.example.com", assets: fileURLToPath(new URL("./fixtures/web", import.meta.url)) },
+      web: { zone: "example.com", hosts: ["example.com"] },
+      app: { assets: fileURLToPath(new URL("./fixtures/web", import.meta.url)) },
     }));
   };
 
@@ -253,24 +254,28 @@ describe("web dashboard (FIT-127)", () => {
       ClientName: "web",
       GenerateSecret: false,
       AllowedOAuthFlows: ["code"],
-      CallbackURLs: ["https://app.example.com/", "http://localhost:5173/"],
+      CallbackURLs: ["https://example.com/app/", "http://localhost:5173/app/"],
       ExplicitAuthFlows: ["ALLOW_REFRESH_TOKEN_AUTH"],
     });
   });
 
-  it("is served from a private bucket on its own host, with every path falling back to the app", () => {
+  it("is served at /app on the site's host from a private bucket, every app path falling back to its index", () => {
     const t = synthApp();
+    t.resourceCountIs("AWS::CloudFront::Distribution", 1);
     t.hasResourceProperties("AWS::CloudFront::Distribution", {
       DistributionConfig: Match.objectLike({
-        Aliases: ["app.example.com"],
-        DefaultRootObject: "index.html",
-        CustomErrorResponses: [
-          Match.objectLike({ ErrorCode: 403, ResponseCode: 200, ResponsePagePath: "/index.html" }),
-          Match.objectLike({ ErrorCode: 404, ResponseCode: 200, ResponsePagePath: "/index.html" }),
-        ],
+        Aliases: ["example.com"],
+        CacheBehaviors: Match.arrayWith([
+          Match.objectLike({ PathPattern: "/app" }),
+          Match.objectLike({ PathPattern: "/app/*" }),
+        ]),
       }),
     });
-    t.hasOutput("AppUrl", { Value: "https://app.example.com" });
+    t.hasResourceProperties("AWS::CloudFront::Function", {
+      FunctionCode: Match.stringLikeRegexp('r.uri = "/app/index.html"'),
+    });
+    t.hasResourceProperties("Custom::CDKBucketDeployment", { DestinationBucketKeyPrefix: "app/" });
+    t.hasOutput("AppUrl", { Value: "https://example.com/app/" });
   });
 
   it("isn't set up for a stage without a host", () => {

@@ -37,7 +37,8 @@ export interface AICoachStackProps extends StackProps {
    */
   web?: { zone: string; hosts: string[] };
   /** FIT-127: the web dashboard's host on a Route 53 zone, and its built files (web/dist). */
-  app?: { zone: string; host: string; assets: string };
+  /** The web dashboard, served at /app on the site's first host. Needs web. */
+  app?: { assets: string };
 }
 
 const path = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
@@ -217,7 +218,8 @@ export class AICoachStack extends Stack {
     }
 
     // FIT-127: the web dashboard signs in through the same hosted UI, as a public client with PKCE.
-    const webOrigins = [...(props.app ? [`https://${props.app.host}/`] : []), "http://localhost:5173/"];
+    const appOrigin = props.app && props.web ? `https://${props.web.hosts[0]}/app` : "http://localhost:5173/app";
+    const webOrigins = [...(props.app && props.web ? [`${appOrigin}/`] : []), "http://localhost:5173/app/"];
     const webClient = userPool.addClient("Web", {
       userPoolClientName: "web",
       generateSecret: false,
@@ -371,7 +373,7 @@ export class AICoachStack extends Stack {
     new CfnOutput(this, "StripeWebhookUrl", { value: webhookUrl.url });
 
     // ---- FIT-144: the coach plan, a Stripe subscription; the webhook above keeps it up to date ----
-    const coachPlan = fn("coachPlan", { STRIPE_SECRET: stripeSecret.secretName, APP_ORIGIN: props.app ? `https://${props.app.host}` : "http://localhost:5173" });
+    const coachPlan = fn("coachPlan", { STRIPE_SECRET: stripeSecret.secretName, APP_ORIGIN: appOrigin });
     table.grant(coachPlan, "dynamodb:GetItem", "dynamodb:UpdateItem");
     stripeSecret.grantRead(coachPlan);
     const coachPlanSource = api.addLambdaDataSource("CoachPlanSource", coachPlan);
@@ -482,6 +484,22 @@ export class AICoachStack extends Stack {
     );
 
     // ---- FIT-105: the share pages, on the domain ----
+    // FIT-127: config.json tells the dashboard where the API is.
+    const webConfig = {
+      region: this.region,
+      clientId: webClient.userPoolClientId,
+      cognitoDomain: `${domainPrefix}.auth.${this.region}.amazoncognito.com`,
+      graphqlUrl: api.graphqlUrl,
+      providers: props.identityProviders,
+    };
+    // FIT-127: the dashboard's files. CloudFront serves them at /app on the site's host.
+    const site = props.app && new s3.Bucket(this, "AppSite", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      removalPolicy,
+      autoDeleteObjects: !isProd,
+    });
     if (props.web) {
       const zone = route53.HostedZone.fromLookup(this, "Zone", { domainName: props.web.zone });
       const [primary, ...others] = props.web.hosts;
@@ -524,6 +542,23 @@ export class AICoachStack extends Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       };
+      // The dashboard routes in the browser, so any /app path without a file extension is its index.html.
+      const appPaths = new cloudfront.Function(this, "AppPaths", {
+        runtime: cloudfront.FunctionRuntime.JS_2_0,
+        code: cloudfront.FunctionCode.fromInline(`function handler(event) {
+  var r = event.request;
+  if (r.uri === "/app") return { statusCode: 301, statusDescription: "Moved", headers: { location: { value: "/app/" } } };
+  if (r.uri.split("/").pop().indexOf(".") < 0) r.uri = "/app/index.html";
+  return r;
+}`),
+      });
+      const appBehavior: cloudfront.BehaviorOptions | undefined = site && {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(site),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+        functionAssociations: [{ function: appPaths, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+      };
       const web = new cloudfront.Distribution(this, "Web", {
         domainNames: props.web.hosts,
         certificate,
@@ -548,6 +583,7 @@ export class AICoachStack extends Stack {
           // FIT-151: the MCP server and its sign-in. No origin access control, which would pass only GETs.
           "/mcp": { ...mcpBehavior, responseHeadersPolicy: signInHeader },
           ...Object.fromEntries(["/mcp/*", "/oauth/*", "/.well-known/oauth-*"].map((p) => [p, mcpBehavior])),
+          ...(appBehavior ? { "/app": appBehavior, "/app/*": appBehavior } : {}),
         },
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       });
@@ -564,54 +600,16 @@ export class AICoachStack extends Stack {
         new route53.AaaaRecord(this, `Web6${host}`, { zone, recordName, target });
       }
       new CfnOutput(this, "ShareOrigin", { value: shareOrigin });
-    }
-
-    // ---- FIT-127: the web dashboard, a static app on its own host; config.json tells it where the API is ----
-    const webConfig = {
-      region: this.region,
-      clientId: webClient.userPoolClientId,
-      cognitoDomain: `${domainPrefix}.auth.${this.region}.amazoncognito.com`,
-      graphqlUrl: api.graphqlUrl,
-      providers: props.identityProviders,
-    };
-    if (props.app) {
-      const zone = route53.HostedZone.fromLookup(this, "AppZone", { domainName: props.app.zone });
-      const site = new s3.Bucket(this, "AppSite", {
-        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-        enforceSSL: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        removalPolicy,
-        autoDeleteObjects: !isProd,
-      });
-      const certificate = new acm.Certificate(this, "AppCertificate", {
-        domainName: props.app.host,
-        validation: acm.CertificateValidation.fromDns(zone),
-      });
-      // Every path is the app (it routes in the browser), so a missing file is index.html.
-      const index = { responseHttpStatus: 200, responsePagePath: "/index.html", ttl: Duration.seconds(0) };
-      const dashboard = new cloudfront.Distribution(this, "App", {
-        domainNames: [props.app.host],
-        certificate,
-        defaultRootObject: "index.html",
-        defaultBehavior: {
-          origin: origins.S3BucketOrigin.withOriginAccessControl(site),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-          responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
-        },
-        errorResponses: [{ httpStatus: 403, ...index }, { httpStatus: 404, ...index }],
-        priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
-      });
-      new s3deploy.BucketDeployment(this, "AppFiles", {
-        sources: [s3deploy.Source.asset(props.app.assets), s3deploy.Source.jsonData("config.json", webConfig)],
-        destinationBucket: site,
-        distribution: dashboard,
-        distributionPaths: ["/index.html", "/config.json"],
-      });
-      const target = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(dashboard));
-      new route53.ARecord(this, "AppRecord", { zone, recordName: props.app.host, target });
-      new route53.AaaaRecord(this, "AppRecord6", { zone, recordName: props.app.host, target });
-      new CfnOutput(this, "AppUrl", { value: `https://${props.app.host}` });
+      if (site) {
+        new s3deploy.BucketDeployment(this, "AppFiles", {
+          sources: [s3deploy.Source.asset(props.app!.assets), s3deploy.Source.jsonData("config.json", webConfig)],
+          destinationBucket: site,
+          destinationKeyPrefix: "app/",
+          distribution: web,
+          distributionPaths: ["/app/index.html", "/app/config.json"],
+        });
+        new CfnOutput(this, "AppUrl", { value: `${appOrigin}/` });
+      }
     }
 
     // ---- FIT-110: what the sharing flywheel makes, counted by day ----

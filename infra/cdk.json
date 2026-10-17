@@ -16,10 +16,7 @@
             "dev.barbrabell.com"
           ]
         },
-        "app": {
-          "zone": "barbrabell.com",
-          "host": "app.dev.barbrabell.com"
-        }
+        "app": true
       },
       "prod": {
         "identityProviders": [
@@ -34,10 +31,7 @@
             "join.barbrabell.com"
           ]
         },
-        "app": {
-          "zone": "barbrabell.com",
-          "host": "app.barbrabell.com"
-        }
+        "app": true
       }
     }
   }

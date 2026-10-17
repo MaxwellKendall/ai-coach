@@ -7,7 +7,7 @@ const stage = app.node.getContext("stage") as Stage;
 const stages = app.node.getContext("stages") as Record<Stage, {
   identityProviders: IdentityProvider[];
   web?: { zone: string; hosts: string[] };
-  app?: { zone: string; host: string };
+  app?: boolean;
 }>;
 const dashboard = stages[stage].app;
 
@@ -19,7 +19,7 @@ new AICoachStack(app, `AICoach-${stage}`, {
   stage,
   identityProviders: stages[stage].identityProviders,
   web: stages[stage].web,
-  // FIT-127: build the dashboard first (npm --prefix ../web run build).
-  app: dashboard && { ...dashboard, assets: fileURLToPath(new URL("../../web/dist", import.meta.url)) },
+  // FIT-127: build the dashboard first (npm --prefix ../web run build). It's served at /app on the site's host.
+  app: dashboard ? { assets: fileURLToPath(new URL("../../web/dist", import.meta.url)) } : undefined,
   alertEmail: app.node.getContext("alertEmail"),
 });

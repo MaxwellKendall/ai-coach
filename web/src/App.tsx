@@ -3,6 +3,7 @@ import { finishSignIn, idToken, signIn, signOut, startLink, user, type Config, t
 import { BillingPage } from "./BillingPage";
 import { ClientPage, ClientsPage } from "./ClientsPage";
 import { HistoryView } from "./HistoryView";
+import { here, href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
 import { comments, postComment, pullAll, type Comment, type Unit } from "./sync";
 
@@ -26,7 +27,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const loaded: Config = await (await fetch("/config.json")).json();
+      const loaded: Config = await (await fetch(`${import.meta.env.BASE_URL}config.json`)).json();
       setConfig(loaded);
       let notice: string | undefined;
       try {
@@ -68,15 +69,15 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
 
 /** The address bar's path, kept in step with the nav without reloading the page. */
 export function usePath(): [string, (path: string) => (e?: React.MouseEvent) => void] {
-  const [path, setPath] = useState(location.pathname);
+  const [path, setPath] = useState(here);
   useEffect(() => {
-    const onPop = () => setPath(location.pathname);
+    const onPop = () => setPath(here());
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const go = (to: string) => (e?: React.MouseEvent) => {
     e?.preventDefault();
-    history.pushState(null, "", to);
+    history.pushState(null, "", href(to));
     setPath(to);
     window.scrollTo(0, 0);
   };
@@ -88,7 +89,7 @@ function Dashboard({ config, me, notice }: { config: Config; me: User; notice?: 
   // FIT-137: back from linking, the Account page says how it went.
   useEffect(() => { if (notice) go("/account")(); }, [notice]);
   const link = (to: string, label: string, active: boolean) => (
-    <a href={to} className={active ? "current" : undefined} aria-current={active ? "page" : undefined} onClick={go(to)}>{label}</a>
+    <a href={href(to)} className={active ? "current" : undefined} aria-current={active ? "page" : undefined} onClick={go(to)}>{label}</a>
   );
   return (
     <div className="shell">
@@ -159,7 +160,7 @@ function Empty({ config, me, go }: { config: Config; me: User; go: (path: string
       <div className="empty coach">
         <h2>Coaching clients?</h2>
         <p className="muted">Invite them, write their programs and follow their training.</p>
-        <a className="button primary" href="/clients" onClick={go("/clients")}>Go to Clients</a>
+        <a className="button primary" href={href("/clients")} onClick={go("/clients")}>Go to Clients</a>
       </div>
       <div className="empty">
         <h2>Training yourself?</h2>

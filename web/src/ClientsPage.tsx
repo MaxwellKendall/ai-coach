@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Config, User } from "./auth";
 import { HistoryView } from "./HistoryView";
+import { href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
 import catalog from "./catalog.json";
 import { SendProgram } from "./SendProgram";
@@ -50,7 +51,7 @@ export function ClientsPage({ config, me, go }: { config: Config; me: User; go: 
         <ul className="clients">
           {clients.map((c) => (
             <li key={c.uid}>
-              <a href={`/clients/${c.uid}`} onClick={go(`/clients/${c.uid}`)}>
+              <a href={href(`/clients/${c.uid}`)} onClick={go(`/clients/${c.uid}`)}>
                 <span className="who">
                   <strong>{personName(c)}</strong>
                   {c.triage ? (
@@ -159,7 +160,7 @@ export function ClientPage({ config, me, uid, go }: {
       <div className="empty">
         <h2>Not one of your clients</h2>
         <p className="muted">They may have stopped sharing with you.</p>
-        <a href="/clients" onClick={go("/clients")}>Back to clients</a>
+        <a href={href("/clients")} onClick={go("/clients")}>Back to clients</a>
       </div>
     );
   }
@@ -173,7 +174,7 @@ export function ClientPage({ config, me, uid, go }: {
   const startOf = (o: Offer) => { const [y, m, d] = o.start.split("-").map(Number); return shortDate.format(new Date(y, m - 1, d)); };
   return (
     <>
-      <p className="crumb"><a href="/clients" onClick={go("/clients")}>Clients</a></p>
+      <p className="crumb"><a href={href("/clients")} onClick={go("/clients")}>Clients</a></p>
       <div className="actions top">
         <button className="button primary" onClick={() => { setMessage(undefined); setSending(true); }}>Send a program</button>
         {message && <span className="status">{message}</span>}
