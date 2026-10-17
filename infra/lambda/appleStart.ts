@@ -7,6 +7,7 @@ import {
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
+import { linkedApple } from "./accounts.ts";
 import { saveProfile } from "./postConfirmation.ts";
 import { verifyAppleToken, type AppleClaims } from "./appleToken.ts";
 
@@ -71,6 +72,9 @@ export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunc
     console.log("refused", result.why);
     return reply(401, { error: "Apple's token wasn't accepted." });
   }
+  // FIT-137: Apple linked to another account (a Google one) signs in to that account.
+  const linked = await linkedApple(result.claims.sub);
+  if (linked && (await exists(linked))) return reply(200, { username: linked });
   // Someone who signed in with Apple before FIT-138 is a federated user; custom auth signs them in as that user.
   const federated = `SignInWithApple_${result.claims.sub}`;
   if (await exists(federated)) return reply(200, { username: federated });

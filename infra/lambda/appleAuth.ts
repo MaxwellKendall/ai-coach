@@ -4,6 +4,7 @@ import type {
   PreSignUpTriggerEvent,
   VerifyAuthChallengeResponseTriggerEvent,
 } from "aws-lambda";
+import { linkedApple } from "./accounts.ts";
 import { verifyAppleToken } from "./appleToken.ts";
 
 /**
@@ -53,8 +54,9 @@ export async function checkAnswer(event: VerifyAuthChallengeResponseTriggerEvent
   const subject = appleSubject(event.userName);
   try {
     const { identityToken, nonce } = JSON.parse(event.request.challengeAnswer) as { identityToken: string; nonce: string };
-    const result = subject ? await verifyAppleToken(identityToken, nonce, now) : { ok: false as const, why: "not an Apple user" };
-    if (result.ok && result.claims.sub === subject) event.response.answerCorrect = true;
+    const result = await verifyAppleToken(identityToken, nonce, now);
+    // FIT-137: or an account this Apple user linked their Apple sign-in to.
+    if (result.ok && (result.claims.sub === subject || (await linkedApple(result.claims.sub)) === event.userName)) event.response.answerCorrect = true;
     else console.log("refused", result.ok ? "another Apple user" : result.why);
   } catch (e) {
     // The answer's shape, never its content (it holds Apple's token).

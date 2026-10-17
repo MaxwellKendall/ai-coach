@@ -15,6 +15,8 @@ type Tokens = { id: string; refresh: string; expiresAt: number };
 
 const TOKENS = "aicoach.tokens";
 const PENDING = "aicoach.signin";
+/** FIT-137: while linking another sign-in, the account's own tokens wait here. */
+const LINKING = "aicoach.linking";
 
 const redirectUri = () => `${location.origin}/`;
 
@@ -70,8 +72,17 @@ function stored(): Tokens | null {
   }
 }
 
-/** On the way back from the provider: trades the code for tokens, and tidies the address bar. */
-export async function finishSignIn(config: Config) {
+/** FIT-137: sign in once more with the other provider, to link it to this account. */
+export async function startLink(config: Config, provider: Provider) {
+  const tokens = localStorage.getItem(TOKENS);
+  if (!tokens) return;
+  sessionStorage.setItem(LINKING, tokens);
+  await signIn(config, provider);
+}
+
+/** On the way back from the provider: trades the code for tokens, and tidies the address bar. When linking, the new
+ *  sign-in's ID token goes to linkAccount and the account's own tokens come back; returns what to say. */
+export async function finishSignIn(config: Config): Promise<string | undefined> {
   const query = new URLSearchParams(location.search);
   const code = query.get("code");
   if (!code) return;
@@ -85,7 +96,26 @@ export async function finishSignIn(config: Config) {
     redirect_uri: redirectUri(),
     code_verifier: pending.verifier,
   });
-  store({ id: t.id_token, refresh: t.refresh_token ?? "", expiresAt: Date.now() + t.expires_in * 1000 });
+  const linking = sessionStorage.getItem(LINKING);
+  if (!linking) {
+    store({ id: t.id_token, refresh: t.refresh_token ?? "", expiresAt: Date.now() + t.expires_in * 1000 });
+    return;
+  }
+  sessionStorage.removeItem(LINKING);
+  // Back to the account's own tokens, then link; a refresh afterwards carries the new identity.
+  const mine = JSON.parse(linking) as Tokens;
+  store({ ...mine, expiresAt: 0 });
+  const token = await idToken(config);
+  if (!token) throw new Error("Sign in again to link.");
+  const response = await fetch(config.graphqlUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: token },
+    body: JSON.stringify({ query: "mutation($t: String!) { linkAccount(token: $t) }", variables: { t: t.id_token } }),
+  });
+  const json = await response.json();
+  if (json.errors?.length) throw new Error(json.errors[0].message);
+  store({ ...mine, expiresAt: 0 });
+  return `${json.data.linkAccount === "google" ? "Google" : "Apple"} is linked. You can sign in with either.`;
 }
 
 /** A current ID token, refreshed when it's about to expire; null when signed out. */
@@ -109,12 +139,16 @@ export function signOut(config: Config) {
   location.assign(`https://${config.cognitoDomain}/logout?${params}`);
 }
 
-export type User = { uid: string; name?: string; email?: string; provider?: Provider };
+export type User = { uid: string; name?: string; email?: string; provider?: Provider; linked: Provider[] };
 
 export function user(token: string): User {
   const claims = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
   // Cognito names federated users after their provider (as Account.Provider reads it in the app).
   const username: string = claims["cognito:username"] ?? "";
-  const provider = username.startsWith("Google_") ? "google" : username.startsWith("SignInWithApple_") ? "apple" : undefined;
-  return { uid: claims.sub, name: claims.name, email: claims.email, provider };
+  const provider = username.startsWith("Google_") ? "google" : username.startsWith("SignInWithApple_") || username.startsWith("apple_") ? "apple" : undefined;
+  // FIT-137: every sign-in on the account: the one it was made with, and any linked to it.
+  const identities: { providerName: string }[] = typeof claims.identities === "string" ? JSON.parse(claims.identities) : claims.identities ?? [];
+  const linked = new Set<Provider>(provider ? [provider] : []);
+  for (const i of identities) linked.add(i.providerName === "Google" ? "google" : "apple");
+  return { uid: claims.sub, name: claims.name, email: claims.email, provider, linked: [...linked] };
 }
