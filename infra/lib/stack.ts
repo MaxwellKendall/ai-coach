@@ -189,6 +189,12 @@ export class AICoachStack extends Stack {
     );
     const appleStartUrl = appleStart.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
+    // FIT-149: the training as MCP tools for any agent, on the agent's own tokens. The URL carries the connection's
+    // token (only its hash is stored); OAuth comes next.
+    const mcp = fn("mcp", {});
+    table.grant(mcp, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query");
+    const mcpUrl = mcp.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
+
     // FIT-127: the web dashboard signs in through the same hosted UI, as a public client with PKCE.
     const webOrigins = [...(props.app ? [`https://${props.app.host}/`] : []), "http://localhost:5173/"];
     const webClient = userPool.addClient("Web", {
@@ -595,9 +601,9 @@ export class AICoachStack extends Stack {
     const alerts = new sns.Topic(this, "Alerts", { topicName: `AICoach-${stage}-alerts` });
     alerts.addSubscription(new subs.EmailSubscription(props.alertEmail));
 
-    const lambdas = { a: postConfirmation, b: deleteAccount, c: push, d: groupCleanup, e: gifts, f: stripeWebhook, g: appleStart, h: verifyAuthChallengeResponse };
+    const lambdas = { a: postConfirmation, b: deleteAccount, c: push, d: groupCleanup, e: gifts, f: stripeWebhook, g: appleStart, h: verifyAuthChallengeResponse, i: mcp };
     const errors = new cloudwatch.MathExpression({
-      expression: "a + b + c + d + e + f + g + h + api",
+      expression: "a + b + c + d + e + f + g + h + i + api",
       usingMetrics: {
         ...Object.fromEntries(Object.entries(lambdas).map(([k, f]) => [k, f.metricErrors({ period: Duration.minutes(5) })])),
         api: new cloudwatch.Metric({
@@ -638,6 +644,7 @@ export class AICoachStack extends Stack {
     new CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
     new CfnOutput(this, "AppClientId", { value: appClient.userPoolClientId });
     new CfnOutput(this, "AppleStartUrl", { value: appleStartUrl.url });
+    new CfnOutput(this, "McpUrl", { value: mcpUrl.url });
     new CfnOutput(this, "WebClientId", { value: webClient.userPoolClientId });
     new CfnOutput(this, "CognitoDomain", { value: `${domainPrefix}.auth.${this.region}.amazoncognito.com` });
     new CfnOutput(this, "IdentityProviders", { value: props.identityProviders.join(",") || "none" });
