@@ -1,10 +1,12 @@
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
+import { saveSubscription, type Subscription } from "./coachPlan.ts";
 import { fulfill, readCode, refund, stripeConfig, type CheckoutSession } from "./gifts.ts";
 import { stripe, verifyWebhook } from "./stripe.ts";
 
 /**
  * FIT-122: Stripe's events for gifts, at this Lambda's own URL (CloudFront's origin access only passes GETs on):
- * a paid Checkout Session makes the gift, a refunded charge ends it. Anything else is acknowledged and ignored.
+ * a paid Checkout Session makes the gift, a refunded charge ends it. FIT-144: subscription events keep a coach's plan
+ * up to date. Anything else is acknowledged and ignored.
  */
 export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunctionURLResult> {
   if (event.requestContext.http.method !== "POST") return { statusCode: 405, body: "" };
@@ -14,8 +16,10 @@ export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunc
   if (!verifyWebhook(body, event.headers["stripe-signature"], keys.webhookSecret, new Date())) {
     return { statusCode: 400, body: "Bad signature" };
   }
-  const { type, data } = JSON.parse(body) as { type: string; data: { object: Record<string, unknown> } };
-  if (type === "checkout.session.completed") {
+  const { type, created, data } = JSON.parse(body) as { type: string; created: number; data: { object: Record<string, unknown> } };
+  if (type.startsWith("customer.subscription.")) {
+    await saveSubscription(data.object as unknown as Subscription, created);
+  } else if (type === "checkout.session.completed" && data.object.mode !== "subscription") {
     await fulfill(data.object as unknown as CheckoutSession);
   } else if (type === "charge.refunded" && data.object.refunded === true && typeof data.object.payment_intent === "string") {
     // The code is on the payment intent (Checkout's payment_intent_data), not the charge.
