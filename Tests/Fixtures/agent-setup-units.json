@@ -1,0 +1,358 @@
+{
+  "goal#00000000-0000-4000-8000-000000000001": {
+    "deadline": 1803920400,
+    "kind": "training",
+    "metric": "back-squat.1rm_lb",
+    "status": "active",
+    "target": 225,
+    "unit": "lb"
+  },
+  "goal#00000000-0000-4000-8000-000000000002": {
+    "kind": "training",
+    "metric": "pull-up.reps",
+    "status": "active",
+    "target": 10,
+    "unit": "reps"
+  },
+  "log#2026-10-17": [
+    {
+      "at": 1792233000,
+      "id": "00000000-0000-4000-8000-000000000007",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "reps",
+          "unit": "reps",
+          "value": 5
+        },
+        {
+          "metric": "load_lb",
+          "unit": "lb",
+          "value": 175
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000003",
+      "template": "back-squat"
+    },
+    {
+      "at": 1792233001,
+      "id": "00000000-0000-4000-8000-000000000008",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "reps",
+          "unit": "reps",
+          "value": 5
+        },
+        {
+          "metric": "load_lb",
+          "unit": "lb",
+          "value": 175
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000003",
+      "template": "back-squat"
+    },
+    {
+      "at": 1792233002,
+      "id": "00000000-0000-4000-8000-000000000009",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "reps",
+          "unit": "reps",
+          "value": 5
+        },
+        {
+          "metric": "load_lb",
+          "unit": "lb",
+          "value": 175
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000003",
+      "template": "back-squat"
+    },
+    {
+      "at": 1792233003,
+      "id": "00000000-0000-4000-8000-000000000010",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "reps",
+          "unit": "reps",
+          "value": 5
+        },
+        {
+          "metric": "load_lb",
+          "unit": "lb",
+          "value": 175
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000003",
+      "template": "back-squat"
+    },
+    {
+      "at": 1792233004,
+      "id": "00000000-0000-4000-8000-000000000011",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "duration_s",
+          "unit": "s",
+          "value": 45
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000004",
+      "template": "plank"
+    },
+    {
+      "at": 1792233005,
+      "id": "00000000-0000-4000-8000-000000000012",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "duration_s",
+          "unit": "s",
+          "value": 45
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000004",
+      "template": "plank"
+    },
+    {
+      "at": 1792233006,
+      "id": "00000000-0000-4000-8000-000000000013",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "duration_s",
+          "unit": "s",
+          "value": 45
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000004",
+      "template": "plank"
+    },
+    {
+      "at": 1792233007,
+      "id": "00000000-0000-4000-8000-000000000014",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "effort",
+          "unit": "/10",
+          "value": 6
+        },
+        {
+          "metric": "completion_rate",
+          "unit": "ratio",
+          "value": 1
+        }
+      ],
+      "note": "Knees fine."
+    }
+  ],
+  "plan#2026-10-17": [
+    {
+      "adjustedReason": "First week.",
+      "at": 1792233000,
+      "id": "00000000-0000-4000-8000-000000000003",
+      "kind": "workout",
+      "main": true,
+      "note": "",
+      "pinned": true,
+      "slot": "Lower A",
+      "targets": [
+        {
+          "metric": "sets",
+          "unit": "sets",
+          "value": 4
+        },
+        {
+          "metric": "reps",
+          "unit": "reps",
+          "value": 5
+        },
+        {
+          "metric": "load_lb",
+          "unit": "lb",
+          "value": 175
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "template": "back-squat"
+    },
+    {
+      "adjustedReason": "First week.",
+      "at": 1792233001,
+      "id": "00000000-0000-4000-8000-000000000004",
+      "kind": "workout",
+      "main": false,
+      "note": "",
+      "pinned": true,
+      "slot": "Lower A",
+      "targets": [
+        {
+          "metric": "sets",
+          "unit": "sets",
+          "value": 3
+        },
+        {
+          "metric": "duration_s",
+          "unit": "s",
+          "value": 45
+        }
+      ],
+      "template": "plank"
+    }
+  ],
+  "plan#2026-10-19": [
+    {
+      "adjustedReason": "First week.",
+      "at": 1792405800,
+      "group": 1,
+      "id": "00000000-0000-4000-8000-000000000005",
+      "kind": "workout",
+      "main": false,
+      "note": "",
+      "pinned": true,
+      "slot": "Upper A",
+      "targets": [
+        {
+          "metric": "sets",
+          "unit": "sets",
+          "value": 3
+        },
+        {
+          "metric": "reps",
+          "unit": "reps",
+          "value": 10
+        },
+        {
+          "metric": "load_lb_hand",
+          "unit": "lb/hand",
+          "value": 50
+        }
+      ],
+      "template": "dumbbell-bench-press"
+    },
+    {
+      "adjustedReason": "First week.",
+      "at": 1792405801,
+      "group": 1,
+      "id": "00000000-0000-4000-8000-000000000006",
+      "kind": "workout",
+      "main": true,
+      "note": "",
+      "pinned": true,
+      "slot": "Upper A",
+      "targets": [
+        {
+          "metric": "sets",
+          "unit": "sets",
+          "value": 3
+        },
+        {
+          "metric": "reps",
+          "unit": "reps",
+          "value": 5
+        }
+      ],
+      "template": "pull-up"
+    }
+  ],
+  "profile": {
+    "age": 41,
+    "avoidExercises": [
+      "bench-press"
+    ],
+    "cookWindows": [],
+    "daysPerWeek": 3,
+    "equipment": [
+      "barbell",
+      "rack",
+      "bench",
+      "dumbbells",
+      "pull_up_bar"
+    ],
+    "fineAreas": {},
+    "injuredAreas": [
+      "knees"
+    ],
+    "maxWeeklySets": 60,
+    "sessionMinutes": 45,
+    "starts": [
+      {
+        "exercise": "back-squat",
+        "measurements": [
+          {
+            "metric": "reps",
+            "unit": "reps",
+            "value": 5
+          },
+          {
+            "metric": "load_lb",
+            "unit": "lb",
+            "value": 185
+          }
+        ]
+      }
+    ],
+    "style": "powerbuilding",
+    "trainingDays": [
+      0,
+      2,
+      5
+    ],
+    "travelWeeks": [],
+    "warmups": true,
+    "weightLb": 196,
+    "workoutTime": 390
+  }
+}

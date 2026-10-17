@@ -163,3 +163,94 @@ describe("mcp", () => {
     expect(units.other["log#2026-10-17"]).toBeUndefined();
   });
 });
+
+describe("agent-first onboarding (FIT-150)", () => {
+  const fresh: Account = { uid: "new", tz, agent: "claude" };
+
+  it("sets up an empty account by conversation, then plans the first week", async () => {
+    const units: Record<string, Record<string, string>> = {};
+    const store = memory({}, units);
+    expect(await callTool("get_context", {}, fresh, store, now)).toMatch(/NOT SET UP YET[\s\S]*profile: age and body weight[\s\S]*goals:/);
+
+    await expect(callTool("set_profile", { training_days: ["Mon"] }, fresh, store, now)).rejects.toThrow(/age and body weight first/);
+    await callTool("set_profile", { age: 41, weight_lb: 196 }, fresh, store, now);
+    const saved = await callTool("set_profile", {
+      training_days: ["Mon", "Wed", "Sat"], session_minutes: 50, workout_time: "06:30", equipment: ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"],
+      injured_areas: ["knees"], never: ["Bench Press"], starting_sets: [{ exercise: "back squat", weight_lb: 185, reps: 5 }],
+    }, fresh, store, now);
+    expect(saved).toMatch(/trains Mon, Wed, Sat, 50 min at 06:30/);
+    const profile = JSON.parse(units.new.profile);
+    expect(profile).toMatchObject({ age: 41, weightLb: 196, trainingDays: [0, 2, 5], daysPerWeek: 3, workoutTime: 390, avoidExercises: ["bench-press"],
+      cookWindows: [], fineAreas: {}, travelWeeks: [], warmups: true, style: "powerbuilding", maxWeeklySets: 60 });
+    expect(profile.starts).toEqual([{ exercise: "back-squat", measurements: [{ metric: "reps", value: 5, unit: "reps" }, { metric: "load_lb", value: 185, unit: "lb" }] }]);
+    await expect(callTool("set_profile", { equipment: ["spaceship"] }, fresh, store, now)).rejects.toThrow(/Unknown equipment/);
+
+    const added = await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, fresh, store, now);
+    const id = added.match(/goal_id (\S+)\]/)![1];
+    expect(JSON.parse(units.new[`goal#${id}`])).toMatchObject({ kind: "training", metric: "back-squat.1rm_lb", target: 225, unit: "lb", status: "active" });
+    await callTool("set_goal", { action: "change", goal_id: id, target: 235 }, fresh, store, now);
+    await callTool("set_goal", { action: "add", type: "body_weight", target: 185 }, fresh, store, now);
+    const ctx = await callTool("get_context", {}, fresh, store, now);
+    expect(ctx).not.toMatch(/NOT SET UP YET/);
+    expect(ctx).toMatch(/Back Squat 235 lb by 2027-03-01/);
+    expect(ctx).toMatch(/Body weight 185 lb/);
+
+    const week = await callTool("propose_week", { reason: "First week: squat twice, easy on the knees.", days: [
+      { date: "2026-10-19", title: "Lower A", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 175, rpe: 7 }, { exercise: "Plank", sets: 3, seconds: 45 }] },
+      { date: "2026-10-21", title: "Upper A", exercises: [{ exercise: "Dumbbell Bench Press", sets: 3, reps: 10, weight_lb_per_hand: 50 }, { exercise: "pull-up", sets: 3, reps: 5 }] },
+      { date: "2026-10-20", exercises: [] },
+    ] }, fresh, store, now);
+    expect(week).toMatch(/Monday 2026-10-19 — Lower A:\n  \+ Back Squat: 4 × 5 @ 175 lb · RPE 7/);
+    expect(week).toMatch(/Tuesday 2026-10-20 — rest/);
+    expect(week).toMatch(/Back Squat works quads, near an area they said is injured/);
+    expect(week).toMatch(/passes the plan rules/);
+    await callTool("apply", { proposal_id: week.match(/Proposal (\S+)/)![1] }, fresh, store, now);
+    expect(JSON.parse(units.new["plan#2026-10-19"])[0]).toMatchObject({ template: "back-squat", slot: "Lower A", at: epoch("2026-10-19", 390, tz) });
+    expect(units.new["plan#2026-10-21"]).toBeDefined();
+    expect(units.new["plan#2026-10-20"]).toBeUndefined();
+    await callTool("set_goal", { action: "drop", goal_id: id }, fresh, store, now);
+    expect(JSON.parse(units.new[`goal#${id}`]).status).toBe("abandoned");
+  });
+
+  it("holds a proposed week to their weekly ceiling", async () => {
+    const units: Record<string, Record<string, string>> = { new: { profile: encode({ ...profile, maxWeeklySets: 10 }) } };
+    const store = memory({}, units);
+    const big = (date: string) => ({ date, title: "Big", exercises: [{ exercise: "back-squat", sets: 5, reps: 5 }, { exercise: "deadlift", sets: 4, reps: 5 }] });
+    const out = await callTool("propose_week", { reason: "x", days: [big("2026-10-19"), big("2026-10-21")] }, fresh, store, now);
+    expect(out).toMatch(/Week of 2026-10-18: 18 working sets, over their ceiling of 10/);
+  });
+});
+
+describe("what the app reads (FIT-150)", () => {
+  // Tests/Fixtures/agent-setup-units.json: an account set up only through the tools. AgentSetupTests (Swift) applies it
+  // with SyncUnits.apply, as a phone signing in would. UPDATE_FIXTURES=1 writes it again.
+  it("matches the fixture the app decodes", async () => {
+    const units: Record<string, Record<string, string>> = {};
+    const store = memory({}, units);
+    const a: Account = { uid: "a", tz, agent: "claude" };
+    await callTool("set_profile", { age: 41, weight_lb: 196, training_days: ["Mon", "Wed", "Sat"], workout_time: "06:30", equipment: ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"],
+      injured_areas: ["knees"], never: ["Bench Press"], starting_sets: [{ exercise: "Back Squat", weight_lb: 185, reps: 5 }] }, a, store, now);
+    await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, a, store, now);
+    await callTool("set_goal", { action: "add", type: "reps", exercise: "Pull-up", target: 10 }, a, store, now);
+    const week = await callTool("propose_week", { reason: "First week.", days: [
+      { date: "2026-10-17", title: "Lower A", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 175, rpe: 7 }, { exercise: "Plank", sets: 3, seconds: 45 }] },
+      { date: "2026-10-19", title: "Upper A", exercises: [{ exercise: "Dumbbell Bench Press", sets: 3, reps: 10, weight_lb_per_hand: 50, superset: 1 }, { exercise: "Pull-up", sets: 3, reps: 5, superset: 1 }] },
+    ] }, a, store, now);
+    await callTool("apply", { proposal_id: week.match(/Proposal (\S+)/)![1] }, a, store, now);
+    await callTool("log_session", { as_planned: true, rpe: 7, effort: 6, note: "Knees fine." }, a, store, now);
+    // Ids are random: the fixture keeps the shape, numbered in order.
+    let n = 0;
+    const ids = new Map<string, string>();
+    const stable = (body: string) => body.replace(/[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}/g, (id) => {
+      if (!ids.has(id)) ids.set(id, `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`);
+      return ids.get(id)!;
+    });
+    // Numbered in the order the tools wrote them (random keys would sort differently each run).
+    const written = Object.keys(units.a).map((k) => [stable(k), JSON.parse(stable(units.a[k]))] as const);
+    const got = Object.fromEntries(written.sort(([x], [y]) => x.localeCompare(y)));
+    const file = new URL("../../Tests/Fixtures/agent-setup-units.json", import.meta.url);
+    const { readFileSync, writeFileSync } = await import("node:fs");
+    if (process.env.UPDATE_FIXTURES) writeFileSync(file, JSON.stringify(got, null, 2) + "\n");
+    expect(got).toEqual(JSON.parse(readFileSync(file, "utf8")));
+  });
+});

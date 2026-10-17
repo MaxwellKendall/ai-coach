@@ -126,8 +126,8 @@ const rows = <T>(units: Units, key: string): T[] => {
 export const planOf = (units: Units, day: string) => rows<PlanRow>(units, `plan#${day}`);
 export const logOf = (units: Units, day: string) => rows<LogRow>(units, `log#${day}`);
 export const profileOf = (units: Units): Profile | undefined => (units.get("profile") ? JSON.parse(units.get("profile")!) : undefined);
-export const goalsOf = (units: Units): Goal[] =>
-  [...units].filter(([k]) => k.startsWith("goal#")).map(([, b]) => JSON.parse(b) as Goal).filter((g) => g.status === "active");
+export const goalsOf = (units: Units): (Goal & { id: string })[] =>
+  [...units].filter(([k]) => k.startsWith("goal#")).map(([k, b]) => ({ ...(JSON.parse(b) as Goal), id: k.slice(5) })).filter((g) => g.status === "active");
 
 const working = (r: PlanRow) => r.kind === "workout" && r.note !== WARMUP;
 
@@ -334,4 +334,103 @@ export function logRows(plan: PlanRow[], start: number, input: { sets?: SetInput
   if (plannedSets) summary.push(m("completion_rate", Math.min(1, sets.length / plannedSets)));
   out.push({ id: uuid(), kind: "workout", at: start + sets.length, measurements: summary, note: input.note?.trim() ?? "" });
   return out;
+}
+
+// ---- Setup (FIT-150): the profile and goals an agent fills in by conversation ----
+
+/** Profile.allEquipment. */
+export const EQUIPMENT = ["barbell", "rack", "bench", "dumbbells", "pull_up_bar", "kettlebells", "cable", "machine", "bands", "ez_bar", "trap_bar",
+  "dip_station", "suspension", "box", "medicine_ball", "exercise_ball", "sled", "bike", "rower", "treadmill", "jump_rope"];
+/** BodyArea.muscles: the areas the app knows, and the muscles each covers. */
+export const AREAS: Record<string, string[]> = {
+  shoulders: ["anterior_deltoids", "rear_deltoids", "deltoids"], chest: ["pectorals"], "upper back": ["lats", "rhomboids", "mid_trapezius", "traps", "upper_back"],
+  "lower back": ["spinal_erectors"], neck: ["traps", "neck"], elbows: ["biceps", "triceps"], wrists: ["forearms"], hips: ["glutes", "adductors", "abductors"],
+  knees: ["quads"], hamstrings: ["hamstrings"], abs: ["core", "rectus_abdominis", "transverse_abdominis", "obliques"], calves: ["calves"],
+};
+export const STYLES = ["powerlifting", "hypertrophy", "powerbuilding", "functional"];
+export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // 0 is Monday (ProgramDesigner.weekdays)
+
+export type ProfileInput = {
+  age?: number; weight_lb?: number; training_days?: string[]; session_minutes?: number; workout_time?: string; equipment?: string[];
+  injured_areas?: string[]; never?: string[]; style?: string; max_weekly_sets?: number;
+  starting_sets?: { exercise: string; weight_lb?: number; reps?: number; seconds?: number }[];
+};
+
+/**
+ * The profile unit with these answers merged in. A new one has every field SyncUnits.ProfileBody decodes, with the
+ * app's defaults (Profile.init: 3 days, 45 minutes, 7:00, powerbuilding, 60 sets), and needs age and weight.
+ */
+export function mergeProfile(current: Record<string, any> | undefined, input: ProfileInput): Record<string, any> {
+  if (!current && (input.age === undefined || input.weight_lb === undefined)) throw new Error("A new profile needs their age and body weight first.");
+  const p: Record<string, any> = current ? { ...current } : {
+    avoidExercises: [], cookWindows: [], daysPerWeek: 3, equipment: EQUIPMENT.slice(0, 5), fineAreas: {}, injuredAreas: [], maxWeeklySets: 60,
+    sessionMinutes: 45, starts: [], style: "powerbuilding", trainingDays: [0, 2, 4], travelWeeks: [], warmups: true, workoutTime: 7 * 60,
+  };
+  if (input.age !== undefined) p.age = Math.round(input.age);
+  if (input.weight_lb !== undefined) p.weightLb = input.weight_lb;
+  if (input.training_days) {
+    const days = input.training_days.map((d) => WEEKDAYS.findIndex((w) => d.toLowerCase().startsWith(w.toLowerCase())));
+    if (days.some((d) => d < 0) || !days.length) throw new Error(`Training days are weekday names: ${WEEKDAYS.join(", ")}.`);
+    p.trainingDays = [...new Set(days)].sort();
+    p.daysPerWeek = p.trainingDays.length;
+  }
+  if (input.session_minutes !== undefined) p.sessionMinutes = Math.round(input.session_minutes);
+  if (input.workout_time !== undefined) {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(input.workout_time);
+    if (!match) throw new Error("workout_time is 24-hour HH:MM, like 07:00 or 18:30.");
+    p.workoutTime = Number(match[1]) * 60 + Number(match[2]);
+  }
+  if (input.equipment) {
+    const bad = input.equipment.filter((e) => !EQUIPMENT.includes(e));
+    if (bad.length) throw new Error(`Unknown equipment ${bad.join(", ")}. Use: ${EQUIPMENT.join(", ")}.`);
+    p.equipment = [...new Set(input.equipment)];
+  }
+  if (input.injured_areas) {
+    const bad = input.injured_areas.filter((a) => !AREAS[a]);
+    if (bad.length) throw new Error(`Unknown area ${bad.join(", ")}. Use: ${Object.keys(AREAS).join(", ")}.`);
+    p.injuredAreas = [...new Set(input.injured_areas)];
+  }
+  if (input.never) p.avoidExercises = [...new Set(input.never.map((n) => resolve(n).slug))];
+  if (input.style !== undefined) {
+    if (!STYLES.includes(input.style)) throw new Error(`style is one of ${STYLES.join(", ")}.`);
+    p.style = input.style;
+  }
+  if (input.max_weekly_sets !== undefined) p.maxWeeklySets = Math.round(input.max_weekly_sets);
+  for (const s of input.starting_sets ?? []) {
+    const slug = resolve(s.exercise).slug;
+    const ms: Measurement[] = [];
+    if (s.seconds !== undefined) ms.push(m("duration_s", s.seconds));
+    else if (s.reps !== undefined) ms.push(m("reps", s.reps));
+    if (s.weight_lb !== undefined) ms.push(m("load_lb", s.weight_lb));
+    p.starts = [...(p.starts ?? []).filter((x: { exercise: string }) => x.exercise !== slug), { exercise: slug, measurements: ms }];
+  }
+  return p;
+}
+
+export type GoalInput = { type: "lift_max" | "reps" | "body_weight"; exercise?: string; target: number; by?: string };
+
+/** A goal unit's body, as SyncUnits.GoalBody: "back-squat.1rm_lb", "pull-up.reps" or "weight_lb", like Onboarding's options. */
+export function goalBody(input: GoalInput, deadline: number | undefined, baseline?: number): Goal {
+  if (input.type === "body_weight") return { kind: "body", metric: "weight_lb", target: input.target, unit: "lb", deadline, baseline, status: "active" };
+  if (!input.exercise) throw new Error("A lift or reps goal needs its exercise.");
+  const slug = resolve(input.exercise).slug;
+  return input.type === "lift_max"
+    ? { kind: "training", metric: `${slug}.1rm_lb`, target: input.target, unit: "lb", deadline, baseline, status: "active" }
+    : { kind: "training", metric: `${slug}.reps`, target: input.target, unit: "reps", deadline, baseline, status: "active" };
+}
+
+/** What a new account still needs before the first week can be planned. */
+export function missing(profile: Profile | undefined, goals: Goal[]): string[] {
+  const out: string[] = [];
+  if (!profile) out.push("profile: age and body weight, training days, minutes per session, usual time, equipment, injuries, exercises they never do");
+  if (!goals.length) out.push("goals: what they want to reach and by when (a lift max, reps, or body weight)");
+  return out;
+}
+
+/** Soft cautions that don't block apply: an exercise that loads an area they said is injured. */
+export function cautions(plan: PlanRow[], profile?: Profile): string[] {
+  const hurt = new Set((profile?.injuredAreas ?? []).flatMap((a) => AREAS[a.toLowerCase().replace(/_/g, " ")] ?? [a]));
+  if (!hurt.size) return [];
+  return [...new Set(plan.filter(working).map((r) => bySlug.get(r.template ?? "")).filter((e): e is Exercise => !!e && e.muscles.some((x) => hurt.has(x)))
+    .map((e) => `${e.name} works ${e.muscles.filter((x) => hurt.has(x)).join(", ").replace(/_/g, " ")}, near an area they said is injured. Check with them.`))];
 }

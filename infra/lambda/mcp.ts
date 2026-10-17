@@ -4,8 +4,9 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@a
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
 import { push } from "./sync.ts";
 import {
-  addDays, bestBy, bySlug, checkDay, dayOf, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
-  nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type PlanRow, type SetInput, type Units,
+  addDays, AREAS, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
+  nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
+  type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
 
 /**
@@ -68,6 +69,14 @@ export const hashToken = (token: string) => createHash("sha256").update(token).d
 
 const DATE = { type: "string", description: "A day, YYYY-MM-DD. Defaults to today in the person's time zone." };
 const EXERCISE = { type: "string", description: "An exercise by catalog name or slug, e.g. \"Back Squat\" or \"back-squat\"." };
+const SESSION = {
+  type: "array", minItems: 1, description: "The session's exercises, in order.", items: { type: "object", properties: {
+    exercise: EXERCISE, sets: { type: "integer", minimum: 1, maximum: 10 }, reps: { type: "integer" }, seconds: { type: "integer" },
+    weight_lb: { type: "number" }, weight_lb_per_hand: { type: "number" }, rpe: { type: "number" },
+    main: { type: "boolean", description: "A main lift (defaults to the catalog's goal lifts)." },
+    superset: { type: "integer", description: "Exercises sharing a number are done together in rounds." },
+  }, required: ["exercise", "sets"] },
+};
 
 export const tools = [
   {
@@ -121,13 +130,49 @@ export const tools = [
       date: DATE,
       title: { type: "string", description: "The session's name, e.g. \"Upper · chest first\"." },
       reason: { type: "string", description: "One sentence on why, shown to them in the app." },
-      exercises: { type: "array", minItems: 1, items: { type: "object", properties: {
-        exercise: EXERCISE, sets: { type: "integer", minimum: 1, maximum: 10 }, reps: { type: "integer" }, seconds: { type: "integer" },
-        weight_lb: { type: "number" }, weight_lb_per_hand: { type: "number" }, rpe: { type: "number" },
-        main: { type: "boolean", description: "A main lift (defaults to the catalog's goal lifts)." },
-        superset: { type: "integer", description: "Exercises sharing a number are done together in rounds." },
-      }, required: ["exercise", "sets"] } },
+      exercises: SESSION,
     }, required: ["title", "reason", "exercises"] },
+  },
+  {
+    name: "propose_week",
+    description: "Propose several days at once, such as the first week after setup or next week from their logs: each day's whole session, or an empty exercises list for a rest day. Days already logged or past are refused. Checked by the plan rules and their weekly set ceiling; nothing changes until apply. Plan the days they said they train, each fitting their minutes.",
+    inputSchema: { type: "object", properties: {
+      reason: { type: "string", description: "One sentence on the week's aim, shown to them in the app." },
+      days: { type: "array", minItems: 1, maxItems: 14, items: { type: "object", properties: {
+        date: { type: "string", description: "YYYY-MM-DD" }, title: { type: "string" }, exercises: { ...SESSION, minItems: 0 },
+      }, required: ["date", "exercises"] } },
+    }, required: ["reason", "days"] },
+  },
+  {
+    name: "set_profile",
+    description: "Save what they tell you about themselves, merging into what's there. Call it as each answer comes in during setup, and whenever something changes. A new profile needs age and weight_lb first.",
+    inputSchema: { type: "object", properties: {
+      age: { type: "integer", minimum: 13, maximum: 100 },
+      weight_lb: { type: "number" },
+      training_days: { type: "array", items: { type: "string", enum: WEEKDAYS }, description: "The weekdays they train." },
+      session_minutes: { type: "integer", minimum: 15, maximum: 180 },
+      workout_time: { type: "string", description: "Usual start, 24-hour HH:MM." },
+      equipment: { type: "array", items: { type: "string", enum: EQUIPMENT }, description: "Everything they can use. Bodyweight work needs none." },
+      injured_areas: { type: "array", items: { type: "string", enum: Object.keys(AREAS) }, description: "Areas to go easy on; [] when none." },
+      never: { type: "array", items: { type: "string" }, description: "Exercises they won't do, by name." },
+      style: { type: "string", enum: STYLES, description: "powerbuilding (strength and size, the default), powerlifting, hypertrophy, functional." },
+      max_weekly_sets: { type: "integer", minimum: 10, maximum: 120, description: "A ceiling on working sets a week (default 60)." },
+      starting_sets: { type: "array", description: "A recent set per goal lift, so the first loads fit.", items: { type: "object", properties: {
+        exercise: EXERCISE, weight_lb: { type: "number" }, reps: { type: "integer" }, seconds: { type: "integer" },
+      }, required: ["exercise"] } },
+    } },
+  },
+  {
+    name: "set_goal",
+    description: "Add, change or drop a goal. Goals have a target and ideally a date: a lift max (\"squat 225\"), reps in a row (\"10 pull-ups\") or body weight (\"190 lb\"). get_context lists goals with their ids.",
+    inputSchema: { type: "object", properties: {
+      action: { type: "string", enum: ["add", "change", "drop"] },
+      goal_id: { type: "string", description: "For change and drop." },
+      type: { type: "string", enum: ["lift_max", "reps", "body_weight"] },
+      exercise: EXERCISE,
+      target: { type: "number", description: "lb for a lift max or body weight; reps for reps." },
+      by: { type: "string", description: "Deadline, YYYY-MM-DD." },
+    }, required: ["action"] },
   },
   {
     name: "apply",
@@ -156,6 +201,11 @@ function context(units: Units, today: string, back: number, ahead: number) {
   }
   const sets = loggedSets(units);
   const goals = goalsOf(units);
+  const needs = missing(profile, goals);
+  if (needs.length) {
+    out.push("", "NOT SET UP YET. Before planning, ask them, one topic at a time, and save each answer (set_profile, set_goal):", ...needs.map((n) => `- ${n}`),
+      "Then propose_week for the days from today to the end of next week, and apply when they agree.");
+  }
   if (goals.length) {
     out.push("", "Goals:");
     for (const g of goals) {
@@ -171,19 +221,21 @@ function context(units: Units, today: string, back: number, ahead: number) {
         now = best ? ` — best set so far ${best} reps` : " — no sets logged yet";
       }
       const label = bySlug.has(slug) ? nameOf(slug) : g.metric === "weight_lb" ? "Body weight" : g.metric;
-      out.push(`- ${label} ${g.target} ${g.unit}${by}${now}`);
+      out.push(`- ${label} ${g.target} ${g.unit}${by}${now} [goal_id ${g.id}]`);
     }
   }
   const trained = [...new Set(sets.filter((s) => s.day >= addDays(today, -back)).map((s) => s.exercise))];
   const maxes = trained.map((slug) => [slug, bestBy(sets, slug, today)] as const).filter(([, e]) => e).sort((a, b) => b[1]! - a[1]!).slice(0, 8);
   if (maxes.length) out.push("", `Estimated maxes (Brzycki, sets at RPE ≤ 8): ${maxes.map(([s, e]) => `${nameOf(s)} ${Math.round(e!)} lb`).join(", ")}.`);
   out.push("", `Plan from today (★ = main lift):`);
+  const planned = out.length;
   for (let i = 0; i <= ahead; i++) {
     const day = addDays(today, i);
     const s = describeSession(planOf(units, day));
     const done = logOf(units, day).some((r) => r.kind === "workout");
     if (s.lines.length) out.push(`${weekday(day)} ${day}${s.title ? ` — ${s.title}` : ""}${done ? " (logged)" : ""}:`, ...s.lines.map((l) => `  ${l}`));
   }
+  if (out.length === planned) out.push(needs.length ? "  Nothing yet." : "  Nothing planned. Propose the coming days with propose_week.");
   out.push("", `Logged in the last ${back} days:`);
   let any = false;
   for (let i = back; i >= 1; i--) {
@@ -203,6 +255,41 @@ function context(units: Units, today: string, back: number, ahead: number) {
 function startOf(units: Units, day: string, tz: string) {
   const first = planOf(units, day).filter((r) => r.kind === "workout").sort((a, b) => a.at - b.at)[0];
   return first ? Math.floor(first.at / 60) * 60 : epoch(day, profileOf(units)?.workoutTime ?? 7 * 60, tz);
+}
+
+type DayInput = { date: string; title?: string; exercises: ExerciseInput[] };
+
+/** One or more days' new sessions, checked by the plan rules, stored for apply. */
+async function propose(uid: string, tz: string, today: string, days: DayInput[], reason: string, store: Store) {
+  const units = await store.units(uid);
+  const profile = profileOf(units);
+  const out: { day: string; rows: string }[] = [];
+  const lines: string[] = [];
+  const problems: string[] = [];
+  const notes: string[] = [];
+  const next = new Map<string, PlanRow[]>();
+  for (const d of days) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date ?? "")) throw new Error(`Not a date: ${d.date}. Use YYYY-MM-DD.`);
+    if (d.date < today) throw new Error(`${d.date} is past; plan today or later.`);
+    if (logOf(units, d.date).some((r) => r.kind === "workout")) throw new Error(`${d.date} is already logged.`);
+    const before = planOf(units, d.date);
+    const after = d.exercises.length ? sessionRows(before, d.title ?? "Workout", d.exercises, startOf(units, d.date, tz), reason) : before.filter((r) => r.kind !== "workout");
+    next.set(d.date, after);
+    out.push({ day: d.date, rows: encode(after) });
+    lines.push("", `${weekday(d.date)} ${d.date}${d.exercises.length ? ` — ${d.title ?? "Workout"}` : " — rest"}:`, ...diff(before, after).map((l) => `  ${l}`));
+    problems.push(...checkDay(after, profile).map((p) => `${d.date}: ${p}`));
+    notes.push(...cautions(after, profile).map((c) => `${d.date}: ${c}`));
+  }
+  const sundays = new Set([...next.keys()].map((d) => addDays(d, -new Date(`${d}T12:00:00Z`).getUTCDay())));
+  for (const sunday of sundays) {
+    const total = weeklySets(Array.from({ length: 7 }, (_, i) => addDays(sunday, i)).map((d) => next.get(d) ?? planOf(units, d)));
+    if (profile?.maxWeeklySets && total > profile.maxWeeklySets) problems.push(`Week of ${sunday}: ${total} working sets, over their ceiling of ${profile.maxWeeklySets}.`);
+  }
+  const id = randomUUID();
+  await store.put(uid, `proposal#${id}`, { days: out, problems }, 2);
+  return [`Proposal ${id} — ${reason}`, ...lines,
+    ...(notes.length ? ["", "Check with them:", ...notes.map((n) => `- ${n}`)] : []),
+    problems.length ? `\nPlan-rule problems; fix these and propose again before applying:\n${problems.map((p) => `- ${p}`).join("\n")}` : "\nIt passes the plan rules. Show them the change, and apply when they agree."].join("\n");
 }
 
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
@@ -252,32 +339,22 @@ export async function callTool(name: string, args: Args, account: Account, store
       await store.write(uid, [{ key: `log#${day}`, body: encode(log) }], account.agent);
       return `Noted on ${day}: ${summary.note}`;
     }
-    case "propose_session": {
-      const units = await store.units(uid);
-      if (day < today) throw new Error("That day is past; plan today or later.");
-      if (logOf(units, day).some((r) => r.kind === "workout")) throw new Error(`${day} is already logged.`);
-      const before = planOf(units, day);
-      const after = sessionRows(before, String(args.title), args.exercises as ExerciseInput[], startOf(units, day, tz), String(args.reason));
-      const profile = profileOf(units);
-      const problems = checkDay(after, profile);
-      const sunday = addDays(day, -new Date(`${day}T12:00:00Z`).getUTCDay());
-      const week = Array.from({ length: 7 }, (_, i) => addDays(sunday, i)).map((d) => (d === day ? after : planOf(units, d)));
-      const total = weeklySets(week);
-      if (profile?.maxWeeklySets && total > profile.maxWeeklySets) problems.push(`The week would have ${total} working sets, over their ceiling of ${profile.maxWeeklySets}.`);
-      const id = randomUUID();
-      await store.put(uid, `proposal#${id}`, { day, rows: encode(after), problems }, 2);
-      return [`Proposal ${id} for ${weekday(day)} ${day} — ${args.title}:`, ...diff(before, after),
-        problems.length ? `\nPlan-rule problems; fix these and propose again before applying:\n${problems.map((p) => `- ${p}`).join("\n")}` : "\nIt passes the plan rules. Show them the change, and apply when they agree."].join("\n");
-    }
+    case "propose_session":
+      return propose(uid, tz, today, [{ date: day, title: args.title, exercises: args.exercises }], String(args.reason), store);
+    case "propose_week":
+      return propose(uid, tz, today, args.days as DayInput[], String(args.reason), store);
     case "apply": {
       const proposal = await store.get(uid, `proposal#${args.proposal_id}`);
       if (!proposal) throw new Error("No such proposal (they last 2 days). Propose again.");
       if (proposal.problems?.length) throw new Error("That proposal breaks the plan rules; fix them and propose again.");
+      const days = proposal.days as { day: string; rows: string }[];
       const units = await store.units(uid);
-      if (logOf(units, proposal.day).some((r) => r.kind === "workout")) throw new Error(`${proposal.day} has been logged since; it can't be replaced.`);
-      await store.put(uid, `undo#${proposal.day}`, { body: units.get(`plan#${proposal.day}`) ?? null }, 14);
-      await store.write(uid, [{ key: `plan#${proposal.day}`, body: proposal.rows }], account.agent);
-      return `Applied: ${weekday(proposal.day)} ${proposal.day} is now ${describeSession(JSON.parse(proposal.rows) as PlanRow[]).title}. It shows on their phone at its next sync. undo puts the old session back.`;
+      const logged = days.filter((d) => logOf(units, d.day).some((r) => r.kind === "workout")).map((d) => d.day);
+      if (logged.length) throw new Error(`${logged.join(", ")} has been logged since; propose again without it.`);
+      for (const d of days) await store.put(uid, `undo#${d.day}`, { body: units.get(`plan#${d.day}`) ?? null }, 14);
+      await store.write(uid, days.map((d) => ({ key: `plan#${d.day}`, body: JSON.parse(d.rows).length ? d.rows : null })), account.agent);
+      const lines = days.map((d) => `${weekday(d.day)} ${d.day}: ${describeSession(JSON.parse(d.rows) as PlanRow[]).title ?? "rest"}`);
+      return `Applied:\n${lines.join("\n")}\nIt shows on their phone at its next sync. undo (per day) puts the old session back.`;
     }
     case "undo": {
       const saved = await store.get(uid, `undo#${day}`);
@@ -286,6 +363,39 @@ export async function callTool(name: string, args: Args, account: Account, store
       await store.write(uid, [{ key: `plan#${day}`, body: saved.body }], account.agent);
       await store.put(uid, `undo#${day}`, { used: true }, 1);
       return `Put back ${day}'s session as it was.`;
+    }
+    case "set_profile": {
+      const units = await store.units(uid);
+      const current = units.get("profile");
+      const merged = mergeProfile(current ? JSON.parse(current) : undefined, args as ProfileInput);
+      await store.write(uid, [{ key: "profile", body: encode(merged) }], account.agent);
+      const days = (merged.trainingDays as number[]).map((d) => WEEKDAYS[d]).join(", ");
+      return `Saved. Age ${merged.age}, ${merged.weightLb} lb; trains ${days}, ${merged.sessionMinutes} min at ${String(Math.floor(merged.workoutTime / 60)).padStart(2, "0")}:${String(merged.workoutTime % 60).padStart(2, "0")}; `
+        + `equipment ${(merged.equipment as string[]).join(", ") || "none"}; injured ${(merged.injuredAreas as string[]).join(", ") || "none"}; never ${(merged.avoidExercises as string[]).map(nameOf).join(", ") || "none"}; `
+        + `${merged.style}; ${merged.starts.length} starting set(s).`;
+    }
+    case "set_goal": {
+      const units = await store.units(uid);
+      const by = args.by as string | undefined;
+      if (by !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(by)) throw new Error("by is YYYY-MM-DD.");
+      const deadline = by ? epoch(by, 12 * 60, tz) : undefined;
+      if (args.action === "add") {
+        if (args.target === undefined || !args.type) throw new Error("A new goal needs its type and target.");
+        const body = goalBody(args as GoalInput, deadline);
+        const id = randomUUID().toUpperCase();
+        await store.write(uid, [{ key: `goal#${id}`, body: encode(body) }], account.agent);
+        return `Added: ${body.metric} ${body.target} ${body.unit}${by ? ` by ${by}` : ""} [goal_id ${id}].`;
+      }
+      const current = units.get(`goal#${args.goal_id}`);
+      if (!current) throw new Error("No goal with that goal_id; get_context lists them.");
+      const goal = JSON.parse(current);
+      if (args.action === "drop") goal.status = "abandoned";
+      else {
+        if (args.target !== undefined) goal.target = args.target;
+        if (deadline !== undefined) goal.deadline = deadline;
+      }
+      await store.write(uid, [{ key: `goal#${args.goal_id}`, body: encode(goal) }], account.agent);
+      return args.action === "drop" ? "Dropped." : `Changed: ${goal.metric} ${goal.target} ${goal.unit}${by ? ` by ${by}` : ""}.`;
     }
     default:
       throw new Error(`Unknown tool ${name}`);
@@ -305,7 +415,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
         capabilities: { tools: {} },
         serverInfo: { name: "barbrabell", version: "0.1.0" },
-        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. Log what they did with RPE and notes; to change a day, propose_session, show the change, then apply when they agree.",
+        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, a recent set per goal lift), saving each answer with set_profile and set_goal, then propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply.",
       });
     }
     case "ping":
