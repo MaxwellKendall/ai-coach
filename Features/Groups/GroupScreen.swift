@@ -247,7 +247,7 @@ struct GroupScreen: View {
     }
 
     static func invite(_ group: Cloud.Group) -> String {
-        "Join my group “\(group.name)” in Rep & Recipe."
+        "Join my group “\(group.name)” in Barbrabell."
     }
 
     // MARK: Actions

@@ -19,7 +19,7 @@ function memoryAuth() {
 const exchanged: { code: string; verifier: string }[] = [];
 const config: Config = {
   origin,
-  site: { appName: "Rep & Recipe", origin, appId: "" },
+  site: { appName: "Barbrabell", origin, appId: "" },
   providers: ["apple", "google"],
   authorizeUrl: (params) => `https://cognito.example/oauth2/authorize?${new URLSearchParams(params)}`,
   async exchange(code, verifier) { exchanged.push({ code, verifier }); return { uid: "new-user" }; },

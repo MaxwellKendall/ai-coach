@@ -28,7 +28,7 @@ struct InviteLinkTests {
     /// FIT-109: what's pasted after installing from the invite page.
     @Test func aPastedLinkMessageOrCode() {
         #expect(InviteLink.code(pasted: "https://join.barbrabell.com/X7K2PQ9A") == "X7K2PQ9A")
-        #expect(InviteLink.code(pasted: "Join my group “Dawn Patrol” in Rep & Recipe. https://join.barbrabell.com/X7K2PQ9A") == "X7K2PQ9A")
+        #expect(InviteLink.code(pasted: "Join my group “Dawn Patrol” in Barbrabell. https://join.barbrabell.com/X7K2PQ9A") == "X7K2PQ9A")
         #expect(InviteLink.code(pasted: "  a1b2c3d4\n") == "A1B2C3D4")
         #expect(InviteLink.code(pasted: "Let's lift tomorrow") == nil)
         #expect(InviteLink.code(pasted: "https://example.com/X7K2PQ9A") == nil)

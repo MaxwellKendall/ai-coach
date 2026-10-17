@@ -6,7 +6,7 @@ import { associationFile, type Site } from "../lambda/sharePages.ts";
 import { form, verifyWebhook } from "../lambda/stripe.ts";
 
 /** FIT-122: a year of Pro, bought as a gift on the web. */
-const site: Site = { appName: "Rep & Recipe", origin: "https://example.com", appId: "TEAM.com.example.app" };
+const site: Site = { appName: "Barbrabell", origin: "https://example.com", appId: "TEAM.com.example.app" };
 const now = new Date("2026-12-20T15:00:00Z");
 
 describe("gift codes", () => {

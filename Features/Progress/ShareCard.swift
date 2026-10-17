@@ -14,7 +14,7 @@ enum CardStyle: String, CaseIterable, Identifiable {
 
 struct ShareCard: View {
     /// Until the app has a name.
-    static let appName = "Rep & Recipe"
+    static let appName = "Barbrabell"
     /// Drawn at this size and scaled, so every use looks the same.
     static let size = CGSize(width: 306, height: 382)
 

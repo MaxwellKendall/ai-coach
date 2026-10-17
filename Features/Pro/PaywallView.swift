@@ -59,7 +59,7 @@ struct PaywallView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Rep & Recipe Pro").font(.system(size: 34, weight: .bold)).tracking(-0.4)
+                Text("Barbrabell Pro").font(.system(size: 34, weight: .bold)).tracking(-0.4)
                 Text("A coach who plans every week of your program.").font(.title3).foregroundStyle(.secondary)
             }
         }

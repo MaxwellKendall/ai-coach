@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { associationFile, route, winWords, type Site, type Store, type Win } from "../lambda/sharePages.ts";
 
-const site: Site = { appName: "Rep & Recipe", origin: "https://example.com", appId: "TEAM.com.example.app" };
+const site: Site = { appName: "Barbrabell", origin: "https://example.com", appId: "TEAM.com.example.app" };
 const win: Win = {
   kind: "pr", name: "Max Kendall", date: "2026-10-08", metric: "Bench Press", unit: "lb", value: 205, previous: 190,
   trend: [190, 205], showNumbers: true, style: "dark", invite: "X7K2PQ",

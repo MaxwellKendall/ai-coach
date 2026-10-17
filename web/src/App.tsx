@@ -6,7 +6,7 @@ import { HistoryView } from "./HistoryView";
 import { ProgramPage } from "./ProgramPage";
 import { comments, postComment, pullAll, type Comment, type Unit } from "./sync";
 
-const APP = "Rep & Recipe";
+const APP = "Barbrabell";
 
 function Logo() {
   return (

@@ -9,7 +9,7 @@ import { route, type Invite, type Program, type Recap, type Session, type Site, 
 const port = Number(process.env.PORT ?? 8787);
 
 const site: Site = {
-  appName: "Rep & Recipe",
+  appName: "Barbrabell",
   origin: `http://localhost:${port}`,
   appStoreUrl: process.env.APP_STORE_URL,
   appId: "7GZKY29XJH.com.maxwellkendall.aicoach",

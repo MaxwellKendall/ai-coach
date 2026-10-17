@@ -462,7 +462,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
       return reply({
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
         capabilities: { tools: {} },
-        serverInfo: { name: "barbrabell", version: "0.1.0" },
+        serverInfo: { name: "Barbrabell", version: "0.1.0" },
         instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, a recent set per goal lift), saving each answer with set_profile and set_goal, then propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply.",
       });
     }
@@ -518,7 +518,7 @@ const CLIENT_ID = process.env.COGNITO_CLIENT_ID ?? "";
 
 export const config: Config = {
   origin: ORIGIN,
-  site: { appName: "Rep & Recipe", origin: process.env.SHARE_ORIGIN || ORIGIN, appId: "" },
+  site: { appName: "Barbrabell", origin: process.env.SHARE_ORIGIN || ORIGIN, appId: "" },
   providers: (process.env.PROVIDERS ?? "").split(",").filter(Boolean),
   authorizeUrl: (params) => `${COGNITO}/oauth2/authorize?${new URLSearchParams({ client_id: CLIENT_ID, ...params })}`,
   async exchange(code, verifier, redirectUri) {

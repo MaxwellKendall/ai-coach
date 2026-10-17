@@ -98,7 +98,7 @@ export function checkoutParams(code: string, origin: string) {
       price_data: {
         currency: price.currency,
         unit_amount: price.cents,
-        product_data: { name: "A year of Rep & Recipe Pro, as a gift", description: "Redeemed in the app. It doesn't renew.", tax_code: TAX_CODE },
+        product_data: { name: "A year of Barbrabell Pro, as a gift", description: "Redeemed in the app. It doesn't renew.", tax_code: TAX_CODE },
       },
     }],
     custom_fields: [

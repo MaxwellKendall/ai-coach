@@ -14,7 +14,7 @@ const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.TABLE!;
 
 const site: Site = {
-  appName: "Rep & Recipe",
+  appName: "Barbrabell",
   origin: process.env.SHARE_ORIGIN!,
   appStoreUrl: process.env.APP_STORE_URL || undefined,
   appId: process.env.APP_ID!,
