@@ -510,14 +510,12 @@ export class AICoachStack extends Stack {
   return r;
 }`),
       });
-      // Function URLs rename a WWW-Authenticate header, which tells agents where to sign in; this names it back.
-      const wwwAuthenticate = new cloudfront.Function(this, "McpWwwAuthenticate", {
-        runtime: cloudfront.FunctionRuntime.JS_2_0,
-        code: cloudfront.FunctionCode.fromInline(`function handler(event) {
-  var h = event.response.headers, r = h["x-amzn-remapped-www-authenticate"];
-  if (r) { h["www-authenticate"] = { value: r.value }; delete h["x-amzn-remapped-www-authenticate"]; }
-  return event.response;
-}`),
+      // Function URLs rename a WWW-Authenticate header, which tells agents where to sign in, and CloudFront runs no
+      // viewer-response function on an origin's 4xx, so /mcp carries it from here. Agents read it only with a 401.
+      const signInHeader = new cloudfront.ResponseHeadersPolicy(this, "McpSignIn", {
+        customHeadersBehavior: { customHeaders: [{
+          header: "WWW-Authenticate", value: `Bearer resource_metadata="https://${mcpHost}/.well-known/oauth-protected-resource/mcp"`, override: true,
+        }] },
       });
       const mcpBehavior: cloudfront.BehaviorOptions = {
         origin: new origins.FunctionUrlOrigin(mcpUrl),
@@ -525,7 +523,6 @@ export class AICoachStack extends Stack {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-        functionAssociations: [{ function: wwwAuthenticate, eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE }],
       };
       const web = new cloudfront.Distribution(this, "Web", {
         domainNames: props.web.hosts,
@@ -549,7 +546,8 @@ export class AICoachStack extends Stack {
             cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           },
           // FIT-151: the MCP server and its sign-in. No origin access control, which would pass only GETs.
-          ...Object.fromEntries(["/mcp", "/mcp/*", "/oauth/*", "/.well-known/oauth-*"].map((p) => [p, mcpBehavior])),
+          "/mcp": { ...mcpBehavior, responseHeadersPolicy: signInHeader },
+          ...Object.fromEntries(["/mcp/*", "/oauth/*", "/.well-known/oauth-*"].map((p) => [p, mcpBehavior])),
         },
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       });
