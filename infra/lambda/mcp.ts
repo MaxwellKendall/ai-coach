@@ -9,6 +9,7 @@ import {
   nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
+import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
 /**
  * FIT-149: the training as tools any agent calls on its own tokens (direction doc, 2026-10-17: agent-first, no hosted AI).
@@ -184,6 +185,29 @@ export const tools = [
     }, required: ["reason", "days"] },
   },
   {
+    name: "get_program",
+    title: "Get the program",
+    annotations: { title: "Get the program", ...READ },
+    description: "The multi-week program as their phone's Program tab shows it: every week from the start to the target date with its phase (base, build, peak), deload and test weeks, trips, the working sets each week aims for, and what's planned in each so far. Plan a week to its kind: a deload or test week is light (RPE 6 at most, about half the sets), a travel week is dumbbells and bodyweight only; propose_week enforces both.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "set_program",
+    title: "Set the program",
+    annotations: { title: "Set the program", ...write(false, true) },
+    description: "Start a program or change it: how many weeks (or the target date), when it starts, how often to deload, and trips. Weeks run Sunday to Saturday. A new program starts this week unless start says otherwise. Code lays out the phases, deloads and the test week; then plan each week with propose_week, the first one or two now and each next week from their logs.",
+    inputSchema: { type: "object", properties: {
+      weeks: { type: "integer", minimum: 1, maximum: 52, description: "Length in weeks, ending on that week's Saturday." },
+      by: { type: "string", description: "Or the target date, YYYY-MM-DD: the program runs through that week." },
+      start: { type: "string", description: "YYYY-MM-DD, any day of the first week. Moving the start clears trips." },
+      deload_every: { type: "integer", minimum: 0, maximum: 12, description: "A deload every N weeks; 0 goes back to their age's default." },
+      trip: { type: "object", description: "A trip away from their gym: the weeks it takes a training day from become travel weeks.", properties: {
+        from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" },
+      }, required: ["from", "to"] },
+      clear_trips: { type: "boolean", description: "Remove every trip." },
+    } },
+  },
+  {
     name: "set_profile",
     title: "Set profile",
     annotations: { title: "Set profile", ...write(false, true) },
@@ -236,7 +260,7 @@ export const tools = [
 
 type Args = Record<string, any>;
 
-function context(units: Units, today: string, back: number, ahead: number) {
+function context(units: Units, today: string, back: number, ahead: number, tz: string) {
   const profile = profileOf(units);
   const out: string[] = [`Today is ${weekday(today)} ${today}.`];
   if (profile) {
@@ -246,13 +270,17 @@ function context(units: Units, today: string, back: number, ahead: number) {
     out.push(`Equipment: ${profile.equipment?.length ? profile.equipment.join(", ").replace(/_/g, " ") : "none (bodyweight)"}.`);
     if (profile.injuredAreas?.length) out.push(`Injured: ${profile.injuredAreas.join(", ")}.`);
     if (profile.avoidExercises?.length) out.push(`Never: ${profile.avoidExercises.map(nameOf).join(", ")}.`);
+    const program = programOf(profile, tz), now = programWeekOf(profile, today, tz);
+    if (program) out.push(now ? `Program: week ${now.index + 1} of ${program.weeks.length}, ${title(now.week)}. ${why(now.week)} get_program has every week.`
+      : `Program: ${today < program.start ? `starts ${program.start}` : `ended ${program.target}`} (get_program).`);
+    else if (profile.age) out.push("No program yet: set_program lays one out to a target date.");
   }
   const sets = loggedSets(units);
   const goals = goalsOf(units);
   const needs = missing(profile, goals);
   if (needs.length) {
     out.push("", "NOT SET UP YET. Before planning, ask them, one topic at a time, and save each answer (set_profile, set_goal):", ...needs.map((n) => `- ${n}`),
-      "Then propose_week for the days from today to the end of next week, and apply when they agree.");
+      "Then set_program to their goal date, propose_week for the days from today to the end of next week, and apply when they agree.");
   }
   if (goals.length) {
     out.push("", "Goals:");
@@ -299,6 +327,27 @@ function context(units: Units, today: string, back: number, ahead: number) {
   return out.join("\n");
 }
 
+/** Every program week with its kind, aim and what's planned so far. */
+function describeProgram(units: Units, today: string, tz: string) {
+  const profile = profileOf(units);
+  const program = programOf(profile, tz);
+  if (!profile || !program) return "No program yet. set_program lays one out from this week to a target date.";
+  const now = weekIndex(today, program.start);
+  const every = profile.deloadEveryWeeks ? `every ${profile.deloadEveryWeeks} weeks` : `every ${deloadEvery(profile.age ?? 35)} weeks (their age's default)`;
+  const out = [`Program: ${program.weeks.length} weeks, ${weekday(program.start)} ${program.start} to ${weekday(addDays(weekStart(program.weeks.length - 1, program.start), 6))} ${addDays(weekStart(program.weeks.length - 1, program.start), 6)}. Deload ${every}.`,
+    now < 0 ? `It starts in ${-now} week(s).` : now >= program.weeks.length ? "It has ended; set_program starts the next one." : `This is week ${now + 1}.`, ""];
+  program.weeks.forEach((w, i) => {
+    const sunday = weekStart(i, program.start);
+    const days = Array.from({ length: 7 }, (_, d) => addDays(sunday, d));
+    const plans = days.map((d) => planOf(units, d));
+    const sessions = plans.filter((p) => p.some((r) => r.kind === "workout")).length;
+    const done = days.filter((d) => logOf(units, d).some((r) => r.kind === "workout")).length;
+    const planned = sessions ? `${sessions} session(s), ${weeklySets(plans)} sets planned${done ? `, ${done} logged` : ""}` : "Not planned yet";
+    out.push(`Week ${i + 1} · ${sunday}${i === now ? " (this week)" : ""} · ${title(w)}: ${why(w)} Aim about ${weeklyTarget(w, profile)} working sets. ${planned}.`);
+  });
+  return out.join("\n");
+}
+
 /** When a day's session starts: its first planned row, else their usual workout time. */
 function startOf(units: Units, day: string, tz: string) {
   const first = planOf(units, day).filter((r) => r.kind === "workout").sort((a, b) => a.at - b.at)[0];
@@ -324,8 +373,11 @@ async function propose(uid: string, tz: string, today: string, days: DayInput[],
     const after = d.exercises.length ? sessionRows(before, d.title ?? "Workout", d.exercises, startOf(units, d.date, tz), reason) : before.filter((r) => r.kind !== "workout");
     next.set(d.date, after);
     out.push({ day: d.date, rows: encode(after) });
-    lines.push("", `${weekday(d.date)} ${d.date}${d.exercises.length ? ` — ${d.title ?? "Workout"}` : " — rest"}:`, ...diff(before, after).map((l) => `  ${l}`));
-    problems.push(...checkDay(after, profile).map((p) => `${d.date}: ${p}`));
+    const week = programWeekOf(profile, d.date, tz);
+    const kind = week ? ` (week ${week.index + 1}, ${title(week.week)})` : "";
+    lines.push("", `${weekday(d.date)} ${d.date}${kind}${d.exercises.length ? ` — ${d.title ?? "Workout"}` : " — rest"}:`, ...diff(before, after).map((l) => `  ${l}`));
+    problems.push(...checkDay(after, profile, week && isLight(week.week) ? 1 : undefined).map((p) => `${d.date}: ${p}`));
+    if (week && profile) problems.push(...checkProgramDay(after, profile, week.week).map((p) => `${d.date}: ${p}`));
     notes.push(...cautions(after, profile).map((c) => `${d.date}: ${c}`));
   }
   const sundays = new Set([...next.keys()].map((d) => addDays(d, -new Date(`${d}T12:00:00Z`).getUTCDay())));
@@ -348,7 +400,7 @@ export async function callTool(name: string, args: Args, account: Account, store
   switch (name) {
     case "get_context": {
       const units = await store.units(uid);
-      return context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28));
+      return context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
     }
     case "get_day": {
       const units = await store.units(uid);
@@ -412,6 +464,43 @@ export async function callTool(name: string, args: Args, account: Account, store
       await store.put(uid, `undo#${day}`, { used: true }, 1);
       return `Put back ${day}'s session as it was.`;
     }
+    case "get_program":
+      return describeProgram(await store.units(uid), today, tz);
+    case "set_program": {
+      const units = await store.units(uid);
+      const current = units.get("profile");
+      if (!current) throw new Error("Set up their profile first (set_profile: age and weight).");
+      const p = JSON.parse(current);
+      const old = programOf(p, tz);
+      const date = (v: unknown, name: string) => {
+        if (v === undefined) return undefined;
+        if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error(`${name} is YYYY-MM-DD.`);
+        return v;
+      };
+      const start = sundayOf(date(args.start, "start") ?? old?.start ?? today);
+      const by = date(args.by, "by");
+      const count = args.weeks !== undefined ? Math.round(args.weeks) : by ? weekCount(start, by) : old ? weekCount(start, old.target) : undefined;
+      if (!count) throw new Error("How long? Give weeks or a target date (by).");
+      // As onboarding writes it: the start's Sunday, and the target the Saturday of the last week (OnboardingView.start).
+      p.programStart = epoch(start, 0, tz);
+      p.targetDate = epoch(addDays(start, 7 * count - 1), 0, tz);
+      const moved = old && old.start !== start;
+      let trips: number[] = moved || args.clear_trips ? [] : (p.travelWeeks ?? []).filter((w: number) => w < count);
+      if (args.trip) {
+        const from = date(args.trip.from, "trip.from")!, to = date(args.trip.to, "trip.to")!;
+        const added = travelWeeks(from, to, start, count, p.trainingDays ?? []);
+        if (!added.length) throw new Error("That trip doesn't miss a training day in the program.");
+        trips = [...new Set([...trips, ...added])].sort((a, b) => a - b);
+      }
+      p.travelWeeks = trips;
+      if (args.deload_every !== undefined) {
+        if (args.deload_every === 0) delete p.deloadEveryWeeks;
+        else p.deloadEveryWeeks = Math.max(2, Math.round(args.deload_every));
+      }
+      await store.write(uid, [{ key: "profile", body: encode(p) }], account.agent);
+      const note = moved && (old?.weeks.some((w) => w.travel)) ? " Moving the start cleared the trips; add them again." : "";
+      return `Saved.${note}\n\n${describeProgram(new Map([...units, ["profile", encode(p)]]), today, tz)}`;
+    }
     case "set_profile": {
       const units = await store.units(uid);
       const current = units.get("profile");
@@ -463,7 +552,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
         capabilities: { tools: {} },
         serverInfo: { name: "Barbrabell", version: "0.1.0" },
-        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, a recent set per goal lift), saving each answer with set_profile and set_goal, then propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply.",
+        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, a recent set per goal lift), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs.",
       });
     }
     case "ping":

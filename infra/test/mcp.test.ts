@@ -105,8 +105,8 @@ describe("mcp", () => {
   it("annotates every tool: reads, writes, the destructive ones, nothing open-world", async () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
-    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week"];
-    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo"];
+    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program"];
+    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
@@ -227,6 +227,47 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(JSON.parse(units.new[`goal#${id}`]).status).toBe("abandoned");
   });
 
+  it("lays out a program as the app does, and holds each week to its kind (FIT-165)", async () => {
+    const units: Record<string, Record<string, string>> = { new: { profile: encode({ ...profile, sessionMinutes: 45, trainingDays: [0, 2, 5] }) } };
+    const store = memory({}, units);
+    expect(await callTool("get_program", {}, fresh, store, now)).toMatch(/No program yet/);
+    await expect(callTool("set_program", {}, fresh, store, now)).rejects.toThrow(/How long/);
+
+    // Saturday 2026-10-17: the program starts this week's Sunday and ends 16 weeks later on a Saturday.
+    const set = await callTool("set_program", { weeks: 16, trip: { from: "2026-11-02", to: "2026-11-07" } }, fresh, store, now);
+    const p = JSON.parse(units.new.profile);
+    expect(dayOf(new Date(p.programStart * 1000), tz)).toBe("2026-10-11");
+    expect(dayOf(new Date(p.targetDate * 1000), tz)).toBe("2027-01-30");
+    expect(p.travelWeeks).toEqual([3]);
+    expect(set).toMatch(/16 weeks, Sunday 2026-10-11 to Saturday 2027-01-30\. Deload every 5 weeks \(their age's default\)/);
+    expect(set).toMatch(/This is week 1\./);
+    // At 42 a deload every 5 weeks; the trip in week 4 takes the first one.
+    expect(set).toMatch(/Week 4 · 2026-11-01 · Deload · travel: Dumbbells and bodyweight only\./);
+    expect(set).toMatch(/Week 9 · 2026-12-06 · Deload:/);
+    expect(set).toMatch(/Week 16 · 2027-01-24 · Test week:/);
+    expect(set).toMatch(/Week 1 · 2026-10-11 \(this week\) · Base: .* Aim about 42 working sets\. Not planned yet/);
+    expect(await callTool("get_context", {}, fresh, store, now)).toMatch(/Program: week 1 of 16, Base\./);
+
+    const heavy = await callTool("propose_week", { reason: "Deload", days: [{ date: "2026-12-07", title: "Lower", exercises: [
+      { exercise: "Back Squat", sets: 5, reps: 5, rpe: 8, main: true }, { exercise: "Romanian Deadlift", sets: 4, reps: 8 }, { exercise: "Walking Lunge", sets: 4, reps: 10 },
+    ] }] }, fresh, store, now);
+    expect(heavy).toMatch(/Monday 2026-12-07 \(week 9, Deload\)/);
+    expect(heavy).toMatch(/Back Squat: RPE 8 is over 6, the cap in a deload week/);
+    expect(heavy).toMatch(/13 sets in a deload week's session; a light week holds at most 12/);
+    await expect(callTool("apply", { proposal_id: heavy.match(/Proposal (\S+)/)![1] }, fresh, store, now)).rejects.toThrow(/breaks the plan rules/);
+    const light = await callTool("propose_week", { reason: "Deload", days: [{ date: "2026-12-07", title: "Lower", exercises: [
+      { exercise: "Back Squat", sets: 3, reps: 5, rpe: 6, main: true }, { exercise: "Romanian Deadlift", sets: 1, reps: 8, rpe: 6 },
+    ] }] }, fresh, store, now);
+    expect(light).toMatch(/passes the plan rules/);
+    const away = await callTool("propose_week", { reason: "Trip", days: [{ date: "2026-11-02", title: "Hotel", exercises: [{ exercise: "Back Squat", sets: 3, reps: 5, rpe: 6 }] }] }, fresh, store, now);
+    expect(away).toMatch(/Back Squat needs barbell and rack; a travel week is dumbbells and bodyweight only/);
+
+    // Longer, a set deload rhythm, then the trip cleared.
+    await callTool("set_program", { by: "2027-03-01", deload_every: 4, clear_trips: true }, fresh, store, now);
+    const later = JSON.parse(units.new.profile);
+    expect([dayOf(new Date(later.targetDate * 1000), tz), later.deloadEveryWeeks, later.travelWeeks]).toEqual(["2027-03-06", 4, []]);
+  });
+
   it("holds a proposed week to their weekly ceiling", async () => {
     const units: Record<string, Record<string, string>> = { new: { profile: encode({ ...profile, maxWeeklySets: 10 }) } };
     const store = memory({}, units);
@@ -247,6 +288,7 @@ describe("what the app reads (FIT-150)", () => {
       injured_areas: ["knees"], never: ["Bench Press"], starting_sets: [{ exercise: "Back Squat", weight_lb: 185, reps: 5 }] }, a, store, now);
     await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, a, store, now);
     await callTool("set_goal", { action: "add", type: "reps", exercise: "Pull-up", target: 10 }, a, store, now);
+    await callTool("set_program", { weeks: 16, trip: { from: "2026-11-02", to: "2026-11-07" } }, a, store, now);
     const week = await callTool("propose_week", { reason: "First week.", days: [
       { date: "2026-10-17", title: "Lower A", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 175, rpe: 7 }, { exercise: "Plank", sets: 3, seconds: 45 }] },
       { date: "2026-10-19", title: "Upper A", exercises: [{ exercise: "Dumbbell Bench Press", sets: 3, reps: 10, weight_lb_per_hand: 50, superset: 1 }, { exercise: "Pull-up", sets: 3, reps: 5, superset: 1 }] },

@@ -29,6 +29,18 @@ struct AgentSetupTests {
         #expect(profile.avoidExercises == ["bench-press"])
         #expect(profile.starts.first?.exercise == "back-squat")
 
+        // FIT-165: set_program's 16 weeks with a trip in week 4, as the Program tab lays them out (the server's
+        // weeks are in the account's time zone, New York).
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let start = try #require(profile.programStart), target = try #require(profile.targetDate)
+        let count = ProgramPlan.weekCount(start: start, target: target, calendar: calendar)
+        let weeks = ProgramPlan.weeks(count: count, deloadEvery: AgeTier.of(age: profile.age).deloadEveryWeeks, travel: Set(profile.travelWeeks))
+        #expect(count == 16)
+        #expect(weeks.indices.filter { weeks[$0].kind == .deload } == [3, 8, 13])
+        #expect(weeks[3].travel && weeks.last?.kind == .test)
+        #expect(ProgramPlan.week(of: profile.programStart!, start: start, calendar: calendar) == 0)
+
         let goals = try context.fetch(FetchDescriptor<Goal>())
         #expect(Set(goals.map(\.metric)) == ["back-squat.1rm_lb", "pull-up.reps"])
         #expect(goals.allSatisfy { $0.status == .active })

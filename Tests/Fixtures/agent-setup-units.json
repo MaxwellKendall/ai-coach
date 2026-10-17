@@ -326,6 +326,7 @@
       "knees"
     ],
     "maxWeeklySets": 60,
+    "programStart": 1791691200,
     "sessionMinutes": 45,
     "starts": [
       {
@@ -345,12 +346,15 @@
       }
     ],
     "style": "powerbuilding",
+    "targetDate": 1801285200,
     "trainingDays": [
       0,
       2,
       5
     ],
-    "travelWeeks": [],
+    "travelWeeks": [
+      3
+    ],
     "warmups": true,
     "weightLb": 196,
     "workoutTime": 390

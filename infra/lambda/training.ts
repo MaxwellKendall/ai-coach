@@ -16,7 +16,7 @@ export type Goal = { kind: string; metric: string; target: number; unit: string;
 export type Profile = {
   age?: number; weightLb?: number; daysPerWeek?: number; sessionMinutes?: number; trainingDays?: number[]; workoutTime?: number;
   equipment?: string[]; injuredAreas?: string[]; avoidExercises?: string[]; maxWeeklySets?: number; style?: string;
-  programStart?: number; targetDate?: number;
+  programStart?: number; targetDate?: number; deloadEveryWeeks?: number; travelWeeks?: number[];
 };
 export type Units = Map<string, string>;
 
@@ -227,8 +227,8 @@ export function rpeCaps(age: number) {
   return { main: 6, accessory: 6 };
 }
 
-/** What breaks the rules in one day's session; empty when it's fine. */
-export function checkDay(plan: PlanRow[], profile?: Profile): string[] {
+/** What breaks the rules in one day's session; empty when it's fine. A light week allows one set (PlanGuard). */
+export function checkDay(plan: PlanRow[], profile?: Profile, least = MIN_SETS): string[] {
   const out: string[] = [];
   const caps = profile?.age ? rpeCaps(profile.age) : undefined;
   const sets = new Map<string, { n: number; main: boolean }>();
@@ -240,7 +240,7 @@ export function checkDay(plan: PlanRow[], profile?: Profile): string[] {
   for (const [slug, { n, main }] of sets) {
     const most = main ? MAX_SETS.main : MAX_SETS.accessory;
     if (n > most) out.push(`${nameOf(slug)}: ${n} sets is more than the ${most} allowed for ${main ? "a main lift" : "an accessory"}.`);
-    else if (n < MIN_SETS) out.push(`${nameOf(slug)}: ${n} set is fewer than the ${MIN_SETS} minimum.`);
+    else if (n < least) out.push(`${nameOf(slug)}: ${n} set is fewer than the ${least} minimum.`);
   }
   for (const r of plan.filter(working)) {
     const e = r.template ? bySlug.get(r.template) : undefined;
