@@ -149,3 +149,29 @@ describe("the weekly review (WeeklyReview)", () => {
     expect(checkIn(201, 194.6, 180, "onPace", 181, 5, 7, 16)).toBeUndefined();
   });
 });
+
+describe("race times (FIT-177)", () => {
+  it("reads distances and times as people say them", async () => {
+    const { meters, seconds, clock, riegel, runMetric, goalMeters } = await import("../lambda/running.ts");
+    expect([meters("10K"), meters("half"), meters("Marathon"), meters("8 km"), meters("5 mi"), meters(8)]).toEqual([10000, 21097.5, 42195, 8000, 8046.72, 8000]);
+    expect([seconds("55:00"), seconds("1:45:30"), seconds("48 min"), seconds(55)]).toEqual([3300, 6330, 2880, 3300]);
+    expect([clock(3344), clock(6330)]).toEqual(["55:44", "1:45:30"]);
+    expect(() => meters("far")).toThrow(/Not a distance/);
+    expect(goalMeters(runMetric(10000))).toBe(10000);
+    // A run under a quarter of the distance, or under 1.6 km, doesn't predict it.
+    expect(riegel(420, 1609, 10000)).toBeUndefined();
+    expect(Math.round(riegel(1500, 5000, 10000)!)).toBe(3127);
+  });
+
+  it("counts a faster time as a personal best", () => {
+    const run = (m: number, day: number, km: number, mins: number): LogSet => ({ at: noon(m, day), day: d(m, day), exercise: "trail-running-walking",
+      measurements: [{ metric: "distance_m", value: km * 1000, unit: "m" }, { metric: "duration_s", value: mins * 60, unit: "s" }] });
+    const goal = { metric: "run_10000m.time_s", unit: "s", baseline: 3600, target: 3300 };
+    const runs = [run(9, 1, 10, 59), run(9, 8, 8, 46), run(9, 15, 10, 61)];
+    // 8 km in 46:00 predicts 58:17, faster than the 59:00 10K before it; the slower 10K after changes nothing.
+    expect(current(goal.metric, runs, [], noon(8, 10))).toBe(3497);
+    const won = wins([goal], runs, [], d(8, 10), noon(8, 10), noon(11, 29), new Set(), new Set(), d(10, 5), tz);
+    expect(won.filter((w) => w.kind === "pr").map((w) => [w.day, w.value, w.previous])).toEqual([[d(9, 8), 3497, 3540], [d(9, 1), 3540, 3600]]);
+    expect(pace(3600, 3497, 3300, 4, programWeeks(16, 6))).toBe("onPace"); // 34% of the way, 29% expected: under 125% of it
+  });
+});

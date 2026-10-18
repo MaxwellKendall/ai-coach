@@ -1,4 +1,5 @@
 import { programOf, weekIndex, weekStart, type ProgramWeek } from "./program.ts";
+import { clock, distanceName, goalMeters, riegel, RUNS } from "./running.ts";
 import { addDays, bySlug, epoch, goalsOf, logOf, planOf, profileOf, type Goal, type Measurement, type Profile, type Units } from "./training.ts";
 
 // FIT-167: the Progress tab and the weekly review, as Core/Progress derives them (GoalProgress, Wins, Streak,
@@ -51,6 +52,8 @@ const round = (x: number) => Math.sign(x) * Math.round(Math.abs(x));
 
 /** "weight_lb": the last weigh-in. "<exercise>.1rm_lb": the best estimate (reps ≤ 12). "<exercise>.reps": most reps unloaded. */
 export function current(metric: string, sets: LogSet[], weighs: Dated[], since: number): number | undefined {
+  const goal = goalMeters(metric);
+  if (goal !== undefined) return bestRun(goal, sets, since)?.time; // FIT-177: the best predicted race time
   if (metric === "weight_lb") return weighs.filter((w) => w.at >= since).reduce<Dated | undefined>((a, w) => (!a || w.at > a.at ? w : a), undefined)?.value;
   const [exercise, kind] = metric.split(".");
   const mine = sets.filter((s) => s.exercise === exercise && s.at >= since);
@@ -65,8 +68,24 @@ export function current(metric: string, sets: LogSet[], weighs: Dated[], since: 
   return undefined;
 }
 
-/** The set behind `current` for a max or reps goal. */
+/** The run whose Riegel prediction for `goal` meters is fastest since `since`, and that time. */
+export function bestRun(goal: number, sets: LogSet[], since: number) {
+  let top: { run: LogSet; time: number } | undefined;
+  for (const run of sets.filter((x) => RUNS.includes(x.exercise) && x.at >= since)) {
+    const d = value(run.measurements, "distance_m"), t = value(run.measurements, "duration_s");
+    const time = d && t ? riegel(t, d, goal) : undefined;
+    if (time !== undefined && (!top || time < top.time)) top = { run, time: Math.round(time) };
+  }
+  return top;
+}
+
+/** Whether a smaller value is better: a race time (FIT-177). */
+export const lowerIsBetter = (metric: string) => goalMeters(metric) !== undefined;
+
+/** The set behind `current` for a max or reps goal, or the run behind a race time. */
 export function best(metric: string, sets: LogSet[], since: number): LogSet | undefined {
+  const goal = goalMeters(metric);
+  if (goal !== undefined) return bestRun(goal, sets, since)?.run;
   const [exercise, kind] = metric.split(".");
   const mine = sets.filter((s) => s.exercise === exercise && s.at >= since);
   const score = (s: LogSet) => {
@@ -134,12 +153,20 @@ export const GOAL_OPTIONS = [
   { id: "weight", metric: "weight_lb", name: "Body weight", short: "Weight", measure: "body" },
   { id: "pushups", metric: "push-up.reps", name: "Push-ups in a row", short: "Push-ups", measure: "reps" },
 ] as const;
-export type GoalOption = (typeof GOAL_OPTIONS)[number];
-const stepOf = (o: GoalOption) => (o.measure === "reps" ? 1 : 5);
+export type GoalOption = (typeof GOAL_OPTIONS)[number] | { id: "run"; metric: string; name: string; short: string; measure: "time" };
+/** Onboarding's goals, and a race time for any distance (FIT-177). */
+export function optionFor(metric: string): GoalOption | undefined {
+  const known = GOAL_OPTIONS.find((o) => o.metric === metric);
+  const m = goalMeters(metric);
+  return known ?? (m === undefined ? undefined : { id: "run", metric, name: `${distanceName(m)} time`, short: distanceName(m), measure: "time" });
+}
+const stepOf = (o: GoalOption) => (o.measure === "reps" ? 1 : o.measure === "time" ? 30 : 5);
 
 /** Coach.number: at most one decimal, with thousands separators. */
 export const number = (x: number) => x.toLocaleString("en-US", { maximumFractionDigits: 1 });
-const shown = (x: number, o: GoalOption) => number(o.measure === "body" ? x : round(x));
+const shown = (x: number, o: GoalOption) => (o.measure === "time" ? clock(x) : number(o.measure === "body" ? x : round(x)));
+/** A goal's value as it reads: "231" (lb), "8" (reps), "57:30" (a race time). */
+export const formatValue = (metric: string, x: number) => { const o = optionFor(metric); return o ? shown(x, o) : number(x); };
 
 // ---- Streak ----
 
@@ -208,7 +235,7 @@ export function wins(goals: { metric: string; unit: string; baseline: number; ta
     const crossed = new Set<number>(), values = [g.baseline];
     for (const p of trend(g.metric, sets, weighs, since)) {
       values.push(p.value);
-      if (g.metric !== "weight_lb" && p.value > top) {
+      if (g.metric !== "weight_lb" && (lowerIsBetter(g.metric) ? p.value < top : p.value > top)) {
         out.push({ kind: "pr", day: p.day, key: `pr:${g.metric}:${round(p.value)}`, metric: g.metric, unit: g.unit, value: p.value, previous: top, target: g.target, weeksLeft: left(p.day), trend: [...values] });
         top = p.value;
       }
@@ -236,9 +263,10 @@ export function wins(goals: { metric: string; unit: string; baseline: number; ta
 }
 
 export function describeWin(w: Win) {
-  const o = GOAL_OPTIONS.find((x) => x.metric === w.metric);
+  const o = optionFor(w.metric);
   const name = o?.name ?? w.metric;
   const v = (x: number) => (o ? shown(x, o) : number(x));
+  if (o?.measure === "time") w = { ...w, unit: "" };
   if (w.kind === "streak") return `${w.day}: ${w.value} weeks in a row, every planned session done (${w.workouts} workouts).`;
   if (w.kind === "pr") return `${w.day}: personal best, ${name} ${v(w.value)} ${w.unit} (was ${v(w.previous!)}).`;
   return w.percent === 100 ? `${w.day}: goal reached, ${name} ${v(w.value)} ${w.unit}.` : `${w.day}: ${w.percent}% of the way to ${name} ${v(w.target!)} ${w.unit}, at ${v(w.value)}.`;
@@ -365,6 +393,8 @@ export function weekReport(units: Units, today: string, nowSec: number, tz: stri
     protein: average(dailyTotals(units, "meal", "protein_g")), kcal: average(dailyTotals(units, "meal", "kcal")), sleep: average(dailyTotals(units, "sleep", "sleep_h")),
     weight: last?.value, weightChange: last && before ? last.value - before.value : undefined,
     push: inWeek.filter((s) => s.pattern === "push").length, pull: inWeek.filter((s) => s.pattern === "pull").length,
+    // FIT-177: the week's running, which isn't working sets.
+    runKm: Math.round(inWeek.filter((s) => RUNS.includes(s.exercise)).reduce((n, s) => n + (value(s.measurements, "distance_m") ?? 0), 0) / 100) / 10,
   };
   const fine = (profile as Record<string, any> | undefined)?.fineAreas as Record<string, number> | undefined;
   const found = alerts(from, { sessions: planned, protein: dailyTotals(units, "meal", "protein_g"), kcal: dailyTotals(units, "meal", "kcal"),
@@ -377,7 +407,7 @@ export function weekReport(units: Units, today: string, nowSec: number, tz: stri
     const startSec = profile.programStart, weekSec = epoch(from, 0, tz);
     Object.assign(report, { programWeek: week, programWeeks: program.weeks.length, end });
     for (const g of goalsOf(units).filter((g) => g.status === "active")) {
-      const option = GOAL_OPTIONS.find((o) => o.metric === g.metric);
+      const option = optionFor(g.metric);
       if (!option) continue;
       const first = g.baseline ?? g.target;
       const now = current(g.metric, sets, weighs, startSec) ?? first;
@@ -394,6 +424,7 @@ export type WeekReport = ReturnType<typeof weekReport>;
 
 const change = (r: GoalRow) => {
   const delta = r.to - r.from, unit = r.goal.unit === "reps" && Math.abs(delta) === 1 ? "rep" : r.goal.unit;
+  if (r.option.measure === "time") return `${delta < 0 ? "faster by" : "slower by"} ${clock(Math.abs(delta))}`;
   return `${delta < 0 ? "down" : "up"} ${shown(Math.abs(delta), r.option)} ${unit}`;
 };
 
@@ -429,7 +460,8 @@ export function facts(r: WeekReport) {
     else work.push(`${done} of ${planned} workouts done.`);
   }
   for (const g of r.goals) {
-    const now = `now ${shown(g.to, g.option)} of a ${shown(g.goal.target, g.option)} ${g.goal.unit} goal`;
+    const now = g.option.measure === "time" ? `now ${shown(g.to, g.option)} for a ${shown(g.goal.target, g.option)} goal`
+      : `now ${shown(g.to, g.option)} of a ${shown(g.goal.target, g.option)} ${g.goal.unit} goal`;
     if ((g.to - g.from) * (g.goal.target - g.start) > 0) good.push(`${g.option.name} ${change(g)} this week, ${now}.`);
     if (g.pace === "behind") work.push(`${g.option.name} is behind the plan's pace, ${now}.`);
   }

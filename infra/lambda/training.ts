@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import seed from "../../Resources/Seed/exercises.json" with { type: "json" };
+import { clock, distanceName, goalMeters, meters, OUTDOOR_RUN, pace, riegel, RUNS, runMetric, seconds } from "./running.ts";
 
 // FIT-149: the training data an agent reads and writes, as the app keeps it in FIT-126's sync units
 // (Core/Cloud/SyncUnits.swift: times in seconds since 1970, keys sorted, nil left out). Pure, so it's tested without a
@@ -23,7 +24,7 @@ export type Units = Map<string, string>;
 export const WARMUP = "warm-up"; // TrainingGenerator.warmupNote
 const UNITS: Record<string, string> = {
   sets: "sets", reps: "reps", duration_s: "s", distance_m: "m", load_lb: "lb", load_lb_hand: "lb/hand", rpe: "RPE",
-  effort: "/10", completion_rate: "ratio", weight_lb: "lb", sleep_h: "h", sleep_quality: "/5", kcal: "kcal", protein_g: "g",
+  effort: "/10", completion_rate: "ratio", weight_lb: "lb", hr_avg: "bpm", sleep_h: "h", sleep_quality: "/5", kcal: "kcal", protein_g: "g",
 };
 const m = (metric: string, value: number): Measurement => ({ metric, value, unit: UNITS[metric] ?? "" });
 const value = (list: Measurement[], metric: string) => list.find((x) => x.metric === metric)?.value;
@@ -229,7 +230,11 @@ export function describeSession(plan: PlanRow[]) {
 
 /** "Back Squat 205×5 @7, 205×5 @8" per exercise, and the session's note. */
 export function describeLog(log: LogRow[]) {
-  const sets = log.filter((r) => r.kind === "workout" && r.template);
+  const sets = log.filter((r) => r.kind === "workout" && r.template && !RUNS.includes(r.template));
+  const runs = log.filter((r) => r.kind === "workout" && r.template && RUNS.includes(r.template)).map((r) => {
+    const d = value(r.measurements, "distance_m"), t = value(r.measurements, "duration_s"), hr = value(r.measurements, "hr_avg");
+    return `${nameOf(r.template)}: ${d ? `${Math.round(d / 100) / 10} km` : ""}${d && t ? " in " : ""}${t ? clock(t) : ""}${d && t ? ` (${pace(t, d)})` : ""}${hr ? `, HR ${hr}` : ""}${r.note ? ` · ${r.note}` : ""}`;
+  });
   const byExercise = new Map<string, string[]>();
   for (const s of sets) {
     const reps = value(s.measurements, "reps"), sec = value(s.measurements, "duration_s");
@@ -241,7 +246,7 @@ export function describeLog(log: LogRow[]) {
   const summary = log.find((r) => r.kind === "workout" && !r.template);
   const notes = [...new Set(log.filter((r) => r.kind === "workout" && !r.template && r.note).map((r) => r.note))];
   return {
-    lines: [...byExercise].map(([slug, list]) => `${nameOf(slug)}: ${list.join(", ")}`),
+    lines: [...[...byExercise].map(([slug, list]) => `${nameOf(slug)}: ${list.join(", ")}`), ...runs],
     note: notes.join(" "),
     effort: summary ? value(summary.measurements, "effort") : undefined,
   };
@@ -487,7 +492,7 @@ export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // 0 
 export type ProfileInput = {
   age?: number; weight_lb?: number; training_days?: string[]; session_minutes?: number; workout_time?: string; equipment?: string[];
   injured_areas?: string[]; never?: string[]; style?: string; max_weekly_sets?: number;
-  starting_sets?: { exercise: string; weight_lb?: number; reps?: number; seconds?: number }[];
+  starting_sets?: { exercise?: string; weight_lb?: number; reps?: number; seconds?: number; distance?: string | number; time?: string | number }[];
 };
 
 /**
@@ -531,6 +536,14 @@ export function mergeProfile(current: Record<string, any> | undefined, input: Pr
   }
   if (input.max_weekly_sets !== undefined) p.maxWeeklySets = Math.round(input.max_weekly_sets);
   for (const s of input.starting_sets ?? []) {
+    // FIT-177: a recent race or hard run, as distance and time, starts a race-time goal.
+    if (s.distance !== undefined || s.time !== undefined) {
+      if (s.distance === undefined || s.time === undefined) throw new Error("A run's starting point needs its distance and time.");
+      const run = [m("distance_m", Math.round(meters(s.distance))), m("duration_s", seconds(s.time))];
+      p.starts = [...(p.starts ?? []).filter((x: { exercise: string }) => x.exercise !== OUTDOOR_RUN), { exercise: OUTDOOR_RUN, measurements: run }];
+      continue;
+    }
+    if (!s.exercise) throw new Error("Each starting set names its exercise.");
     const slug = resolve(s.exercise).slug;
     const ms: Measurement[] = [];
     if (s.seconds !== undefined) ms.push(m("duration_s", s.seconds));
@@ -541,10 +554,15 @@ export function mergeProfile(current: Record<string, any> | undefined, input: Pr
   return p;
 }
 
-export type GoalInput = { type: "lift_max" | "reps" | "body_weight"; exercise?: string; target: number; by?: string };
+export type GoalInput = { type: "lift_max" | "reps" | "body_weight" | "timed_distance"; exercise?: string; target?: number; by?: string; distance?: string | number; time?: string | number };
 
 /** A goal unit's body, as SyncUnits.GoalBody: "back-squat.1rm_lb", "pull-up.reps" or "weight_lb", like Onboarding's options. */
 export function goalBody(input: GoalInput, deadline: number | undefined, baseline?: number): Goal {
+  if (input.type === "timed_distance") {
+    if (input.distance === undefined || input.time === undefined) throw new Error("A race-time goal needs its distance and target time, e.g. 10K in 55:00.");
+    return { kind: "training", metric: runMetric(meters(input.distance)), target: seconds(input.time), unit: "s", deadline, baseline, status: "active" };
+  }
+  if (input.target === undefined) throw new Error("A goal needs its target.");
   if (input.type === "body_weight") return { kind: "body", metric: "weight_lb", target: input.target, unit: "lb", deadline, baseline, status: "active" };
   if (!input.exercise) throw new Error("A lift or reps goal needs its exercise.");
   const slug = resolve(input.exercise).slug;
@@ -583,6 +601,18 @@ function setsOf(units: Units, slug: string, metric: string) {
 const startOf = (profile: Profile | undefined, slug: string) =>
   ((profile as Record<string, any> | undefined)?.starts ?? []).find((s: { exercise: string }) => s.exercise === slug) as { measurements: Measurement[] } | undefined;
 
+/** FIT-177: the best race time their runs (or the starting run) predict for `race` meters, by Riegel. */
+export function runTime(units: Units, profile: Profile | undefined, race: number): number | undefined {
+  const runs = [...units.keys()].filter((k) => k.startsWith("log#")).flatMap((k) => logOf(units, k.slice(4)))
+    .filter((r) => r.kind === "workout" && r.template && RUNS.includes(r.template)).map((r) => r.measurements);
+  const start = startOf(profile, OUTDOOR_RUN)?.measurements;
+  const times = [...runs, ...(start ? [start] : [])].flatMap((ms) => {
+    const d = value(ms, "distance_m"), t = value(ms, "duration_s"), p = d && t ? riegel(t, d, race) : undefined;
+    return p === undefined ? [] : [p];
+  });
+  return times.length ? Math.round(Math.min(...times)) : undefined;
+}
+
 /** Whether a weight for this exercise has something to go on: its own logged sets, or (for load_lb) a starting set. */
 export function knowsMax(units: Units, profile: Profile | undefined, slug: string, metric = "load_lb") {
   const start = startOf(profile, slug);
@@ -595,6 +625,8 @@ export function unknownMaxes(goals: Goal[], units: Units, profile: Profile | und
     const [slug, kind] = g.metric.split(".");
     if (kind === "1rm_lb" && !knowsMax(units, profile, slug)) return [`${nameOf(slug)}: a 1RM (tested or estimated) or a recent heavy set, weight × reps`];
     if (kind === "reps" && !setsOf(units, slug, "reps").length && value(startOf(profile, slug)?.measurements ?? [], "reps") === undefined) return [`${nameOf(slug)}: most reps in a row now`];
+    const race = goalMeters(g.metric);
+    if (race !== undefined && runTime(units, profile, race) === undefined) return [`${distanceName(race)}: a recent race or hard run, its distance and time`];
     return [];
   });
 }

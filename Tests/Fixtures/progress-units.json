@@ -3950,7 +3950,8 @@
         "weight": 197.6,
         "weightChange": -0.8,
         "push": 6,
-        "pull": 6
+        "pull": 6,
+        "runKm": 0
       },
       "goals": [
         {

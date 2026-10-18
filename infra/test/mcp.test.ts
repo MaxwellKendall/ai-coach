@@ -117,7 +117,7 @@ describe("mcp", () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
     const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
-    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise"];
+    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise", "log_run"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
@@ -490,6 +490,42 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(heavy).toMatch(/Back Squat: 215 lb for 5 is over the most their starting point gives for 5 reps; at most 205 lb\./);
     const right = await callTool("propose_session", { date: "2026-10-19", title: "Lower", reason: "x", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 200, rpe: 7 }] }, fresh, store, now);
     expect(right).toMatch(/passes the plan rules/);
+  });
+
+  it("sets a race-time goal, logs runs and predicts the race (FIT-177)", async () => {
+    const units: Record<string, Record<string, string>> = {};
+    const store = memory({}, units);
+    await callTool("set_profile", { age: 41, weight_lb: 196, training_days: ["Mon", "Wed", "Sat"] }, fresh, store, now);
+    // "10K in 55:00 by April 2; last one was about 60 minutes."
+    const added = await callTool("set_goal", { action: "add", type: "timed_distance", distance: "10K", time: "55:00", by: "2027-04-02" }, fresh, store, now);
+    expect(added).toMatch(/Added: 10K in 55:00 by 2027-04-02 .*Ask for their last race/);
+    const id = added.match(/goal_id (\S+)\]/)![1];
+    expect(JSON.parse(units.new[`goal#${id}`])).toMatchObject({ metric: "run_10000m.time_s", target: 3300, unit: "s", kind: "training" });
+    expect(await callTool("get_context", {}, fresh, store, now)).toMatch(/10K: a recent race or hard run, its distance and time/);
+    await expect(callTool("set_program", { weeks: 24 }, fresh, store, now)).rejects.toThrow(/10K: a recent race/);
+    await callTool("set_profile", { starting_sets: [{ distance: "10K", time: "60:00" }] }, fresh, store, now);
+    expect(JSON.parse(units.new.profile).starts).toEqual([{ exercise: "trail-running-walking", measurements: [{ metric: "distance_m", value: 10000, unit: "m" }, { metric: "duration_s", value: 3600, unit: "s" }] }]);
+    await callTool("set_goal", { action: "drop", goal_id: id }, fresh, store, now);
+    const again = await callTool("set_goal", { action: "add", type: "timed_distance", distance: "10k", time: "55:00", by: "2027-04-02" }, fresh, store, now);
+    expect(again).toMatch(/Their runs put them at 1:00:00 now/);
+    const goal = again.match(/goal_id (\S+)\]/)![1];
+    expect(JSON.parse(units.new[`goal#${goal}`]).baseline).toBe(3600);
+    await callTool("set_program", { weeks: 24 }, fresh, store, now);
+
+    // An 8 km run in 44:00: Riegel puts a 10K at 44:00 × 1.25^1.06 = 55:44.
+    const run = await callTool("log_run", { distance: "8 km", time: "44:00", hr_avg: 152, kind: "tempo", note: "felt strong" }, fresh, store, now);
+    expect(run).toMatch(/Logged Saturday 2026-10-17: 8 km in 44:00 \(5:30\/km\), HR 152, tempo: felt strong\.\n10K: this predicts 55:44; best so far 55:44 \(goal 55:00\)\./);
+    expect(JSON.parse(units.new["log#2026-10-17"])[0]).toMatchObject({ kind: "workout", template: "trail-running-walking", note: "tempo: felt strong",
+      measurements: [{ metric: "distance_m", value: 8000 }, { metric: "duration_s", value: 2640 }, { metric: "hr_avg", value: 152, unit: "bpm" }] });
+    expect(await callTool("get_day", {}, fresh, store, now)).toMatch(/Trail Running\/Walking: 8 km in 44:00 \(5:30\/km\), HR 152 · tempo: felt strong/);
+    const p = await callTool("get_progress", {}, fresh, store, now);
+    expect(p).toMatch(/- 10K time: target 55:00 by 2027-04-02 \[goal_id [^\]]+\]\n  Now 55:44 predicted from their runs, from 1:00:00 at the start: 85% of the way\./);
+    expect(p).toMatch(/Best run: 8 km in 44:00 \(5:30\/km\) on 2026-10-17\./);
+    expect(await callTool("get_context", {}, fresh, store, now)).toMatch(/- 10K in 55:00 by 2027-04-02 — their runs predict 55:44 now/);
+    // A short easy jog doesn't count toward a 10K prediction.
+    await callTool("log_run", { distance: "1 mi", time: "7:00", kind: "easy" }, fresh, store, now);
+    expect(await callTool("get_progress", {}, fresh, store, now)).toMatch(/Now 55:44 predicted/);
+    expect(await callTool("get_week_review", {}, fresh, store, now)).toMatch(/Ran 9\.6 km\./);
   });
 
   it("holds a proposed week to their weekly ceiling", async () => {

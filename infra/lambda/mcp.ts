@@ -6,11 +6,12 @@ import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda
 import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
 import { push } from "./sync.ts";
 import {
-  addDays, AREAS, checkLoads, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
+  addDays, AREAS, checkLoads, runTime, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
   nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
 import * as progress from "./progress.ts";
+import { clock, distanceName, goalMeters, meters, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
@@ -225,6 +226,21 @@ export const tools = [
     inputSchema: { type: "object", properties: { date: DATE, note: { type: "string" } }, required: ["note"] },
   },
   {
+    name: "log_run",
+    title: "Log a run",
+    annotations: { title: "Log a run", ...write(false, false) },
+    description: "Log a run they did: distance, time, average heart rate if they know it, and what kind (easy, long, tempo, intervals, race). It's added to the day beside any lifting. Race-time goals follow it.",
+    inputSchema: { type: "object", properties: {
+      date: DATE,
+      distance: { type: "string", description: "\"8 km\", \"5 mi\", \"10K\"." },
+      time: { type: "string", description: "\"44:00\" or \"1:02:10\"." },
+      hr_avg: { type: "integer", minimum: 60, maximum: 220, description: "Average heart rate, bpm." },
+      kind: { type: "string", enum: ["easy", "long", "tempo", "intervals", "race"] },
+      treadmill: { type: "boolean" },
+      note: { type: "string", description: "How it felt, in their words." },
+    }, required: ["distance", "time"] },
+  },
+  {
     name: "log_daily",
     title: "Log weight, sleep or meals",
     annotations: { title: "Log weight, sleep or meals", ...write(false, false) },
@@ -364,20 +380,24 @@ export const tools = [
       max_weekly_sets: { type: "integer", minimum: 10, maximum: 120, description: "A ceiling on working sets a week (default 60)." },
       starting_sets: { type: "array", description: "Where they are now, per goal lift and any main lift: their 1RM (weight_lb with reps 1, tested or their best estimate) or a recent heavy set (weight × reps). Required before set_program, and weights are held to it.", items: { type: "object", properties: {
         exercise: EXERCISE, weight_lb: { type: "number" }, reps: { type: "integer" }, seconds: { type: "integer" },
-      }, required: ["exercise"] } },
+        distance: { type: "string", description: "For a run (a race-time goal's starting point): \"10K\", \"8 km\", \"5 mi\"." },
+        time: { type: "string", description: "For a run: its time, \"59:30\"." },
+      } } },
     } },
   },
   {
     name: "set_goal",
     title: "Set a goal",
     annotations: { title: "Set a goal", ...write(true, false) },
-    description: "Add, change or drop a goal. Goals have a target and ideally a date: a lift max (\"squat 225\"), reps in a row (\"10 pull-ups\") or body weight (\"190 lb\"). get_context lists goals with their ids.",
+    description: "Add, change or drop a goal. Goals have a target and ideally a date: a lift max (\"squat 225\"), reps in a row (\"10 pull-ups\"), body weight (\"190 lb\") or a race time (\"10K in 55:00\", type timed_distance with distance and time; save their last race or a hard run as a starting set too). get_context lists goals with their ids.",
     inputSchema: { type: "object", properties: {
       action: { type: "string", enum: ["add", "change", "drop"] },
       goal_id: { type: "string", description: "For change and drop." },
-      type: { type: "string", enum: ["lift_max", "reps", "body_weight"] },
+      type: { type: "string", enum: ["lift_max", "reps", "body_weight", "timed_distance"] },
       exercise: EXERCISE,
       target: { type: "number", description: "lb for a lift max or body weight; reps for reps." },
+      distance: { type: "string", description: "For a race time: \"5K\", \"10K\", \"half\", \"marathon\", \"8 km\" or \"5 mi\"." },
+      time: { type: "string", description: "For a race time: the target, \"55:00\" or \"1:45:30\"." },
       by: { type: "string", description: "Deadline, YYYY-MM-DD." },
     }, required: ["action"] },
   },
@@ -440,6 +460,12 @@ function context(units: Units, today: string, back: number, ahead: number, tz: s
         now = last ? ` — weighed ${last.lb} lb on ${last.day}${month ? ` (${last.lb - month.lb >= 0 ? "+" : ""}${Math.round((last.lb - month.lb) * 10) / 10} in 4 weeks)` : ""}`
           : profile?.weightLb ? ` — ${profile.weightLb} lb at setup, no weigh-ins yet` : "";
       }
+      const race = goalMeters(g.metric);
+      if (race !== undefined) {
+        const t = runTime(units, profile, race);
+        out.push(`- ${distanceName(race)} in ${clock(g.target)}${by}${t !== undefined ? ` — their runs predict ${clock(t)} now` : " — no runs to go on yet"} [goal_id ${g.id}]`);
+        continue;
+      }
       const label = bySlug.has(slug) ? nameOf(slug) : g.metric === "weight_lb" ? "Body weight" : g.metric;
       out.push(`- ${label} ${g.target} ${g.unit}${by}${now} [goal_id ${g.id}]`);
     }
@@ -482,6 +508,8 @@ function baselineOf(units: Units, metric: string): number | undefined {
   if (logged !== undefined) return logged;
   const profile = profileOf(units) as Record<string, any> | undefined;
   if (metric === "weight_lb") return profile?.weightLb;
+  const race = goalMeters(metric);
+  if (race !== undefined) return runTime(units, profile as any, race);
   const [slug, kind] = metric.split(".");
   const start = (profile?.starts ?? []).find((s: { exercise: string }) => s.exercise === slug);
   const v = (m: string) => start?.measurements.find((x: { metric: string }) => x.metric === m)?.value as number | undefined;
@@ -504,24 +532,28 @@ function describeProgress(units: Units, today: string, nowSec: number, tz: strin
   else out.push("No program yet, so this counts all their logs and there's no pace to compare with (set_program).");
   out.push("", goals.length ? "Goals:" : "No goals yet (set_goal).");
   for (const g of goals) {
-    const option = progress.GOAL_OPTIONS.find((o) => o.metric === g.metric);
+    const option = progress.optionFor(g.metric);
     const name = option?.name ?? (g.metric.endsWith(".1rm_lb") ? `${nameOf(g.metric.split(".")[0])} max` : g.metric.endsWith(".reps") ? `${nameOf(g.metric.split(".")[0])} in a row` : g.metric);
     const first = g.baseline ?? g.target;
     const now = progress.current(g.metric, sets, weighs, since);
-    const n = progress.number;
-    const lines = [`- ${name}: target ${n(g.target)} ${g.unit}${g.deadline ? ` by ${dayOf(new Date(g.deadline * 1000), tz)}` : ""} [goal_id ${g.id}]`];
-    if (now === undefined) lines.push("  Nothing logged toward it yet.");
+    const time = option?.measure === "time";
+    const n = (x: number) => progress.formatValue(g.metric, x), u = time ? "" : ` ${g.unit}`;
+    const lines = [`- ${name}: target ${n(g.target)}${u}${g.deadline ? ` by ${dayOf(new Date(g.deadline * 1000), tz)}` : ""} [goal_id ${g.id}]`];
+    if (now === undefined) lines.push(time ? "  No runs since the program started to predict from (log_run)." : "  Nothing logged toward it yet.");
     else {
-      lines.push(`  Now ${n(now)} ${g.unit}${g.baseline !== undefined ? `, from ${n(first)} at the start: ${Math.round(progress.fraction(first, now, g.target) * 100)}% of the way` : ""}.`);
+      lines.push(`  Now ${n(now)}${u}${time ? " predicted from their runs" : ""}${g.baseline !== undefined ? `, from ${n(first)} at the start: ${Math.round(progress.fraction(first, now, g.target) * 100)}% of the way` : ""}.`);
       if (program && end && profile?.programStart && option) {
         const p = progress.pace(first, now, g.target, week, program.weeks);
         const fc = progress.forecast(first, now, profile.programStart, nowSec, end);
-        lines.push(`  ${PACE[p][0].toUpperCase()}${PACE[p].slice(1)}.${fc !== undefined ? ` At this rate, ${n(Math.round(fc * 10) / 10)} ${g.unit} by ${program.target}.` : ""} Needs ${n(Math.round(progress.perWeek(now, g.target, nowSec, end) * 10) / 10)} ${g.unit} a week from here.`);
+        const per = progress.perWeek(now, g.target, nowSec, end);
+        lines.push(`  ${PACE[p][0].toUpperCase()}${PACE[p].slice(1)}.${fc !== undefined ? ` At this rate, ${time ? clock(fc) : `${progress.number(Math.round(fc * 10) / 10)} ${g.unit}`} by ${program.target}.` : ""} `
+          + (time ? `Needs ${clock(Math.abs(per))} ${per <= 0 ? "faster" : "slower"} each week from here.` : `Needs ${progress.number(Math.round(per * 10) / 10)} ${g.unit} a week from here.`));
       }
       const top = progress.best(g.metric, sets, since);
       if (top) {
         const v = (m: string) => top.measurements.find((x) => x.metric === m)?.value;
-        lines.push(`  Best set: ${v("load_lb") !== undefined ? `${v("load_lb")} lb × ` : ""}${v("reps")} reps on ${top.day}.`);
+        lines.push(time ? `  Best run: ${Math.round(v("distance_m")! / 100) / 10} km in ${clock(v("duration_s")!)} (${runPace(v("duration_s")!, v("distance_m")!)}) on ${top.day}.`
+          : `  Best set: ${v("load_lb") !== undefined ? `${v("load_lb")} lb × ` : ""}${v("reps")} reps on ${top.day}.`);
       }
       const points = progress.trend(g.metric, sets, weighs, since).slice(-8);
       if (points.length > 1) lines.push(`  Trend: ${points.map((p) => `${p.day} ${n(p.value)}`).join(", ")}.`);
@@ -545,12 +577,14 @@ function describeReview(units: Units, day: string, nowSec: number, tz: string) {
     `Numbers: ${x.workoutsDone} of ${x.workoutsPlanned} workouts, ${x.sets} working sets (${x.push} push, ${x.pull} pull).`
       + (x.protein !== undefined ? ` Protein ${Math.round(x.protein)} g a day.` : "") + (x.kcal !== undefined ? ` ${Math.round(x.kcal).toLocaleString("en-US")} kcal a day.` : "")
       + (x.sleep !== undefined ? ` Sleep ${n(x.sleep)} h a night.` : "") + " (Averages over the days logged.)"
+      + (x.runKm ? ` Ran ${n(x.runKm)} km.` : "")
       + (x.weight !== undefined ? ` Weight ${n(x.weight)} lb${x.weightChange !== undefined ? ` (${x.weightChange >= 0 ? "+" : ""}${n(Math.round(x.weightChange * 10) / 10)} on the week before)` : ""}.` : "")];
   if (r.goals.length) {
     out.push("", "Goals this week:");
     for (const g of r.goals) {
-      out.push(`- ${g.option.name}: ${n(Math.round(g.from * 10) / 10)} → ${n(Math.round(g.to * 10) / 10)} of ${n(g.goal.target)} ${g.goal.unit}, ${PACE[g.pace]}.${g.forecast !== undefined ? ` At this rate ${n(Math.round(g.forecast * 10) / 10)} by the end.` : ""}`);
-      if (g.checkIn) out.push(`  Check-in: ${g.checkIn.ahead ? "well ahead; offer to raise" : "behind; offer to keep it, or move"} the target to ${n(g.checkIn.proposed)} ${g.goal.unit} (${g.checkIn.weeksLeft} weeks left). Only if they agree: set_goal change, goal_id ${g.id}.`);
+      const f = (x: number) => (g.option.measure === "time" ? clock(x) : n(Math.round(x * 10) / 10)), u = g.option.measure === "time" ? "" : ` ${g.goal.unit}`;
+      out.push(`- ${g.option.name}: ${f(g.from)} → ${f(g.to)} of ${f(g.goal.target)}${u}, ${PACE[g.pace]}.${g.forecast !== undefined ? ` At this rate ${f(g.forecast)} by the end.` : ""}`);
+      if (g.checkIn) out.push(`  Check-in: ${g.checkIn.ahead ? `well ahead; offer to ${g.option.measure === "time" ? "lower" : "raise"}` : "behind; offer to keep it, or move"} the target to ${f(g.checkIn.proposed)}${u} (${g.checkIn.weeksLeft} weeks left). Only if they agree: set_goal change, goal_id ${g.id}.`);
     }
   }
   out.push("", r.alerts.length ? `Alerts:\n${r.alerts.map((a) => `- ${a.title}. ${a.detail}${a.area ? ` (If it's an injury, set_profile can add ${a.area} to injured_areas.)` : ""}`).join("\n")}` : "No alerts.");
@@ -569,7 +603,7 @@ function resolveLoose(said: string) {
 function progressWins(units: Units, today: string, tz: string) {
   const profile = profileOf(units), program = programOf(profile, tz);
   if (!profile?.programStart || !profile.targetDate || !program) return [];
-  const tracked = goalsOf(units).filter((g) => g.status === "active" && g.baseline !== undefined && progress.GOAL_OPTIONS.some((o) => o.metric === g.metric))
+  const tracked = goalsOf(units).filter((g) => g.status === "active" && g.baseline !== undefined && progress.optionFor(g.metric))
     .map((g) => ({ metric: g.metric, unit: g.unit, baseline: g.baseline!, target: g.target }));
   return progress.wins(tracked, progress.logSets(units), progress.weighIns(units), program.start, profile.programStart, profile.targetDate,
     progress.plannedDays(units), progress.workoutDays(units), today, tz);
@@ -708,6 +742,24 @@ export async function callTool(name: string, args: Args, account: Account, store
       summary.note = [summary.note, String(args.note).trim()].filter(Boolean).join(" ");
       await store.write(uid, [{ key: `log#${day}`, body: encode(log) }], account.agent);
       return `Noted on ${day}: ${summary.note}`;
+    }
+    case "log_run": {
+      if (day > today) throw new Error(`${day} hasn't happened yet.`);
+      const d = Math.round(meters(String(args.distance))), t = seconds(String(args.time));
+      const slug = args.treadmill ? "running-treadmill" : OUTDOOR_RUN;
+      const ms = [{ metric: "distance_m", value: d, unit: "m" }, { metric: "duration_s", value: t, unit: "s" },
+        ...(args.hr_avg ? [{ metric: "hr_avg", value: Math.round(args.hr_avg), unit: "bpm" }] : [])];
+      const note = [args.kind, typeof args.note === "string" ? args.note.trim() : ""].filter(Boolean).join(": ");
+      const units = await store.units(uid);
+      const at = day === today ? Math.floor(now.getTime() / 1000) : epoch(day, 12 * 60, tz);
+      const log = [...logOf(units, day), { id: randomUUID().toUpperCase(), kind: "workout", at, template: slug, measurements: ms, note }];
+      await store.write(uid, [{ key: `log#${day}`, body: encode(log) }], account.agent);
+      const after = new Map([...units, [`log#${day}`, encode(log)]]);
+      const moved = goalsOf(after).filter((g) => g.status === "active" && goalMeters(g.metric) !== undefined).map((g) => {
+        const race = goalMeters(g.metric)!, now2 = runTime(after, profileOf(after), race);
+        return now2 === undefined ? "" : `\n${distanceName(race)}: this predicts ${clock(Math.round(t * (race / d) ** 1.06))}; best so far ${clock(now2)} (goal ${clock(g.target)}).`;
+      }).join("");
+      return `Logged ${weekday(day)} ${day}: ${Math.round(d / 100) / 10} km in ${clock(t)} (${runPace(t, d)})${args.hr_avg ? `, HR ${Math.round(args.hr_avg)}` : ""}${note ? `, ${note}` : ""}.${moved}`;
     }
     case "log_daily": {
       if (day > today) throw new Error(`${day} hasn't happened yet.`);
@@ -890,11 +942,16 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (by !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(by)) throw new Error("by is YYYY-MM-DD.");
       const deadline = by ? epoch(by, 12 * 60, tz) : undefined;
       if (args.action === "add") {
-        if (args.target === undefined || !args.type) throw new Error("A new goal needs its type and target.");
+        if (!args.type || (args.type !== "timed_distance" && args.target === undefined)) throw new Error("A new goal needs its type and target.");
         const body = goalBody(args as GoalInput, deadline);
         body.baseline = baselineOf(units, body.metric);
         const id = randomUUID().toUpperCase();
         await store.write(uid, [{ key: `goal#${id}`, body: encode(body) }], account.agent);
+        const race = goalMeters(body.metric);
+        if (race !== undefined) {
+          return `Added: ${distanceName(race)} in ${clock(body.target)}${by ? ` by ${by}` : ""} [goal_id ${id}].`
+            + (body.baseline !== undefined ? ` Their runs put them at ${clock(body.baseline)} now.` : " Ask for their last race or a recent hard run (distance and time) and save it as a starting set.");
+        }
         return `Added: ${body.metric} ${body.target} ${body.unit}${by ? ` by ${by}` : ""} [goal_id ${id}].`;
       }
       const current = units.get(`goal#${args.goal_id}`);
@@ -903,6 +960,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (args.action === "drop") goal.status = "abandoned";
       else {
         if (args.target !== undefined) goal.target = args.target;
+        if (args.time !== undefined && goalMeters(goal.metric) !== undefined) goal.target = seconds(args.time);
         if (deadline !== undefined) goal.deadline = deadline;
       }
       await store.write(uid, [{ key: `goal#${args.goal_id}`, body: encode(goal) }], account.agent);
