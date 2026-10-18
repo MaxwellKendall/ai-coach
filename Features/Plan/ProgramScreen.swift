@@ -167,7 +167,10 @@ struct ProgramScreen: View {
         let sunday = Calendar.current.date(byAdding: .day, value: 6, to: monday)!
         let programGoals = self.programGoals
         let eyebrow = (index == current ? "This week · " : index == current + 1 ? "Next week · " : "") + "Week \(index + 1) of \(weeks.count)"
-        let tests = programGoals.map { "\(GoalOption.with(id: $0.option)?.name.lowercased() ?? "") \(Coach.number($0.goal.target))" }
+        let tests = programGoals.map { item in
+            let option = GoalOption.with(id: item.option)
+            return "\(option?.name.lowercased() ?? "") \(option?.format(item.goal.target) ?? Coach.number(item.goal.target))"
+        }
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(eyebrow.uppercased()).font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
@@ -226,6 +229,7 @@ struct ProgramScreen: View {
         programGoals.map { item in
             let value = ProgramPlan.expected(from: item.goal.baseline ?? item.goal.target, target: item.goal.target, at: index, weeks: weeks)
             let option = GoalOption.with(id: item.option)
+            if option?.measure == .time { return (option!.name, "~" + Running.clock(value), "") }
             let shown = option?.measure == .load ? TrainingGenerator.roundTo5(value) : value.rounded()
             return (option?.name ?? item.goal.metric, (item.option == "weight" ? "~" : "") + Coach.number(shown), item.goal.unit)
         }
@@ -549,7 +553,7 @@ struct ProgramScreen: View {
                 let item = items[position]
                 let option = GoalOption.with(id: item.option)!
                 GoalCard(goal: item.goal, option: option, weeks: weeks, start: start, end: end, current: current,
-                         sets: sets, weighIns: weighIns, next: option.exercise.flatMap(nextWorkout),
+                         sets: sets, weighIns: weighIns, next: (option.exercise ?? (option.measure == .time ? Running.outdoor : nil)).flatMap(nextWorkout),
                          setTarget: { setTarget(item.goal, $0) })
             }
             .padding(.horizontal, 22)

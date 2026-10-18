@@ -25,6 +25,9 @@ enum DayCard {
         var note: String
         var feel: Feel?
         var planned: [PlannedActivity]
+        /// FIT-179: a day that was only a run: its distance and time.
+        var runMeters: Double? = nil
+        var runSeconds: Double? = nil
     }
 
     /// Workouts only: cooking and groceries are left off Today for now (FIT-25).
@@ -34,7 +37,13 @@ enum DayCard {
         let calendar = Calendar.current
         let items = planned.filter { $0.kind == .workout && calendar.isDate($0.date, inSameDayAs: day) }.sorted { $0.date < $1.date }
         let logged = entries.filter { $0.kind == .workout && calendar.isDate($0.timestamp, inSameDayAs: day) }
-        if !logged.isEmpty { return .done(summary(logged, planned: items, context: context)) }
+        // FIT-179: a run doesn't finish the day's lifting; a day that was only a run shows the run.
+        let runs = Set(context.templates.filter { Running.runs.contains($0.slug) }.map(\.id))
+        let ran = logged.filter { $0.templateRef.map(runs.contains) == true }
+        let lifted = logged.filter { $0.templateRef.map(runs.contains) != true }
+        let liftsPlanned = items.contains { $0.templateRef.map(runs.contains) != true }
+        if !lifted.isEmpty { return .done(summary(lifted, planned: items, context: context)) }
+        if !ran.isEmpty && !liftsPlanned { return .done(runSummary(ran, planned: items)) }
         guard let first = items.first else { return .rest(Coach.rest(next: next, from: day)) }
         let reasons = items.compactMap(\.adjustedReason)
         let minutes = reasons.first { $0.hasSuffix("min available") }.flatMap { Int($0.prefix { $0.isNumber }) }
@@ -70,6 +79,16 @@ enum DayCard {
                     volume: SessionRecord(logged, groups: []).volume,
                     coach: Coach.done(lifts(Array(sets), planned: planned, context: context), missedSets: missed),
                     note: note, feel: Feel(effort: value("effort")), planned: planned)
+    }
+
+    private static func runSummary(_ runs: [LogEntry], planned: [PlannedActivity]) -> Done {
+        func total(_ metric: String) -> Double { runs.compactMap { $0.measurements.first { $0.metric == metric }?.value }.reduce(0, +) }
+        let meters = total("distance_m"), seconds = total("duration_s")
+        let first = runs.min { $0.timestamp < $1.timestamp }
+        let coach = meters > 0 && seconds > 0 ? "\(Running.km(meters)) in \(Running.clock(seconds)), \(Running.pace(seconds: seconds, meters: meters))." : "Run logged."
+        return Done(title: planned.first?.slot ?? "Run", start: first?.timestamp ?? .now, minutes: seconds > 0 ? Int((seconds / 60).rounded()) : nil,
+                    sets: 0, volume: 0, coach: coach, note: first?.note ?? "", feel: nil, planned: planned,
+                    runMeters: meters > 0 ? meters : nil, runSeconds: seconds > 0 ? seconds : nil)
     }
 
     /// Main lifts in the order they were done, with what the progression rule plans next.

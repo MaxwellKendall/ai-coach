@@ -337,12 +337,12 @@ describe("agent-first onboarding (FIT-150)", () => {
     const units = { me: Object.fromEntries(Object.entries(fixture.units).map(([k, v]) => [k, encode(v)])) };
     const store = memory({}, units);
     const review = await callTool("get_week_review", { date: "2026-10-10" }, me, store, new Date("2026-10-10T16:00:00Z"));
-    expect(review).toMatch(/^Week of Sunday 2026-10-04 to Saturday 2026-10-10, program week 4 of 16\.\n3 of 3 workouts\. Squat up 17 lb\. 2 goals to check in on\. 3 things worth a look\./);
-    expect(review).toMatch(/Numbers: 3 of 3 workouts, 18 working sets \(6 push, 6 pull\)\. Protein 143 g a day\. 2,400 kcal a day\. Sleep 6\.8 h a night\./);
+    expect(review).toMatch(/^Week of Sunday 2026-10-04 to Saturday 2026-10-10, program week 4 of 16\.\n4 of 4 workouts\. 10K faster by 2:23\. 3 goals to check in on\. 3 things worth a look\./);
+    expect(review).toMatch(/Numbers: 4 of 4 workouts, 18 working sets \(6 push, 6 pull\)\. Protein 143 g a day\. 2,400 kcal a day\. Sleep 6\.8 h a night\./);
     expect(review).toMatch(/- Back squat max: 225 → 242 of 250 lb, ahead of pace\./);
     expect(review).toMatch(/Check-in: well ahead; offer to raise the target to 355 lb \(12 weeks left\)\. Only if they agree: set_goal change/);
     expect(review).toMatch(/- Knee came up in 3 notes\. Sep 21, Sep 30 and Oct 7\..*set_profile can add knee to injured_areas/);
-    expect(review).toMatch(/- Went well: All 3 workouts done\./);
+    expect(review).toMatch(/- Went well: All 4 workouts done\./);
     expect(review).not.toMatch(/Romanian/);
 
     const p = await callTool("get_progress", {}, me, store, new Date("2026-10-17T16:00:00Z"));
@@ -350,9 +350,9 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(p).toMatch(/- Back squat max: target 250 lb by 2027-01-02 \[goal_id [^\]]+\]\n  Now 242 lb, from 205 at the start: 82% of the way\.\n  Ahead of pace\./);
     expect(p).toMatch(/  Best set: 215 lb × 5 reps on 2026-10-12\./);
     expect(p).toMatch(/Romanian Deadlift max: target 200 lb/);
-    expect(p).toMatch(/Streak: Do Friday’s session today to make it 3 weeks in a row\./);
+    expect(p).toMatch(/Streak: 5 weeks in a row\./);
     expect(p).toMatch(/Wins, newest first \(share one by its id\):\n- 2026-10-12: personal best, Back squat max 242 lb \(was 236\)\./);
-    expect(p).toMatch(/- 2026-10-10: 2 weeks in a row, every planned session done/);
+    expect(p).toMatch(/- 2026-10-10: 4 weeks in a row, every planned session done/);
   });
 
   it("gives a new goal its starting point, as onboarding does", async () => {
@@ -397,9 +397,9 @@ describe("agent-first onboarding (FIT-150)", () => {
     const id = (out: string) => out.match(/\/(\w)\/([0-9a-f]{12})/)!;
 
     const recap = await callTool("share", { kind: "recap", date: "2026-10-10" }, me, store, at);
-    expect(recap).toMatch(/Shared Week 4 of 16: 3 of 3 sessions, 2 new best\(s\)\.\nhttps:\/\/example\.com\/r\//);
+    expect(recap).toMatch(/Shared Week 4 of 16: 4 of 4 sessions, 3 new best\(s\)\.\nhttps:\/\/example\.com\/r\//);
     const r = store.shared.get(id(recap)[2])!;
-    expect(r.payload).toEqual({ week: 4, weeks: 16, phase: "base", sessions: { done: 3, planned: 3 }, bests: 2, showNumbers: true,
+    expect(r.payload).toEqual({ week: 4, weeks: 16, phase: "base", sessions: { done: 4, planned: 4 }, bests: 3, showNumbers: true,
       lifts: [{ metric: "Back squat", from: 225, to: 242, unit: "lb" }, { metric: "Pull-ups", from: 7, to: 8, unit: "reps" }] });
     expect(readRecap(r.payload, "Sam")).toBeDefined();
 

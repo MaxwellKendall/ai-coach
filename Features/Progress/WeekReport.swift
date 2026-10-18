@@ -116,7 +116,8 @@ struct WeekReport {
         }
         for row in goals {
             let toward = (row.week.to - row.week.from) * (row.goal.target - row.start) > 0
-            let now = "now \(format(row.week.to, row.option)) of a \(format(row.goal.target, row.option)) \(row.goal.unit) goal"
+            let now = row.option.measure == .time ? "now \(format(row.week.to, row.option)) for a \(format(row.goal.target, row.option)) goal"
+                : "now \(format(row.week.to, row.option)) of a \(format(row.goal.target, row.option)) \(row.goal.unit) goal"
             if toward { good.append("\(row.option.name) \(change(row)) this week, \(now).") }
             if row.week.pace == .behind { work.append("\(row.option.name) is behind the plan's pace, \(now).") }
         }
@@ -133,18 +134,20 @@ struct WeekReport {
     /// "up 9 lb", "down 0.6 lb", "up 1 rep".
     func change(_ row: GoalRow) -> String {
         let delta = row.week.to - row.week.from
+        if row.option.measure == .time { return "\(delta < 0 ? "faster by" : "slower by") \(Running.clock(abs(delta)))" }
         let unit = row.goal.unit == "reps" && abs(delta) == 1 ? "rep" : row.goal.unit
         return "\(delta < 0 ? "down" : "up") \(format(abs(delta), row.option)) \(unit)"
     }
 
-    func format(_ value: Double, _ option: GoalOption) -> String {
-        Coach.number(option.measure == .body ? value : value.rounded())
-    }
+    func format(_ value: Double, _ option: GoalOption) -> String { option.format(value) }
 
     static func short(_ option: GoalOption) -> String {
         switch option.id {
         case "pullups": "Pull-ups"
         case "pushups": "Push-ups"
+        case "5k", "10k": option.id.uppercased()
+        case "half": "Half"
+        case "marathon": "Marathon"
         default: option.id.prefix(1).uppercased() + option.id.dropFirst()
         }
     }

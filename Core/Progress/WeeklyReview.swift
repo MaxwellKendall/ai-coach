@@ -21,6 +21,8 @@ enum WeeklyReview {
         var weightChange: Double?
         var push = 0
         var pull = 0
+        /// FIT-179: the week's running, to a tenth of a km; it isn't working sets.
+        var runKm = 0.0
     }
 
     struct Alert: Equatable, Sendable {
@@ -65,9 +67,10 @@ enum WeeklyReview {
         let before = sorted.last { $0.date < week.lowerBound }
         return Numbers(workoutsDone: done.count,
                        workoutsPlanned: Set(planned.filter(week.contains).map(calendar.startOfDay)).union(done).count,
-                       sets: inWeek.count, protein: average(protein), kcal: average(kcal), sleep: average(sleep),
+                       sets: inWeek.filter { !Running.runs.contains($0.exercise) }.count, protein: average(protein), kcal: average(kcal), sleep: average(sleep),
                        weight: last?.value, weightChange: last.flatMap { last in before.map { last.value - $0.value } },
-                       push: inWeek.filter { $0.pattern == "push" }.count, pull: inWeek.filter { $0.pattern == "pull" }.count)
+                       push: inWeek.filter { $0.pattern == "push" }.count, pull: inWeek.filter { $0.pattern == "pull" }.count,
+                       runKm: (inWeek.filter { Running.runs.contains($0.exercise) }.compactMap { $0.value("distance_m") }.reduce(0, +) / 100).rounded() / 10)
     }
 
     /// FIT-8's alerts for the week. `workoutDays` are days with a session; daily values are per-day totals.

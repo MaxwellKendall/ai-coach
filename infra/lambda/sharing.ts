@@ -45,7 +45,7 @@ export function programSessions(units: Units, start: string, today: string) {
 export function recapPayload(report: WeekReport, weeks: ProgramWeek[], wins: Win[], program: { done: number; planned: number }, showNumbers: boolean) {
   if (report.programWeek === undefined || report.programWeeks === undefined) return undefined;
   const index = report.programWeek, last = index + 1 >= report.programWeeks;
-  const lifts = report.goals.filter((g) => g.option.measure !== "body").slice(0, 3)
+  const lifts = report.goals.filter((g) => g.option.measure !== "body" && g.option.measure !== "time").slice(0, 3)
     .map((g) => ({ name: liftName(g.option), from: last ? g.start : g.from, to: g.to, unit: g.goal.unit }));
   const bests = wins.filter((w) => w.kind === "pr" && (last || (w.day >= report.from && w.day <= report.to))).length;
   return {

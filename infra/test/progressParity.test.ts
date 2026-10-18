@@ -28,6 +28,7 @@ function account() {
   goal("pull-up.reps", "reps", 6, 10);
   goal("weight_lb", "lb", 200, 185);
   goal("romanian-deadlift.1rm_lb", "lb", 150, 200); // not one onboarding offers: the review leaves it out
+  goal("run_10000m.time_s", "s", 3600, 3300); // FIT-179: a 10K in 55:00, from 1:00:00
 
   // Mon squat, Wed bench and row, Fri deadlift and pull-ups, weeks 1–6. Week 2 misses Friday; week 5 misses Friday.
   const sessions: Record<number, [string, number, number, number?][]> = {
@@ -65,6 +66,12 @@ function account() {
       units[`log#${day}`] = log;
     }
   }
+  // FIT-179: a run every Sunday, unplanned, beside the lifting: 8K, 10K, 8K, a 5K, 8K.
+  for (const [week, km, mins, hr] of [[0, 8, 47, 150], [1, 10, 58.5, 154], [2, 8, 45.5, 158], [3, 5, 26.5, 165], [4, 8, 44, 160]] as const) {
+    const day = addDays(start, 7 * week), at = epoch(day, 8 * 60, tz);
+    units[`log#${day}`] = [{ at, id: id(), kind: "workout", measurements: [m("distance_m", km * 1000, "m"), m("duration_s", mins * 60, "s"), m("hr_avg", hr, "bpm")],
+      note: week === 3 ? "race: parkrun" : "easy", template: "trail-running-walking" }];
+  }
   return units;
 }
 
@@ -73,7 +80,7 @@ function derive(raw: Record<string, unknown>) {
   const profile = profileOf(units)!;
   const review = progress.weekReport(units, "2026-10-10", epoch("2026-10-10", 12 * 60, tz), tz);
   const today = "2026-10-17", sets = progress.logSets(units), weighs = progress.weighIns(units);
-  const tracked = goalsOf(units).filter((g) => g.baseline !== undefined && progress.GOAL_OPTIONS.some((o) => o.metric === g.metric))
+  const tracked = goalsOf(units).filter((g) => g.baseline !== undefined && progress.optionFor(g.metric))
     .map((g) => ({ metric: g.metric, unit: g.unit, baseline: g.baseline!, target: g.target }));
   const won = progress.wins(tracked, sets, weighs, "2026-09-13", profile.programStart!, profile.targetDate!, progress.plannedDays(units), progress.workoutDays(units), today, tz);
   const s = progress.streak("2026-09-13", progress.plannedDays(units), progress.workoutDays(units), today);
@@ -101,9 +108,12 @@ describe("progress parity with the app (FIT-167)", () => {
     expect(got).toEqual(JSON.parse(readFileSync(file, "utf8")));
     // Spot checks that the scenario does what it's for.
     const e = got.expected;
-    expect(e.review.goals.map((g) => g.metric)).toEqual(["back-squat.1rm_lb", "pull-up.reps", "weight_lb"]);
+    expect(e.review.goals.map((g) => g.metric)).toEqual(["back-squat.1rm_lb", "pull-up.reps", "weight_lb", "run_10000m.time_s"]);
+    expect(e.review.numbers.runKm).toBe(5);
+    expect(e.wins.filter((w) => w.key.startsWith("pr:run_10000m"))).not.toHaveLength(0);
     expect(e.review.alerts.map((a) => a.title)).toEqual(["Protein under 120 g around 1 workout", "Under 6 h of sleep before 1 workout", "Knee came up in 3 notes"]);
-    expect(e.streak).toEqual({ weeks: 2, thisWeek: "atRisk", line: "Do Friday’s session today to make it 3 weeks in a row" });
+    // The Sunday runs are days trained, so they make up the missed Fridays (FIT-121: days trained against planned).
+    expect(e.streak).toMatchObject({ weeks: 5, thisWeek: "full" });
     expect(e.wins.some((w) => w.key.startsWith("pr:back-squat"))).toBe(true);
   });
 });

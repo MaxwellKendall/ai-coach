@@ -39,10 +39,11 @@ struct TodayScreen: View {
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
-        case propose(Proposal), spoken(Spoken), own
+        case propose(Proposal), spoken(Spoken), own, run(PlannedActivity?)
         var id: String {
             switch self {
             case .own: "own"
+            case .run(let item): "run \(item?.id.uuidString ?? "")"
             case .details(let items): "details \(items.map(\.id))"
             case .record(let items): "record \(items.map(\.id))"
             case .log(let items): "log \(items.map(\.id))"
@@ -124,6 +125,8 @@ struct TodayScreen: View {
                 try? await Task.sleep(for: .seconds(2))
                 heard(said)
             }
+            // `-race YES` adds a 10K in 55:00 from a 1:00:00 run and two runs since, to look at race goals (FIT-179).
+            if UserDefaults.standard.bool(forKey: "race"), !racing { seedRace() }
             // `-review YES` opens this week's review.
             if UserDefaults.standard.bool(forKey: "review") { review = weekReport() }
             // `-celebrate YES` shows the latest two wins as if a workout had just earned them (FIT-106).
@@ -349,7 +352,7 @@ struct TodayScreen: View {
                     Text("Rest").font(.system(size: 30, weight: .bold)).tracking(-0.4)
                     Text(coach).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         .frame(maxWidth: 240)
-                    if isToday && !pro.active { logOwnButton.padding(.top, 18) }
+                    if isToday && !pro.active { logOwnButton.padding(.top, 18) } else if isToday && racing { runButton("Log a run", nil).padding(.top, 18) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -416,13 +419,20 @@ struct TodayScreen: View {
                 }
             } else if isToday {
                 Button { start(plan) } label: {
-                    Label("Start", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
+                    Label(lifting(plan.items).isEmpty ? "Log the run" : "Start", systemImage: lifting(plan.items).isEmpty ? "figure.run" : "play.fill")
+                        .font(.headline).frame(maxWidth: .infinity, minHeight: 58)
                         .foregroundStyle(Color(.systemBackground))
                         .background(Color.primary, in: .capsule)
                 }
                 .buttonStyle(.plain)
+                // FIT-179: a run beside the lifting is logged on its own, with its time.
+                if let run = runs(plan.items).first, !lifting(plan.items).isEmpty {
+                    runButton("Log the run", run)
+                } else if racing && runs(plan.items).isEmpty {
+                    runButton("Log a run", nil)
+                }
             } else if isPast {
-                Button { sheet = .log(plan.items) } label: {
+                Button { if lifting(plan.items).isEmpty, let run = runs(plan.items).first { sheet = .run(run) } else { sheet = .log(plan.items) } } label: {
                     Text("Log it").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
                         .background(Color(.systemBackground), in: .capsule)
                 }
@@ -461,8 +471,20 @@ struct TodayScreen: View {
 
     /// FIT-120: free, a workout of your own: pick the exercises, then the same workout mode.
     private var logOwnButton: some View {
-        Button { sheet = .own } label: {
-            Label("Log a workout", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+        HStack(spacing: 10) {
+            Button { sheet = .own } label: {
+                Label("Log a workout", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                    .background(Color(.systemBackground), in: .capsule)
+            }
+            if racing { runButton("Log a run", nil) }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// FIT-179: a run, planned or not, logged with its distance and time.
+    private func runButton(_ title: String, _ planned: PlannedActivity?) -> some View {
+        Button { sheet = .run(planned) } label: {
+            Label(title, systemImage: "figure.run").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
                 .background(Color(.systemBackground), in: .capsule)
         }
         .buttonStyle(.plain)
@@ -477,9 +499,17 @@ struct TodayScreen: View {
             }
             Text(done.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
             HStack(alignment: .top, spacing: 8) {
-                if let minutes = done.minutes { stat("\(minutes)", "min") }
-                stat("\(done.sets)", done.sets == 1 ? "set" : "sets")
-                stat(done.volume.formatted(.number.precision(.fractionLength(0))), "lb")
+                if let meters = done.runMeters {
+                    stat(Coach.number((meters / 100).rounded() / 10), "km")
+                    if let seconds = done.runSeconds {
+                        stat(Running.clock(seconds), "time")
+                        stat(Running.clock(seconds / (meters / 1000)), "per km")
+                    }
+                } else {
+                    if let minutes = done.minutes { stat("\(minutes)", "min") }
+                    stat("\(done.sets)", done.sets == 1 ? "set" : "sets")
+                    stat(done.volume.formatted(.number.precision(.fractionLength(0))), "lb")
+                }
             }
             .padding(.top, 26)
             Text(done.coach).font(.body).lineSpacing(2).padding(.top, 26).fixedSize(horizontal: false, vertical: true)
@@ -525,8 +555,40 @@ struct TodayScreen: View {
     // MARK: Actions
 
     private func start(_ plan: DayCard.Planned) {
-        live = WorkoutDraft(session: plan.title, plan: plan.session)
+        let lifts = lifting(plan.items)
+        if lifts.isEmpty, let run = runs(plan.items).first { sheet = .run(run); return }
+        live = WorkoutDraft(session: plan.title, plan: lifts.count == plan.items.count ? plan.session : Planner.session(lifts, templates: templates))
     }
+
+    // MARK: FIT-179: runs
+
+    private var runTemplates: Set<UUID> { Set(templates.filter { Running.runs.contains($0.slug) }.map(\.id)) }
+    private func runs(_ items: [PlannedActivity]) -> [PlannedActivity] {
+        let ids = runTemplates
+        return items.filter { $0.kind == .workout && $0.templateRef.map(ids.contains) == true }
+    }
+    private func lifting(_ items: [PlannedActivity]) -> [PlannedActivity] {
+        let ids = runTemplates
+        return items.filter { !($0.kind == .workout && $0.templateRef.map(ids.contains) == true) }
+    }
+    #if DEBUG
+    private func seedRace() {
+        guard let profile = profiles.first, let start = profile.programStart else { return }
+        let run = templates.first { $0.slug == Running.outdoor }?.id
+        profile.starts.append(StartingSet(exercise: Running.outdoor, measurements: [
+            Measurement(metric: "distance_m", value: 10000, unit: "m"), Measurement(metric: "duration_s", value: 3600, unit: "s")]))
+        let goal = Goal(kind: .training, metric: Running.metric(meters: 10000), target: 3300, unit: "s", deadline: profile.targetDate)
+        goal.baseline = 3600
+        context.insert(goal)
+        for (days, km, minutes) in [(1.0, 8.0, 46.0), (4.0, 10.0, 57.5)] {
+            context.insert(LogEntry(kind: .workout, timestamp: start.addingTimeInterval(days * 86_400 + 8 * 3600), templateRef: run, measurements: [
+                Measurement(metric: "distance_m", value: km * 1000, unit: "m"), Measurement(metric: "duration_s", value: minutes * 60, unit: "s")], note: "easy"))
+        }
+    }
+    #endif
+
+    /// Someone training for a race gets "Log a run" beside "Log a workout".
+    private var racing: Bool { goals.contains { $0.status == .active && Running.meters($0.metric) != nil } }
 
     /// A workout of your own, started once its sheet has gone (two can't be presented at once).
     private func startOwn(_ session: SessionPlan) {
@@ -779,10 +841,13 @@ struct TodayScreen: View {
                 WorkoutDetailView(items: [], session: SessionPlan(blocks: []), startTitle: "Start", onStartOwn: startOwn)
             }
         case .log(let items):
+            // A day's runs are logged with their own sheet, which has the time (FIT-179).
+            let lifts = lifting(items)
             NavigationStack {
-                WorkoutLogView(draft: WorkoutDraft(session: items.first?.slot ?? "Workout", plan: Planner.session(items, templates: templates)),
-                               date: items.first?.date ?? .now)
+                WorkoutLogView(draft: WorkoutDraft(session: lifts.first?.slot ?? "Workout", plan: Planner.session(lifts, templates: templates)),
+                               date: lifts.first?.date ?? .now)
             }
+        case .run(let item): NavigationStack { RunLogSheet(planned: item, templates: templates) }
         case .adjust(let plan): NavigationStack { AdjustSheet(plan: plan) }
         case .check(let entries): LogCheckSheet(entries: entries)
         case .propose(let proposal): ProposalSheet(proposal: proposal) { apply(proposal) }

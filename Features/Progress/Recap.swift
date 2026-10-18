@@ -28,7 +28,8 @@ struct Recap: Equatable {
                                 sessions program: (done: Int, planned: Int)) -> Recap? {
         guard let index = report.programWeek, let weeks = report.programWeeks else { return nil }
         let last = index + 1 >= weeks
-        let lifts = report.goals.filter { $0.option.measure != .body }.prefix(3).map {
+        // A race time isn't a lift on the card (FIT-179).
+        let lifts = report.goals.filter { $0.option.measure != .body && $0.option.measure != .time }.prefix(3).map {
             Lift(name: $0.option.liftName, from: last ? $0.start : $0.week.from, to: $0.week.to, unit: $0.goal.unit)
         }
         let bests = wins.filter { $0.kind == .pr && (last || report.days.contains($0.date)) }.count

@@ -7,6 +7,8 @@ enum GoalProgress {
     /// "weight_lb": the last weigh-in. "<exercise>.1rm_lb": the best Brzycki estimate. "<exercise>.reps": most reps
     /// in an unloaded set.
     static func current(_ metric: String, sets: [LoggedSet], weighIns: [DatedValue], since start: Date) -> Double? {
+        // FIT-179: a race time is the fastest the runs predict.
+        if let meters = Running.meters(metric) { return Running.best(meters, sets: sets, since: start)?.time }
         if metric == "weight_lb" { return weighIns.filter { $0.date >= start }.max { $0.date < $1.date }?.value }
         let parts = metric.split(separator: ".").map(String.init)
         guard parts.count == 2 else { return nil }
@@ -24,6 +26,7 @@ enum GoalProgress {
 
     /// The set behind `current` for a max or reps goal: the heaviest estimate, or the most unloaded reps.
     static func best(_ metric: String, sets: [LoggedSet], since start: Date) -> LoggedSet? {
+        if let meters = Running.meters(metric) { return Running.best(meters, sets: sets, since: start)?.run }
         let parts = metric.split(separator: ".").map(String.init)
         guard parts.count == 2 else { return nil }
         let sets = sets.filter { $0.exercise == parts[0] && $0.date >= start }
@@ -57,6 +60,9 @@ enum GoalProgress {
         }
         return byDay.keys.sorted().map { DatedValue(date: $0, value: byDay[$0]!) }
     }
+
+    /// Whether a smaller value is better: a race time.
+    static func lowerIsBetter(_ metric: String) -> Bool { Running.meters(metric) != nil }
 
     /// How far from the start to the target, 0–1, in either direction (weight goes down).
     static func fraction(from start: Double, now: Double, target: Double) -> Double {

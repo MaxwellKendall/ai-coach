@@ -135,6 +135,7 @@ struct OnboardingStepView: View {
         case .load: (names[row.id] ?? row.id, "Best recent set")
         case .reps: (names[row.id] ?? row.id, "Most in a row")
         case .hold: (names[row.id] ?? row.id, "Longest hold")
+        case .run: ("A recent run", "A race or hard run")
         }
         var value = "Add", note: String? = row.measure == .age || row.measure == .body ? "Needed for your plan" : "Week 1 finds it"
         switch row.measure {
@@ -147,6 +148,12 @@ struct OnboardingStepView: View {
             }
         case .reps: if let reps = start?.value("reps") { value = "\(Coach.number(reps)) reps"; note = dashed ? "from your logs" : nil }
         case .hold: if let seconds = start?.value("duration_s") { value = "\(Coach.number(seconds)) s"; note = dashed ? "from your logs" : nil }
+        case .run:
+            note = "Sets your race goal"
+            if let meters = start?.value("distance_m"), let seconds = start?.value("duration_s") {
+                value = "\(Running.km(meters)) in \(Running.clock(seconds))"
+                note = Running.pace(seconds: seconds, meters: meters)
+            }
         }
         return ValueRow(name: name, detail: detail, value: value, note: note, dashed: dashed && value != "Add",
                         muted: value == "Add", open: opened(row.id) { fillDefault(row) }) {
@@ -192,13 +199,23 @@ struct OnboardingStepView: View {
             Nudge(label: "\(Coach.number(seconds)) s", less: { set(row.id, ["duration_s": max(5, seconds - 5)]) },
                   more: { set(row.id, ["duration_s": seconds + 5]) },
                   value: seconds, set: { set(row.id, ["duration_s": max(5, $0.rounded())]) })
+        case .run:
+            let meters = start?.value("distance_m") ?? 5000, seconds = start?.value("duration_s") ?? 1800
+            Nudge(label: Running.km(meters), lessLabel: "Shorter", moreLabel: "Longer",
+                  less: { set(row.id, ["distance_m": max(1000, meters - 1000), "duration_s": seconds]) },
+                  more: { set(row.id, ["distance_m": meters + 1000, "duration_s": seconds]) },
+                  value: meters / 1000, set: { set(row.id, ["distance_m": max(1, $0) * 1000, "duration_s": seconds]) })
+            Nudge(label: Running.clock(seconds), lessLabel: "Faster", moreLabel: "Slower",
+                  less: { set(row.id, ["distance_m": meters, "duration_s": max(60, seconds - 15)]) },
+                  more: { set(row.id, ["distance_m": meters, "duration_s": seconds + 15]) },
+                  value: seconds / 60, set: { set(row.id, ["distance_m": meters, "duration_s": max(1, $0) * 60]) })
         }
     }
 
     private func set(_ slug: String, load: Double, reps: Double) { set(slug, ["load_lb": load, "reps": reps]) }
 
     private func set(_ slug: String, _ values: [String: Double]) {
-        let units = ["load_lb": "lb", "reps": "reps", "duration_s": "s"]
+        let units = ["load_lb": "lb", "reps": "reps", "duration_s": "s", "distance_m": "m"]
         answers.starts[slug] = StartingSet(exercise: slug, measurements: values.keys.sorted().map {
             Measurement(metric: $0, value: values[$0]!, unit: units[$0] ?? "")
         })
@@ -216,6 +233,7 @@ struct OnboardingStepView: View {
             set(row.id, load: barbell ? 95 : 25, reps: barbell ? 5 : 10)
         case .reps: if answers.starts[row.id] == nil { set(row.id, ["reps": 5]) }
         case .hold: if answers.starts[row.id] == nil { set(row.id, ["duration_s": 30]) }
+        case .run: if answers.starts[row.id] == nil { set(row.id, ["distance_m": 5000, "duration_s": 1800]) }
         }
     }
 
@@ -329,12 +347,13 @@ struct OnboardingStepView: View {
     private func goalRow(_ option: GoalOption) -> some View {
         let target = answers.target(option)
         let from = answers.baseline(option)
-        let value = target.map { target in (from.map { "\(Coach.number($0)) → " } ?? "") + "\(Coach.number(target)) \(option.unit)" }
+        let value = target.map { target in (from.map { "\(option.format($0)) → " } ?? "") + "\(option.format(target)) \(option.shownUnit)" }
         return ValueRow(name: option.name, value: value ?? "Needs a starting point", dashed: target != nil && (answers.targets[option.id] == nil
                             || answers.unconfirmed.contains("target.\(option.id)")),
                         muted: target == nil, open: opened("goal.\(option.id)") { if target == nil { go(2) } }) {
             if let target {
-                Nudge(label: "\(Coach.number(target)) \(option.unit)", lessLabel: "Lower", moreLabel: "Raise",
+                Nudge(label: "\(option.format(target)) \(option.shownUnit)", lessLabel: option.measure == .time ? "Faster" : "Lower",
+                      moreLabel: option.measure == .time ? "Slower" : "Raise",
                       less: { answers.targets[option.id] = max(0, target - option.step); touch("target.\(option.id)") },
                       more: { answers.targets[option.id] = target + option.step; touch("target.\(option.id)") },
                       value: target, set: { answers.targets[option.id] = $0; touch("target.\(option.id)") })
@@ -357,6 +376,7 @@ extension OnboardingAnswers {
             if let load = start.value("load_lb"), let reps = start.value("reps") {
                 return "\(name) ≈\(Int(ProgramPlan.estimatedMax(load: load, reps: reps).rounded()))"
             }
+            if let meters = start.value("distance_m"), let seconds = start.value("duration_s") { return "\(Running.km(meters)) \(Running.clock(seconds))" }
             if let reps = start.value("reps") { return "\(name) \(Coach.number(reps)) reps" }
             return start.value("duration_s").map { "\(name) \(Coach.number($0)) s" }
         }

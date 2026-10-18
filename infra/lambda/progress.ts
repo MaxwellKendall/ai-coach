@@ -158,7 +158,9 @@ export type GoalOption = (typeof GOAL_OPTIONS)[number] | { id: "run"; metric: st
 export function optionFor(metric: string): GoalOption | undefined {
   const known = GOAL_OPTIONS.find((o) => o.metric === metric);
   const m = goalMeters(metric);
-  return known ?? (m === undefined ? undefined : { id: "run", metric, name: `${distanceName(m)} time`, short: distanceName(m), measure: "time" });
+  // WeekReport.short: "10K", "Half", "Marathon".
+  const short = m === undefined ? "" : Math.abs(m - 21098) < 2 ? "Half" : distanceName(m);
+  return known ?? (m === undefined ? undefined : { id: "run", metric, name: `${distanceName(m)} time`, short, measure: "time" });
 }
 const stepOf = (o: GoalOption) => (o.measure === "reps" ? 1 : o.measure === "time" ? 30 : 5);
 
@@ -266,10 +268,10 @@ export function describeWin(w: Win) {
   const o = optionFor(w.metric);
   const name = o?.name ?? w.metric;
   const v = (x: number) => (o ? shown(x, o) : number(x));
-  if (o?.measure === "time") w = { ...w, unit: "" };
+  const u = o?.measure === "time" ? "" : ` ${w.unit}`;
   if (w.kind === "streak") return `${w.day}: ${w.value} weeks in a row, every planned session done (${w.workouts} workouts).`;
-  if (w.kind === "pr") return `${w.day}: personal best, ${name} ${v(w.value)} ${w.unit} (was ${v(w.previous!)}).`;
-  return w.percent === 100 ? `${w.day}: goal reached, ${name} ${v(w.value)} ${w.unit}.` : `${w.day}: ${w.percent}% of the way to ${name} ${v(w.target!)} ${w.unit}, at ${v(w.value)}.`;
+  if (w.kind === "pr") return `${w.day}: personal best, ${name} ${v(w.value)}${u} (was ${v(w.previous!)}).`;
+  return w.percent === 100 ? `${w.day}: goal reached, ${name} ${v(w.value)}${u}.` : `${w.day}: ${w.percent}% of the way to ${name} ${v(w.target!)}${u}, at ${v(w.value)}.`;
 }
 
 // ---- BodyArea (notes that keep naming an area) ----
@@ -389,7 +391,7 @@ export function weekReport(units: Units, today: string, nowSec: number, tz: stri
   const numbers = {
     workoutsDone: doneDays.size,
     workoutsPlanned: new Set([...[...planned].filter((d) => d >= from && d < to), ...doneDays]).size,
-    sets: inWeek.length,
+    sets: inWeek.filter((s) => !RUNS.includes(s.exercise)).length,
     protein: average(dailyTotals(units, "meal", "protein_g")), kcal: average(dailyTotals(units, "meal", "kcal")), sleep: average(dailyTotals(units, "sleep", "sleep_h")),
     weight: last?.value, weightChange: last && before ? last.value - before.value : undefined,
     push: inWeek.filter((s) => s.pattern === "push").length, pull: inWeek.filter((s) => s.pattern === "pull").length,

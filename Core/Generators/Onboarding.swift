@@ -2,7 +2,8 @@ import Foundation
 
 /// A goal onboarding offers (FIT-38). Each is measured its own way, so the starting-point question follows it.
 struct GoalOption: Identifiable, Sendable {
-    enum Measure: Sendable { case body, load, reps }
+    /// FIT-179: `time` is a race time, lower being better.
+    enum Measure: Sendable { case body, load, reps, time }
 
     let id: String
     let title: String
@@ -29,7 +30,22 @@ struct GoalOption: Identifiable, Sendable {
                    metric: "weight_lb", unit: "lb", measure: .body, exercise: nil),
         GoalOption(id: "pushups", title: "More push-ups", why: "In a row. No equipment needed.", kind: .training,
                    metric: "push-up.reps", unit: "reps", measure: .reps, exercise: "push-up"),
+        // FIT-179: a race time. Its starting point is a recent run (Running.outdoor), its value what the runs predict.
+        GoalOption(id: "5k", title: "Run a faster 5K", why: "A time to beat, by a date.", kind: .training,
+                   metric: Running.metric(meters: 5000), unit: "s", measure: .time, exercise: nil),
+        GoalOption(id: "10k", title: "Run a faster 10K", why: "A time to beat, by a date.", kind: .training,
+                   metric: Running.metric(meters: 10000), unit: "s", measure: .time, exercise: nil),
+        GoalOption(id: "half", title: "Run a half marathon", why: "A time to beat, by a date.", kind: .training,
+                   metric: Running.metric(meters: 21097.5), unit: "s", measure: .time, exercise: nil),
+        GoalOption(id: "marathon", title: "Run a marathon", why: "A time to beat, by a date.", kind: .training,
+                   metric: Running.metric(meters: 42195), unit: "s", measure: .time, exercise: nil),
     ]
+
+    /// The goals a group can share: race times aren't group goals yet (FIT-179).
+    static var group: [GoalOption] { all.filter { $0.measure != .time } }
+
+    /// A race goal's distance in meters.
+    var meters: Double? { Running.meters(metric) }
 
     static func with(id: String) -> GoalOption? { all.first { $0.id == id } }
 
@@ -46,12 +62,25 @@ struct GoalOption: Identifiable, Sendable {
         case "bench": "Bench press max"
         case "deadlift": "Deadlift max"
         case "pullups": "Pull-ups in a row"
+        case "5k": "5K time"
+        case "10k": "10K time"
+        case "half": "Half marathon time"
+        case "marathon": "Marathon time"
         default: "Push-ups in a row"
         }
     }
 
     /// How far one tap of − or + moves its target.
-    var step: Double { measure == .reps ? 1 : 5 }
+    /// A race time moves 30 seconds a tap.
+    var step: Double { measure == .reps ? 1 : measure == .time ? 30 : 5 }
+
+    /// "57:30" for a race time; whole numbers for lifts and reps, a tenth for body weight.
+    func format(_ value: Double) -> String {
+        measure == .time ? Running.clock(value) : Coach.number(measure == .body ? value : value.rounded())
+    }
+
+    /// The unit after a value: none for a race time, which reads as a clock.
+    var shownUnit: String { measure == .time ? "" : unit }
 
     /// "Get to 180 lb", "Squat 225", "12 pull-ups".
     func title(target: Double) -> String {
@@ -62,6 +91,7 @@ struct GoalOption: Identifiable, Sendable {
         case "bench": "Bench \(number)"
         case "deadlift": "Deadlift \(number)"
         case "pullups": "\(number) pull-ups"
+        case "5k", "10k", "half", "marathon": "\(id == "half" ? "Half" : id == "marathon" ? "Marathon" : id.uppercased()) in \(Running.clock(target))"
         default: "\(number) push-ups"
         }
     }
@@ -69,7 +99,8 @@ struct GoalOption: Identifiable, Sendable {
 
 /// One "Where are you starting?" row: age, body weight, or an exercise.
 struct StartRow: Equatable, Sendable {
-    enum Measure: Sendable { case age, body, load, reps, hold }
+    /// `run`: a recent run, distance and time, for a race goal (FIT-179).
+    enum Measure: Sendable { case age, body, load, reps, hold, run }
     /// "age", "weight" or an exercise slug.
     var id: String
     var measure: Measure
@@ -130,6 +161,7 @@ struct OnboardingAnswers: Sendable {
         }
         for goal in goals.compactMap(GoalOption.with(id:)) {
             if let slug = goal.exercise, let exercise = catalog.first(where: { $0.slug == slug }) { add(exercise) }
+            if goal.measure == .time, !rows.contains(where: { $0.id == Running.outdoor }) { rows.append(StartRow(id: Running.outdoor, measure: .run)) }
         }
         let available = available(catalog)
         for pattern in ["squat", "hinge", "push", "pull"] {
@@ -153,6 +185,10 @@ struct OnboardingAnswers: Sendable {
                   let reps = start.value("reps") else { return nil }
             return ProgramPlan.estimatedMax(load: load, reps: reps).rounded()
         case .reps: return goal.exercise.flatMap { starts[$0]?.value("reps") }
+        case .time:
+            guard let meters = goal.meters, let run = starts[Running.outdoor], let distance = run.value("distance_m"),
+                  let seconds = run.value("duration_s") else { return nil }
+            return Running.riegel(seconds: seconds, from: distance, to: meters)?.rounded()
         }
     }
 
@@ -197,6 +233,10 @@ struct OnboardingAnswers: Sendable {
         case .reps:
             if let start { return min(start * 2, start + (weeks / 2).rounded(.down)) }
             return Double(goal.id == "pullups" ? tier.pullUps : tier.pushUps)
+        case .time:
+            // Half a percent faster a week, at most 10%, to the nearest 15 seconds.
+            guard let start else { return nil }
+            return (start * max(0.9, 1 - 0.005 * weeks) / 15).rounded() * 15
         }
     }
 

@@ -113,6 +113,7 @@ struct WeeklyReviewScreen: View {
         let n = report.numbers
         var tiles: [(String, String, String)] = []
         if n.workoutsPlanned > 0 { tiles.append(("Workouts", "\(n.workoutsDone) of \(n.workoutsPlanned)", WeeklyReview.count(n.sets, "set"))) }
+        if n.runKm > 0 { tiles.append(("Running", "\(Coach.number(n.runKm)) km", "this week")) }
         if let protein = n.protein { tiles.append(("Protein", "\(Int(protein.rounded())) g", "a day")) }
         if let kcal = n.kcal { tiles.append(("Calories", Int(kcal.rounded()).formatted(), "a day")) }
         if let sleep = n.sleep {

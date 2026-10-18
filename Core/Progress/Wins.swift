@@ -50,7 +50,7 @@ enum Wins {
             var crossed = Set<Int>()
             for point in trend {
                 values.append(point.value)
-                if goal.metric != "weight_lb", point.value > best {
+                if goal.metric != "weight_lb", GoalProgress.lowerIsBetter(goal.metric) ? point.value < best : point.value > best {
                     wins.append(WinItem(kind: .pr, date: point.date, key: "pr:\(goal.metric):\(Int(point.value.rounded()))", metric: goal.metric,
                                     unit: goal.unit, value: point.value, previous: best, start: goal.baseline, target: goal.target,
                                     trend: values, weeksLeft: weeksLeft(from: point.date, to: end)))

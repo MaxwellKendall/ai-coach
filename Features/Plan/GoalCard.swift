@@ -35,7 +35,7 @@ struct GoalCard: View {
         let pace = GoalProgress.pace(from: from, now: now, target: goal.target, week: current, weeks: weeks)
         let forecast = GoalProgress.forecast(from: from, now: now, started: start, today: .now, end: end)
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
-                                    forecast: forecast, target: goal.target, start: start, end: end)
+                                    forecast: forecast, target: goal.target, start: start, end: end, format: option.format)
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(option.name).font(.subheadline).foregroundStyle(.secondary)
@@ -45,7 +45,7 @@ struct GoalCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(format(now)).contentTransition(.numericText())
                 Text("→ \(format(goal.target))").foregroundStyle(.secondary).contentTransition(.numericText())
-                Text(goal.unit).font(.title3).foregroundStyle(.secondary)
+                if !option.shownUnit.isEmpty { Text(option.shownUnit).font(.title3).foregroundStyle(.secondary) }
             }
             .font(.system(size: 34, weight: .bold, design: .rounded))
             .padding(.top, 6)
@@ -83,7 +83,9 @@ struct GoalCard: View {
             HStack {
                 Text("Target").foregroundStyle(.secondary)
                 Spacer(minLength: 24)
-                Nudge(label: "\(format(goal.target)) \(goal.unit)", lessLabel: "Lower the target", moreLabel: "Raise the target",
+                Nudge(label: "\(format(goal.target)) \(option.shownUnit)",
+                      lessLabel: option.measure == .time ? "A faster target" : "Lower the target",
+                      moreLabel: option.measure == .time ? "A slower target" : "Raise the target",
                       less: { setTarget(goal.target - option.step) }, more: { setTarget(goal.target + option.step) })
                     .frame(maxWidth: 220)
             }
@@ -112,17 +114,28 @@ struct GoalCard: View {
         let moved = abs(now - from)
         let percent = Int((GoalProgress.fraction(from: from, now: now, target: goal.target) * 100).rounded())
         guard moved > 0 else { return "Started at \(format(from)) on \(day(start))" }
+        if option.measure == .time {
+            return "\(Running.clock(moved)) \(now < from ? "faster" : "slower") since \(day(start)) · \(percent)% there"
+        }
         let direction = (now < from) ? "down" : "up"
         return "\(Coach.number(moved)) \(goal.unit) \(direction) since \(day(start)) · \(percent)% there"
     }
 
     private func facts(from: Double, now: Double, forecast: Double?) -> [(String, String)] {
         var facts: [(String, String)] = []
-        if let forecast { facts.append(("At this rate", "\(format(forecast)) \(goal.unit) by \(day(end))")) }
+        if let forecast { facts.append(("At this rate", "\(format(forecast)) \(option.shownUnit) by \(day(end))".replacingOccurrences(of: "  ", with: " "))) }
         let perWeek = GoalProgress.perWeek(now: now, target: goal.target, today: .now, end: end)
         let there = GoalProgress.fraction(from: from, now: now, target: goal.target) >= 1
-        facts.append(("To get there", there ? "Already there" : "\(Coach.number(abs(perWeek))) \(goal.unit) a week"))
-        if option.measure == .body {
+        let needed = option.measure == .time ? "\(Running.clock(abs(perWeek))) faster a week" : "\(Coach.number(abs(perWeek))) \(goal.unit) a week"
+        facts.append(("To get there", there ? "Already there" : needed))
+        if option.measure == .time {
+            // FIT-179: the run behind the predicted time.
+            if let run = GoalProgress.best(goal.metric, sets: sets, since: start), let meters = run.value("distance_m"), let seconds = run.value("duration_s") {
+                facts.append(("Best run", "\(Running.km(meters)) in \(Running.clock(seconds)) · \(day(run.date))"))
+            } else {
+                facts.append(("Predicted from", "Your runs once you log one"))
+            }
+        } else if option.measure == .body {
             if let last = weighIns.filter({ $0.date >= start }).max(by: { $0.date < $1.date }) {
                 facts.append(("Last weigh-in", "\(Coach.number(last.value)) · \(day(last.date))"))
             }
@@ -134,10 +147,8 @@ struct GoalCard: View {
         return facts
     }
 
-    /// Maxes and reps in whole numbers, body weight to a tenth.
-    private func format(_ value: Double) -> String {
-        Coach.number(option.measure == .body ? value : value.rounded())
-    }
+    /// Maxes and reps in whole numbers, body weight to a tenth, a race time as a clock.
+    private func format(_ value: Double) -> String { option.format(value) }
 
     private func day(_ date: Date) -> String { date.formatted(.dateTime.month(.abbreviated).day()) }
 
@@ -187,6 +198,7 @@ struct GoalChart: View {
         var target: Double
         var start: Date
         var end: Date
+        var format: (Double) -> String = { Coach.number($0) }
     }
 
     let lines: Lines
@@ -218,8 +230,9 @@ struct GoalChart: View {
                 PointMark(x: .value("Date", point.date), y: .value("Value", point.value)).foregroundStyle(Color.primary).symbolSize(20)
             }
             RuleMark(y: .value("Goal", lines.target)).foregroundStyle(Color(.separator)).lineStyle(StrokeStyle(lineWidth: 1))
-                .annotation(position: lines.target >= lines.plan[0].value ? .top : .bottom, alignment: .leading, spacing: 4) {
-                    Text("Goal \(Coach.number(lines.target))").font(.caption2).foregroundStyle(.secondary)
+                // Above the line either way: below it, a falling goal's label ran into the start date.
+                .annotation(position: .top, alignment: .leading, spacing: 4) {
+                    Text("Goal \(lines.format(lines.target))").font(.caption2).foregroundStyle(.secondary)
                 }
             PointMark(x: .value("Date", lines.end), y: .value("Value", lines.target))
                 .symbol {

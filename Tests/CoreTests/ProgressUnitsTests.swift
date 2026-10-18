@@ -13,7 +13,7 @@ struct ProgressUnitsTests {
         struct Expected: Decodable {
             struct Review: Decodable {
                 struct Numbers: Decodable {
-                    var workoutsDone: Int, workoutsPlanned: Int, sets: Int, push: Int, pull: Int
+                    var workoutsDone: Int, workoutsPlanned: Int, sets: Int, push: Int, pull: Int, runKm: Double
                     var protein: Double?, kcal: Double?, sleep: Double?, weight: Double?, weightChange: Double?
                 }
                 struct GoalRow: Decodable {
@@ -55,7 +55,7 @@ struct ProgressUnitsTests {
         let context = ModelContext(try AppSchema.container(inMemory: true))
         // The catalog's movement patterns for the exercises the units use.
         let patterns = ["back-squat": "squat", "bench-press": "push", "bent-over-barbell-row": "pull", "deadlift": "hinge", "pull-up": "pull",
-                        "romanian-deadlift": "hinge"]
+                        "romanian-deadlift": "hinge", "trail-running-walking": "conditioning"]
         for (slug, pattern) in patterns {
             context.insert(Template(kind: .exercise, name: slug, slug: slug, attributes: [TemplateAttribute(key: "movement_pattern", values: [pattern])]))
         }
@@ -80,6 +80,7 @@ struct ProgressUnitsTests {
         func close(_ a: Double?, _ b: Double?) -> Bool { a == nil ? b == nil : b != nil && abs(a! - b!) < 0.01 }
         #expect(close(n.protein, e.protein) && close(n.kcal, e.kcal) && close(n.sleep, e.sleep), "\(n)")
         #expect(close(n.weight, e.weight) && close(n.weightChange, e.weightChange), "\(n)")
+        #expect(n.runKm == e.runKm) // FIT-179
         // The store keeps goals in no set order.
         #expect(Set(report.goals.map(\.goal.metric)) == Set(review.goals.map(\.metric)))
         for want in review.goals {

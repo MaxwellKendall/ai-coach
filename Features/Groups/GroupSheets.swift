@@ -21,6 +21,7 @@ struct GoalDraft: Equatable {
         case .body: -10
         case .load: 20
         case .reps: 5
+        case .time: -60
         }
     }
 }
@@ -33,7 +34,7 @@ struct GoalFields: View {
         let goal = draft.goal
         Section {
             Picker("Goal", selection: Binding(get: { draft.option }, set: { draft = GoalDraft(GoalOption.with(id: $0)!, deadline: draft.deadline) })) {
-                ForEach(GoalOption.all) { Text($0.title).tag($0.id) }
+                ForEach(GoalOption.group) { Text($0.title).tag($0.id) }
             }
             Stepper(GroupProgress.title(metric: goal.metric, goal: draft.amount, mode: .relative),
                     value: Binding(get: { abs(draft.amount) }, set: { draft.amount = goal.measure == .body ? -$0 : $0 }),
@@ -62,8 +63,8 @@ struct NewGroupSheet: View {
 
     /// The goal you're already working on comes first.
     private var suggested: GoalDraft {
-        GoalDraft(goals.filter { $0.status == .active }.lazy.compactMap { goal in GoalOption.all.first { $0.metric == goal.metric } }.first
-                  ?? GoalOption.all[0])
+        GoalDraft(goals.filter { $0.status == .active }.lazy.compactMap { goal in GoalOption.group.first { $0.metric == goal.metric } }.first
+                  ?? GoalOption.group[0])
     }
 
     var body: some View {
@@ -122,7 +123,7 @@ struct AddGoalSheet: View {
     @State private var failure: String?
 
     private var suggested: GoalDraft {
-        GoalDraft(GoalOption.all.first { !existing.contains($0.metric) } ?? GoalOption.all[0])
+        GoalDraft(GoalOption.group.first { !existing.contains($0.metric) } ?? GoalOption.group[0])
     }
 
     var body: some View {
