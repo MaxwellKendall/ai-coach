@@ -19,31 +19,6 @@
   "log#2026-10-17": [
     {
       "at": 1792233000,
-      "id": "00000000-0000-4000-8000-000000000008",
-      "kind": "workout",
-      "measurements": [
-        {
-          "metric": "reps",
-          "unit": "reps",
-          "value": 5
-        },
-        {
-          "metric": "load_lb",
-          "unit": "lb",
-          "value": 175
-        },
-        {
-          "metric": "rpe",
-          "unit": "RPE",
-          "value": 7
-        }
-      ],
-      "note": "Lower A",
-      "plannedRef": "00000000-0000-4000-8000-000000000003",
-      "template": "back-squat"
-    },
-    {
-      "at": 1792233001,
       "id": "00000000-0000-4000-8000-000000000009",
       "kind": "workout",
       "measurements": [
@@ -68,7 +43,7 @@
       "template": "back-squat"
     },
     {
-      "at": 1792233002,
+      "at": 1792233001,
       "id": "00000000-0000-4000-8000-000000000010",
       "kind": "workout",
       "measurements": [
@@ -93,7 +68,7 @@
       "template": "back-squat"
     },
     {
-      "at": 1792233003,
+      "at": 1792233002,
       "id": "00000000-0000-4000-8000-000000000011",
       "kind": "workout",
       "measurements": [
@@ -118,14 +93,19 @@
       "template": "back-squat"
     },
     {
-      "at": 1792233004,
+      "at": 1792233003,
       "id": "00000000-0000-4000-8000-000000000012",
       "kind": "workout",
       "measurements": [
         {
-          "metric": "duration_s",
-          "unit": "s",
-          "value": 45
+          "metric": "reps",
+          "unit": "reps",
+          "value": 5
+        },
+        {
+          "metric": "load_lb",
+          "unit": "lb",
+          "value": 175
         },
         {
           "metric": "rpe",
@@ -134,11 +114,11 @@
         }
       ],
       "note": "Lower A",
-      "plannedRef": "00000000-0000-4000-8000-000000000004",
-      "template": "plank"
+      "plannedRef": "00000000-0000-4000-8000-000000000003",
+      "template": "back-squat"
     },
     {
-      "at": 1792233005,
+      "at": 1792233004,
       "id": "00000000-0000-4000-8000-000000000013",
       "kind": "workout",
       "measurements": [
@@ -158,7 +138,7 @@
       "template": "plank"
     },
     {
-      "at": 1792233006,
+      "at": 1792233005,
       "id": "00000000-0000-4000-8000-000000000014",
       "kind": "workout",
       "measurements": [
@@ -178,8 +158,28 @@
       "template": "plank"
     },
     {
-      "at": 1792233007,
+      "at": 1792233006,
       "id": "00000000-0000-4000-8000-000000000015",
+      "kind": "workout",
+      "measurements": [
+        {
+          "metric": "duration_s",
+          "unit": "s",
+          "value": 45
+        },
+        {
+          "metric": "rpe",
+          "unit": "RPE",
+          "value": 7
+        }
+      ],
+      "note": "Lower A",
+      "plannedRef": "00000000-0000-4000-8000-000000000004",
+      "template": "plank"
+    },
+    {
+      "at": 1792233007,
+      "id": "00000000-0000-4000-8000-000000000016",
       "kind": "workout",
       "measurements": [
         {
@@ -197,7 +197,7 @@
     },
     {
       "at": 1792231200,
-      "id": "00000000-0000-4000-8000-000000000016",
+      "id": "00000000-0000-4000-8000-000000000017",
       "kind": "bodyweight",
       "measurements": [
         {
@@ -210,7 +210,7 @@
     },
     {
       "at": 1792231200,
-      "id": "00000000-0000-4000-8000-000000000017",
+      "id": "00000000-0000-4000-8000-000000000018",
       "kind": "sleep",
       "measurements": [
         {
@@ -228,7 +228,7 @@
     },
     {
       "at": 1792236600,
-      "id": "00000000-0000-4000-8000-000000000018",
+      "id": "00000000-0000-4000-8000-000000000019",
       "kind": "meal",
       "measurements": [
         {
@@ -301,6 +301,36 @@
         }
       ],
       "template": "plank"
+    }
+  ],
+  "plan#2026-10-18": [
+    {
+      "adjustedReason": "First week.",
+      "at": 1792319400,
+      "id": "00000000-0000-4000-8000-000000000008",
+      "kind": "workout",
+      "main": false,
+      "note": "easy",
+      "pinned": true,
+      "slot": "Easy run",
+      "targets": [
+        {
+          "metric": "sets",
+          "unit": "sets",
+          "value": 1
+        },
+        {
+          "metric": "distance_m",
+          "unit": "m",
+          "value": 5000
+        },
+        {
+          "metric": "duration_s",
+          "unit": "s",
+          "value": 1800
+        }
+      ],
+      "template": "trail-running-walking"
     }
   ],
   "plan#2026-10-19": [

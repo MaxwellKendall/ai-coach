@@ -17,7 +17,7 @@ export const prompts: Prompt[] = [
 Set them up from scratch:
 1. get_context. If it isn't NOT SET UP YET, say what's there and ask what they'd like to change instead.
 2. Ask, one topic at a time, saving each answer as it comes (set_profile, set_goal): their goal and the date for it; age and body weight; the days they train, minutes a session and usual time; equipment; injuries and anything they won't do; and their name for what they share.
-3. For each goal lift, get where they are now: a 1RM (tested, or their honest estimate) or a recent heavy set, weight × reps; for a reps goal, the most in a row now. Save them as set_profile starting_sets (a 1RM is reps 1). No program or weights without these.
+3. For each goal lift, get where they are now: a 1RM (tested, or their honest estimate) or a recent heavy set, weight × reps; for a reps goal, the most in a row now; for a race-time goal (set_goal timed_distance), their last race or a recent hard run, distance and time. Save them as set_profile starting_sets (a 1RM is reps 1). No program or weights without these.
 4. set_program to their goal date, with phases: a focus, 2–4 main lifts (the goal lifts among them) and reps for each phase. Show them the weeks from get_program in a few lines.
 5. propose_week for the days from today to the end of next week, held to each week's kind. Fix any plan-rule problems, show the sessions, and apply when they agree.`,
   },
@@ -28,7 +28,7 @@ Set them up from scratch:
 Plan next week:
 1. get_program for next week's kind (base, build, peak, deload, test or travel) and the sets it aims for.
 2. get_week_review for this week, and get_context for the logs, RPE and notes: what moved, what felt heavy, anything sore.
-3. propose_week for next week's training days: the program's main lifts progressing from this week's top sets (RPE 8 or more last time means hold or ease off; easy means add a little), accessories that fit, the week's kind respected. Fix any plan-rule problems before showing it.
+3. propose_week for next week's training days: the program's main lifts progressing from this week's top sets (RPE 8 or more last time means hold or ease off; easy means add a little), accessories that fit, the week's kind respected. With a race-time goal, add its runs: mostly easy, one tempo or intervals run kept off the day of or before heavy legs, and the week's distance up no more than 10%. Fix any plan-rule problems before showing it.
 4. Show them the change in a few lines and why, then apply when they agree.`,
   },
   {
@@ -52,7 +52,7 @@ Review the week${a.date ? ` holding ${a.date}` : ""}:
 Log today${a.what ? `. They said: "${a.what}"` : ""}.
 1. get_day for what was planned.
 2. For the workout: if it went as planned, log_session with as_planned and the RPE; otherwise the sets as done (load, reps or seconds, RPE). Ask for anything missing that matters (the top sets' RPE, how it felt) rather than guessing, and put their words about pain, sleep or energy in the note.
-3. Weight, sleep or meals they mention go in log_daily; estimate kcal and protein for a meal only if they don't know, and say it's an estimate.
+3. A run goes in log_run (distance, time, heart rate if they know it, the kind of run). Weight, sleep or meals they mention go in log_daily; estimate kcal and protein for a meal only if they don't know, and say it's an estimate.
 4. Confirm what you logged in one or two lines, and say if anything stood out (a best, a hard day).`,
   },
   {

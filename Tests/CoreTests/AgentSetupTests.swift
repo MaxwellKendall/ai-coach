@@ -13,7 +13,7 @@ struct AgentSetupTests {
             .appending(path: "Fixtures/agent-setup-units.json")
         let json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         let context = ModelContext(try AppSchema.container(inMemory: true))
-        for slug in ["back-squat", "plank", "dumbbell-bench-press", "pull-up"] {
+        for slug in ["back-squat", "plank", "dumbbell-bench-press", "pull-up", "trail-running-walking"] {
             context.insert(Template(kind: .exercise, name: slug, slug: slug))
         }
         // Exercises first, as SyncEngine applies them, so the plans that name them find them.
@@ -57,10 +57,14 @@ struct AgentSetupTests {
         #expect(sent == json["template#landmine-press"] as? NSDictionary)
 
         let planned = try context.fetch(FetchDescriptor<PlannedActivity>())
-        #expect(planned.count == 5)
+        #expect(planned.count == 6)
+        // FIT-178: a planned run, with its distance, time and kind.
+        let run = try #require(planned.first { $0.slot == "Easy run" })
+        #expect(run.targets.first { $0.metric == "distance_m" }?.value == 5000 && run.targets.first { $0.metric == "duration_s" }?.value == 1800)
+        #expect(run.note == "easy" && !run.main)
         #expect(planned.contains { $0.templateRef == landmine.id })
         #expect(planned.allSatisfy { $0.pinned && $0.templateRef != nil })
-        #expect(Set(planned.compactMap(\.slot)) == ["Lower A", "Upper A"])
+        #expect(Set(planned.compactMap(\.slot)) == ["Lower A", "Upper A", "Easy run"])
 
         let logged = try context.fetch(FetchDescriptor<LogEntry>())
         #expect(logged.filter { $0.kind == .workout && $0.templateRef != nil }.count == 7)

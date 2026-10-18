@@ -1,4 +1,4 @@
-import { addDays, bySlug, dayOf, nameOf, WARMUP, type PlanRow, type Profile } from "./training.ts";
+import { addDays, bySlug, dayOf, isRun, nameOf, WARMUP, type PlanRow, type Profile } from "./training.ts";
 
 // FIT-165: the program's skeleton, as Core/Generators/ProgramPlan.swift (FIT-36) builds it from the profile, so an agent
 // sees the same weeks as the phone's Program tab. Repeated here because the Lambda can't import the Swift. Weeks run
@@ -121,7 +121,7 @@ export function why(week: ProgramWeek) {
 /** What a program week adds to the plan rules for one day (PlanGuard rule 6, and a trip's equipment). */
 export function checkProgramDay(plan: PlanRow[], profile: Profile, week: ProgramWeek): string[] {
   const out: string[] = [];
-  const rows = plan.filter((r) => r.kind === "workout" && r.note !== WARMUP);
+  const rows = plan.filter((r) => r.kind === "workout" && r.note !== WARMUP && !isRun(r));
   const sets = (r: PlanRow) => r.targets.find((t) => t.metric === "sets")?.value ?? 1;
   const kind = week.kind === "test" ? "test" : "deload";
   if (isLight(week)) {

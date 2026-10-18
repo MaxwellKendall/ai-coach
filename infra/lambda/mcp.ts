@@ -6,7 +6,7 @@ import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda
 import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
 import { push } from "./sync.ts";
 import {
-  addDays, AREAS, checkLoads, runTime, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
+  addDays, AREAS, isHardRun, isRun, checkLoads, runTime, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
   nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
@@ -130,12 +130,14 @@ export const hashToken = (token: string) => createHash("sha256").update(token).d
 const DATE = { type: "string", description: "A day, YYYY-MM-DD. Defaults to today in the person's time zone." };
 const EXERCISE = { type: "string", description: "An exercise by catalog name or slug, e.g. \"Back Squat\" or \"back-squat\"." };
 const SESSION = {
-  type: "array", minItems: 1, description: "The session's exercises, in order.", items: { type: "object", properties: {
+  type: "array", minItems: 1, description: "The session's exercises, in order. A run is \"Trail Running/Walking\" (or \"Running, Treadmill\") with distance_km and/or minutes and its kind, no sets; it can be a day of its own or beside lifting.", items: { type: "object", properties: {
     exercise: EXERCISE, sets: { type: "integer", minimum: 1, maximum: 10 }, reps: { type: "integer" }, seconds: { type: "integer" },
+    distance_km: { type: "number", description: "A run's distance." }, minutes: { type: "number", description: "A run's time." },
+    run: { type: "string", enum: ["easy", "long", "tempo", "intervals", "race"], description: "A run's kind (default easy). Keep tempo and intervals off the day before, or the day of, heavy legs." },
     weight_lb: { type: "number" }, weight_lb_per_hand: { type: "number" }, rpe: { type: "number" },
     main: { type: "boolean", description: "A main lift (defaults to the catalog's goal lifts)." },
     superset: { type: "integer", description: "Exercises sharing a number are done together in rounds." },
-  }, required: ["exercise", "sets"] },
+  }, required: ["exercise"] },
 };
 
 // MCP tool annotations (FIT-156). Clients take a missing destructiveHint as true, so writes say it.
@@ -609,6 +611,17 @@ function progressWins(units: Units, today: string, tz: string) {
     progress.plannedDays(units), progress.workoutDays(units), today, tz);
 }
 
+/** The km of running a week (Sunday on) holds: logged where a day is logged, else planned. */
+function weekKm(units: Units, sunday: string, planFor: (d: string) => PlanRow[]) {
+  let m = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(sunday, i), logged = logOf(units, d).filter((r) => isRun(r));
+    const rows = logged.length ? logged.map((r) => r.measurements) : planFor(d).filter((r) => isRun(r)).map((r) => r.targets);
+    m += rows.reduce((n, ms) => n + (ms.find((x) => x.metric === "distance_m")?.value ?? 0), 0);
+  }
+  return Math.round(m / 100) / 10;
+}
+
 /** Every program week with its kind, aim and what's planned so far. */
 function describeProgram(units: Units, today: string, tz: string) {
   const profile = profileOf(units);
@@ -624,7 +637,8 @@ function describeProgram(units: Units, today: string, tz: string) {
     const plans = days.map((d) => planOf(units, d));
     const sessions = plans.filter((p) => p.some((r) => r.kind === "workout")).length;
     const done = days.filter((d) => logOf(units, d).some((r) => r.kind === "workout")).length;
-    const planned = sessions ? `${sessions} session(s), ${weeklySets(plans)} sets planned${done ? `, ${done} logged` : ""}` : "Not planned yet";
+    const km = weekKm(units, sunday, (d) => planOf(units, d));
+    const planned = sessions ? `${sessions} session(s), ${weeklySets(plans)} sets planned${km ? `, ${km} km of running` : ""}${done ? `, ${done} logged` : ""}` : "Not planned yet";
     out.push(`Week ${i + 1} · ${sunday}${i === now ? " (this week)" : ""} · ${title(w)}: ${why(w)} Aim about ${weeklyTarget(w, profile)} working sets. ${planned}.`);
   });
   return out.join("\n");
@@ -666,14 +680,27 @@ async function propose(uid: string, tz: string, today: string, days: DayInput[],
     notes.push(...loads.cautions.map((c) => `${d.date}: ${c}`));
   }
   const sundays = new Set([...next.keys()].map((d) => addDays(d, -new Date(`${d}T12:00:00Z`).getUTCDay())));
+  const planFor = (d: string) => next.get(d) ?? planOf(units, d);
   for (const sunday of sundays) {
-    const total = weeklySets(Array.from({ length: 7 }, (_, i) => addDays(sunday, i)).map((d) => next.get(d) ?? planOf(units, d)));
+    const total = weeklySets(Array.from({ length: 7 }, (_, i) => addDays(sunday, i)).map(planFor));
     if (profile?.maxWeeklySets && total > profile.maxWeeklySets) problems.push(`Week of ${sunday}: ${total} working sets, over their ceiling of ${profile.maxWeeklySets}.`);
+    // FIT-178: a week's running more than 10% over the most of the 4 before it.
+    const km = weekKm(units, sunday, planFor), before = Math.max(0, ...[1, 2, 3, 4].map((w) => weekKm(units, addDays(sunday, -7 * w), (d) => planOf(units, d))));
+    if (before > 0 && km > before * 1.1) notes.push(`Week of ${sunday}: ${km} km of running, more than 10% over the ${before} km most of the 4 weeks before.`);
+  }
+  // FIT-178: a hard run the day of, or the day before, heavy legs (a main squat or hinge).
+  const heavyLegs = (d: string) => planFor(d).some((r) => r.kind === "workout" && r.main && ["squat", "hinge"].includes(bySlug.get(r.template ?? "")?.pattern ?? ""));
+  for (const d of next.keys()) {
+    for (const day of [d, addDays(d, -1)]) {
+      if (planFor(day).some(isHardRun) && (heavyLegs(day) || heavyLegs(addDays(day, 1)))) {
+        notes.push(`${day}: a hard run next to heavy legs (${heavyLegs(day) ? "the same day" : `squats or deadlifts on ${addDays(day, 1)}`}). Move one, or make the run easy.`);
+      }
+    }
   }
   const id = randomUUID();
   await store.put(uid, `proposal#${id}`, { days: out, problems }, 2);
   return [`Proposal ${id} — ${reason}`, ...lines,
-    ...(notes.length ? ["", "Check with them:", ...notes.map((n) => `- ${n}`)] : []),
+    ...(notes.length ? ["", "Check with them:", ...[...new Set(notes)].map((n) => `- ${n}`)] : []),
     problems.length ? `\nPlan-rule problems; fix these and propose again before applying:\n${problems.map((p) => `- ${p}`).join("\n")}` : "\nIt passes the plan rules. Show them the change, and apply when they agree."].join("\n");
 }
 
@@ -725,12 +752,12 @@ export async function callTool(name: string, args: Args, account: Account, store
       const units = await store.units(uid);
       if (day > today) throw new Error("That day hasn't happened yet.");
       const existing = logOf(units, day);
-      if (existing.some((r) => r.kind === "workout") && !args.replace) {
+      if (existing.some((r) => r.kind === "workout" && !isRun(r)) && !args.replace) {
         throw new Error(`${day} is already logged:\n${describeLog(existing).lines.join("\n")}\nPass replace: true to replace it, or add_note to add context.`);
       }
       const plan = planOf(units, day);
       const made = logRows(plan, startOf(units, day, tz), { sets: args.sets as SetInput[] | undefined, as_planned: args.as_planned, rpe: args.rpe, effort: args.effort, note: args.note });
-      await store.write(uid, [{ key: `log#${day}`, body: encode([...existing.filter((r) => r.kind !== "workout"), ...made]) }], account.agent);
+      await store.write(uid, [{ key: `log#${day}`, body: encode([...existing.filter((r) => r.kind !== "workout" || isRun(r)), ...made]) }], account.agent);
       const l = describeLog(made);
       return `Logged ${weekday(day)} ${day}:\n${l.lines.join("\n")}${l.note ? `\nNote: ${l.note}` : ""}\nIt shows on their phone at its next sync.`;
     }
@@ -752,7 +779,8 @@ export async function callTool(name: string, args: Args, account: Account, store
       const note = [args.kind, typeof args.note === "string" ? args.note.trim() : ""].filter(Boolean).join(": ");
       const units = await store.units(uid);
       const at = day === today ? Math.floor(now.getTime() / 1000) : epoch(day, 12 * 60, tz);
-      const log = [...logOf(units, day), { id: randomUUID().toUpperCase(), kind: "workout", at, template: slug, measurements: ms, note }];
+      const plannedRef = planOf(units, day).find((r) => r.template === slug)?.id;
+      const log = [...logOf(units, day), { id: randomUUID().toUpperCase(), kind: "workout", at, template: slug, plannedRef, measurements: ms, note }];
       await store.write(uid, [{ key: `log#${day}`, body: encode(log) }], account.agent);
       const after = new Map([...units, [`log#${day}`, encode(log)]]);
       const moved = goalsOf(after).filter((g) => g.status === "active" && goalMeters(g.metric) !== undefined).map((g) => {

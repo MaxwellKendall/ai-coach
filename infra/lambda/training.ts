@@ -196,20 +196,31 @@ export const goalsOf = (units: Units): (Goal & { id: string })[] =>
   [...units].filter(([k]) => k.startsWith("goal#")).map(([k, b]) => ({ ...(JSON.parse(b) as Goal), id: k.slice(5) })).filter((g) => g.status === "active");
 
 const working = (r: PlanRow) => r.kind === "workout" && r.note !== WARMUP;
+/** FIT-178: a run in the plan, which the sets and load rules leave alone. */
+export const isRun = (r: { template?: string }) => !!r.template && RUNS.includes(r.template);
+const lifting = (r: PlanRow) => working(r) && !isRun(r);
+/** A run that's hard work: tempo, intervals or a race (its kind is the row's note). */
+export const isHardRun = (r: PlanRow) => isRun(r) && /^(tempo|intervals|race)/i.test(r.note);
 
 // ---- Reading ----
 
 /** "4 × 6 @ 170 lb · RPE 8", per exercise, from plan rows (one row per set or per exercise, as the app writes either). */
 export function sessionLines(plan: PlanRow[]) {
-  const out: { slug?: string; sets: number; targets: Measurement[]; main: boolean; group?: number }[] = [];
+  const out: { slug?: string; sets: number; targets: Measurement[]; main: boolean; group?: number; note?: string }[] = [];
   for (const row of [...plan].filter(working).sort((a, b) => a.at - b.at)) {
     const targets = row.targets.filter((x) => x.metric !== "sets");
     const sets = value(row.targets, "sets") ?? 1;
     const last = out[out.length - 1];
     if (last && last.slug === row.template && JSON.stringify(last.targets) === JSON.stringify(targets)) last.sets += sets;
-    else out.push({ slug: row.template, sets, targets, main: row.main, group: row.group ?? undefined });
+    else out.push({ slug: row.template, sets, targets, main: row.main, group: row.group ?? undefined, note: isRun(row) ? row.note : undefined });
   }
   return out;
+}
+
+/** "8 km · 45 min · easy". */
+export function describeRun(t: Measurement[], note?: string) {
+  const d = value(t, "distance_m"), s = value(t, "duration_s");
+  return [d ? `${Math.round(d / 100) / 10} km` : "", s ? `${Math.round(s / 60)} min` : "", note ?? ""].filter(Boolean).join(" · ") || "a run";
 }
 
 export function describeTargets(sets: number, t: Measurement[]) {
@@ -224,7 +235,7 @@ export function describeTargets(sets: number, t: Measurement[]) {
 
 export function describeSession(plan: PlanRow[]) {
   const title = plan.find((r) => r.kind === "workout" && r.slot)?.slot;
-  const lines = sessionLines(plan).map((l) => `${l.main ? "★ " : ""}${nameOf(l.slug)} (${l.slug}): ${describeTargets(l.sets, l.targets)}${l.group ? ` [superset ${l.group}]` : ""}`);
+  const lines = sessionLines(plan).map((l) => `${l.main ? "★ " : ""}${nameOf(l.slug)} (${l.slug}): ${l.slug && RUNS.includes(l.slug) ? describeRun(l.targets, l.note) : describeTargets(l.sets, l.targets)}${l.group ? ` [superset ${l.group}]` : ""}`);
   return { title, lines };
 }
 
@@ -371,7 +382,7 @@ export function checkDay(plan: PlanRow[], profile?: Profile, least = MIN_SETS): 
   const out: string[] = [];
   const caps = profile?.age ? rpeCaps(profile.age) : undefined;
   const sets = new Map<string, { n: number; main: boolean }>();
-  for (const r of plan.filter(working)) {
+  for (const r of plan.filter(lifting)) {
     const k = r.template ?? "";
     const so = sets.get(k) ?? { n: 0, main: false };
     sets.set(k, { n: so.n + (value(r.targets, "sets") ?? 1), main: so.main || r.main });
@@ -381,7 +392,7 @@ export function checkDay(plan: PlanRow[], profile?: Profile, least = MIN_SETS): 
     if (n > most) out.push(`${nameOf(slug)}: ${n} sets is more than the ${most} allowed for ${main ? "a main lift" : "an accessory"}.`);
     else if (n < least) out.push(`${nameOf(slug)}: ${n} set is fewer than the ${least} minimum.`);
   }
-  for (const r of plan.filter(working)) {
+  for (const r of plan.filter(lifting)) {
     const e = r.template ? bySlug.get(r.template) : undefined;
     const rpe = value(r.targets, "rpe"), cap = caps && (r.main ? caps.main : caps.accessory);
     if (cap !== undefined && rpe !== undefined && rpe > cap) out.push(`${nameOf(r.template)}: RPE ${rpe} is over ${cap}, the cap at age ${profile!.age} for ${r.main ? "a main lift" : "an accessory"}.`);
@@ -396,7 +407,7 @@ export function checkDay(plan: PlanRow[], profile?: Profile, least = MIN_SETS): 
 }
 
 export function weeklySets(days: PlanRow[][]) {
-  return days.flatMap((d) => d.filter(working)).reduce((sum, r) => sum + (value(r.targets, "sets") ?? 1), 0);
+  return days.flatMap((d) => d.filter(lifting)).reduce((sum, r) => sum + (value(r.targets, "sets") ?? 1), 0);
 }
 
 // ---- Writing ----
@@ -404,7 +415,7 @@ export function weeklySets(days: PlanRow[][]) {
 const uuid = () => randomUUID().toUpperCase();
 
 export type ExerciseInput = {
-  exercise: string; sets: number; reps?: number; seconds?: number; weight_lb?: number; weight_lb_per_hand?: number; rpe?: number;
+  exercise: string; sets?: number; distance_km?: number; minutes?: number; run?: string; reps?: number; seconds?: number; weight_lb?: number; weight_lb_per_hand?: number; rpe?: number;
   main?: boolean; superset?: number;
 };
 
@@ -413,6 +424,13 @@ export function sessionRows(existing: PlanRow[], title: string, exercises: Exerc
   const kept = existing.filter((r) => r.kind !== "workout");
   const made = exercises.map((x, i): PlanRow => {
     const e = resolve(x.exercise);
+    if (RUNS.includes(e.slug)) {
+      // FIT-178: a run is one row: its distance and/or time, its kind as the note.
+      if (x.distance_km === undefined && x.minutes === undefined) throw new Error(`${e.name}: give distance_km or minutes.`);
+      const run = [m("sets", 1), ...(x.distance_km !== undefined ? [m("distance_m", Math.round(x.distance_km * 1000))] : []), ...(x.minutes !== undefined ? [m("duration_s", Math.round(x.minutes * 60))] : [])];
+      return { id: uuid(), kind: "workout", at: start + i, slot: title, template: e.slug, targets: run, note: x.run ?? "easy", adjustedReason: reason, group: x.superset, main: false, pinned: true };
+    }
+    if (x.sets === undefined) throw new Error(`${e.name}: how many sets?`);
     const targets = [m("sets", x.sets)];
     if (x.seconds !== undefined) targets.push(m("duration_s", x.seconds));
     else if (x.reps !== undefined) targets.push(m("reps", x.reps));
@@ -429,8 +447,9 @@ export function sessionRows(existing: PlanRow[], title: string, exercises: Exerc
 
 /** What a new session changes, line by line, for the agent to show before it applies. */
 export function diff(before: PlanRow[], after: PlanRow[]) {
-  const a = sessionLines(before).map((l) => `${nameOf(l.slug)}: ${describeTargets(l.sets, l.targets)}`);
-  const b = sessionLines(after).map((l) => `${nameOf(l.slug)}: ${describeTargets(l.sets, l.targets)}`);
+  const line = (l: ReturnType<typeof sessionLines>[number]) => `${nameOf(l.slug)}: ${l.slug && RUNS.includes(l.slug) ? describeRun(l.targets, l.note) : describeTargets(l.sets, l.targets)}`;
+  const a = sessionLines(before).map(line);
+  const b = sessionLines(after).map(line);
   return [...a.filter((x) => !b.includes(x)).map((x) => `− ${x}`), ...b.filter((x) => !a.includes(x)).map((x) => `+ ${x}`), ...b.filter((x) => a.includes(x)).map((x) => `= ${x}`)];
 }
 
@@ -442,7 +461,8 @@ export type SetInput = { exercise: string; weight_lb?: number; weight_lb_per_han
  */
 export function logRows(plan: PlanRow[], start: number, input: { sets?: SetInput[]; as_planned?: boolean; rpe?: number; note?: string; effort?: number }): LogRow[] {
   const title = plan.find((r) => r.kind === "workout" && r.slot)?.slot ?? "Workout";
-  const planned = [...plan].filter(working).sort((a, b) => a.at - b.at);
+  // Runs are logged with log_run, with what was actually run (FIT-178).
+  const planned = [...plan].filter(lifting).sort((a, b) => a.at - b.at);
   const sets: (SetInput & { slug: string; plannedRef?: string })[] = [];
   if (input.as_planned) {
     if (!planned.length) throw new Error("Nothing is planned that day, so list the sets.");
