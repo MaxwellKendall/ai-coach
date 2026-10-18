@@ -68,6 +68,9 @@ struct OnboardingView: View {
                                            designing: designing, brief: brief, loads: $loads,
                                            go: { index in withAnimation(.snappy) { page = index } })
                         if index == 0, account.isAvailable { inviteRow.padding(.top, 28) }
+                        #if DEBUG
+                        if index == 0 { BackendPicker().font(.subheadline).foregroundStyle(.secondary).padding(.top, 20) }
+                        #endif
                     }
                     .padding(.horizontal, 22)
                     .padding(.bottom, 24)

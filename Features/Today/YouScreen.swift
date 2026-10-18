@@ -21,6 +21,7 @@ struct YouScreen: View {
                         UserDefaults.standard.set(on, forKey: "pro")
                         Task { await pro.refresh() }
                     })) { Label("Pro (debug)", systemImage: "star") }
+                    BackendPicker()
                     #endif
                     // FIT-122: a year of Pro bought as a gift on the web.
                     if account.isAvailable {

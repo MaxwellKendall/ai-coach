@@ -3,12 +3,8 @@ import Foundation
 /// FIT-58/105: a group invite as a link. join.barbrabell.com/CODE opens the app on the Join sheet when it's
 /// installed (Associated Domains), and the invite page with the App Store when it isn't.
 enum InviteLink {
-    /// Each build invites to its own backend's groups: Debug to dev, Release (TestFlight, App Store) to prod.
-    #if DEBUG
-    static let base = URL(string: "https://dev.barbrabell.com/join/")!
-    #else
-    static let base = URL(string: "https://join.barbrabell.com/")!
-    #endif
+    /// Invites are to the groups of the backend this launch talks to.
+    static let base = URL(string: Backend.current == .prod ? "https://join.barbrabell.com/" : "https://dev.barbrabell.com/join/")!
 
     static func url(code: String) -> URL { base.appending(path: code) }
 

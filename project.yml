@@ -57,9 +57,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
       configs:
-        # FIT-57: each build bundles only its own backend.
-        Debug:
-          EXCLUDED_SOURCE_FILE_NAMES: amplify_outputs.prod.json
+        # FIT-57: Release bundles only prod's backend; Debug both, for the You screen's switch.
         # The author's personal history is a dogfooding aid, never shipped.
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: history.json goals.json amplify_outputs.dev.json

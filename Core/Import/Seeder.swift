@@ -29,7 +29,8 @@ enum Seeder {
             }
         }
 #if DEBUG
-        if try context.fetchCount(FetchDescriptor<LogEntry>()) == 0, bundle.url(forResource: "history", withExtension: "json") != nil {
+        // The author's history is dev's dogfooding data; a prod store starts empty and fills from the account.
+        if Backend.current == .dev, try context.fetchCount(FetchDescriptor<LogEntry>()) == 0, bundle.url(forResource: "history", withExtension: "json") != nil {
             let templates = Dictionary(try context.fetch(FetchDescriptor<Template>()).map { ($0.slug, $0.id) },
                                        uniquingKeysWith: { first, _ in first })
             for seed in try decode([LogSeed].self, "history", bundle) {
@@ -38,7 +39,7 @@ enum Seeder {
                                         measurements: seed.measurements, note: seed.note))
             }
         }
-        if try context.fetchCount(FetchDescriptor<Goal>()) == 0, bundle.url(forResource: "goals", withExtension: "json") != nil {
+        if Backend.current == .dev, try context.fetchCount(FetchDescriptor<Goal>()) == 0, bundle.url(forResource: "goals", withExtension: "json") != nil {
             for (index, seed) in try decode([GoalSeed].self, "goals", bundle).enumerated() {
                 // Goals list in createdAt order, so keep the file's order.
                 context.insert(Goal(kind: seed.kind, metric: seed.metric, target: seed.target, unit: seed.unit,

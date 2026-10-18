@@ -36,13 +36,9 @@ final class Account {
     }
 
     private(set) var user: User?
-    /// FIT-57: chosen at build time, no settings screen. Debug builds talk to AICoach-dev; Release
-    /// (TestFlight and the App Store) to AICoach-prod. Each config bundles only its own file.
-    #if DEBUG
-    static let outputs = "amplify_outputs.dev"
-    #else
-    static let outputs = "amplify_outputs.prod"
-    #endif
+    /// FIT-57: Release (TestFlight and the App Store) talks to AICoach-prod and bundles only its file; Debug
+    /// bundles both and talks to the one `Backend.current` names.
+    static let outputs = "amplify_outputs.\(Backend.current.rawValue)"
 
     /// False when the backend config is missing or invalid; the app then hides account features.
     let isAvailable: Bool
