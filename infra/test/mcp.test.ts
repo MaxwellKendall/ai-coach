@@ -550,6 +550,11 @@ describe("agent-first onboarding (FIT-150)", () => {
 
     // A run logged beside the lifting stays when the lifting is logged over, and as-planned leaves runs to log_run.
     const later = new Date("2026-10-23T22:00:00Z");
+    // FIT-184: what's left out went as planned. Thursday's 8 km tempo has no time planned, so it asks for one.
+    await expect(callTool("log_run", { date: "2026-10-22" }, fresh, store, later)).rejects.toThrow(/no time: ask them how long it took/);
+    expect(await callTool("log_run", { date: "2026-10-22", time: "40:00" }, fresh, store, later)).toMatch(/Logged Thursday 2026-10-22: 8 km in 40:00 \(.*\), tempo\./);
+    expect(JSON.parse(units.new["log#2026-10-22"])[0]).toMatchObject({ template: "trail-running-walking", plannedRef: JSON.parse(units.new["plan#2026-10-22"])[0].id, note: "tempo" });
+    await expect(callTool("log_run", { date: "2026-10-21" }, fresh, store, later)).rejects.toThrow(/No run is planned 2026-10-21/);
     await callTool("log_run", { date: "2026-10-23", distance: "3 km", time: "18:00", kind: "easy" }, fresh, store, later);
     await callTool("log_session", { date: "2026-10-23", as_planned: true, rpe: 7 }, fresh, store, later);
     await callTool("log_session", { date: "2026-10-23", as_planned: true, rpe: 8, replace: true }, fresh, store, later);

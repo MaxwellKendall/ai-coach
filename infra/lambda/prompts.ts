@@ -52,7 +52,7 @@ Review the week${a.date ? ` holding ${a.date}` : ""}:
 Log today${a.what ? `. They said: "${a.what}"` : ""}.
 1. get_day for what was planned.
 2. For the workout: if it went as planned, log_session with as_planned and the RPE; otherwise the sets as done (load, reps or seconds, RPE). Ask for anything missing that matters (the top sets' RPE, how it felt) rather than guessing, and put their words about pain, sleep or energy in the note.
-3. A run goes in log_run (distance, time, heart rate if they know it, the kind of run). Weight, sleep or meals they mention go in log_daily; estimate kcal and protein for a meal only if they don't know, and say it's an estimate.
+3. A run goes in log_run (distance, time, heart rate if they know it, the kind of run); a planned run done as planned needs none of those. Weight, sleep or meals they mention go in log_daily; estimate kcal and protein for a meal only if they don't know, and say it's an estimate.
 4. Confirm what you logged in one or two lines, and say if anything stood out (a best, a hard day).`,
   },
   {

@@ -206,7 +206,7 @@ export const tools = [
     name: "log_session",
     title: "Log a session",
     annotations: { title: "Log a session", ...write(true, false) },
-    description: "Log a workout they did: each set with load, reps (or seconds) and RPE, and a note on how it went (soreness, sleep, how it felt). as_planned logs the day's planned sets; add sets to record what differed. A day already logged needs replace: true. Confirm the numbers with them first when unsure.",
+    description: "Log a workout they did: each set with load, reps (or seconds) and RPE, and a note on how it went (soreness, sleep, how it felt). as_planned logs the day's planned lifting; add sets to record what differed. Runs, planned or not, go to log_run. A day already logged needs replace: true. Confirm the numbers with them first when unsure.",
     inputSchema: { type: "object", properties: {
       date: DATE,
       as_planned: { type: "boolean", description: "Log every planned set as planned." },
@@ -231,16 +231,16 @@ export const tools = [
     name: "log_run",
     title: "Log a run",
     annotations: { title: "Log a run", ...write(false, false) },
-    description: "Log a run they did: distance, time, average heart rate if they know it, and what kind (easy, long, tempo, intervals, race). It's added to the day beside any lifting. Race-time goals follow it.",
+    description: "Log a run they did: distance, time, average heart rate if they know it, and what kind (easy, long, tempo, intervals, race). Leave out what went as planned: distance, time and kind default to the day's planned run, so \"did my run\" on a planned 25-minute 3.2 km needs neither. It's added to the day beside any lifting. Race-time goals follow it.",
     inputSchema: { type: "object", properties: {
       date: DATE,
-      distance: { type: "string", description: "\"8 km\", \"5 mi\", \"10K\"." },
-      time: { type: "string", description: "\"44:00\" or \"1:02:10\"." },
+      distance: { type: "string", description: "\"8 km\", \"5 mi\", \"10K\". Defaults to the planned run's." },
+      time: { type: "string", description: "\"44:00\" or \"1:02:10\". Defaults to the planned run's." },
       hr_avg: { type: "integer", minimum: 60, maximum: 220, description: "Average heart rate, bpm." },
       kind: { type: "string", enum: ["easy", "long", "tempo", "intervals", "race"] },
       treadmill: { type: "boolean" },
       note: { type: "string", description: "How it felt, in their words." },
-    }, required: ["distance", "time"] },
+    } },
   },
   {
     name: "log_daily",
@@ -772,14 +772,23 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "log_run": {
       if (day > today) throw new Error(`${day} hasn't happened yet.`);
-      const d = Math.round(meters(String(args.distance))), t = seconds(String(args.time));
-      const slug = args.treadmill ? "running-treadmill" : OUTDOOR_RUN;
+      const units = await store.units(uid);
+      // FIT-184: what they leave out went as planned.
+      const planned = planOf(units, day).find(isRun);
+      const target = (metric: string) => planned?.targets.find((m) => m.metric === metric)?.value;
+      const d = Math.round(args.distance !== undefined ? meters(String(args.distance)) : target("distance_m") ?? NaN);
+      const t = args.time !== undefined ? seconds(String(args.time)) : target("duration_s");
+      if (Number.isNaN(d) || t === undefined) {
+        const missing = [Number.isNaN(d) && "distance", t === undefined && "time"].filter(Boolean).join(" and ");
+        throw new Error(planned ? `The planned run has no ${missing}: ask them how ${t === undefined ? "long it took" : "far they went"}.` : `No run is planned ${day}: give its distance and time.`);
+      }
+      const slug = args.treadmill ? "running-treadmill" : args.treadmill === false || !planned?.template ? OUTDOOR_RUN : planned.template;
       const ms = [{ metric: "distance_m", value: d, unit: "m" }, { metric: "duration_s", value: t, unit: "s" },
         ...(args.hr_avg ? [{ metric: "hr_avg", value: Math.round(args.hr_avg), unit: "bpm" }] : [])];
-      const note = [args.kind, typeof args.note === "string" ? args.note.trim() : ""].filter(Boolean).join(": ");
-      const units = await store.units(uid);
+      const kind = args.kind ?? planned?.note.match(/^(easy|long|tempo|intervals|race)/i)?.[1].toLowerCase();
+      const note = [kind, typeof args.note === "string" ? args.note.trim() : ""].filter(Boolean).join(": ");
       const at = day === today ? Math.floor(now.getTime() / 1000) : epoch(day, 12 * 60, tz);
-      const plannedRef = planOf(units, day).find((r) => r.template === slug)?.id;
+      const plannedRef = planned?.id;
       const log = [...logOf(units, day), { id: randomUUID().toUpperCase(), kind: "workout", at, template: slug, plannedRef, measurements: ms, note }];
       await store.write(uid, [{ key: `log#${day}`, body: encode(log) }], account.agent);
       const after = new Map([...units, [`log#${day}`, encode(log)]]);

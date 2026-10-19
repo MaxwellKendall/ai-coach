@@ -352,7 +352,7 @@ struct TodayScreen: View {
                     Text("Rest").font(.system(size: 30, weight: .bold)).tracking(-0.4)
                     Text(coach).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         .frame(maxWidth: 240)
-                    if isToday && !pro.active { logOwnButton.padding(.top, 18) } else if isToday && racing { runButton("Log a run", nil).padding(.top, 18) }
+                    if isToday && !pro.active { logOwnButton(run: nil).padding(.top, 18) } else if isToday && racing { runButton("Log a run", nil).padding(.top, 18) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -415,7 +415,7 @@ struct TodayScreen: View {
                             .background(Color.primary, in: .capsule)
                     }
                     .buttonStyle(.plain)
-                    if isToday { logOwnButton }
+                    if isToday { logOwnButton(run: runs(plan.items).first) }
                 }
             } else if isToday {
                 Button { start(plan) } label: {
@@ -470,13 +470,14 @@ struct TodayScreen: View {
     }
 
     /// FIT-120: free, a workout of your own: pick the exercises, then the same workout mode.
-    private var logOwnButton: some View {
+    /// FIT-184: a planned run is logged as a run, free, race goal or not.
+    private func logOwnButton(run: PlannedActivity?) -> some View {
         HStack(spacing: 10) {
             Button { sheet = .own } label: {
                 Label("Log a workout", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
                     .background(Color(.systemBackground), in: .capsule)
             }
-            if racing { runButton("Log a run", nil) }
+            if let run { runButton("Log the run", run) } else if racing { runButton("Log a run", nil) }
         }
         .buttonStyle(.plain)
     }
