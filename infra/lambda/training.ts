@@ -595,7 +595,7 @@ export function goalBody(input: GoalInput, deadline: number | undefined, baselin
 export function missing(profile: Profile | undefined, goals: Goal[], units: Units = new Map()): string[] {
   const out: string[] = [];
   if (!profile) out.push("profile: age and body weight, training days, minutes per session, usual time, equipment, injuries, exercises they never do");
-  if (!goals.length) out.push("goals: what they want to reach and by when (a lift max, reps, or body weight)");
+  if (!goals.length) out.push("goals: what they want to reach and by when (a lift max, reps, body weight, or a race time)");
   const unknown = unknownMaxes(goals, units, profile);
   if (unknown.length) out.push(`where they are now, so the weights are right (FIT-174): ${unknown.join("; ")}. Save each with set_profile starting_sets (a 1RM is weight_lb with reps 1)`);
   return out;
