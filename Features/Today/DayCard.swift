@@ -46,11 +46,13 @@ enum DayCard {
         if !ran.isEmpty && !liftsPlanned { return .done(runSummary(ran, planned: items)) }
         guard let first = items.first else { return .rest(Coach.rest(next: next, from: day)) }
         let reasons = items.compactMap(\.adjustedReason)
+        // FIT-183: a day of runs only is as long as its runs, with a running tip.
+        let runMinutes = liftsPlanned ? nil : items.flatMap(\.targets).filter { $0.metric == "duration_s" }.map(\.value).reduce(0, +) / 60
         let minutes = reasons.first { $0.hasSuffix("min available") }.flatMap { Int($0.prefix { $0.isNumber }) }
-            ?? context.sessionMinutes
+            ?? runMinutes.flatMap { $0 > 0 ? Int($0.rounded()) : nil } ?? context.sessionMinutes
         return .plan(Planned(items: items, session: Planner.session(items, templates: context.templates),
                              title: first.slot ?? "Workout", start: first.date, minutes: minutes,
-                             coach: Coach.plan(deload: context.deload, reasons: reasons)))
+                             coach: liftsPlanned ? Coach.plan(deload: context.deload, reasons: reasons) : Coach.run(kind: first.note)))
     }
 
     struct Context {

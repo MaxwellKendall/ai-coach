@@ -18,6 +18,25 @@ struct CoachTests {
         #expect(core.dose == "2 × 10")
     }
 
+    // FIT-183: a planned run reads as one, holds stay in seconds.
+    @Test func runsAndHoldsReadInMinutesAndKilometres() {
+        func timed(_ metrics: [String: Double]) -> SessionPlan.PlannedSet {
+            SessionPlan.PlannedSet(targets: metrics.sorted { $0.key < $1.key }.map { Measurement(metric: $0.key, value: $0.value, unit: "") })
+        }
+        let run = SessionPlan.Block(movements: [.init(exercise: "trail-running-walking", sets: [timed(["duration_s": 1500])])])
+        let long = SessionPlan.Block(movements: [.init(exercise: "trail-running-walking", sets: [timed(["distance_m": 8000, "duration_s": 2700])])])
+        let plank = SessionPlan.Block(movements: [.init(exercise: "plank", sets: Array(repeating: timed(["duration_s": 45]), count: 3))])
+        let carry = SessionPlan.Block(movements: [.init(exercise: "carry", sets: Array(repeating: timed(["distance_m": 40]), count: 2))])
+        #expect(run.dose == "25 min")
+        #expect(long.dose == "8 km · 45 min")
+        #expect(plank.dose == "3 × 45 s")
+        #expect(carry.dose == "2 × 40 m")
+        #expect(Coach.distance(5250) == "5.3 km")
+        #expect(Coach.run(kind: "easy") == "Easy enough to talk the whole way.")
+        #expect(Coach.run(kind: "tempo: 3 × 8 min") == "Comfortably hard: a pace you could hold for about an hour.")
+        #expect(Coach.run(kind: "") == "Easy enough to talk the whole way.")
+    }
+
     @Test func planLineExplainsTheDay() {
         #expect(Coach.plan(deload: true, reasons: []).hasPrefix("Light week"))
         #expect(Coach.plan(deload: true, reasons: ["30 min available"]).hasPrefix("Short on time"))

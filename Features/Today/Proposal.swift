@@ -63,13 +63,13 @@ struct Proposal: Identifiable {
         return lines
     }
 
-    /// "3 × 5 · 190", "3 × 45 s", "2 × 10".
+    /// "3 × 5 · 190", "3 × 45 s", "2 × 10", a run "25 min".
     static func dose(_ workout: PlannedWorkout) -> String {
         guard let sets = workout.target("sets") else { return "" }
-        let each = workout.target("reps").map(Coach.number) ?? workout.target("duration_s").map { "\(Coach.number($0)) s" }
-            ?? workout.target("distance_m").map { "\(Coach.number($0)) m" }
+        let reps = workout.target("reps")
+        let each = Coach.amount(reps: reps, meters: workout.target("distance_m"), seconds: workout.target("duration_s"))
         let load = workout.target("load_lb") ?? workout.target("load_lb_hand")
-        return [each.map { "\(Coach.number(sets)) × \($0)" } ?? "\(Coach.number(sets)) sets", load.map(Coach.number)]
+        return [each.map { Coach.sets(sets, of: $0, reps: reps != nil) } ?? "\(Coach.number(sets)) sets", load.map(Coach.number)]
             .compactMap { $0 }.joined(separator: " · ")
     }
 }

@@ -604,9 +604,11 @@ extension Planner {
 
         /// "3×5 · 135", "3 × 45 s", "3 × 30 m".
         static func dose(_ workout: PlannedWorkout) -> String {
+            if workout.target("reps") == nil,
+               let each = Coach.amount(reps: nil, meters: workout.target("distance_m"), seconds: workout.target("duration_s")) {
+                return Coach.sets(workout.target("sets") ?? 1, of: each, reps: false)
+            }
             let sets = Coach.number(workout.target("sets") ?? 1)
-            if let seconds = workout.target("duration_s") { return "\(sets) × \(Coach.number(seconds)) s" }
-            if let meters = workout.target("distance_m") { return "\(sets) × \(Coach.number(meters)) m" }
             let reps = "\(sets)×\(Coach.number(workout.target("reps") ?? 0))"
             if let load = workout.target("load_lb") ?? workout.target("load_lb_hand") { return "\(reps) · \(Coach.number(load))" }
             return reps

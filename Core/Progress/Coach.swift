@@ -73,6 +73,39 @@ enum Coach {
     }
 
     static func number(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0...1))) }
+
+    /// FIT-183: "45 s" for a hold, "25 min" from two minutes up.
+    static func duration(_ seconds: Double) -> String {
+        seconds < 120 ? "\(number(seconds)) s" : "\(number((seconds / 6).rounded() / 10)) min"
+    }
+
+    /// "400 m", or "8 km" from a kilometre up.
+    static func distance(_ meters: Double) -> String {
+        meters < 1000 ? "\(number(meters)) m" : "\(number((meters / 100).rounded() / 10)) km"
+    }
+
+    /// One set's amount: reps, or how far and how long ("8 km · 45 min"); nil when it has neither.
+    static func amount(reps: Double?, meters: Double?, seconds: Double?) -> String? {
+        if let reps { return number(reps) }
+        let parts = [meters.map(distance), seconds.map(duration)].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "3 × 5", "3 × 45 s", or a single run as just "25 min".
+    static func sets(_ count: Double, of amount: String, reps: Bool) -> String {
+        count == 1 && !reps ? amount : "\(number(count)) × \(amount)"
+    }
+
+    /// FIT-183: a day of runs only, by the first run's kind (its note starts with it, as the server writes it).
+    static func run(kind note: String) -> String {
+        switch note.lowercased().prefix(while: \.isLetter) {
+        case "long": "Slow and steady. The distance is the work."
+        case "tempo": "Comfortably hard: a pace you could hold for about an hour."
+        case "intervals": "Hard on the repeats, easy on the recoveries."
+        case "race": "Race day. Start a little slower than you want to."
+        default: "Easy enough to talk the whole way."
+        }
+    }
 }
 
 /// "How did it feel?" on the finish card. It is the session's effort (log.md: 1–10), and it becomes the RPE of
@@ -91,18 +124,16 @@ enum Feel: Int, CaseIterable, Identifiable, Sendable {
 }
 
 extension SessionPlan.Block {
-    /// "3 × 5 · 140", a superset "3 × 10+10 · 50", or bodyweight "2 × 10". Warm-ups aren't counted.
+    /// "3 × 5 · 140", a superset "3 × 10+10 · 50", bodyweight "2 × 10", or a run "25 min". Warm-ups aren't counted.
     var dose: String {
         func amount(_ set: SessionPlan.PlannedSet) -> String {
-            if let reps = set.value("reps") { return Coach.number(reps) }
-            if let seconds = set.value("duration_s") { return "\(Coach.number(seconds)) s" }
-            if let metres = set.value("distance_m") { return "\(Coach.number(metres)) m" }
-            return ""
+            Coach.amount(reps: set.value("reps"), meters: set.value("distance_m"), seconds: set.value("duration_s")) ?? ""
         }
         let firsts = movements.compactMap(\.working.first)
         guard !firsts.isEmpty else { return "" }
         let loads = Set(firsts.compactMap { $0.value("load_lb") ?? $0.value("load_lb_hand") })
         let load = loads.count == 1 ? " · \(Coach.number(loads.first!))" : ""
-        return "\(rounds) × \(firsts.map(amount).joined(separator: "+"))\(load)"
+        let reps = firsts.contains { $0.value("reps") != nil }
+        return Coach.sets(Double(rounds), of: firsts.map(amount).joined(separator: "+"), reps: reps) + load
     }
 }
