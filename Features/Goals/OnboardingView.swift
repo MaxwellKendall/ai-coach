@@ -32,6 +32,8 @@ struct OnboardingView: View {
     /// FIT-109: an invite pasted after installing from its page (iOS loses the link through the App Store).
     @State private var invite: Invite?
     @State private var signingInToJoin = false
+    /// FIT-182: an account that already exists, set up by an agent or on another phone.
+    @State private var signingInToRestore = false
     @State private var pendingInvite: String?
     @State private var joined: Cloud.GroupSummary?
     @State private var sessionWaiting = false
@@ -40,7 +42,8 @@ struct OnboardingView: View {
     @State private var askedSignIn = false
     /// A number being typed: the mic and its hint step aside for the keyboard.
     @State private var keyboard = false
-    var onDone: () -> Void
+    /// `started`: a program was just started here, not picked up from an account that had one.
+    var onDone: (_ started: Bool) -> Void
 
     private static let steps = [
         ("What do you want to lift, and by when?", "Say it in your own words, or pick."),
@@ -62,6 +65,7 @@ struct OnboardingView: View {
                       }) { index in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        if index == 0, account.isAvailable, account.user == nil { signInRow }
                         if index < 4 { header(index) }
                         OnboardingStepView(index: index, answers: $answers, open: $open, catalog: catalog, names: names,
                                            history: history, firstLoads: firstWeek.map { FirstLoads.items($0.week.workouts) },
@@ -100,6 +104,20 @@ struct OnboardingView: View {
         }) {
             SignInSheet(reason: "Sign in to join the group.")
         }
+        .sheet(isPresented: $signingInToRestore) {
+            SignInSheet(reason: "Sign in to pick up your program.")
+        }
+        // FIT-182: an account's first sync takes the server's copy, so one set up elsewhere (an agent, another phone)
+        // lands here: with a program, onboarding is done; without one, its answers start from what the account has.
+        .onChange(of: SyncEngine.shared.lastSynced, initial: true) { _, synced in
+            guard synced != nil, account.user != nil, profile.isComplete else { return }
+            if profile.programStart != nil {
+                onDone(false)
+            } else {
+                prefilled = false
+                prefill()
+            }
+        }
         .sheet(item: $invite) { invite in
             NavigationStack {
                 JoinGroupSheet(code: invite.code) { group in
@@ -124,6 +142,19 @@ struct OnboardingView: View {
         }
         .onChange(of: answers.goals) { answers.estimateStarts() }
         .onChange(of: answers.targets) { answers.estimateStarts() }
+    }
+
+    /// FIT-182: above the first question, so an account that already exists doesn't scroll past the goals to find it.
+    private var signInRow: some View {
+        HStack(spacing: 4) {
+            Spacer()
+            Text("Have an account?").foregroundStyle(.secondary)
+            Button("Sign In") { signingInToRestore = true }
+                .fontWeight(.semibold)
+                .tint(.primary)
+        }
+        .font(.subheadline)
+        .padding(.top, 6)
     }
 
     /// FIT-109: one quiet line, for someone who came from a friend's invite. Apple's paste button reads the
@@ -376,7 +407,7 @@ struct OnboardingView: View {
             let model = LanguageModel.programs(signedIn: account.user != nil)
             Task { await Planner.finishFirstWeek(task, in: context, model: model) }
         }
-        onDone()
+        onDone(true)
     }
 }
 

@@ -190,9 +190,9 @@ struct RootView: View {
         }
         .fullScreenCover(item: $onboarding) { profile in
             // FIT-83: Pro's trial is offered once the program has just been shown.
-            OnboardingView(profile: profile) {
+            OnboardingView(profile: profile) { started in
                 onboarding = nil
-                if !pro.active { pro.paywall = true }
+                if started, !pro.active { pro.paywall = true }
             }
                 .interactiveDismissDisabled()
                 .tint(Self.accent)
