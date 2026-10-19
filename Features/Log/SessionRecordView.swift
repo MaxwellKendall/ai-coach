@@ -11,13 +11,18 @@ struct SessionRecordView: View {
     @Query private var profiles: [Profile]
     let planned: [PlannedActivity]
     @State private var page = 0
+    /// FIT-188: a run that day, opened to its route.
+    @State private var opened: LogEntry?
 
     var body: some View {
         let bySlug = Dictionary(templates.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
         let day = planned.first?.date ?? .now
-        let mine = SessionRecord.lastSession(
-            entries.filter { $0.kind == .workout && Calendar.current.isDate($0.timestamp, inSameDayAs: day) },
-            isSummary: { $0.templateRef == nil })
+        let onDay = entries.filter { $0.kind == .workout && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }
+        // FIT-188: runs are listed on their own, each opening to its route, not counted as sets.
+        let runIDs = Set(templates.filter { Running.runs.contains($0.slug) }.map(\.id))
+        let runs = onDay.filter { $0.templateRef.map(runIDs.contains) == true }
+        let mine = SessionRecord.lastSession(onDay.filter { $0.templateRef.map(runIDs.contains) != true },
+                                             isSummary: { $0.templateRef == nil })
         let groups = Dictionary(planned.map { ($0.id, $0.group) }, uniquingKeysWith: { first, _ in first })
         // One set per entry, so each keeps its planned row's superset group.
         let pairs = mine.compactMap { entry in
@@ -26,7 +31,13 @@ struct SessionRecordView: View {
         let record = SessionRecord(pairs.map(\.0), groups: pairs.map(\.1))
         let summary = mine.first { $0.templateRef == nil }?.measurements ?? []
         VStack(spacing: 14) {
-            stats(record, summary: summary)
+            if !record.blocks.isEmpty || runs.isEmpty { stats(record, summary: summary) }
+            ForEach(runs) { run in
+                RunRow(run: run) { opened = run }
+                    .padding(12)
+                    .background(.background, in: .rect(cornerRadius: 18))
+                    .padding(.horizontal, 16)
+            }
             CoachThread(date: day)
             if !record.blocks.isEmpty {
                 tabs(record)
@@ -35,10 +46,13 @@ struct SessionRecordView: View {
                         .background(Color(.secondarySystemBackground))
                 }
                 .padding(.horizontal, 16)
-            } else {
+            } else if runs.isEmpty {
                 ContentUnavailableView("No sets logged", systemImage: "dumbbell")
+            } else {
+                Spacer()
             }
         }
+        .navigationDestination(item: $opened) { RunDetailView(run: $0) }
         .padding(.top, 8)
         .background(Color(.secondarySystemBackground))
         .navigationTitle(planned.first?.slot ?? "Workout")

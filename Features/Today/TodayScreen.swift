@@ -40,10 +40,11 @@ struct TodayScreen: View {
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
-        case propose(Proposal), spoken(Spoken), own, run(PlannedActivity?)
+        case propose(Proposal), spoken(Spoken), own, run(PlannedActivity?), ran(LogEntry)
         var id: String {
             switch self {
             case .own: "own"
+            case .ran(let entry): "ran \(entry.id)"
             case .run(let item): "run \(item?.id.uuidString ?? "")"
             case .details(let items): "details \(items.map(\.id))"
             case .record(let items): "record \(items.map(\.id))"
@@ -409,7 +410,7 @@ struct TodayScreen: View {
             .padding(.top, 22)
             .contentShape(.rect)
             .onTapGesture { open(plan, locked: locked) }
-            if let ran = plan.ran { ranRow(ran).padding(.top, 16) }
+            ForEach(plan.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
             Spacer(minLength: 16)
             if locked {
                 VStack(spacing: 10) {
@@ -486,23 +487,6 @@ struct TodayScreen: View {
         .buttonStyle(.plain)
     }
 
-    /// FIT-185: a run logged beside the lifting: its route and numbers, so it's plain the run counted.
-    private func ranRow(_ ran: DayCard.Done) -> some View {
-        HStack(spacing: 12) {
-            if let route = ran.route {
-                RouteMap(points: route).frame(width: 64, height: 64).clipShape(.rect(cornerRadius: 12))
-            } else {
-                Image(systemName: "figure.run").font(.title2).frame(width: 64, height: 64)
-                    .background(Color(.systemBackground), in: .rect(cornerRadius: 12))
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Label("Ran", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                Text(ran.coach).font(.subheadline)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
     /// FIT-179: a run, planned or not, logged with its distance and time.
     private func runButton(_ title: String, _ planned: PlannedActivity?) -> some View {
         Button { tracking = RunTarget(planned: planned) } label: {
@@ -556,7 +540,7 @@ struct TodayScreen: View {
             }
         }
         .contentShape(.rect)
-        .onTapGesture { sheet = .record(done.planned) }
+        .onTapGesture { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned) } }
     }
 
     private func stat(_ value: String, _ unit: String) -> some View {
@@ -867,6 +851,7 @@ struct TodayScreen: View {
                 WorkoutDetailView(items: items, session: Planner.session(items, templates: templates))
             }
         case .record(let items): NavigationStack { SessionRecordView(planned: items) }
+        case .ran(let entry): NavigationStack { RunDetailView(run: entry) }
         case .own:
             NavigationStack {
                 WorkoutDetailView(items: [], session: SessionPlan(blocks: []), startTitle: "Start", onStartOwn: startOwn)

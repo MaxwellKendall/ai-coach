@@ -200,6 +200,8 @@ struct RunModeView: View {
         var measurements = [Measurement(metric: "distance_m", value: recorder.track.meters.rounded(), unit: "m"),
                             Measurement(metric: "duration_s", value: seconds, unit: "s")]
         if let bpm = recorder.averageHeartRate { measurements.append(Measurement(metric: "hr_avg", value: bpm.rounded(), unit: "bpm")) }
+        // FIT-188: each mile's split, in order, so the run's page shows them later.
+        measurements += recorder.track.splits.map { Measurement(metric: "split_s", value: $0.rounded(), unit: "s") }
         let said = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let entry = LogEntry(kind: .workout, timestamp: recorder.track.started ?? .now, plannedRef: planned?.id,
                              templateRef: templates.first { $0.slug == Running.outdoor }?.id, measurements: measurements,
@@ -212,13 +214,15 @@ struct RunModeView: View {
     }
 }
 
-/// A logged run's route, framed to fit. Not interactive: it's a picture of where the run went.
+/// A logged run's route, framed to fit: a picture of where the run went, or a map to explore on the run's page.
 struct RouteMap: View {
     let points: [Polyline.Point]
+    /// FIT-188: the run's own page lets you move around the map.
+    var interactive = false
 
     var body: some View {
         let coordinates = points.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-        Map(initialPosition: .automatic, interactionModes: []) {
+        Map(initialPosition: .automatic, interactionModes: interactive ? .all : []) {
             if coordinates.count > 1 {
                 MapPolyline(coordinates: coordinates).stroke(.blue, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
             }
