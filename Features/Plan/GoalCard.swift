@@ -131,7 +131,7 @@ struct GoalCard: View {
         if option.measure == .time {
             // FIT-179: the run behind the predicted time.
             if let run = GoalProgress.best(goal.metric, sets: sets, since: start), let meters = run.value("distance_m"), let seconds = run.value("duration_s") {
-                facts.append(("Best run", "\(Running.km(meters)) in \(Running.clock(seconds)) · \(day(run.date))"))
+                facts.append(("Best run", "\(Running.distance(meters)) in \(Running.clock(seconds)) · \(day(run.date))"))
             } else {
                 facts.append(("Predicted from", "Your runs once you log one"))
             }

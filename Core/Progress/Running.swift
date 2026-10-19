@@ -47,9 +47,12 @@ enum Running {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
-    /// "5:30/km".
-    static func pace(seconds: Double, meters: Double) -> String { "\(clock(seconds / (meters / 1000)))/km" }
+    /// FIT-185: runs read in miles, as the author trains (author, 2026-10-19). Race names stay 5K, 10K.
+    static let mile = 1609.344
 
-    /// "8 km", "5.2 km".
-    static func km(_ meters: Double) -> String { "\(Coach.number((meters / 100).rounded() / 10)) km" }
+    /// "8:51/mi".
+    static func pace(seconds: Double, meters: Double) -> String { "\(clock(seconds / (meters / mile)))/mi" }
+
+    /// "5 mi", "3.1 mi".
+    static func distance(_ meters: Double) -> String { "\(Coach.number((meters / mile * 10).rounded() / 10)) mi" }
 }

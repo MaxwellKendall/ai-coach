@@ -79,9 +79,9 @@ enum Coach {
         seconds < 120 ? "\(number(seconds)) s" : "\(number((seconds / 6).rounded() / 10)) min"
     }
 
-    /// "400 m", or "8 km" from a kilometre up.
+    /// "400 m" for a carry or a short repeat, or a run in miles ("2 mi") from half a mile up.
     static func distance(_ meters: Double) -> String {
-        meters < 1000 ? "\(number(meters)) m" : "\(number((meters / 100).rounded() / 10)) km"
+        meters < 800 ? "\(number(meters)) m" : Running.distance(meters)
     }
 
     /// One set's amount: reps, or how far and how long ("8 km · 45 min"); nil when it has neither.

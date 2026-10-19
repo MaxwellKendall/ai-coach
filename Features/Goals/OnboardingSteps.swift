@@ -151,7 +151,7 @@ struct OnboardingStepView: View {
         case .run:
             note = "Sets your race goal"
             if let meters = start?.value("distance_m"), let seconds = start?.value("duration_s") {
-                value = "\(Running.km(meters)) in \(Running.clock(seconds))"
+                value = "\(Running.distance(meters)) in \(Running.clock(seconds))"
                 note = Running.pace(seconds: seconds, meters: meters)
             }
         }
@@ -201,10 +201,10 @@ struct OnboardingStepView: View {
                   value: seconds, set: { set(row.id, ["duration_s": max(5, $0.rounded())]) })
         case .run:
             let meters = start?.value("distance_m") ?? 5000, seconds = start?.value("duration_s") ?? 1800
-            Nudge(label: Running.km(meters), lessLabel: "Shorter", moreLabel: "Longer",
-                  less: { set(row.id, ["distance_m": max(1000, meters - 1000), "duration_s": seconds]) },
-                  more: { set(row.id, ["distance_m": meters + 1000, "duration_s": seconds]) },
-                  value: meters / 1000, set: { set(row.id, ["distance_m": max(1, $0) * 1000, "duration_s": seconds]) })
+            Nudge(label: Running.distance(meters), lessLabel: "Shorter", moreLabel: "Longer",
+                  less: { set(row.id, ["distance_m": max(Running.mile, meters - Running.mile / 2), "duration_s": seconds]) },
+                  more: { set(row.id, ["distance_m": meters + Running.mile / 2, "duration_s": seconds]) },
+                  value: meters / Running.mile, set: { set(row.id, ["distance_m": max(1, $0) * Running.mile, "duration_s": seconds]) })
             Nudge(label: Running.clock(seconds), lessLabel: "Faster", moreLabel: "Slower",
                   less: { set(row.id, ["distance_m": meters, "duration_s": max(60, seconds - 15)]) },
                   more: { set(row.id, ["distance_m": meters, "duration_s": seconds + 15]) },
@@ -376,7 +376,7 @@ extension OnboardingAnswers {
             if let load = start.value("load_lb"), let reps = start.value("reps") {
                 return "\(name) ≈\(Int(ProgramPlan.estimatedMax(load: load, reps: reps).rounded()))"
             }
-            if let meters = start.value("distance_m"), let seconds = start.value("duration_s") { return "\(Running.km(meters)) \(Running.clock(seconds))" }
+            if let meters = start.value("distance_m"), let seconds = start.value("duration_s") { return "\(Running.distance(meters)) \(Running.clock(seconds))" }
             if let reps = start.value("reps") { return "\(name) \(Coach.number(reps)) reps" }
             return start.value("duration_s").map { "\(name) \(Coach.number($0)) s" }
         }

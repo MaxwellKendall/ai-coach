@@ -12,7 +12,7 @@ struct RunningTests {
         #expect(Running.clock(Running.riegel(seconds: 2640, from: 8000, to: 10000)!) == "55:44")
         #expect(Running.riegel(seconds: 420, from: 1609, to: 10000) == nil)
         #expect(Running.clock(6330) == "1:45:30")
-        #expect(Running.pace(seconds: 2640, meters: 8000) == "5:30/km")
+        #expect(Running.pace(seconds: 2640, meters: 8000) == "8:51/mi")
     }
 
     @Test func aRaceGoalStartsFromARecentRun() {

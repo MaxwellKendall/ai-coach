@@ -36,6 +36,16 @@ targets:
           - applinks:barbrabell.com
           - applinks:share.barbrabell.com
           - applinks:dev.barbrabell.com
+        # FIT-185: run mode records each run as an Apple Health workout with its route.
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+    # FIT-185: GPS keeps recording a run with the phone locked. The other keys are generated (GENERATE_INFOPLIST_FILE).
+    info:
+      path: App/Info.plist
+      properties:
+        UIBackgroundModes: [location]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
     dependencies:
       - package: Amplify
         product: Amplify
@@ -53,6 +63,9 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Hold the mic to log meals, sleep and weight by voice.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Your voice is turned into text on this iPhone to fill in your log.
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: Run mode maps your run and measures its distance and pace.
+        INFOPLIST_KEY_NSHealthShareUsageDescription: Run mode reads your heart rate from Apple Health during a run, when your Watch or AirPods measure it.
+        INFOPLIST_KEY_NSHealthUpdateUsageDescription: Run mode saves each run to Apple Health as a workout, with its route.
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO

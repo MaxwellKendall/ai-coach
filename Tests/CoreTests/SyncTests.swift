@@ -124,6 +124,24 @@ struct SyncTests {
         #expect(try web.fetch(FetchDescriptor<PlannedActivity>()).allSatisfy { $0.plan?.weekStart == Week.start(of: t0) })
     }
 
+    // FIT-185: a tracked run's route goes with its row; a row without one encodes as it always did.
+    @Test func aRunsRouteSyncsAndOtherRowsAreUnchanged() throws {
+        let phone = try store(), web = try store()
+        let run = LogEntry(kind: .workout, timestamp: t0, measurements: [Measurement(metric: "distance_m", value: 5000, unit: "m")], now: t0)
+        run.route = "_p~iF~ps|U_ulLnnqC"
+        phone.insert(run)
+        phone.insert(LogEntry(kind: .workout, timestamp: t0 + 60, measurements: [Measurement(metric: "reps", value: 5, unit: "reps")], now: t0))
+        try phone.save()
+
+        let key = "log#\(SyncUnits.day(t0))"
+        let body = try #require(try SyncUnits.all(in: phone)[key])
+        #expect(body.components(separatedBy: "\"route\"").count == 2, "only the run has a route")
+        try SyncUnits.apply(key, body: body, in: web)
+        try web.save()
+        #expect(try web.fetch(FetchDescriptor<LogEntry>()).compactMap(\.route) == ["_p~iF~ps|U_ulLnnqC"])
+        #expect(try SyncUnits.all(in: web)[key] == body)
+    }
+
     @Test func anEditedDayReplacesItsRowsAndKeepsLogPhotos() throws {
         let context = try store()
         let entry = LogEntry(kind: .workout, timestamp: t0, templateRef: try bench(context).id,

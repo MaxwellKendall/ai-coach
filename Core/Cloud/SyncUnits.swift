@@ -46,6 +46,8 @@ enum SyncUnits {
         var template: String?
         var measurements: [Measurement]
         var note: String
+        /// FIT-185: a tracked run's path (Polyline). Absent on everything else, so other rows encode as before.
+        var route: String?
     }
 
     struct GoalBody: Codable, Equatable {
@@ -155,7 +157,7 @@ enum SyncUnits {
 
     static func logRow(_ entry: LogEntry, _ slugs: [UUID: String]) -> LogRow {
         LogRow(id: entry.id, kind: entry.kind, at: entry.timestamp, plannedRef: entry.plannedRef,
-               template: entry.templateRef.flatMap { slugs[$0] }, measurements: entry.measurements, note: entry.note)
+               template: entry.templateRef.flatMap { slugs[$0] }, measurements: entry.measurements, note: entry.note, route: entry.route)
     }
 
     static func goalBody(_ goal: Goal) -> GoalBody {
@@ -239,6 +241,7 @@ enum SyncUnits {
                 entry.templateRef = row.template.flatMap { ids[$0] }
                 entry.measurements = row.measurements
                 entry.note = row.note
+                entry.route = row.route
                 entry.updatedAt = now
             }
         } else if key.hasPrefix("goal#"), let id = UUID(uuidString: String(key.dropFirst(5))) {

@@ -11,8 +11,10 @@ struct RunLogSheet: View {
     @FocusState private var typing: Bool
 
     private let planned: PlannedActivity?
+    /// FIT-185: run mode closes too when a run is logged by hand from it.
+    private let onSave: () -> Void
     @State private var date: Date
-    @State private var km: Double?
+    @State private var miles: Double?
     @State private var time: String
     @State private var heartRate: Int?
     @State private var kind: String
@@ -22,12 +24,13 @@ struct RunLogSheet: View {
     static let kinds = ["easy", "long", "tempo", "intervals", "race"]
 
     /// A run of your own, or the planned one with its distance and time filled in.
-    init(planned: PlannedActivity? = nil, templates: [Template] = []) {
+    init(planned: PlannedActivity? = nil, templates: [Template] = [], onSave: @escaping () -> Void = {}) {
         self.planned = planned
+        self.onSave = onSave
         let distance = planned?.targets.first { $0.metric == "distance_m" }?.value
         let seconds = planned?.targets.first { $0.metric == "duration_s" }?.value
         _date = State(initialValue: planned.map { Calendar.current.isDateInToday($0.date) ? .now : $0.date } ?? .now)
-        _km = State(initialValue: distance.map { $0 / 1000 })
+        _miles = State(initialValue: distance.map { ($0 / Running.mile * 100).rounded() / 100 })
         _time = State(initialValue: seconds.map(Running.clock) ?? "")
         _kind = State(initialValue: planned.flatMap { Self.kinds.contains($0.note) ? $0.note : nil } ?? "easy")
         _treadmill = State(initialValue: planned?.templateRef.flatMap { id in templates.first { $0.id == id }?.slug } == "running-treadmill")
@@ -38,9 +41,9 @@ struct RunLogSheet: View {
             Section {
                 LabeledContent("Distance") {
                     HStack(spacing: 4) {
-                        TextField("0", value: $km, format: .number).keyboardType(.decimalPad).focused($typing).multilineTextAlignment(.trailing)
+                        TextField("0", value: $miles, format: .number).keyboardType(.decimalPad).focused($typing).multilineTextAlignment(.trailing)
                             .frame(width: 90)
-                        Text("km").foregroundStyle(.secondary)
+                        Text("mi").foregroundStyle(.secondary)
                     }
                 }
                 LabeledContent("Time") {
@@ -55,7 +58,7 @@ struct RunLogSheet: View {
                     }
                 }
             } footer: {
-                if let seconds, let km, km > 0 { Text(Running.pace(seconds: seconds, meters: km * 1000)) }
+                if let seconds, let miles, miles > 0 { Text(Running.pace(seconds: seconds, meters: miles * Running.mile)) }
             }
             Section {
                 Picker("Kind", selection: $kind) {
@@ -70,7 +73,7 @@ struct RunLogSheet: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-            ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(seconds == nil || (km ?? 0) <= 0) }
+            ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(seconds == nil || (miles ?? 0) <= 0) }
             ToolbarItem(placement: .keyboard) {
                 HStack {
                     Spacer()
@@ -83,9 +86,9 @@ struct RunLogSheet: View {
     private var seconds: Double? { Running.seconds(time) }
 
     private func save() {
-        guard let seconds, let km, km > 0 else { return }
+        guard let seconds, let miles, miles > 0 else { return }
         let slug = treadmill ? "running-treadmill" : Running.outdoor
-        var measurements = [Measurement(metric: "distance_m", value: (km * 1000).rounded(), unit: "m"),
+        var measurements = [Measurement(metric: "distance_m", value: (miles * Running.mile).rounded(), unit: "m"),
                             Measurement(metric: "duration_s", value: seconds, unit: "s")]
         if let heartRate, heartRate > 0 { measurements.append(Measurement(metric: "hr_avg", value: Double(heartRate), unit: "bpm")) }
         let said = note.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,5 +96,6 @@ struct RunLogSheet: View {
                                 templateRef: templates.first { $0.slug == slug }?.id, measurements: measurements,
                                 note: said.isEmpty ? kind : "\(kind): \(said)"))
         dismiss()
+        onSave()
     }
 }

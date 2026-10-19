@@ -12,6 +12,8 @@ final class LogEntry {
     var measurements: [Measurement]
     var note: String
     @Attribute(.externalStorage) var photo: Data?
+    /// FIT-185: where a tracked run went, as an encoded polyline (Polyline).
+    var route: String?
     var createdAt: Date
     var updatedAt: Date
 

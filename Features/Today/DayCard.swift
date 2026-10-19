@@ -13,6 +13,8 @@ enum DayCard {
         var start: Date
         var minutes: Int
         var coach: String
+        /// FIT-185: a run already logged beside the day's lifting.
+        var ran: Done? = nil
     }
 
     struct Done {
@@ -28,6 +30,8 @@ enum DayCard {
         /// FIT-179: a day that was only a run: its distance and time.
         var runMeters: Double? = nil
         var runSeconds: Double? = nil
+        /// FIT-185: where a tracked run went.
+        var route: [Polyline.Point]? = nil
     }
 
     /// Workouts only: cooking and groceries are left off Today for now (FIT-25).
@@ -52,7 +56,8 @@ enum DayCard {
             ?? runMinutes.flatMap { $0 > 0 ? Int($0.rounded()) : nil } ?? context.sessionMinutes
         return .plan(Planned(items: items, session: Planner.session(items, templates: context.templates),
                              title: first.slot ?? "Workout", start: first.date, minutes: minutes,
-                             coach: liftsPlanned ? Coach.plan(deload: context.deload, reasons: reasons) : Coach.run(kind: first.note)))
+                             coach: liftsPlanned ? Coach.plan(deload: context.deload, reasons: reasons) : Coach.run(kind: first.note),
+                             ran: ran.isEmpty ? nil : runSummary(ran, planned: [])))
     }
 
     struct Context {
@@ -87,10 +92,11 @@ enum DayCard {
         func total(_ metric: String) -> Double { runs.compactMap { $0.measurements.first { $0.metric == metric }?.value }.reduce(0, +) }
         let meters = total("distance_m"), seconds = total("duration_s")
         let first = runs.min { $0.timestamp < $1.timestamp }
-        let coach = meters > 0 && seconds > 0 ? "\(Running.km(meters)) in \(Running.clock(seconds)), \(Running.pace(seconds: seconds, meters: meters))." : "Run logged."
+        let coach = meters > 0 && seconds > 0 ? "\(Running.distance(meters)) in \(Running.clock(seconds)), \(Running.pace(seconds: seconds, meters: meters))." : "Run logged."
         return Done(title: planned.first?.slot ?? "Run", start: first?.timestamp ?? .now, minutes: seconds > 0 ? Int((seconds / 60).rounded()) : nil,
                     sets: 0, volume: 0, coach: coach, note: first?.note ?? "", feel: nil, planned: planned,
-                    runMeters: meters > 0 ? meters : nil, runSeconds: seconds > 0 ? seconds : nil)
+                    runMeters: meters > 0 ? meters : nil, runSeconds: seconds > 0 ? seconds : nil,
+                    route: runs.lazy.compactMap { $0.route.flatMap(Polyline.decode) }.first { $0.count > 1 })
     }
 
     /// Main lifts in the order they were done, with what the progression rule plans next.
