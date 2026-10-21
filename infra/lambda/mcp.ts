@@ -14,6 +14,8 @@ import * as progress from "./progress.ts";
 import { clock, distanceName, goalMeters, meters, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
+import { HAS_PLAN, onSale, planRecord, portal, start } from "./coachPlan.ts";
+import { giftedUntil } from "./gifts.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
 /**
@@ -38,7 +40,40 @@ export interface Store {
   unshare(uid: string, id: string): Promise<boolean>;
   /** Their display name, as updateProfile sets it: shown on what they share. */
   setName(uid: string, name: string): Promise<void>;
+  /** FIT-190: when their trial started (their first call, kept), and whether they have Pro (Stripe's, or a gift). */
+  access(uid: string, now: Date): Promise<Access>;
+  /** Whether Pro is on sale (Stripe's keys and both prices exist); nothing is held back until it is. */
+  onSale(): Promise<boolean>;
+  /** Stripe Checkout for Pro, or undefined while it isn't on sale; Stripe's portal, or undefined without a customer. */
+  checkout(uid: string, interval: string): Promise<string | undefined>;
+  billingPortal(uid: string): Promise<string | undefined>;
 }
+
+// ---- FIT-190: Pro, sold to the connector's users on the web (author, 2026-10-21) ----
+
+export type Access = { trialStart: string; pro: boolean };
+export const TRIAL_DAYS = 14;
+/** As the Stripe prices are (pro_monthly, pro_yearly), so Claude can say them before the link. */
+export const PRO_PRICES = { month: "$7.99 a month", year: "$49.99 a year" } as const;
+const PRO_PRICE = `${PRO_PRICES.month} or ${PRO_PRICES.year}`;
+/** What the trial ends: planning. Logging, reading, progress, sharing, apply and undo stay free. */
+export const PLANNING = new Set(["propose_session", "propose_week", "set_program"]);
+
+export const trialDaysLeft = (access: Access, now: Date) =>
+  Math.ceil((Date.parse(access.trialStart) + TRIAL_DAYS * 86_400_000 - now.getTime()) / 86_400_000);
+
+/** get_context's line about the trial, from its last 3 days on, so Claude can say it before a plan is refused. */
+export function trialNote(access: Access, now: Date): string | undefined {
+  if (access.pro) return undefined;
+  const left = trialDaysLeft(access, now);
+  if (left > 3) return undefined;
+  const planning = "planning (propose_session, propose_week, set_program)";
+  return left > 0
+    ? `Trial: ${left} day${left === 1 ? "" : "s"} left. After it, ${planning} needs Pro, ${PRO_PRICE}; logging, progress and sharing stay free. Mention it once, plainly; subscribe gives them a checkout link if they want it.`
+    : `Trial over: ${planning} needs Pro, ${PRO_PRICE}. Logging, progress and sharing stay free. When they want something planned, offer subscribe.`;
+}
+
+const PAYWALL = `Planning needs Pro: their ${TRIAL_DAYS}-day trial is over. Pro is ${PRO_PRICE}; logging, progress and sharing stay free. Tell them, and if they want it, call subscribe (month or year) for the checkout link.`;
 
 export type ShareKind = "win" | "recap" | "program" | "session";
 const SHARE_PATHS: Record<ShareKind, string> = { win: "w", recap: "r", program: "p", session: "s" };
@@ -98,6 +133,17 @@ export const dynamoStore: Store = {
       ExpressionAttributeNames: { "#id": "uid" }, ExpressionAttributeValues: { ":n": name, ":u": now, ":id": uid },
     }));
   },
+  async access(uid, now) {
+    const trial = await db.send(new UpdateCommand({
+      TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "TRIAL" },
+      UpdateExpression: "SET startedAt = if_not_exists(startedAt, :n)", ExpressionAttributeValues: { ":n": now.toISOString() }, ReturnValues: "ALL_NEW",
+    }));
+    const [plan, gift] = await Promise.all([planRecord(uid, "pro"), giftedUntil(uid, now)]);
+    return { trialStart: trial.Attributes!.startedAt, pro: HAS_PLAN.includes(plan?.status ?? "") || gift !== undefined };
+  },
+  onSale: () => onSale("pro"),
+  checkout: (uid, interval) => start(uid, interval, undefined, process.env.SHARE_ORIGIN!, "pro"),
+  billingPortal: (uid) => portal(uid, process.env.SHARE_ORIGIN!, "pro"),
   async unshare(uid, id) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
     if (!Item || Item.uid !== uid) return false;
@@ -417,6 +463,21 @@ export const tools = [
     description: "Put back the session a day had before the last apply.",
     inputSchema: { type: "object", properties: { date: DATE }, required: ["date"] },
   },
+  {
+    name: "subscribe",
+    title: "Subscribe to Pro",
+    // Stripe is outside the account.
+    annotations: { title: "Subscribe to Pro", ...write(false, false), openWorldHint: true },
+    description: `A Stripe Checkout link for Pro (${PRO_PRICE}), which planning needs after the ${TRIAL_DAYS}-day trial. Only once they've said they want it. When they've paid, planning works on their next request.`,
+    inputSchema: { type: "object", properties: { interval: { type: "string", enum: ["month", "year"], description: "Monthly or yearly." } }, required: ["interval"] },
+  },
+  {
+    name: "manage_subscription",
+    title: "Their subscription",
+    annotations: { title: "Their subscription", ...READ, openWorldHint: true },
+    description: "Whether they have Pro or how much of the trial is left, and Stripe's page to change the card or the plan, or cancel.",
+    inputSchema: { type: "object", properties: {} },
+  },
 ];
 
 type Args = Record<string, any>;
@@ -710,10 +771,27 @@ export async function callTool(name: string, args: Args, account: Account, store
   const today = dayOf(now, tz);
   const day = (args.date as string | undefined) ?? today;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error(`Not a date: ${day}. Use YYYY-MM-DD.`);
+  const access = await store.access(uid, now); // the first call starts the trial
+  if (PLANNING.has(name) && !access.pro && trialDaysLeft(access, now) <= 0 && (await store.onSale())) throw new Error(PAYWALL);
   switch (name) {
     case "get_context": {
       const units = await store.units(uid);
-      return context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
+      const text = context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
+      const note = (await store.onSale()) ? trialNote(access, now) : undefined;
+      return note ? `${text}\n\n${note}` : text;
+    }
+    case "subscribe": {
+      if (access.pro) return "They already have Pro. manage_subscription changes or cancels it.";
+      const interval = args.interval === "year" ? "year" : "month";
+      const url = await store.checkout(uid, interval);
+      if (!url) return "Pro isn't on sale yet, so nothing is held back meanwhile.";
+      return `Checkout for Pro, ${PRO_PRICES[interval]}: ${url}\nGive them the link. Once they've paid, planning works on their next request; there's nothing to reconnect.`;
+    }
+    case "manage_subscription": {
+      const left = trialDaysLeft(access, now);
+      const status = access.pro ? "They have Pro." : left > 0 ? `They're on the free trial: ${left} day${left === 1 ? "" : "s"} left.` : "They don't have Pro; the trial is over.";
+      const url = await store.billingPortal(uid);
+      return url ? `${status}\nStripe's page to change the card or the plan, or cancel: ${url}` : status;
     }
     case "get_day": {
       const units = await store.units(uid);
@@ -1021,7 +1099,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
         capabilities: { tools: {}, prompts: {} },
         serverInfo: { name: "Barbrabell", version: "0.1.0" },
-        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs.",
+        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs. After the free trial, planning needs Pro: if a tool says so, tell them plainly once and offer subscribe; never push.",
       });
     }
     case "ping":

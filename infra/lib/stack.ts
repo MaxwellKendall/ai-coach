@@ -379,6 +379,9 @@ export class AICoachStack extends Stack {
     const coachPlan = fn("coachPlan", { STRIPE_SECRET: stripeSecret.secretName, APP_ORIGIN: appOrigin });
     table.grant(coachPlan, "dynamodb:GetItem", "dynamodb:UpdateItem");
     stripeSecret.grantRead(coachPlan);
+    // FIT-190: the connector sells Pro and holds planning back after the trial.
+    mcp.addEnvironment("STRIPE_SECRET", stripeSecret.secretName);
+    stripeSecret.grantRead(mcp);
     const coachPlanSource = api.addLambdaDataSource("CoachPlanSource", coachPlan);
     coachPlanSource.createResolver("CoachPlanGet", { typeName: "Query", fieldName: "coachPlan" });
     coachPlanSource.createResolver("CoachPlanStart", { typeName: "Mutation", fieldName: "startCoachPlan" });

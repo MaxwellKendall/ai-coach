@@ -9,14 +9,30 @@ import { stripe } from "./stripe.ts";
  * Checkout makes the subscription; Stripe's subscription events (stripeWebhook) keep USER#uid COACHPLAN up to date;
  * the customer portal changes the card, the interval or cancels. During the beta coaching is free whatever this says
  * (FIT-148 ends that).
+ *
+ * FIT-190: Pro, sold to the connector's users the same way (author, 2026-10-21: $7.99/month or $49.99/year), kept in
+ * USER#uid PROPLAN. Which plan a subscription is comes from its price's lookup key.
  */
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = () => process.env.TABLE!;
 
-/** The prices' lookup keys, the same in test and live mode (FIT-143). */
-export const LOOKUP_KEYS = { month: "coach_monthly", year: "coach_yearly" } as const;
+/** The prices' lookup keys, the same in test and live mode (FIT-143), and where each plan is kept. */
+export const PLANS = {
+  coach: { keys: { month: "coach_monthly", year: "coach_yearly" }, sk: "COACHPLAN" },
+  pro: { keys: { month: "pro_monthly", year: "pro_yearly" }, sk: "PROPLAN" },
+} as const;
+export type Kind = keyof typeof PLANS;
+export const LOOKUP_KEYS = PLANS.coach.keys;
 export type Interval = keyof typeof LOOKUP_KEYS;
+
+/** Stripe's statuses that still have the plan: a payment that failed keeps it while Stripe retries. */
+export const HAS_PLAN = ["active", "trialing", "past_due"];
+
+/** Where Checkout and the portal come back to. Pro's buyers come from Claude, so they land on the site's pages. */
+const returns = (kind: Kind, origin: string) => kind === "coach"
+  ? { success: `${origin}/billing?started=1`, cancel: `${origin}/billing`, portal: `${origin}/billing` }
+  : { success: `${origin}/pro/thanks`, cancel: `${origin}/claude`, portal: `${origin}/claude` };
 
 export interface PlanRecord {
   customer?: string;
@@ -46,7 +62,7 @@ export const shownPlan = (onSale: boolean, record?: PlanRecord): CoachPlan => ({
 });
 
 /** Checkout for the plan, as a subscription; the uid rides on the subscription so its events find the account. */
-export function checkoutParams(uid: string, customer: string, price: string, origin: string) {
+export function checkoutParams(uid: string, customer: string, price: string, origin: string, kind: Kind = "coach") {
   return {
     mode: "subscription",
     managed_payments: { enabled: true },
@@ -54,8 +70,8 @@ export function checkoutParams(uid: string, customer: string, price: string, ori
     client_reference_id: uid,
     line_items: [{ price, quantity: 1 }],
     subscription_data: { metadata: { uid } },
-    success_url: `${origin}/billing?started=1`,
-    cancel_url: `${origin}/billing`,
+    success_url: returns(kind, origin).success,
+    cancel_url: returns(kind, origin).cancel,
   };
 }
 
@@ -68,15 +84,17 @@ export interface Subscription {
   items?: { data: { current_period_end?: number; price?: { lookup_key?: string | null; recurring?: { interval?: string } | null } }[] };
 }
 
-/** What a subscription event says about the account's plan. */
-export function recordFrom(sub: Subscription, eventAt: number): { uid: string; record: PlanRecord } | undefined {
+/** What a subscription event says about the account's plans; a price without a lookup key is the coach plan's. */
+export function recordFrom(sub: Subscription, eventAt: number): { uid: string; kind: Kind; record: PlanRecord } | undefined {
   const uid = sub.metadata?.uid;
   if (!uid) return undefined;
   const item = sub.items?.data[0];
   const key = item?.price?.lookup_key;
-  if (key && !Object.values(LOOKUP_KEYS).includes(key as never)) return undefined;
+  const kind = !key ? "coach" : (Object.keys(PLANS) as Kind[]).find((k) => Object.values(PLANS[k].keys).includes(key as never));
+  if (!kind) return undefined;
   return {
     uid,
+    kind,
     record: {
       customer: sub.customer,
       subscription: sub.id,
@@ -89,10 +107,10 @@ export function recordFrom(sub: Subscription, eventAt: number): { uid: string; r
   };
 }
 
-const planKey = (uid: string) => ({ PK: `USER#${uid}`, SK: "COACHPLAN" });
+const planKey = (uid: string, kind: Kind = "coach") => ({ PK: `USER#${uid}`, SK: PLANS[kind].sk });
 
-export async function planRecord(uid: string): Promise<PlanRecord | undefined> {
-  const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: planKey(uid) }));
+export async function planRecord(uid: string, kind: Kind = "coach"): Promise<PlanRecord | undefined> {
+  const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: planKey(uid, kind) }));
   return Item as PlanRecord | undefined;
 }
 
@@ -104,7 +122,7 @@ export async function saveSubscription(sub: Subscription, eventAt: number): Prom
   const removed = (["interval", "renews"] as const).filter((k) => made.record[k] === undefined);
   await db.send(new UpdateCommand({
     TableName: TABLE(),
-    Key: planKey(made.uid),
+    Key: planKey(made.uid, made.kind),
     UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(", ")}${removed.length ? ` REMOVE ${removed.map((k) => `#${k}`).join(", ")}` : ""}`,
     ConditionExpression: "attribute_not_exists(eventAt) OR eventAt <= :eventAt",
     ExpressionAttributeNames: Object.fromEntries([...fields.map(([k]) => k), ...removed].map((k) => [`#${k}`, k])),
@@ -116,39 +134,40 @@ export async function saveSubscription(sub: Subscription, eventAt: number): Prom
 
 export class PlanError extends Error {}
 
-let prices: { at: number; ids: Partial<Record<Interval, string>> } | undefined;
+const prices: Partial<Record<Kind, { at: number; ids: Partial<Record<Interval, string>> }>> = {};
 /** The plan's price ids by lookup key, looked up at most every 5 minutes; none until the author has made them (FIT-143). */
-export async function planPrices(key: string, now = Date.now()): Promise<Partial<Record<Interval, string>>> {
-  if (!prices || now - prices.at > 5 * 60_000) {
-    const query = Object.values(LOOKUP_KEYS).map((k) => `lookup_keys[]=${k}`).join("&");
-    const found = await stripe<{ data: { id: string; lookup_key: string | null }[] }>(key, `prices?active=true&${query}`);
-    const ids: Partial<Record<Interval, string>> = {};
-    for (const [interval, lookup] of Object.entries(LOOKUP_KEYS) as [Interval, string][]) {
-      const price = found.data.find((p) => p.lookup_key === lookup);
-      if (price) ids[interval] = price.id;
-    }
-    prices = { at: now, ids };
+export async function planPrices(key: string, now = Date.now(), kind: Kind = "coach"): Promise<Partial<Record<Interval, string>>> {
+  const cached = prices[kind];
+  if (cached && now - cached.at <= 5 * 60_000) return cached.ids;
+  const keys = PLANS[kind].keys;
+  const query = Object.values(keys).map((k) => `lookup_keys[]=${k}`).join("&");
+  const found = await stripe<{ data: { id: string; lookup_key: string | null }[] }>(key, `prices?active=true&${query}`);
+  const ids: Partial<Record<Interval, string>> = {};
+  for (const [interval, lookup] of Object.entries(keys) as [Interval, string][]) {
+    const price = found.data.find((p) => p.lookup_key === lookup);
+    if (price) ids[interval] = price.id;
   }
-  return prices.ids;
+  prices[kind] = { at: now, ids };
+  return ids;
 }
 
 /** On sale once there's a Stripe secret and both prices. */
-export async function onSale(): Promise<boolean> {
+export async function onSale(kind: Kind = "coach"): Promise<boolean> {
   const keys = await stripeConfig();
   if (!keys) return false;
-  const ids = await planPrices(keys.secretKey);
+  const ids = await planPrices(keys.secretKey, Date.now(), kind);
   return Boolean(ids.month && ids.year);
 }
 
 /** The account's Stripe customer, made once and kept. */
-async function customerFor(key: string, uid: string, email?: string): Promise<string> {
-  const known = (await planRecord(uid))?.customer;
+async function customerFor(key: string, uid: string, email: string | undefined, kind: Kind): Promise<string> {
+  const known = (await planRecord(uid, kind))?.customer;
   if (known) return known;
   const made = await stripe<{ id: string }>(key, "customers", { email, metadata: { uid } });
   try {
     await db.send(new UpdateCommand({
       TableName: TABLE(),
-      Key: planKey(uid),
+      Key: planKey(uid, kind),
       UpdateExpression: "SET customer = :c",
       ConditionExpression: "attribute_not_exists(customer)",
       ExpressionAttributeValues: { ":c": made.id },
@@ -156,36 +175,36 @@ async function customerFor(key: string, uid: string, email?: string): Promise<st
     return made.id;
   } catch (error) {
     // Two clicks at once: keep the first one's customer.
-    if (error instanceof ConditionalCheckFailedException) return (await planRecord(uid))!.customer!;
+    if (error instanceof ConditionalCheckFailedException) return (await planRecord(uid, kind))!.customer!;
     throw error;
   }
 }
 
 /** A Checkout URL for the plan, or undefined while it isn't on sale. */
-export async function start(uid: string, interval: string, email?: string, origin = process.env.APP_ORIGIN!): Promise<string | undefined> {
+export async function start(uid: string, interval: string, email?: string, origin = process.env.APP_ORIGIN!, kind: Kind = "coach"): Promise<string | undefined> {
   if (interval !== "month" && interval !== "year") throw new PlanError("Choose monthly or yearly.");
   const keys = await stripeConfig();
   if (!keys) return undefined;
-  const current = await planRecord(uid);
+  const current = await planRecord(uid, kind);
   if (current?.status && !["canceled", "incomplete_expired"].includes(current.status)) {
-    throw new PlanError("You already have the coach plan. Use Manage billing to change it.");
+    throw new PlanError(kind === "coach" ? "You already have the coach plan. Use Manage billing to change it." : "They already have Pro: manage_subscription changes it.");
   }
-  const price = (await planPrices(keys.secretKey))[interval];
+  const price = (await planPrices(keys.secretKey, Date.now(), kind))[interval];
   if (!price) {
-    console.error("No price with lookup key", LOOKUP_KEYS[interval]);
+    console.error("No price with lookup key", PLANS[kind].keys[interval]);
     return undefined;
   }
-  const customer = await customerFor(keys.secretKey, uid, email);
-  const session = await stripe<{ url: string }>(keys.secretKey, "checkout/sessions", checkoutParams(uid, customer, price, origin));
+  const customer = await customerFor(keys.secretKey, uid, email, kind);
+  const session = await stripe<{ url: string }>(keys.secretKey, "checkout/sessions", checkoutParams(uid, customer, price, origin, kind));
   return session.url;
 }
 
 /** Stripe's customer portal for the account, or undefined without a customer. */
-export async function portal(uid: string, origin = process.env.APP_ORIGIN!): Promise<string | undefined> {
+export async function portal(uid: string, origin = process.env.APP_ORIGIN!, kind: Kind = "coach"): Promise<string | undefined> {
   const keys = await stripeConfig();
-  const customer = (await planRecord(uid))?.customer;
+  const customer = (await planRecord(uid, kind))?.customer;
   if (!keys || !customer) return undefined;
-  const session = await stripe<{ url: string }>(keys.secretKey, "billing_portal/sessions", { customer, return_url: `${origin}/billing` });
+  const session = await stripe<{ url: string }>(keys.secretKey, "billing_portal/sessions", { customer, return_url: returns(kind, origin).portal });
   return session.url;
 }
 

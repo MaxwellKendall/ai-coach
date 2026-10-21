@@ -119,5 +119,10 @@ describe("Train with Claude (FIT-152)", () => {
     expect(page.body).toContain("Set me up");
     expect((await route("/", store, withMcp)).body).toContain('href="/claude"');
     expect((await route("/claude", store, site)).status).toBe(404);
+    // FIT-190: the price is on the page, and Checkout comes back to a page that sends them back to Claude.
+    expect(page.body).toContain("$7.99 a month or $49.99 a year");
+    const thanks = await route("/pro/thanks", store, withMcp);
+    expect(thanks).toMatchObject({ status: 200, noStore: true });
+    expect(thanks.body).toContain("You have Pro");
   });
 });

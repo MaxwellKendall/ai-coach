@@ -276,6 +276,7 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
     if (invite) return html(coachInvitePage(invite.coach, path, site));
   }
   if (path === "/claude" && site.mcpUrl) return html(claudePage(site, site.mcpUrl));
+  if (path === "/pro/thanks" && site.mcpUrl) return { ...html(proThanksPage(site)), noStore: true };
   if (path === "/") return html(homePage(site));
   return { ...html(missingPage(site)), status: 404 };
 }
@@ -599,13 +600,26 @@ function claudePage(site: Site, mcpUrl: string) {
           <li><b>Say “Set me up”</b><span>Claude asks about your goals, schedule, equipment and injuries, one at a time, then plans your first week.</span></li>
         </ol>
         <div class="actions"><a class="button primary" href="https://claude.ai/settings/connectors">Open Claude's connectors</a></div>
-        <p class="fine">Once added, it's in the Claude app on your phone too. It runs on your own Claude, so there's nothing to pay here.</p>
+        <p class="fine">Once added, it's in the Claude app on your phone too. Free for 14 days; then planning needs Pro, $7.99 a month or $49.99 a year, and logging, progress and sharing stay free. Ask Claude to subscribe when you're ready.</p>
       </section>
       <section class="block">
         <h2>Then just say it</h2>
         <ul class="says">${says.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
         <p class="fine">Claude shows each change to your plan before it's saved, and can undo it. Other agents that speak MCP connect at the same address.</p>
       </section>`,
+  });
+}
+
+/** FIT-190: where Stripe Checkout comes back to once Pro is paid for; they carry on in Claude. */
+function proThanksPage(site: Site) {
+  return layout(site, {
+    title: `You have ${site.appName} Pro`,
+    description: `Thanks for subscribing to ${site.appName} Pro.`,
+    path: "/pro/thanks",
+    body: `<section class="hero"><h1>You have Pro</h1>
+      <p class="lede">Thanks for subscribing. Go back to Claude and carry on: your next plan goes through, with nothing to reconnect.</p>
+      <div class="actions"><a class="button primary" href="https://claude.ai">Back to Claude</a></div>
+      <p class="fine">To change your card or plan, or cancel, ask Claude to manage your subscription.</p></section>`,
   });
 }
 

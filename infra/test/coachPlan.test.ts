@@ -75,6 +75,30 @@ describe("checkout for the coach plan", () => {
   });
 });
 
+describe("FIT-190: Pro's checkout", () => {
+  it("comes back to the site's pages, not the dashboard's billing", () => {
+    const params = checkoutParams("sam", "cus_1", "price_1", "https://barbrabell.com", "pro");
+    expect(params.success_url).toBe("https://barbrabell.com/pro/thanks");
+    expect(params.cancel_url).toBe("https://barbrabell.com/claude");
+  });
+
+  it("looks up Pro's prices and keeps its customer on PROPLAN", async () => {
+    keys.mockResolvedValue({ secretKey: "sk_test_1" });
+    send.mockResolvedValueOnce({}).mockResolvedValueOnce({}).mockResolvedValueOnce({});
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      const path = url.replace("https://api.stripe.com/v1/", "");
+      calls.push(`${init.method} ${path}`);
+      const body = path.startsWith("prices") ? { data: [{ id: "price_pm", lookup_key: "pro_monthly" }, { id: "price_py", lookup_key: "pro_yearly" }] } : path === "customers" ? { id: "cus_new" } : { url: "https://checkout.stripe.com/c/2" };
+      return new Response(JSON.stringify(body));
+    });
+    expect(await start("sam", "month", undefined, "https://barbrabell.com", "pro")).toBe("https://checkout.stripe.com/c/2");
+    expect(calls[0]).toBe("GET prices?active=true&lookup_keys[]=pro_monthly&lookup_keys[]=pro_yearly");
+    expect(send.mock.calls[0][0].input.Key).toEqual({ PK: "USER#sam", SK: "PROPLAN" });
+    expect(send.mock.calls[2][0].input.Key).toEqual({ PK: "USER#sam", SK: "PROPLAN" });
+  });
+});
+
 describe("on sale", () => {
   it("needs the Stripe secret and both prices, looked up at most every 5 minutes", async () => {
     keys.mockResolvedValue(undefined);
@@ -96,6 +120,7 @@ describe("subscription events", () => {
   it("say the plan's status, interval and renewal", () => {
     expect(recordFrom(sub, 100)).toEqual({
       uid: "sam",
+      kind: "coach",
       record: { customer: "cus_1", subscription: "sub_1", status: "active", interval: "month", renews: "2026-11-18T11:06:40.000Z", cancelsAtEnd: false, eventAt: 100 },
     });
   });
@@ -104,6 +129,14 @@ describe("subscription events", () => {
     expect(recordFrom({ ...sub, metadata: {} }, 100)).toBeUndefined();
     const other = { ...sub, items: { data: [{ price: { lookup_key: "something_else" } }] } };
     expect(recordFrom(other, 100)).toBeUndefined();
+  });
+
+  it("FIT-190: say which plan by the price's lookup key, Pro's kept apart from the coach plan", async () => {
+    const pro = { ...sub, items: { data: [{ price: { lookup_key: "pro_yearly", recurring: { interval: "year" } } }] } };
+    expect(recordFrom(pro, 100)).toMatchObject({ uid: "sam", kind: "pro", record: { status: "active", interval: "year" } });
+    send.mockResolvedValue({});
+    await saveSubscription(pro, 100);
+    expect(send.mock.calls[0][0].input.Key).toEqual({ PK: "USER#sam", SK: "PROPLAN" });
   });
 
   it("are saved unless a newer one already was", async () => {
