@@ -10,7 +10,7 @@ import { stripe } from "./stripe.ts";
  * the customer portal changes the card, the interval or cancels. During the beta coaching is free whatever this says
  * (FIT-148 ends that).
  *
- * FIT-190: Pro, sold to the connector's users the same way (author, 2026-10-21: $7.99/month or $49.99/year), kept in
+ * FIT-190: Pro, sold to the connector's users the same way (author, 2026-10-21: $5.99/month or $39.99/year), kept in
  * USER#uid PROPLAN. Which plan a subscription is comes from its price's lookup key.
  */
 

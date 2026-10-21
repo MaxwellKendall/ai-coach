@@ -600,7 +600,7 @@ function claudePage(site: Site, mcpUrl: string) {
           <li><b>Say “Set me up”</b><span>Claude asks about your goals, schedule, equipment and injuries, one at a time, then plans your first week.</span></li>
         </ol>
         <div class="actions"><a class="button primary" href="https://claude.ai/settings/connectors">Open Claude's connectors</a></div>
-        <p class="fine">Once added, it's in the Claude app on your phone too. Free for 14 days; then planning needs Pro, $7.99 a month or $49.99 a year, and logging, progress and sharing stay free. Ask Claude to subscribe when you're ready.</p>
+        <p class="fine">Once added, it's in the Claude app on your phone too. Free for 14 days; then planning needs Pro, $5.99 a month or $39.99 a year, and logging, progress and sharing stay free. Ask Claude to subscribe when you're ready.</p>
       </section>
       <section class="block">
         <h2>Then just say it</h2>

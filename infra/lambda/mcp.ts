@@ -54,7 +54,7 @@ export interface Store {
 export type Access = { trialStart: string; pro: boolean };
 export const TRIAL_DAYS = 14;
 /** As the Stripe prices are (pro_monthly, pro_yearly), so Claude can say them before the link. */
-export const PRO_PRICES = { month: "$7.99 a month", year: "$49.99 a year" } as const;
+export const PRO_PRICES = { month: "$5.99 a month", year: "$39.99 a year" } as const;
 const PRO_PRICE = `${PRO_PRICES.month} or ${PRO_PRICES.year}`;
 /** What the trial ends: planning. Logging, reading, progress, sharing, apply and undo stay free. */
 export const PLANNING = new Set(["propose_session", "propose_week", "set_program"]);

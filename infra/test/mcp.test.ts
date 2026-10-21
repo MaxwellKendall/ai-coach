@@ -630,7 +630,7 @@ describe("FIT-190: Pro after the trial", () => {
     const store = memory({}, data());
     expect(await callTool("get_context", {}, me, store, now)).not.toMatch(/Trial/);
     expect(store.billing.trialStart).toBe(now.toISOString());
-    expect(await callTool("get_context", {}, me, store, later(11))).toMatch(/Trial: 3 days left[\s\S]*\$7\.99 a month or \$49\.99 a year/);
+    expect(await callTool("get_context", {}, me, store, later(11))).toMatch(/Trial: 3 days left[\s\S]*\$5\.99 a month or \$39\.99 a year/);
     expect(await callTool("get_context", {}, me, store, later(13))).toMatch(/Trial: 1 day left/);
     expect(await callTool("get_context", {}, me, store, later(14))).toMatch(/Trial over: planning/);
   });
@@ -659,7 +659,7 @@ describe("FIT-190: Pro after the trial", () => {
 
   it("gives a checkout link, and Stripe's portal once they have a customer", async () => {
     const store = memory({}, data());
-    expect(await callTool("subscribe", { interval: "year" }, me, store, now)).toMatch(/\$49\.99 a year: https:\/\/checkout\.stripe\.com\/c\/me-year/);
+    expect(await callTool("subscribe", { interval: "year" }, me, store, now)).toMatch(/\$39\.99 a year: https:\/\/checkout\.stripe\.com\/c\/me-year/);
     expect(await callTool("manage_subscription", {}, me, store, now)).toBe("They're on the free trial: 14 days left.");
     store.billing.pro = true;
     store.billing.customer = true;
