@@ -3,6 +3,7 @@
  * The renderers are the ones the Lambda will serve (lambda/sharePages.ts); only the store differs.
  */
 import { createServer } from "node:http";
+import { legalRoute } from "../lambda/legalPages.ts";
 import { giftRoute, type GiftCard, type GiftStore } from "../lambda/giftPages.ts";
 import { route, type Invite, type Program, type Recap, type Session, type Site, type Store, type Win } from "../lambda/sharePages.ts";
 
@@ -118,7 +119,7 @@ createServer(async (req, res) => {
       <body style="font:17px/1.8 -apple-system,sans-serif;padding:24px"><h1>Share page samples</h1>${links.map((l) => `<a href="${l}">${l}</a>`).join("<br>")}`);
     return;
   }
-  const page = (await giftRoute(path, giftStore, site)) ?? (await route(path, store, site));
+  const page = legalRoute(path, site) ?? (await giftRoute(path, giftStore, site)) ?? (await route(path, store, site));
   res.writeHead(page.status, { "content-type": page.type, ...(page.location ? { location: page.location } : {}) });
   res.end(page.body);
 }).listen(port, () => console.log(`Share pages on http://localhost:${port}/samples`));

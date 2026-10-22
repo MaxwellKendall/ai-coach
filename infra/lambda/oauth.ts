@@ -94,6 +94,7 @@ function consentPage(config: Config, request: string, client: string, returnHost
       <p class="lede">${esc(client)} will read your goals, plan and logged workouts, log sessions for you, and change your plan when you agree.</p>
       <div class="actions">${buttons || `<p class="fine">Sign-in isn't set up on this server yet.</p>`}</div>
       <p class="fine">Then you're back at ${esc(returnHost)}. New here? Signing in makes your account; ask ${esc(client)} to set you up.</p>
+      <p class="fine">By continuing you agree to the <a href="/terms">terms</a> and <a href="/privacy">privacy policy</a>.</p>
     </section>
     <script>
       // The account's days follow this browser's time zone.

@@ -61,6 +61,8 @@ describe("OAuth for agents (FIT-151)", () => {
     expect(consent.statusCode).toBe(200);
     expect(consent.body).toContain("Connect Claude to your training");
     expect(consent.body).toContain("claude.ai");
+    // FIT-158: the consent page links the terms and the privacy policy.
+    expect(consent.body).toContain('<a href="/privacy">privacy policy</a>');
     const start = /href="(\/oauth\/start\?[^"]+)"/.exec(consent.body)![1].replace(/&amp;/g, "&");
     expect(start).toContain("provider=apple");
 

@@ -686,7 +686,7 @@ export function layout(site: Site, page: { title: string; description: string; p
 <body>
 <header class="top"><a href="/" class="brand">${logo}${esc(site.appName)}</a></header>
 <main>${page.body}</main>
-<footer class="foot">© ${new Date().getUTCFullYear()} ${esc(site.appName)}</footer>
+<footer class="foot"><nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a></nav>© ${new Date().getUTCFullYear()} ${esc(site.appName)}</footer>
 <script>${page.view ? `\nfetch("/v/${page.view}", { cache: "no-store", keepalive: true }).catch(() => {});` : ""}
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-copy]");
@@ -732,6 +732,7 @@ h3{font-size:17px}
   border:1px solid var(--line);display:grid;place-items:center;font-size:14px;font-weight:650}
 .how span,.steps span{color:var(--muted);font-size:15px}
 .foot{color:var(--muted);font-size:13px;text-align:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom))}
+.foot nav{display:flex;justify-content:center;gap:20px;margin-bottom:8px}.foot nav a{color:inherit}
 
 /* The win card: fixed colors, as in the app. */
 .card{--c-bg:#111;--c-text:#fff;--c-muted:#b5b5b0;--c-soft:#d6d6d1;--c-track:#3a3a3d;
