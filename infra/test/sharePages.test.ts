@@ -127,3 +127,23 @@ describe("Train with Claude (FIT-152)", () => {
     }
   });
 });
+
+describe("the coach landing page (FIT-217)", () => {
+  it("is the home page: the value proposition, the price, and Start coaching to the dashboard's billing", async () => {
+    for (const path of ["/", "/coaches"]) {
+      const page = await route(path, {} as Store, { ...site, mcpUrl: "https://example.com/mcp" });
+      expect(page.status).toBe(200);
+      expect(page.body).toContain("Your clients log in a free app. You coach them from Claude.");
+      expect(page.body).toContain("$19.99");
+      expect(page.body).toContain("$199 a year");
+      expect(page.body).toContain("Clients are free");
+      expect(page.body).toContain('<a class="button primary" href="/app/billing">Start coaching</a>');
+      expect(page.body).toContain('href="/claude"');
+    }
+  });
+
+  it("links the App Store for clients once there's a listing", async () => {
+    const listed = await route("/", {} as Store, { ...site, appStoreUrl: "https://apps.apple.com/app/id1" });
+    expect(listed.body).toContain('href="https://apps.apple.com/app/id1"');
+  });
+});

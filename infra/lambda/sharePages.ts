@@ -277,7 +277,7 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
   }
   if (path === "/claude" && site.mcpUrl) return html(claudePage(site, site.mcpUrl));
   if (path === "/pro/thanks" && site.mcpUrl) return { ...html(proThanksPage(site)), noStore: true };
-  if (path === "/") return html(homePage(site));
+  if (path === "/" || path === "/coaches") return html(homePage(site));
   return { ...html(missingPage(site)), status: 404 };
 }
 
@@ -563,49 +563,121 @@ function coachInvitePage(coach: string, path: string, site: Site) {
   });
 }
 
+/** FIT-217: where a coach starts. Sign-in, the plan's Checkout and inviting clients are on the dashboard (/app). */
+export const START = "/app/billing";
+
+/**
+ * FIT-217: the home page is for coaches, the customer since the pilot (author, 2026-10-22). It says who it's for,
+ * what it costs and what to do next, and "Start coaching" leads to the dashboard: sign in, then the coach plan.
+ */
 function homePage(site: Site) {
+  const app = esc(site.appName);
+  const chat = [
+    { who: "coach", text: "Mike's knee is sore and his squat has stalled. Rebuild next week." },
+    { who: "claude", text: "Mike's squat has sat at 245 × 5 for three weeks, and he noted his left knee on Tuesday. Next week: box squats at 225 for 4 × 5 and split squats instead of lunges. Bench and rows stay as they are. Apply it?" },
+    { who: "coach", text: "Apply." },
+  ];
   return layout(site, {
-    title: `${site.appName}: your training, written for you`,
-    description: `A 12-week program written around your goals, every weight set for you, and a coach that keeps it on track.`,
+    title: `${site.appName}: coach your clients from Claude`,
+    description: `Your clients log in a free app. You coach them from Claude. $19.99 a month; clients are free.`,
     path: "/",
-    body: `<section class="hero"><h1>Your training, written for you</h1>
-      <p class="lede">Tell ${esc(site.appName)} what you're training for. It writes the program, sets every weight, and moves it along as you log.</p>
-      ${actions(site, [site.mcpUrl && { href: "/claude", label: "Train with Claude" }])}</section>${how(site)}`,
+    body: `${coachStyle}
+      <section class="hero">
+        <p class="eyebrow">For strength coaches</p>
+        <h1>Your clients log in a free app. You coach them from Claude.</h1>
+        <p class="lede">Ask Claude to write or change a client's week, and it works from every set they logged. You decide what's saved. The dashboard shows who trained, who's slipping and who's hurting.</p>
+        <div class="actions">
+          <a class="button primary" href="${START}">Start coaching</a>
+          <a class="button" href="#how">How it works</a>
+        </div>
+      </section>
+      <section class="block how" id="how">
+        <h2>How it works</h2>
+        <ol>
+          <li><b>Invite your clients</b><span>They get ${app} free on their iPhone, follow the week you wrote, and log each set.</span></li>
+          <li><b>Program in Claude</b><span>Say what you want for a client. Claude reads their logs, proposes the week, and saves it when you say so.</span></li>
+          <li><b>See your roster</b><span>Who trained, who's slipping, and who said something hurts, at a glance.</span></li>
+        </ol>
+      </section>
+      <section class="block">
+        <h2>What it looks like in Claude</h2>
+        <ul class="chat">${chat.map((m) => `<li class="${m.who}">${esc(m.text)}</li>`).join("")}</ul>
+        <p class="fine">Mike's phone shows the new week as soon as it's applied.</p>
+      </section>
+      <section class="block price-block">
+        <h2>Price</h2>
+        <p class="price"><b>$19.99</b><span>a month, or $199 a year</span></p>
+        <p class="lede">Clients are free. Cancel any time from Billing.</p>
+      </section>
+      <section class="block">
+        <h2>What you need</h2>
+        <ul class="needs">
+          <li><b>Claude</b><span>On claude.ai or the Claude app, with ${app} added as a connector. <a href="/claude">How to connect</a></span></li>
+          <li><b>Clients with an iPhone</b><span>${site.appStoreUrl ? `<a href="${esc(site.appStoreUrl)}">${app} on the App Store</a>, free.` : `${app} is free for them; you send each one an invite link.`}</span></li>
+        </ul>
+      </section>
+      <section class="block start">
+        <h2>Get started</h2>
+        <ol class="steps">
+          <li><b>Sign in</b><span>With Google or Apple.</span></li>
+          <li><b>Start the coach plan</b><span>Monthly or yearly, through Stripe.</span></li>
+          <li><b>Connect Claude</b><span>Paste one address into Claude's connectors.</span></li>
+          <li><b>Invite your first client</b><span>Send them the link.</span></li>
+        </ol>
+        <div class="actions"><a class="button primary" href="${START}">Start coaching</a></div>
+      </section>`,
   });
 }
 
-/** FIT-152: connecting Claude (or any MCP agent) to the training, on the person's own Claude. */
+const coachStyle = `<style>
+.chat{list-style:none;display:grid;gap:8px}
+.chat li{border-radius:18px;padding:10px 14px;font-size:15px;max-width:88%;width:fit-content}
+.chat .coach{justify-self:end;background:var(--button);color:var(--button-text);border-bottom-right-radius:6px}
+.chat .claude{background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:6px}
+.price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.price b{font:700 40px/1 var(--round);letter-spacing:-.02em}.price span{color:var(--muted)}
+.price-block .lede{margin-top:8px}
+.needs{list-style:none;display:grid;gap:14px}
+.needs li{display:flex;flex-direction:column}.needs span{color:var(--muted);font-size:15px}
+.start .steps{margin-top:0;max-width:none}
+.start .actions{max-width:none}
+@media (min-width:700px){.start .actions{max-width:360px}}
+</style>`;
+
+/**
+ * FIT-152: connecting Claude (or any MCP agent). FIT-217: written for the coach, the last step before inviting
+ * clients; it works the same for someone training themselves.
+ */
 function claudePage(site: Site, mcpUrl: string) {
   const says = [
-    "Set me up.",
-    "Log today: squats 225 for 5, 5 and 4 at RPE 8. Left knee a bit sore.",
-    "I only have 30 minutes and dumbbells today.",
-    "Plan next week. I'm traveling Thursday.",
-    "Am I on track for my squat goal?",
+    "Show me my clients.",
+    "Mike's knee is sore and his squat has stalled. Rebuild next week.",
+    "Write Sara a 3-day program for her first meet in March.",
+    "Who's slipping this week?",
+    "Invite a new client.",
   ];
   return layout(site, {
-    title: "Train with Claude",
-    description: `Connect ${site.appName} to Claude: it plans your weeks from your goals, logs what you lift and changes a session on the spot.`,
+    title: "Connect Claude",
+    description: `Connect ${site.appName} to Claude: write and change your clients' training from their logged sets.`,
     path: "/claude",
     body: `
       <section class="hero left">
-        <p class="eyebrow">Train with Claude</p>
-        <h1>Claude as your strength coach</h1>
-        <p class="lede">Connect ${esc(site.appName)} to Claude. It plans your weeks from your goals, logs each set with RPE and how it felt, and rewrites today's session when the day changes. Every plan keeps your lifts progressing and stays inside rules for your age, equipment and injuries.</p>
+        <p class="eyebrow">Connect Claude</p>
+        <h1>Coach from Claude</h1>
+        <p class="lede">Add ${esc(site.appName)} to Claude once. Then ask it to write or change a client's week: it reads what they logged, shows you the plan, and saves it when you say so.</p>
         <ol class="steps">
           <li><b>Copy the connector address</b>
             <button class="code url" type="button" data-copy="${esc(mcpUrl)}" aria-label="Copy the connector address">${esc(mcpUrl)}<small>Copy</small></button></li>
           <li><b>Add it to Claude</b><span>On claude.ai, open Settings › Connectors › Add custom connector. Name it ${esc(site.appName)} and paste the address.</span></li>
-          <li><b>Connect and sign in</b><span>Choose Connect, then Apple or Google. New here? That makes your account.</span></li>
-          <li><b>Say “Set me up”</b><span>Claude asks about your goals, schedule, equipment and injuries, one at a time, then plans your first week.</span></li>
+          <li><b>Connect and sign in</b><span>Choose Connect, then the same Google or Apple account you coach with.</span></li>
+          <li><b>Say “Show me my clients”</b><span>Your roster comes back. Invite clients on the dashboard, or ask Claude for an invite link.</span></li>
         </ol>
         <div class="actions"><a class="button primary" href="https://claude.ai/settings/connectors">Open Claude's connectors</a></div>
-        <p class="fine">Once added, it's in the Claude app on your phone too. It's free.</p>
+        <p class="fine">Once added, it's in the Claude app on your phone too.</p>
       </section>
       <section class="block">
         <h2>Then just say it</h2>
         <ul class="says">${says.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
-        <p class="fine">Claude shows each change to your plan before it's saved, and can undo it. Other agents that speak MCP connect at the same address.</p>
+        <p class="fine">Claude shows each change before it's saved, and can undo it. Training yourself? The same connector works for you: say “Set me up”. Other agents that speak MCP connect at the same address.</p>
       </section>`,
   });
 }

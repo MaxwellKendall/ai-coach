@@ -14,6 +14,7 @@ const site: Site = {
   origin: `http://localhost:${port}`,
   appStoreUrl: process.env.APP_STORE_URL,
   appId: "7GZKY29XJH.com.maxwellkendall.aicoach",
+  mcpUrl: `http://localhost:${port}/mcp`,
 };
 
 const wins: Record<string, Win> = {
