@@ -89,7 +89,8 @@ struct CloudModelTests {
         }
     }
 
-    @Test func signedOutProgramsAreOnDevice() {
+    /// FIT-215: while the pilot hides the in-app AI there's no model; PilotTests covers that.
+    @Test(.enabled(if: Pilot.inAppAI)) func signedOutProgramsAreOnDevice() {
         #expect(LanguageModel.programs(signedIn: false).name == "on-device")
         #expect((LanguageModel.programs(signedIn: true) as? FallbackModel)?.primary.name == "claude-haiku-5-5")
     }

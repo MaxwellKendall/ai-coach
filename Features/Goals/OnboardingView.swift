@@ -71,7 +71,7 @@ struct OnboardingView: View {
                                            history: history, firstLoads: firstWeek.map { FirstLoads.items($0.week.workouts) },
                                            designing: designing, brief: brief, loads: $loads,
                                            go: { index in withAnimation(.snappy) { page = index } })
-                        if index == 0, account.isAvailable { inviteRow.padding(.top, 28) }
+                        if index == 0, Pilot.groups, account.isAvailable { inviteRow.padding(.top, 28) }
                         #if DEBUG
                         if index == 0 { BackendPicker().font(.subheadline).foregroundStyle(.secondary).padding(.top, 20) }
                         #endif
@@ -129,7 +129,7 @@ struct OnboardingView: View {
         // The check step designs the first week, again whenever the answers it's built from change.
         .onChange(of: page == 4 ? designKey : nil, initial: true) { _, key in
             guard let key else { return }
-            if account.isAvailable, account.user == nil, !askedSignIn {
+            if Pilot.inAppAI, account.isAvailable, account.user == nil, !askedSignIn {
                 askedSignIn = true
                 signingInForCoach = true
             } else if !signingInForCoach {

@@ -7,6 +7,8 @@ struct TalkToCoachIntent: AppIntent {
     static let title: LocalizedStringResource = "Talk to Coach"
     static let description = IntentDescription("Opens Barbrabell listening, ready for what you say.")
     static let openAppWhenRun = true
+    /// FIT-215: not offered in Shortcuts, Spotlight or Siri while the pilot hides the in-app AI.
+    static var isDiscoverable: Bool { Pilot.inAppAI }
 
     @MainActor func perform() async throws -> some IntentResult {
         Navigator.shared.coach = true

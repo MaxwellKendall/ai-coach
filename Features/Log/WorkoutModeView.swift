@@ -102,7 +102,7 @@ struct WorkoutModeView: View {
         // A phone that locks mid-set loses the clock; keep it awake while training.
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            if account.user != nil, live == nil {
+            if Pilot.groups, account.user != nil, live == nil {
                 live = LiveShare(workout: draft.session, startedAt: startedAt)
                 live?.start()
                 live?.update(draft.live(at: page, names: names))

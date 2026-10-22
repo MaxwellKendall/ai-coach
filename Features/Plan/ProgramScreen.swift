@@ -95,7 +95,7 @@ struct ProgramScreen: View {
                     }
                 }
                 // FIT-111: share the program, signed in and once it has a brief.
-                if tab == .program, account.user != nil, let profile = profiles.first, profile.brief != nil {
+                if tab == .program, Pilot.groups, account.user != nil, let profile = profiles.first, profile.brief != nil {
                     ToolbarItem(placement: .primaryAction) {
                         Button("Share Program", systemImage: "square.and.arrow.up") { pro.gate { shareProgram(profile) } }
                     }
@@ -186,7 +186,8 @@ struct ProgramScreen: View {
                          pinnable: saved, monday: monday)
                     .padding(.top, 18)
                 Spacer(minLength: 12)
-                if index == current {
+                // FIT-215: planning the week again is the in-app AI's.
+                if index == current, Pilot.inAppAI {
                     let days = regenerateDays(monday)
                     HStack(alignment: .center) {
                         Text("Pinned sessions stay when you regenerate.").font(.footnote).foregroundStyle(.tertiary)

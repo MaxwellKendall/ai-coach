@@ -15,16 +15,20 @@ struct YouScreen: View {
                 Section {
                     NavigationLink { CatalogScreen() } label: { Label("Library", systemImage: "books.vertical") }
                     #if DEBUG
-                    NavigationLink { VoiceLogView() } label: { Label("Spoken attempts", systemImage: "waveform") }
+                    if Pilot.inAppAI {
+                        NavigationLink { VoiceLogView() } label: { Label("Spoken attempts", systemImage: "waveform") }
+                    }
                     // Pro without buying, kept across launches, for the author's own phone (`-pro YES` lasts one launch).
-                    Toggle(isOn: Binding(get: { UserDefaults.standard.bool(forKey: "pro") }, set: { on in
-                        UserDefaults.standard.set(on, forKey: "pro")
-                        Task { await pro.refresh() }
-                    })) { Label("Pro (debug)", systemImage: "star") }
+                    if Pilot.sellsPro {
+                        Toggle(isOn: Binding(get: { UserDefaults.standard.bool(forKey: "pro") }, set: { on in
+                            UserDefaults.standard.set(on, forKey: "pro")
+                            Task { await pro.refresh() }
+                        })) { Label("Pro (debug)", systemImage: "star") }
+                    }
                     BackendPicker()
                     #endif
                     // FIT-122: a year of Pro bought as a gift on the web.
-                    if account.isAvailable {
+                    if Pilot.sellsPro, account.isAvailable {
                         NavigationLink { RedeemGiftView() } label: { Label("Redeem a gift", systemImage: "gift") }
                     }
                 }

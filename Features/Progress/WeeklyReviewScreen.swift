@@ -37,8 +37,8 @@ struct WeeklyReviewScreen: View {
         }
         // FIT-83: the coach's paragraph is Pro; the numbers below it stay free.
         .task(id: pro.active) {
-            guard pro.active else { writing = false; return }
-            writing = LanguageModel.isAvailable
+            guard pro.active, LanguageModel.isAvailable else { writing = false; return }
+            writing = true
             paragraph = await WeekSummary.write(report.facts)
             writing = false
         }

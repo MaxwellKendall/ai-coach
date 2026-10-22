@@ -21,7 +21,8 @@ final class Pro {
     /// FIT-130: the coaches this account has; a coached client has Pro while linked (free during the beta).
     private(set) var coaches: [Cloud.Person] = (UserDefaults.standard.data(forKey: coachesKey))
         .flatMap { try? JSONDecoder().decode([Cloud.Person].self, from: $0) } ?? []
-    var active: Bool { subscribed || giftUntil.map { $0 > .now } == true || !coaches.isEmpty }
+    /// FIT-215: while Pro isn't sold, everyone has what it gated.
+    var active: Bool { !Pilot.sellsPro || subscribed || giftUntil.map { $0 > .now } == true || !coaches.isEmpty }
     /// When the free trial ends, while in one.
     private(set) var trialEnds: Date?
     /// Whether this Apple Account can still have the free trial; someone whose Pro lapsed can't.
@@ -31,6 +32,7 @@ final class Pro {
     private var updates: Task<Void, Never>?
 
     init() {
+        guard Pilot.sellsPro else { return }
         updates = Task { [weak self] in
             for await update in Transaction.updates {
                 if case .verified(let transaction) = update { await transaction.finish() }
@@ -46,6 +48,8 @@ final class Pro {
 
     /// Whether a Pro subscription is in force now: verified, not revoked, not expired.
     func refresh() async {
+        // FIT-215: no StoreKit while Pro isn't sold.
+        guard Pilot.sellsPro else { return }
         var active = false
         var trialEnds: Date?
         for await entitlement in Transaction.currentEntitlements {
@@ -89,7 +93,7 @@ final class Pro {
 
     /// The account's gifted Pro, from the server; signed out, there's none. Offline, the last answer stands.
     func refreshGift(signedIn: Bool) async {
-        guard signedIn else { return setGift(nil) }
+        guard signedIn, Pilot.sellsPro else { return setGift(nil) }
         guard let until = try? await Cloud.giftedPro() else { return }
         setGift(until)
         await remind()

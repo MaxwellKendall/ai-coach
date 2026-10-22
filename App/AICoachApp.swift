@@ -46,7 +46,7 @@ struct AICoachApp: App {
                 guard let uid = account.user?.uid else { return }
                 SyncEngine.shared.start(uid: uid, context: container.mainContext)
                 await Push.refresh()
-                await GroupSync.all(container.mainContext, me: uid)
+                if Pilot.groups { await GroupSync.all(container.mainContext, me: uid) }
             }
         }
     }

@@ -33,7 +33,7 @@ struct RootView: View {
             Tab("Today", systemImage: "figure.strengthtraining.traditional", value: AppTab.today) { TodayScreen() }
             Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
             Tab("Progress", systemImage: "chart.bar", value: AppTab.progress) { ProgramScreen(tabs: [.goals, .wins]) }
-            if account.isAvailable {
+            if Pilot.groups, account.isAvailable {
                 Tab(groupsTab.title, systemImage: "person.2", value: AppTab.groups) { NavigationStack { GroupsScreen() } }
                     .badge(groupsTab.live ? Text("Live") : nil)
             }
@@ -57,7 +57,7 @@ struct RootView: View {
         }
         // The group's name and whether anyone's live: a minute is soon enough, and push says when a workout starts.
         .task(id: account.user?.uid) {
-            guard account.isAvailable else { return }
+            guard Pilot.groups, account.isAvailable else { return }
             while !Task.isCancelled {
                 await groupsTab.refresh(me: account.user?.uid)
                 try? await Task.sleep(for: .seconds(60))
@@ -82,7 +82,7 @@ struct RootView: View {
             }
             .tint(Self.accent)
         }
-        .sheet(isPresented: Binding(get: { pro.paywall }, set: { pro.paywall = $0 })) { PaywallView() }
+        .sheet(isPresented: Binding(get: { Pilot.sellsPro && pro.paywall }, set: { pro.paywall = $0 })) { PaywallView() }
         .sheet(item: Binding(get: { onboarding == nil ? navigator.gift.map(GiftRef.init) : nil },
                              set: { if $0 == nil { navigator.gift = nil } })) { ref in
             NavigationStack { RedeemGiftView(code: ref.id) }.tint(Self.accent)
@@ -102,7 +102,7 @@ struct RootView: View {
         .onOpenURL { url in
             guard account.isAvailable else { return }
             // FIT-122: a gift's link opens Redeem with its code; Redeem asks to sign in.
-            if let gift = InviteLink.gift(from: url) {
+            if Pilot.sellsPro, let gift = InviteLink.gift(from: url) {
                 navigator.gift = gift
                 return
             }
@@ -116,6 +116,8 @@ struct RootView: View {
                 }
                 return
             }
+            // FIT-215: friends' sessions, programs and groups wait for the pilot to end.
+            guard Pilot.groups else { return }
             // FIT-113: a shared session; it waits for onboarding, if any, then asks before planning anything.
             if let session = InviteLink.session(from: url) {
                 if account.user == nil {

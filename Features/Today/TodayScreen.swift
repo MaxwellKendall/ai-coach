@@ -356,7 +356,8 @@ struct TodayScreen: View {
                     Text("Rest").font(.system(size: 30, weight: .bold)).tracking(-0.4)
                     Text(coach).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         .frame(maxWidth: 240)
-                    if isToday && !pro.active { logOwnButton(run: nil).padding(.top, 18) } else if isToday { runButton("Start a run", nil).padding(.top, 18) }
+                    // FIT-215: in the pilot anyone can log a workout of their own on a rest day.
+                    if isToday && (!pro.active || Pilot.simple) { logOwnButton(run: nil).padding(.top, 18) } else if isToday { runButton("Start a run", nil).padding(.top, 18) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -450,14 +451,14 @@ struct TodayScreen: View {
         Menu {
             Button("Edit exercises", systemImage: "list.bullet") { sheet = .details(plan.items) }
             // FIT-113: send this session to a friend, who does it with their own weights.
-            if account.user != nil, !isPast {
+            if Pilot.groups, account.user != nil, !isPast {
                 Button("Train with a Friend", systemImage: "person.2") { trainWithFriend(plan) }
             }
             // Changing the program's week is Pro (FIT-120).
             if pro.active, let plan = thisWeeksPlan {
                 Button("Change this week", systemImage: "slider.horizontal.3") { sheet = .adjust(plan) }
             }
-            if pro.active {
+            if pro.active, Pilot.inAppAI {
                 Button("Plan this week again", systemImage: "arrow.clockwise") {
                     try? Planner.generate(weekOf: .now, in: context)
                     Task { await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil)) }

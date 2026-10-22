@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let groupId = response.notification.request.content.userInfo["groupId"] as? String else { return }
+        guard Pilot.groups, let groupId = response.notification.request.content.userInfo["groupId"] as? String else { return }
         await MainActor.run { Navigator.shared.group = Cloud.GroupSummary(groupId: groupId, name: "", role: "member") }
     }
 }
