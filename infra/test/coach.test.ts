@@ -104,11 +104,13 @@ describe("a coach link (FIT-130)", () => {
     await expect(owner("ann", "sam")).rejects.toThrow(/Unauthorized/);
   });
 
-  it("lets the coach change only the plan, never logs, goals or the profile", () => {
+  it("lets the coach change the plan and (FIT-200) correct the logs, never goals or the profile", () => {
     const at = "2026-10-16T12:00:00.000Z";
-    expect(() => coachMayWrite([{ key: "plan#2026-10-16", updatedAt: at, deleted: false, body: "[]" }])).not.toThrow();
-    for (const key of ["log#2026-10-16", "goal#3F2504E0-4F89-11D3-9A0C-0305E82C3301", "profile"]) {
-      expect(() => coachMayWrite([{ key, updatedAt: at, deleted: false, body: "[]" }])).toThrow(/only the plan/);
+    for (const key of ["plan#2026-10-16", "log#2026-10-16"]) {
+      expect(() => coachMayWrite([{ key, updatedAt: at, deleted: false, body: "[]" }])).not.toThrow();
+    }
+    for (const key of ["goal#3F2504E0-4F89-11D3-9A0C-0305E82C3301", "profile"]) {
+      expect(() => coachMayWrite([{ key, updatedAt: at, deleted: false, body: "[]" }])).toThrow(/only the plan and the logs/);
     }
   });
 

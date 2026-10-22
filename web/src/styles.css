@@ -213,3 +213,19 @@ h3 .copy:hover { color: var(--text); }
 .signins { list-style: none; display: grid; gap: 8px; }
 .signins li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .signins .button { min-height: 38px; }
+
+/* FIT-200: correcting a logged session */
+.correct { display: grid; gap: 12px; margin-top: 8px; }
+.correct ul { list-style: none; display: grid; gap: 6px; }
+.correct li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; color: var(--muted); }
+.correct li .what { flex: 1 1 160px; color: var(--text); font-size: 15px; }
+.correct input { width: 72px; font: inherit; color: var(--text); padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.correct .remove { border: 0; background: none; color: var(--muted); font-size: 18px; padding: 0 4px; }
+.correct .remove:hover { color: var(--text); }
+.correct .note-edit { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.correct textarea { font: inherit; font-weight: 400; color: var(--text); padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); resize: vertical; }
+.correct .actions { margin-top: 0; }
+.danger-link { margin-left: auto; color: #b0541f; }
+.thread .tools-inline { margin-left: 8px; display: inline-flex; gap: 10px; font-size: 13px; }
+.thread .tools-inline .link { color: var(--muted); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .danger-link { color: #f0a46b; } }

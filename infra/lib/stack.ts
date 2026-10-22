@@ -305,6 +305,9 @@ export class AICoachStack extends Stack {
     });
 
     pipeline("Mutation", "updateProfile", ["updateProfile"]);
+    // FIT-200: a reply's author corrects or deletes it.
+    pipeline("Mutation", "editComment", ["editComment"]);
+    pipeline("Mutation", "deleteComment", ["deleteComment"]);
     pipeline("Mutation", "createGroup", ["getProfile", "createGroup"]);
     pipeline("Mutation", "joinGroup", ["getInvite", "getProfile", "joinGroup"]);
     pipeline("Mutation", "registerDevice", ["registerDevice"]);

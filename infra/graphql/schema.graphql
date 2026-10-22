@@ -232,6 +232,9 @@ type Mutation {
   removeClient(uid: ID!): Boolean
   "FIT-132: reply on a logged session (day YYYY-MM-DD): my own, or a client's (uid) as their coach."
   postComment(uid: ID, day: String!, text: String!): Comment
+  "FIT-200: change or delete a reply I wrote (day and at as postComment returned them), in my thread or a client's (uid)."
+  editComment(uid: ID, day: String!, at: AWSDateTime!, text: String!): Comment
+  deleteComment(uid: ID, day: String!, at: AWSDateTime!): Boolean
   "FIT-131: send a client a program: days is a template week as JSON ([{weekday 0-6 from Sunday, slot, rows}]), repeated for weeks from start."
   sendProgram(uid: ID!, start: String!, weeks: Int!, note: String, days: AWSJSON!, addPerWeek: Float): ProgramOffer
   "FIT-131: the client starts (writes it into their plan from its start day) or declines a program. offsetMinutes: their time zone, east of UTC."

@@ -16,6 +16,8 @@ import * as createShare from "../resolvers/createShare.js";
 import * as getShare from "../resolvers/getShare.js";
 import * as publishWeek from "../resolvers/publishWeek.js";
 import * as clearWeek from "../resolvers/clearWeek.js";
+import * as editComment from "../resolvers/editComment.js";
+import * as deleteComment from "../resolvers/deleteComment.js";
 
 const ME = "user-a";
 const OTHER = "user-b";
@@ -219,5 +221,29 @@ describe("week plans (FIT-114)", () => {
     const items = [{ SK: "META", name: "G" }, { SK: `MEMBER#${ME}`, uid: ME }, { SK: `WEEK#${ME}`, uid: ME }, { SK: "WEEK#gone", uid: "gone" }];
     const group = groupDetail.response(ctx({ args: { groupId: "g1" }, result: { items } }));
     expect(group.weeks.map((w: { uid: string }) => w.uid)).toEqual([ME]);
+  });
+});
+
+describe("FIT-200: a reply's author corrects or deletes it", () => {
+  const args = { uid: OTHER, day: "2026-10-20", at: "2026-10-20T18:00:00.000Z" };
+  it("reaches only a reply the caller wrote, in the thread asked for", () => {
+    const req = editComment.request(ctx({ args: { ...args, text: " Go lighter next week " } }));
+    expect(req.key).toEqual({ PK: `USER#${OTHER}`, SK: `COMMENT#2026-10-20#2026-10-20T18:00:00.000Z#${ME}` });
+    expect(req.update.expressionValues[":text"]).toBe("Go lighter next week");
+    expect(req.condition.expression).toBe("attribute_exists(PK)");
+    expect(deleteComment.request(ctx({ args: { day: args.day, at: args.at } })).key)
+      .toEqual({ PK: `USER#${ME}`, SK: `COMMENT#2026-10-20#2026-10-20T18:00:00.000Z#${ME}` });
+  });
+
+  it("refuses an empty or long reply, or a day that isn't one", () => {
+    expect(() => editComment.request(ctx({ args: { ...args, text: "  " } }))).toThrow(ResolverError);
+    expect(() => editComment.request(ctx({ args: { ...args, text: "x".repeat(1001) } }))).toThrow(/too long/);
+    expect(() => deleteComment.request(ctx({ args: { ...args, day: "2026-10-20#X" } }))).toThrow(/Not a day/);
+  });
+
+  it("says when the reply is gone, and returns the edited one", () => {
+    expect(() => editComment.response(ctx({ error: { type: "DynamoDB:ConditionalCheckFailedException", message: "x" } }))).toThrow(/gone/);
+    const c = { day: args.day, at: args.at, by: ME, text: "New", PK: "x" };
+    expect(editComment.response(ctx({ result: c }))).toEqual({ day: args.day, at: args.at, by: ME, byName: null, text: "New" });
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Config, User } from "./auth";
-import { HistoryView } from "./HistoryView";
+import { corrections, HistoryView } from "./HistoryView";
 import { href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
 import catalog from "./catalog.json";
@@ -200,7 +200,7 @@ export function ClientPage({ config, me, uid, go }: {
         <>
           <header className="page"><h1>{personName(client)}</h1></header>
           {units ? (
-            <HistoryView units={units} comments={thread} me={me.uid}
+            <HistoryView units={units} comments={thread} me={me.uid} corrections={corrections(config, uid, setUnits, setThread)}
                          onReply={async (day, text) => { const c = await postComment(config, day, text, uid); setThread((t) => [...t, c]); }} />
           ) : <p className="muted">Loading…</p>}
         </>

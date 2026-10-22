@@ -60,8 +60,17 @@ export async function pullAll(config: Config, uid?: string): Promise<Map<string,
 }
 
 /** FIT-128: a day's planned rows, as this browser has them now; false when the server kept a newer copy (the phone's). */
-export async function pushDay(config: Config, day: string, rows: PlanRow[], uid?: string): Promise<boolean> {
-  const unit = { key: `plan#${day}`, updatedAt: new Date().toISOString(), deleted: rows.length === 0, body: rows.length ? JSON.stringify(rows) : null };
+export const pushDay = (config: Config, day: string, rows: PlanRow[], uid?: string) => pushUnit(config, `plan#${day}`, rows, uid);
+
+/** FIT-200: a day's logged rows, corrected; as pushDay. */
+export const pushLog = (config: Config, day: string, rows: LogRow[], uid?: string) => pushUnit(config, `log#${day}`, rows, uid);
+
+/** The unit as it's pushed, also kept in the page's own copy of the units. */
+export const unitOf = (key: string, rows: unknown[]): Unit =>
+  ({ key, updatedAt: new Date().toISOString(), deleted: rows.length === 0, body: rows.length ? JSON.stringify(rows) : null });
+
+async function pushUnit(config: Config, key: string, rows: unknown[], uid?: string): Promise<boolean> {
+  const unit = unitOf(key, rows);
   const { syncPush }: { syncPush: { rejected: { key: string }[] } } = await gql(
     config,
     `mutation($u: [SyncUnitInput!]!, $o: ID) { syncPush(units: $u, source: "web", uid: $o) { uid source changedAt rejected { key } } }`,
@@ -91,6 +100,14 @@ export const comments = (config: Config, uid?: string) =>
 export const postComment = (config: Config, day: string, text: string, uid?: string) =>
   gql<{ postComment: Comment }>(config, `mutation($u: ID, $d: String!, $t: String!) { postComment(uid: $u, day: $d, text: $t) { day at by byName text } }`,
     { u: uid ?? null, d: day, t: text }).then((d) => d.postComment);
+
+// FIT-200: the author of a reply corrects or deletes it.
+export const editComment = (config: Config, c: Comment, text: string, uid?: string) =>
+  gql<{ editComment: Comment }>(config, `mutation($u: ID, $d: String!, $a: AWSDateTime!, $t: String!) { editComment(uid: $u, day: $d, at: $a, text: $t) { day at by byName text } }`,
+    { u: uid ?? null, d: c.day, a: c.at, t: text }).then((d) => d.editComment);
+
+export const deleteComment = (config: Config, c: Comment, uid?: string) =>
+  gql(config, `mutation($u: ID, $d: String!, $a: AWSDateTime!) { deleteComment(uid: $u, day: $d, at: $a) }`, { u: uid ?? null, d: c.day, a: c.at });
 
 // FIT-131: programs a coach sends.
 export type Offer = {

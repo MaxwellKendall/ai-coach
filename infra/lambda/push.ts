@@ -79,7 +79,8 @@ export async function handler(event: DynamoDBStreamEvent) {
     const image = record.dynamodb;
     if (!image?.NewImage) continue;
     if (String(image.Keys?.SK?.S ?? "").startsWith("COMMENT#")) {
-      await replied(unmarshall(image.NewImage as never) as never);
+      // FIT-200: an edited reply isn't news.
+      if (record.eventName === "INSERT") await replied(unmarshall(image.NewImage as never) as never);
       continue;
     }
     if (String(image.Keys?.SK?.S ?? "").startsWith("OFFER#")) {

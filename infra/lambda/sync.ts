@@ -93,9 +93,11 @@ export async function owner(caller: string, asked: string | null | undefined) {
   throw new Error("Unauthorized: not this person's coach");
 }
 
-/** A coach changes the client's plan, never what the client logged, their goals or their profile. */
+/** A coach changes the client's plan and (FIT-200) corrects what they logged, never their goals or their profile. */
 export function coachMayWrite(units: UnitInput[]) {
-  if (units.some((u) => !u.key.startsWith("plan#"))) throw new Error("Unauthorized: a coach changes only the plan");
+  if (units.some((u) => !u.key.startsWith("plan#") && !u.key.startsWith("log#"))) {
+    throw new Error("Unauthorized: a coach changes only the plan and the logs");
+  }
 }
 
 export async function handler(event: AppSyncResolverEvent<any>) {

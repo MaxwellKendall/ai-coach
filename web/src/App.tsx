@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { finishSignIn, idToken, signIn, signOut, startLink, user, type Config, type Provider, type User } from "./auth";
 import { BillingPage } from "./BillingPage";
 import { ClientPage, ClientsPage } from "./ClientsPage";
-import { HistoryView } from "./HistoryView";
+import { corrections, HistoryView } from "./HistoryView";
 import { here, href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
 import { comments, postComment, pullAll, type Comment, type Unit } from "./sync";
@@ -143,7 +143,7 @@ function HistoryPage({ config, me }: { config: Config; me: User }) {
       <header className="page"><h1>History</h1></header>
       {error ? <p className="error" role="alert">Couldn't load your history: {error}</p>
         : units ? (
-          <HistoryView units={units} comments={thread} me={me.uid}
+          <HistoryView units={units} comments={thread} me={me.uid} corrections={corrections(config, undefined, setUnits, setThread)}
                        onReply={thread.length ? async (day, text) => { const c = await postComment(config, day, text); setThread((t) => [...t, c]); } : undefined} />
         ) : <p className="muted">Loading…</p>}
     </>

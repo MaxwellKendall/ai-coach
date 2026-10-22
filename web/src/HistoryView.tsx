@@ -1,7 +1,10 @@
 import catalog from "./catalog.json";
+import { sessionNote } from "./corrections";
 import { estimated1RMs, estimated1RMTrend, loggedSets, streakLine, streakNow } from "./progress";
 import { useState } from "react";
-import type { Comment, LogRow, PlanRow, Unit } from "./sync";
+import { SessionEditor } from "./SessionEditor";
+import type { Config } from "./auth";
+import { deleteComment, editComment, pushLog, unitOf, type Comment, type LogRow, type PlanRow, type Unit } from "./sync";
 
 // FIT-129: what was logged, newest first, and how the lifts and goals are moving. Derived from the synced units, never
 // stored. Takes any account's units, so a coach's client page (FIT-132) shows the same thing.
@@ -40,8 +43,78 @@ function Sparkline({ points }: { points: [string, number][] }) {
   );
 }
 
+/** FIT-200: what a page lets its viewer correct; each saves to the account and updates the page's units. */
+export type Corrections = {
+  /** A day's logged rows, all of them (meals and sleep too), as they should be now. */
+  saveDay: (day: string, rows: LogRow[]) => Promise<void>;
+  editComment: (comment: Comment, text: string) => Promise<void>;
+  deleteComment: (comment: Comment) => Promise<void>;
+};
+
+/** The corrections for an account's history page: mine, or a client's (uid) as their coach. Last edit wins. */
+export function corrections(config: Config, uid: string | undefined, setUnits: (f: (u?: Map<string, Unit>) => Map<string, Unit> | undefined) => void,
+                            setThread: (f: (t: Comment[]) => Comment[]) => void): Corrections {
+  const same = (a: Comment) => (b: Comment) => a.day === b.day && a.at === b.at && a.by === b.by;
+  return {
+    saveDay: async (day, rows) => {
+      if (!(await pushLog(config, day, rows, uid))) throw new Error("This day changed on the phone since you opened it. Reload to see it, then correct it again.");
+      setUnits((u) => u && new Map(u).set(`log#${day}`, unitOf(`log#${day}`, rows)));
+    },
+    editComment: async (comment, text) => {
+      const edited = await editComment(config, comment, text, uid);
+      setThread((t) => t.map((c) => (same(comment)(c) ? edited : c)));
+    },
+    deleteComment: async (comment) => {
+      await deleteComment(config, comment, uid);
+      setThread((t) => t.filter((c) => !same(comment)(c)));
+    },
+  };
+}
+
+/** FIT-200: one of my replies, which I can change or delete. */
+function MyComment({ comment, corrections }: { comment: Comment; corrections?: Corrections }) {
+  const [text, setText] = useState<string>();
+  const [error, setError] = useState<string>();
+  const run = async (work: () => Promise<void>) => {
+    setError(undefined);
+    try {
+      await work();
+      setText(undefined);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  if (text !== undefined && corrections) {
+    return (
+      <div className="reply">
+        <textarea autoFocus rows={2} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setText(undefined); }} />
+        <div>
+          <button className="button primary" disabled={!text.trim()} onClick={() => run(() => corrections.editComment(comment, text))}>Save</button>
+          <button className="link" onClick={() => setText(undefined)}>Cancel</button>
+        </div>
+        {error && <p className="error">{error}</p>}
+      </div>
+    );
+  }
+  return (
+    <p className="mine">
+      <strong>You</strong> {comment.text}
+      {corrections && (
+        <span className="tools-inline">
+          <button className="link" onClick={() => setText(comment.text)}>Edit</button>
+          <button className="link" onClick={() => confirm("Delete this reply?") && run(() => corrections.deleteComment(comment))}>Delete</button>
+        </span>
+      )}
+      {error && <span className="error"> {error}</span>}
+    </p>
+  );
+}
+
 /** FIT-132: a session's thread, and a reply box when replying is allowed. */
-function Thread({ day, comments, me, onReply }: { day: string; comments: Comment[]; me?: string; onReply?: (day: string, text: string) => Promise<void> }) {
+function Thread({ day, comments, me, onReply, corrections }: {
+  day: string; comments: Comment[]; me?: string; onReply?: (day: string, text: string) => Promise<void>; corrections?: Corrections;
+}) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -62,10 +135,8 @@ function Thread({ day, comments, me, onReply }: { day: string; comments: Comment
   };
   return (
     <div className="thread">
-      {comments.map((c) => (
-        <p key={c.at + c.by} className={c.by === me ? "mine" : undefined}>
-          <strong>{c.by === me ? "You" : c.byName ?? "Coach"}</strong> {c.text}
-        </p>
+      {comments.map((c) => c.by === me ? <MyComment key={c.at + c.by} comment={c} corrections={corrections} /> : (
+        <p key={c.at + c.by}><strong>{c.byName ?? "Coach"}</strong> {c.text}</p>
       ))}
       {onReply && (open ? (
         <div className="reply">
@@ -85,9 +156,10 @@ function Thread({ day, comments, me, onReply }: { day: string; comments: Comment
   );
 }
 
-export function HistoryView({ units, comments = [], me, onReply }: {
-  units: Map<string, Unit>; comments?: Comment[]; me?: string; onReply?: (day: string, text: string) => Promise<void>;
+export function HistoryView({ units, comments = [], me, onReply, corrections }: {
+  units: Map<string, Unit>; comments?: Comment[]; me?: string; onReply?: (day: string, text: string) => Promise<void>; corrections?: Corrections;
 }) {
+  const [editing, setEditing] = useState<string>();
   const sets = loggedSets(units);
   const maxes = estimated1RMs(sets);
   const streak = streakLine(streakNow(units));
@@ -98,7 +170,10 @@ export function HistoryView({ units, comments = [], me, onReply }: {
   const lifts = Object.entries(maxes).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const days = [...units.entries()]
     .filter(([k, u]) => k.startsWith("log#") && u.body)
-    .map(([k, u]) => ({ key: k.slice(4), rows: (JSON.parse(u.body!) as LogRow[]).filter((r) => r.kind === "workout") }))
+    .map(([k, u]) => {
+      const all = JSON.parse(u.body!) as LogRow[];
+      return { key: k.slice(4), all, rows: all.filter((r) => r.kind === "workout") };
+    })
     .filter((d) => d.rows.length)
     .sort((a, b) => (a.key < b.key ? 1 : -1));
   const title = (key: string) => {
@@ -150,15 +225,31 @@ export function HistoryView({ units, comments = [], me, onReply }: {
       <ol className="days history">
         {days.map((day) => {
           const byExercise = new Map<string, LogRow[]>();
-          for (const row of [...day.rows].sort((a, b) => a.at - b.at)) {
-            byExercise.set(row.template ?? "", [...(byExercise.get(row.template ?? "") ?? []), row]);
+          // The summary row (no exercise) holds the session's note and ratings, not a set.
+          for (const row of [...day.rows].filter((r) => r.template).sort((a, b) => a.at - b.at)) {
+            byExercise.set(row.template!, [...(byExercise.get(row.template!) ?? []), row]);
           }
-          const notes = day.rows.map((r) => r.note).filter(Boolean);
+          const note = sessionNote(day.rows, title(day.key));
+          const thread = <Thread day={day.key} comments={comments.filter((c) => c.day === day.key)} me={me} onReply={onReply} corrections={corrections} />;
+          if (editing === day.key && corrections) {
+            return (
+              <li className="day" key={day.key}>
+                <div className="date"><span>{dayFormat.format(parse(day.key))}</span></div>
+                <div className="session">
+                  <h3>{title(day.key) ?? "Workout"}</h3>
+                  <SessionEditor rows={day.all} title={title(day.key)} name={name} onCancel={() => setEditing(undefined)}
+                                 onSave={async (rows) => { await corrections.saveDay(day.key, rows); setEditing(undefined); }} />
+                  {thread}
+                </div>
+              </li>
+            );
+          }
           return (
             <li className="day" key={day.key}>
               <div className="date"><span>{dayFormat.format(parse(day.key))}</span></div>
               <div className="session">
-                <h3>{title(day.key) ?? "Workout"}</h3>
+                <h3>{title(day.key) ?? "Workout"}
+                  {corrections && <button className="copy" onClick={() => setEditing(day.key)}>Edit</button>}</h3>
                 <ul>
                   {[...byExercise].map(([slug, rows]) => (
                     <li key={slug}>
@@ -167,8 +258,8 @@ export function HistoryView({ units, comments = [], me, onReply }: {
                     </li>
                   ))}
                 </ul>
-                {notes.length > 0 && <p className="note">“{[...new Set(notes)].join(" ")}”</p>}
-                <Thread day={day.key} comments={comments.filter((c) => c.day === day.key)} me={me} onReply={onReply} />
+                {note && <p className="note">“{note}”</p>}
+                {thread}
               </div>
             </li>
           );
