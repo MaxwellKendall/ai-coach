@@ -2,7 +2,7 @@ import type { LambdaFunctionURLEvent } from "aws-lambda";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../../shared/triage.ts";
-import { answer, callTool, hashToken, serve, type Account, type Store } from "../lambda/mcp.ts";
+import { answer, callTool, CLIENT_TOOLS, hashToken, serve, type Account, type Store } from "../lambda/mcp.ts";
 import { readProgram, readRecap, readSession, readWin } from "../lambda/sharePages.ts";
 import { checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
 
@@ -18,16 +18,20 @@ const row = (template: string, sets: number, extra: Partial<PlanRow> = {}, t = a
 
 type Link = { coach: string; client: string; name: string | null };
 
-function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }>; links: Link[]; invites: string[]; threads: (Comment & { owner: string })[] } {
+function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }>; links: Link[]; invites: string[]; threads: (Comment & { owner: string })[]; paying: Set<string> } {
   const extra = new Map<string, Record<string, any>>();
   const shared = new Map<string, { uid: string; kind: string; payload: any }>();
   const links: Link[] = [], invites: string[] = [];
   const threads: (Comment & { owner: string })[] = [];
+  const paying = new Set(["coach"]);
   return {
     shared,
     links,
     invites,
     threads,
+    paying,
+    async coachPlan(uid) { return paying.has(uid); },
+    async coachCheckout(uid) { return `https://checkout.stripe.com/c/${uid}-coach`; },
     async comments(_, client) { return threads.filter((c) => c.owner === client); },
     async comment(coach, client, day, text) { threads.push({ owner: client, day, at: now.toISOString(), by: coach, byName: "Coach", text }); },
     async clients(coach) { return links.filter((l) => l.coach === coach).map((l) => ({ uid: l.client, name: l.name, since: "2026-10-01T00:00:00.000Z" })); },
@@ -737,6 +741,8 @@ describe("FIT-196: the coach's roster", () => {
     await callTool("add_note", { client: "Sarah", date: "2026-10-15", note: "Ice it and keep the squat at RPE 7." }, coach, store, now);
     expect(store.threads).toMatchObject([{ owner: "me", day: "2026-10-15", by: "coach", text: "Ice it and keep the squat at RPE 7." }]);
     expect(await callTool("list_clients", {}, coach, store, now)).toMatch(/Sarah Jones \[me\]: .* No flags\./);
+    await expect(callTool("list_clients", {}, me, store, now)).rejects.toThrow(/Coaching needs the coach plan/);
+    store.paying.add("me");
     expect(await callTool("list_clients", {}, me, store, now)).toMatch(/no clients yet[\s\S]*invite_client/);
   });
 
@@ -767,5 +773,42 @@ describe("FIT-196: the coach's roster", () => {
     await callTool("apply", { client: "Mike", proposal_id: week.match(/Proposal (\S+)/)![1] }, coach, store, now);
     expect(units.mike["plan#2026-10-24"]).toMatch(/back-squat/);
     expect(units.me["plan#2026-10-24"]).toBeUndefined();
+  });
+});
+
+describe("FIT-148: coaching needs the coach plan", () => {
+  const coach: Account = { uid: "coach", tz, agent: "claude" };
+  const setup = () => {
+    const store = memory({}, { ...data(), coach: { profile: encode(profile) } });
+    store.links.push({ coach: "coach", client: "me", name: "Sarah" });
+    store.paying.clear();
+    return store;
+  };
+
+  it("answers every coach tool with the coach plan's Checkout until it's paid, then coaches as before", async () => {
+    const store = setup();
+    const calls: [string, Record<string, unknown>][] = [["list_clients", {}], ["roster_review", {}], ["invite_client", {}],
+      ...[...CLIENT_TOOLS].map((t) => [t, { client: "Sarah", date: "2026-10-15" }] as [string, Record<string, unknown>])];
+    for (const [tool, args] of calls) {
+      await expect(callTool(tool, args, coach, store, now), tool).rejects.toThrow(/coach plan, \$19\.99 a month or \$199 a year[\s\S]*https:\/\/checkout\.stripe\.com\/c\/coach-coach[\s\S]*\/billing/);
+    }
+    expect(store.invites).toEqual([]);
+    store.paying.add("coach");
+    expect(await callTool("list_clients", {}, coach, store, now)).toMatch(/Sarah \[me\]/);
+    expect(await callTool("get_day", { client: "Sarah", date: "2026-10-15" }, coach, store, now)).toMatch(/Back Squat/);
+  });
+
+  it("keeps their own training free, and says the clients are waiting on the plan", async () => {
+    const store = setup();
+    const own = await callTool("get_context", {}, coach, store, now);
+    expect(own).toMatch(/They coach 1 client, but their coach plan has ended/);
+    expect(own).not.toMatch(/Sarah/);
+    await expect(callTool("propose_session", { date: "2026-10-19", title: "Lower", reason: "r", exercises: [{ exercise: "Plank", sets: 3, seconds: 45 }] }, coach, store, now)).resolves.toMatch(/Proposal/);
+    // A client's own tools never ask for anything.
+    await expect(callTool("get_context", {}, me, store, now)).resolves.not.toMatch(/coach plan/);
+  });
+
+  it("says who isn't a client before it says anything about the plan", async () => {
+    await expect(callTool("get_day", { client: "Mike" }, coach, setup(), now)).rejects.toThrow(/No client called Mike/);
   });
 });

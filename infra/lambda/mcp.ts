@@ -14,7 +14,8 @@ import * as progress from "./progress.ts";
 import { clock, distanceName, goalMeters, meters, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
-import { comments, createInvite, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
+import { COACH_PRICE, comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
+import { PlanError, start as checkout } from "./coachPlan.ts";
 import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
@@ -47,6 +48,9 @@ export interface Store {
   /** FIT-196: a client's session threads (FIT-132), and a coach's reply on one, shown in the app as the coach's. */
   comments(coach: string, client: string): Promise<Comment[]>;
   comment(coach: string, client: string, day: string, text: string): Promise<void>;
+  /** FIT-148: whether they have the coach plan, and its monthly Checkout (undefined when Checkout can't start one). */
+  coachPlan(uid: string): Promise<boolean>;
+  coachCheckout(uid: string): Promise<string | undefined>;
 }
 
 export type ShareKind = "win" | "recap" | "program" | "session";
@@ -112,6 +116,14 @@ export const dynamoStore: Store = {
   invite: (coach) => createInvite(coach, undefined),
   comments: (coach, client) => comments(coach, client),
   async comment(coach, client, day, text) { await postComment(coach, undefined, client, day, text); },
+  coachPlan: hasCoachPlan,
+  async coachCheckout(uid) {
+    // Billing handles what Checkout won't (a plan unpaid or incomplete, or one Stripe already has).
+    return checkout(uid, "month", undefined, process.env.APP_ORIGIN, "coach").catch((error) => {
+      if (error instanceof PlanError) return undefined;
+      throw error;
+    });
+  },
   async unshare(uid, id) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
     if (!Item || Item.uid !== uid) return false;
@@ -799,13 +811,26 @@ async function clientOf(caller: string, said: unknown, store: Store): Promise<Pe
   if (said === undefined || said === null || said === "") return undefined;
   const client = pickClient(await store.clients(caller), String(said));
   if (!(await store.coachOf(caller, client.uid))) throw new Error(`They don't coach ${shownName(client)} any more.`);
+  await needsPlan(caller, store);
   return client;
 }
+
+/** The coach tools need the coach plan; without it, its Checkout (FIT-148). The athlete tools stay free. */
+async function needsPlan(coach: string, store: Store) {
+  if (await store.coachPlan(coach)) return;
+  const url = await store.coachCheckout(coach);
+  const billing = `${process.env.APP_ORIGIN ?? ""}/billing`;
+  throw new Error(`Coaching needs the coach plan, ${COACH_PRICE}; their clients stay free and keep logging meanwhile. `
+    + (url ? `Monthly Checkout: ${url}\nYearly, or anything else about billing: ${billing}` : `Start it on the Billing page: ${billing}`)
+    + "\nGive them the link. Once they've paid, coaching works on their next request; there's nothing to reconnect.");
+}
+const COACH_ONLY = new Set(["list_clients", "roster_review", "invite_client"]);
 
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
   const { tz } = account;
   if (args.client !== undefined && !CLIENT_TOOLS.has(name)) throw new Error(`${name} is the client's own to do, so it takes no client.`);
   const client = await clientOf(account.uid, args.client, store);
+  if (COACH_ONLY.has(name)) await needsPlan(account.uid, store);
   // Whose data this call is about. A coach's changes reach the client's phone at its next sync, as the dashboard's do.
   const uid = client?.uid ?? account.uid;
   useAccountExercises(await store.units(uid)); // FIT-173: their own exercises, beside the catalog
@@ -818,6 +843,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       const text = context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
       if (client) return `Client: ${shownName(client)}, coached by them since ${client.since.slice(0, 10)}. Everything below is the client's.\n\n${text}`;
       const clients = await store.clients(uid);
+      if (clients.length && !(await store.coachPlan(uid))) return `${text}\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}, but their coach plan has ended, so they can't see or change them until it's paid again (any coaching tool gives the link). Their own training above is free as ever.`;
       return clients.length ? `${text}\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.` : text;
     }
     case "invite_client": {

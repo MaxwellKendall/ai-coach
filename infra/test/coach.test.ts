@@ -50,6 +50,7 @@ beforeEach(() => {
   table.clear();
   table.set("USER#sam|PROFILE", { PK: "USER#sam", SK: "PROFILE", displayName: "Sam Coach" });
   table.set("USER#ann|PROFILE", { PK: "USER#ann", SK: "PROFILE", displayName: "Ann" });
+  table.set("USER#sam|COACHPLAN", { PK: "USER#sam", SK: "COACHPLAN", status: "active" }); // FIT-148
 });
 
 describe("coach invites (FIT-130)", () => {
@@ -169,5 +170,47 @@ describe("replies on a session (FIT-132)", () => {
     const { replyText } = await import("../lambda/push.ts");
     expect(replyText("Sam", "2026-10-14", "Good squats.")).toEqual({ title: "Sam replied on Wednesday's session", body: "Good squats." });
     expect(replyText(null, "2026-10-14", "x".repeat(200)).body).toHaveLength(178);
+  });
+});
+
+describe("coaching needs the coach plan (FIT-148)", () => {
+  const as = (sub: string, fieldName: string, args: Record<string, string> = {}) => coach.handler({ identity: { sub }, info: { fieldName }, arguments: args } as any);
+  const plan = (status?: string) => status ? table.set("USER#sam|COACHPLAN", { PK: "USER#sam", SK: "COACHPLAN", status }) : table.delete("USER#sam|COACHPLAN");
+  async function linked() {
+    const { code } = await coach.createInvite("sam", undefined, now);
+    await coach.accept("ann", code, undefined, now);
+  }
+
+  it("counts active, trialing and past_due as the plan", async () => {
+    for (const status of ["active", "trialing", "past_due"]) { plan(status); expect(await coach.hasCoachPlan("sam")).toBe(true); }
+    for (const status of ["canceled", "unpaid", "incomplete", undefined]) { plan(status); expect(await coach.hasCoachPlan("sam")).toBe(false); }
+  });
+
+  it("holds back invites, the client list, a client's units and their threads; the coach's own and the client's stay free", async () => {
+    await linked();
+    plan("canceled");
+    for (const [field, args] of [["createClientInvite", {}], ["myClients", {}], ["comments", { uid: "ann" }], ["postComment", { uid: "ann", day: "2026-10-14", text: "hi" }]] as const) {
+      await expect(as("sam", field, args), field).rejects.toThrow("Coaching needs the coach plan, $19.99 a month or $199 a year. Start it on the Billing page.");
+    }
+    await expect(owner("sam", "ann")).rejects.toThrow(/coach plan/);
+    // The link stays, and nothing else changes for either of them.
+    expect(table.has("USER#ann|COACH#sam")).toBe(true);
+    expect(await owner("sam", undefined)).toBe("sam");
+    expect(await owner("ann", undefined)).toBe("ann");
+    expect(await as("ann", "myCoaches")).toHaveLength(1);
+    await expect(coach.postComment("ann", undefined, undefined, "2026-10-14", "Still logging", now)).resolves.toBeTruthy();
+    // Someone who isn't a client hears that, not about the plan.
+    await expect(owner("bob", "ann")).rejects.toThrow(/Unauthorized/);
+    // Paying again restores everything.
+    plan("active");
+    expect(await owner("sam", "ann")).toBe("ann");
+    expect(await as("sam", "myClients")).toHaveLength(1);
+  });
+
+  it("still lets a lapsed coach end a link", async () => {
+    await linked();
+    plan(undefined);
+    await as("sam", "removeClient", { uid: "ann" });
+    expect(table.has("USER#ann|COACH#sam")).toBe(false);
   });
 });

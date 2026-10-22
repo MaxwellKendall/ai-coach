@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { BatchGetCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
-import { CoachError, isCoachOf } from "./coach.ts";
+import { canCoach, CoachError } from "./coach.ts";
 import { push, type UnitInput } from "./sync.ts";
 
 // FIT-131: a coach sends a client a program: a template week repeated for some weeks from a start day, with a note.
@@ -87,7 +87,7 @@ export function dayRows(day: string, slot: string, rows: TemplateRow[], coachNam
 
 export async function send(coach: string, coachName: string | null, client: string, start: string, weeks: number, note: string,
                            daysJson: string, addPerWeek: number, now = new Date()): Promise<Offer> {
-  if (!(await isCoachOf(coach, client))) throw new CoachError("You don't coach this person.");
+  if (!(await canCoach(coach, client))) throw new CoachError("You don't coach this person.");
   if (!DAY.test(start)) throw new CoachError("Pick a start day.");
   if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_WEEKS) throw new CoachError(`From 1 to ${MAX_WEEKS} weeks.`);
   if (note.length > 500) throw new CoachError("The note is too long (500 characters).");
@@ -103,7 +103,7 @@ export async function send(coach: string, coachName: string | null, client: stri
 
 export async function offers(caller: string, client?: string): Promise<Offer[]> {
   const owner = client ?? caller;
-  if (owner !== caller && !(await isCoachOf(caller, owner))) throw new CoachError("You don't coach this person.");
+  if (owner !== caller && !(await canCoach(caller, owner))) throw new CoachError("You don't coach this person.");
   const { Items = [] } = await db.send(new QueryCommand({
     TableName: TABLE(),
     KeyConditionExpression: "PK = :pk AND begins_with(SK, :o)",

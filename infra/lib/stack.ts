@@ -381,6 +381,7 @@ export class AICoachStack extends Stack {
     stripeSecret.grantRead(coachPlan);
     // FIT-190: the connector sells Pro and holds planning back after the trial.
     mcp.addEnvironment("STRIPE_SECRET", stripeSecret.secretName);
+    mcp.addEnvironment("APP_ORIGIN", appOrigin); // FIT-148: the coach plan's Checkout comes back to Billing
     stripeSecret.grantRead(mcp);
     const coachPlanSource = api.addLambdaDataSource("CoachPlanSource", coachPlan);
     coachPlanSource.createResolver("CoachPlanGet", { typeName: "Query", fieldName: "coachPlan" });

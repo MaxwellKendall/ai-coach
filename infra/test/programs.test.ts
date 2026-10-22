@@ -63,6 +63,7 @@ const rowsOf = (owner: string, key: string) => JSON.parse(table.get(`USER#${owne
 beforeEach(() => {
   table.clear();
   table.set("USER#ann|COACH#sam", { PK: "USER#ann", SK: "COACH#sam", coachUid: "sam" });
+  table.set("USER#sam|COACHPLAN", { PK: "USER#sam", SK: "COACHPLAN", status: "active" }); // FIT-148
 });
 
 describe("a program's weeks (FIT-131)", () => {
@@ -125,6 +126,11 @@ describe("sending and answering (FIT-131)", () => {
     await expect(programs.answer("ann", offer.id, true, 0, now)).rejects.toThrow(/already answered/);
     expect((await programs.offers("sam", "ann")).map((o) => o.status)).toEqual(["declined"]);
     await expect(programs.offers("bob", "ann")).rejects.toThrow(/don't coach/);
+    // FIT-148: a lapsed plan keeps the offer, but the coach can't see it or send another until they pay.
+    table.set("USER#sam|COACHPLAN", { PK: "USER#sam", SK: "COACHPLAN", status: "canceled" });
+    await expect(programs.offers("sam", "ann")).rejects.toThrow(/coach plan/);
+    await expect(send()).rejects.toThrow(/coach plan/);
+    expect((await programs.offers("ann")).map((o) => o.status)).toEqual(["declined"]);
   });
 
   it("go to the client's phone as \"Sam sent you a 2-week program\"", async () => {

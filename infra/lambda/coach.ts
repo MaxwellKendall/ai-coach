@@ -2,11 +2,12 @@ import { randomBytes } from "node:crypto";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
+import { HAS_PLAN, planRecord } from "./coachPlan.ts";
 
 // FIT-130: coaches and their clients. A coach (any account) makes an invite link; the client opens it in the app and
 // allows it. The link is two items, one in each partition (USER#client COACH#coach, USER#coach CLIENT#client), so
 // either side sees it and either can end it at once. A linked coach reads and edits the client's synced program
-// (sync.ts asks `isCoachOf`), and the client has Pro while linked (free during the beta, author 2026-10-16).
+// (sync.ts asks `canCoach`) while the coach has the coach plan (FIT-148).
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = () => process.env.TABLE!;
@@ -38,6 +39,30 @@ async function nameOf(uid: string, claims?: Record<string, unknown>) {
 export async function isCoachOf(coach: string, client: string) {
   const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `USER#${client}`, SK: `COACH#${coach}` }, ConsistentRead: true }));
   return !!Item;
+}
+
+// ---- FIT-148: coaching needs the coach plan (author, 2026-10-22: no free beta, no trial) ----
+
+export const COACH_PRICE = "$19.99 a month or $199 a year";
+export const NO_PLAN = `Coaching needs the coach plan, ${COACH_PRICE}. Start it on the Billing page.`;
+
+/** The one check: the coach plan's Stripe status still has the plan (active, trialing or past_due). */
+export async function hasCoachPlan(uid: string) {
+  return HAS_PLAN.includes((await planRecord(uid, "coach"))?.status ?? "");
+}
+
+export async function requireCoachPlan(uid: string) {
+  if (!(await hasCoachPlan(uid))) throw new CoachError(NO_PLAN);
+}
+
+/**
+ * Whether a coach may see and change this client now: linked, and paying. A lapsed plan keeps the link (the client
+ * keeps logging, nothing is deleted); the coach is told to pay rather than that they don't coach them.
+ */
+export async function canCoach(coach: string, client: string) {
+  if (!(await isCoachOf(coach, client))) return false;
+  await requireCoachPlan(coach);
+  return true;
 }
 
 /** Whether an account has a coach: the client's Pro while linked (FIT-130). */
@@ -139,7 +164,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The account a thread is in: the caller's own, or a client's when the caller is their coach. */
 async function threadOwner(caller: string, asked?: string) {
   if (!asked || asked === caller) return caller;
-  if (await isCoachOf(caller, asked)) return asked;
+  if (await canCoach(caller, asked)) return asked;
   throw new CoachError("You don't coach this person.");
 }
 
@@ -175,11 +200,11 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
   const args = event.arguments;
   try {
     switch (event.info.fieldName) {
-      case "createClientInvite": return await createInvite(me, identity.claims);
+      case "createClientInvite": await requireCoachPlan(me); return await createInvite(me, identity.claims);
       case "coachInvite": return await inviteName(args.code);
       case "acceptCoach": return await accept(me, args.code, identity.claims);
       case "myCoaches": return await list(me, "COACH#");
-      case "myClients": return await list(me, "CLIENT#");
+      case "myClients": await requireCoachPlan(me); return await list(me, "CLIENT#");
       case "unlinkCoach": return await unlink(args.uid, me);
       case "removeClient": return await unlink(me, args.uid);
       case "postComment": return await postComment(me, identity.claims, args.uid, args.day, args.text);
