@@ -18,8 +18,18 @@ struct WelcomeView: View {
     @State private var lookedUp: String?
     @State private var working = false
     @State private var failure: String?
+    /// FIT-219: joined; the coach's questions follow.
+    @State private var intake = false
 
     var body: some View {
+        Group { if intake { IntakeView(onDone: onDone) } else { welcome } }
+        #if DEBUG
+            // `-intake YES` opens the coach's questions on a fresh simulator, without signing in or an invite.
+            .onAppear { if UserDefaults.standard.bool(forKey: "intake") { intake = true } }
+        #endif
+    }
+
+    private var welcome: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 24)
             if account.user == nil {
@@ -161,7 +171,7 @@ struct WelcomeView: View {
             do {
                 let person = try await Cloud.acceptCoach(code)
                 pro.setCoaches(pro.coaches.filter { $0.uid != person.uid } + [person])
-                onDone()
+                withAnimation(.snappy) { intake = true }
             } catch {
                 failure = error.localizedDescription
             }

@@ -357,35 +357,15 @@ struct OnboardingView: View {
     }
 
     private func start() {
-        guard let age = answers.age, let weight = answers.weight else { return }
+        guard answers.age != nil, answers.weight != nil else { return }
         let now = Date.now
         let monday = Week.start(of: now)
-        profile.age = age
-        profile.weightLb = weight
-        profile.trainingDays = answers.days.sorted()
-        profile.sessionMinutes = answers.minutes
-        profile.equipment = Profile.allEquipment.filter(answers.equipment.contains)
-        profile.avoidExercises = answers.avoid.sorted()
-        profile.injuredAreas = answers.hurts.sorted()
         profile.programStart = monday
         profile.targetDate = Calendar.current.date(byAdding: .day, value: 7 * answers.weeks - 1, to: monday)
         profile.travelWeeks = []
+        Intake.save(answers, to: profile, goals: goals, deadline: profile.targetDate, in: context, now: now)
+        // Onboarding keeps every starting set, those found in the logs too.
         profile.starts = answers.starts.values.sorted { $0.exercise < $1.exercise }
-        profile.updatedAt = now
-        for (index, option) in answers.goals.compactMap(GoalOption.with(id:)).enumerated() {
-            guard let target = answers.target(option) else { continue }
-            if option.id == "weight" { profile.targetWeightLb = target }
-            let goal = goals.first { $0.metric == option.metric && $0.status == .active } ?? {
-                let goal = Goal(kind: option.kind, metric: option.metric, target: target, unit: option.unit,
-                                now: now + TimeInterval(index))
-                context.insert(goal)
-                return goal
-            }()
-            goal.target = target
-            goal.baseline = answers.baseline(option)
-            goal.deadline = profile.targetDate
-            goal.updatedAt = now
-        }
         try? context.save()
         // Kept under the key Planner reads it by, with the goals just saved, so it isn't written again.
         let saved = (try? context.fetch(FetchDescriptor<Goal>())) ?? []

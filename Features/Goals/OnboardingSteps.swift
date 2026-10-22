@@ -14,6 +14,8 @@ struct OnboardingStepView: View {
     /// FIT-99: the program brief the model wrote with week 1, when it could.
     var brief: ProgramBrief? = nil
     @Binding var loads: [String: Double]
+    /// FIT-219: the coach's intake, where nothing is designed from these.
+    var forCoach = false
     let go: (Int) -> Void
 
     var body: some View {
@@ -137,7 +139,8 @@ struct OnboardingStepView: View {
         case .hold: (names[row.id] ?? row.id, "Longest hold")
         case .run: ("A recent run", "A race or hard run")
         }
-        var value = "Add", note: String? = row.measure == .age || row.measure == .body ? "Needed for your plan" : "Week 1 finds it"
+        var value = "Add", note: String? = forCoach ? nil
+            : row.measure == .age || row.measure == .body ? "Needed for your plan" : "Week 1 finds it"
         switch row.measure {
         case .age: if let age = answers.age { value = "\(age)"; note = nil }
         case .body: if let weight = answers.weight { value = "\(Coach.number(weight)) lb"; note = nil }
