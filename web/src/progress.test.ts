@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { estimated1RMs, estimated1RMTrend, plateaued, streak, type LoggedSet } from "./progress";
+import { estimated1RMs, estimated1RMTrend, plateaued, streak, streakNow, trainingDays, type LoggedSet } from "./progress";
 
 // FIT-129: the app's ProgressParityTests reads the same file; both must agree with it.
 const fixture = JSON.parse(readFileSync(new URL("../../Tests/Fixtures/progress-parity.json", import.meta.url), "utf8"));
@@ -34,5 +34,17 @@ describe("progress, the same as the app's (FIT-129)", () => {
     // Week of Oct 11: Monday missed on Thursday, Wednesday done; two days left for two sessions.
     expect(streak("2026-10-12", ["2026-10-12", "2026-10-14", "2026-10-16"], ["2026-10-14"], "2026-10-15").thisWeek).toBe("atRisk");
     expect(streak("2026-10-12", ["2026-10-12", "2026-10-14", "2026-10-16"], [], "2026-10-16").thisWeek).toBe("broken");
+  });
+
+  it("reads training days past goals and the profile, which aren't rows (FIT-222)", () => {
+    const workout = JSON.stringify([{ kind: "workout", template: "back-squat", measurements: [] }]);
+    const units = new Map(Object.entries({
+      profile: JSON.stringify({ programStart: Date.parse("2026-10-12T12:00:00Z") / 1000 }),
+      "goal#1": JSON.stringify({ kind: "training", metric: "back-squat.1rm_lb", target: 315 }),
+      "plan#2026-10-14": workout,
+      "log#2026-10-14": workout,
+    }).map(([key, body]) => [key, { key, body, updatedAt: "", deleted: false }]));
+    expect(trainingDays(units)).toEqual({ planned: ["2026-10-14"], done: ["2026-10-14"] });
+    expect(streakNow(units, new Date("2026-10-15T12:00:00Z"))).toBeDefined();
   });
 });

@@ -109,7 +109,8 @@ export function loggedSets(units: Map<string, Unit>): LoggedSet[] {
 export function trainingDays(units: Map<string, Unit>) {
   const planned: string[] = [], done: string[] = [];
   for (const [key, unit] of units) {
-    if (!unit.body) continue;
+    // Goals and the profile are objects, not rows.
+    if (!unit.body || !(key.startsWith("plan#") || key.startsWith("log#"))) continue;
     const rows = JSON.parse(unit.body) as (PlanRow | LogRow)[];
     if (!rows.some((r) => r.kind === "workout")) continue;
     if (key.startsWith("plan#")) planned.push(key.slice(5));
