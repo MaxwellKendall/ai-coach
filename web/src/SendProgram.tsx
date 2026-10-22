@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Config } from "./auth";
 import catalog from "./catalog.json";
-import { brief, choices, design, request, toWeek, type CatalogEntry } from "./design";
 import { checkDay, type Exercise, type Profile } from "./guard";
 import { DayCard } from "./ProgramPage";
 import { dayKey, lines, weekStart, type Day } from "./program";
@@ -37,9 +36,8 @@ export function SendProgram({ config, client, onSent, onCancel }: {
   const [template, setTemplate] = useState<Week>(() => Array.from({ length: 7 }, () => []));
   const [from, setFrom] = useState<"empty" | "theirs" | "mine">("empty");
   const [sending, setSending] = useState(false);
-  const [designing, setDesigning] = useState(false);
   const [error, setError] = useState<string>();
-  // The client's synced units: their profile and lifts for designing, and for the plan checks.
+  // The client's synced units: their profile, for the plan checks.
   const [clientUnits, setClientUnits] = useState<Map<string, Unit>>();
   useEffect(() => {
     pullAll(config, client.uid).then(setClientUnits, () => setClientUnits(new Map()));
@@ -68,25 +66,6 @@ export function SendProgram({ config, client, onSent, onCancel }: {
     next[to] = next[fromIndex].map((r) => ({ ...r, at: r.at + (to - fromIndex) * 86_400 }));
     next[fromIndex] = [];
     setTemplate(next);
-  };
-
-  // FIT-141: Claude Haiku lays out the week from the client's profile, goals and lifts, and the note.
-  const designWeek = async () => {
-    if (!clientUnits) return;
-    setDesigning(true);
-    setError(undefined);
-    try {
-      const about = brief(clientUnits, names);
-      const menu = choices(catalog as CatalogEntry[], about.profile);
-      const answer = await design(config, request(about.text, menu, note));
-      const week = toWeek(answer, menu, firstWeek);
-      if (!week.some((d) => d.length)) throw new Error("Claude didn't plan any sessions. Add a note on what you want and try again.");
-      setTemplate(week);
-    } catch (e) {
-      setError(`Couldn't design the week: ${(e as Error).message}`);
-    } finally {
-      setDesigning(false);
-    }
   };
 
   const send = async () => {
@@ -128,12 +107,8 @@ export function SendProgram({ config, client, onSent, onCancel }: {
             <option value="mine">My week now</option>
           </select>
         </label>
-        <div className="wide design">
-          <button className="button" disabled={designing || !clientUnits} onClick={designWeek}>
-            {designing ? "Designing…" : "Design it for me"}
-          </button>
-          <span className="muted">Claude lays out the week from their profile, goals and lifts, and your note. You can change anything after.</span>
-        </div>
+        {/* FIT-216: no AI of our own; the coach writes the week in their Claude and it shows here. */}
+        <p className="wide muted claude">Or <a href="/claude">write it with Claude</a>: ask Claude for {client.name ?? "your client"}'s week and it shows in their program here.</p>
         <label className="wide">Note for them <textarea rows={2} maxLength={500} value={note} placeholder="What this block is for"
           onChange={(e) => setNote(e.target.value)} /></label>
       </div>
