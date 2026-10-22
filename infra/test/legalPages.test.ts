@@ -24,6 +24,14 @@ describe("privacy, terms and support (FIT-158)", () => {
     expect(body).toContain("an access token that lasts 1 hour and a refresh token that lasts 90 days");
   });
 
+  it("the policy says runs keep a GPS route and heart rate from Apple Health, which the coach sees and we never sell (FIT-224)", () => {
+    const body = legalRoute("/privacy", site)!.body;
+    expect(body).toContain("GPS route, which is your precise location");
+    expect(body).toContain("reads from Apple Health");
+    expect(body).toContain("runs (with their routes and heart rate)");
+    expect(body).toContain("never for advertising or marketing, never sold");
+  });
+
   it("every page's footer links them", async () => {
     const body = (await route("/nope", {} as Store, site)).body;
     for (const path of ["/privacy", "/terms", "/support"]) expect(body).toContain(`href="${path}"`);

@@ -44,17 +44,18 @@ function privacyPage(site: Site) {
     <ul>
       <li><b>Your account:</b> the name Apple or Google gives us when you sign in, and an account ID. We don't receive or keep your password.</li>
       <li><b>Your training:</b> your profile (units, equipment, injuries you tell us about), goals, program and plan, the workouts and runs you log, check-ins, notes, and replies between you and your coach.</li>
+      <li><b>Runs you track:</b> the run's GPS route, which is your precise location along the way, and its average heart rate, which ${app} reads from Apple Health when your Watch or AirPods measure it and you allow it. We read nothing else from Apple Health.</li>
       <li><b>Sharing:</b> anything you choose to share as a link, until you stop sharing it.</li>
       <li><b>Notifications:</b> your phone's push token, if you allow notifications.</li>
       <li><b>Billing, for coaches:</b> Stripe handles payment. We keep your Stripe customer and subscription IDs and the plan's status, never your card.</li>
     </ul>
-    <p>It's stored with Amazon Web Services in the United States (DynamoDB, in the us-east-1 region), and it syncs between your phone, the web dashboard and the agents you connect. Runs you track are also saved to Apple Health on your phone, which stays under your control in the Health app.</p>
-    <p>We don't sell your data, show ads, or use tracking cookies. The pages on this site count how often each kind of page is opened, without recording who opened it.</p>
+    <p>It's stored with Amazon Web Services in the United States (DynamoDB, in the us-east-1 region), and it syncs between your phone, the web dashboard and the agents you connect. Runs you track are also saved to Apple Health on your phone, with their route, which stays under your control in the Health app.</p>
+    <p>We don't sell your data, show ads, or use tracking cookies. Heart rate and other data from Apple Health is used only to show you and your coach your training: never for advertising or marketing, never sold, and never shared with anyone you haven't chosen. The pages on this site count how often each kind of page is opened, without recording who opened it.</p>
 
     <h2>Who can see it</h2>
     <ul>
       <li><b>You,</b> in the app, on the dashboard, and through any agent you connect.</li>
-      <li><b>Your coach,</b> only after you accept their invite. A coach can see and change your program, and see your logged workouts, check-ins and notes, so they can coach you. Either of you can end the link at any time, in the app or on the dashboard, and the coach loses access at once.</li>
+      <li><b>Your coach,</b> only after you accept their invite. A coach can see and change your program, and see your logged workouts and runs (with their routes and heart rate), check-ins and notes, so they can coach you. Either of you can end the link at any time, in the app or on the dashboard, and the coach loses access at once.</li>
       <li><b>Anyone with a link you shared,</b> until you stop sharing it.</li>
     </ul>
 

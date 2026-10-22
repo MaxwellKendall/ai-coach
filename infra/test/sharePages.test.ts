@@ -139,6 +139,9 @@ describe("the coach landing page (FIT-217)", () => {
       expect(page.body).toContain("Clients are free");
       expect(page.body).toContain('<a class="button primary" href="/app/billing">Start coaching</a>');
       expect(page.body).toContain('href="/claude"');
+      // Someone training themselves has a way in too: free, through Claude.
+      expect(page.body).toContain("Training yourself?");
+      expect(page.body).toContain('<a class="button" href="/claude">Connect Claude</a>');
     }
   });
 
