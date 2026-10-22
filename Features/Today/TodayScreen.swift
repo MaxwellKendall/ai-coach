@@ -30,6 +30,8 @@ struct TodayScreen: View {
     @State private var live: WorkoutDraft?
     @State private var tracking: RunTarget?
     @State private var you = false
+    /// FIT-204: today's check-in sheet.
+    @State private var checkingIn = false
     @State private var review: WeekReport?
     @State private var sharing: WinItem?
     /// FIT-106: the wins there were before a workout, so the ones it earns can be celebrated when it's saved.
@@ -153,6 +155,9 @@ struct TodayScreen: View {
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen() }
+        .sheet(isPresented: $checkingIn) {
+            CheckInSheet(lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
+        }
         .sheet(item: $sharing) { ShareWinSheet(win: $0) }
         .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
             if let review {
@@ -252,6 +257,7 @@ struct TodayScreen: View {
                         .foregroundStyle(streak.atRisk ? .primary : .secondary)
                         .padding(.top, 2)
                 }
+                if index == todayIndex { checkInButton.padding(.top, 2) }
             }
             Spacer()
             Button { you = true } label: {
@@ -262,6 +268,19 @@ struct TodayScreen: View {
         }
         .padding(.leading, 22).padding(.trailing, 12).padding(.top, 8)
         .animation(.snappy, value: index)
+    }
+
+    /// FIT-204: weight, sleep and a note for the coach, or what today's said.
+    private var checkInButton: some View {
+        let today = entries.filter { ($0.kind == .bodyweight || $0.kind == .sleep) && Calendar.current.isDateInToday($0.timestamp) }
+        let summary = CheckIn.summary(today)
+        return Button { checkingIn = true } label: {
+            Label(summary.map { "Checked in · \($0)" } ?? "Check in", systemImage: summary == nil ? "plus.circle" : "checkmark.circle.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(summary == nil ? .primary : .secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Weight, sleep and a note for your coach")
     }
 
     /// FIT-121: weeks in a row with every planned session done, or what keeps it going this week.
