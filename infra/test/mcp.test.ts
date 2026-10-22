@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { Comment } from "../../shared/triage.ts";
 import { answer, callTool, CLIENT_TOOLS, hashToken, serve, type Account, type Store } from "../lambda/mcp.ts";
 import { readProgram, readRecap, readSession, readWin } from "../lambda/sharePages.ts";
-import { checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
+import { addDays, checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
 
 const tz = "America/New_York";
 const now = new Date("2026-10-17T13:00:00Z"); // Saturday 9:00 in New York
@@ -811,5 +811,106 @@ describe("FIT-148: coaching needs the coach plan", () => {
 
   it("says who isn't a client before it says anything about the plan", async () => {
     await expect(callTool("get_day", { client: "Mike" }, coach, setup(), now)).rejects.toThrow(/No client called Mike/);
+  });
+});
+
+describe("FIT-218: bringing a client's program in", () => {
+  const coach: Account = { uid: "coach", tz, agent: "claude" };
+  const setup = () => {
+    const units: Record<string, Record<string, string>> = { coach: { profile: encode(profile) }, mike: { profile: encode({ ...profile, age: 30, maxWeeklySets: 80 }) } };
+    const store = memory({}, units);
+    store.links.push({ coach: "coach", client: "mike", name: "Mike" });
+    return { store, units };
+  };
+  const call = (store: Store, tool: string, args: Record<string, unknown>) => callTool(tool, { client: "Mike", ...args }, coach, store, now);
+  const maxes = (store: Store) => call(store, "set_profile", { equipment: ["barbell", "rack", "bench", "dumbbells", "pull_up_bar", "cable", "machine", "dip_station"], starting_sets: [
+    { exercise: "Back Squat", weight_lb: 315, reps: 1 }, { exercise: "Bench Press", weight_lb: 225, reps: 1 },
+    { exercise: "Deadlift", weight_lb: 405, reps: 1 }, { exercise: "OHP", weight_lb: 135, reps: 1 }] });
+  const weekdays = (monday: string, weeks: number, offsets: number[]) =>
+    Array.from({ length: weeks }, (_, w) => offsets.map((o) => addDays(monday, 7 * w + o))).flat();
+  const apply = async (store: Store, proposal: string) => {
+    expect(proposal).toMatch(/passes the plan rules/);
+    return call(store, "apply", { proposal_id: proposal.match(/Proposal (\S+)/)![1] });
+  };
+
+  it("a 4-week Google Sheet block starting a later Monday, with supersets and tempo, in one call", async () => {
+    const { store, units } = setup();
+    await maxes(store);
+    // The sheet has no deload and ends heavy: its 4 weeks, then the test week.
+    expect(await call(store, "set_program", { start: "2026-10-26", weeks: 5, deload_every: 12 })).toMatch(/Saved/);
+    const squat = [225, 240, 255, 275], days = weekdays("2026-10-26", 4, [0, 2, 4]);
+    const sheet = days.map((date, i) => {
+      const w = Math.floor(i / 3), day = i % 3;
+      const exercises = day === 0 ? [
+        { exercise: "Squat", sets: 4, reps: 5 - w % 2, weight_lb: squat[w], note: "3-1-1 tempo, rest 3 min" },
+        { exercise: "RDL", sets: 3, reps: 8, weight_lb: 185, superset: 1 }, { exercise: "Hanging Leg Raise", sets: 3, reps: 10, superset: 1 },
+      ] : day === 1 ? [
+        { exercise: "Bench Press", sets: 4, reps: 6, weight_lb: 170 + 5 * w, note: "pause on the chest" },
+        { exercise: "Barbell Row", sets: 4, reps: 8, weight_lb: 135, superset: 1 }, { exercise: "Face Pull", sets: 3, reps: 15, superset: 1 },
+      ] : [
+        { exercise: "Deadlift", sets: 3, reps: 5, weight_lb: 315 + 10 * w },
+        { exercise: "OHP", sets: 4, reps: 6, weight_lb: 95, note: "rest 2 min" }, { exercise: "Lat Pulldown", sets: 3, reps: 10, weight_lb: 120 },
+      ];
+      return { date, title: ["Lower", "Upper", "Full"][day], exercises };
+    });
+    const proposal = await call(store, "propose_week", { reason: "Mike's 4-week block from his sheet", days: sheet });
+    expect(proposal).toMatch(/Back Squat: 4 × 5 @ 225 lb — “3-1-1 tempo, rest 3 min”/);
+    expect(proposal).toMatch(/Matched by name[\s\S]*"Barbell Row" is Bent Over Barbell Row[\s\S]*"OHP" is Standing Military Press/);
+    expect(await apply(store, proposal)).toMatch(/Applied:[\s\S]*Friday 2026-11-20: Full/);
+    expect(Object.keys(units.mike).filter((k) => k.startsWith("plan#"))).toHaveLength(12);
+    const day = await call(store, "get_day", { date: "2026-10-28" });
+    expect(day).toMatch(/Bench Press \(bench-press\): 4 × 6 @ 170 lb — “pause on the chest”\n  Bent Over Barbell Row \(bent-over-barbell-row\): 4 × 8 @ 135 lb \[superset 1\]\n  Face Pull \(face-pull\): 3 × 15 \[superset 1\]/);
+  });
+
+  it("a PDF from another app: RIR, rep ranges and a deload week, starting mid-week", async () => {
+    const { store } = setup();
+    await maxes(store);
+    expect(await call(store, "set_program", { start: "2026-10-20", weeks: 4, deload_every: 3 })).toMatch(/Deload/);
+    const days = weekdays("2026-10-19", 3, [1, 2, 4, 5]);
+    const pdf = days.map((date, i) => {
+      const deload = i >= 8, sets = deload ? 2 : 3, rpe = deload ? 6 : 7, upper = i % 2 === 0;
+      const exercises = upper ? [
+        { exercise: "Barbell Bench Press", sets, reps: 6, weight_lb: deload ? 135 : 175, rpe, note: "6–8 reps" },
+        { exercise: "Seated Cable Row", sets, reps: 10, rpe, note: "10–12 reps" },
+        { exercise: "Incline DB Press", sets, reps: 10, weight_lb_per_hand: 50, rpe },
+        { exercise: "Tricep Pushdown", sets: 2, reps: 12, rpe },
+      ] : [
+        { exercise: "Leg Press", sets, reps: 10, rpe, note: "10–12 reps" }, { exercise: "Leg Curl", sets, reps: 12, rpe },
+        { exercise: "Hip Thrust", sets, reps: 10, rpe }, { exercise: "Calf Raise", sets: 2, reps: 15, rpe },
+      ];
+      return { date, title: upper ? "Upper" : "Lower", exercises };
+    });
+    const proposal = await call(store, "propose_week", { reason: "Mike's program from his old app", days: pdf });
+    expect(proposal).toMatch(/Tuesday 2026-11-03 \(week 3, Deload\)/);
+    expect(proposal).toMatch(/- 2026-10-20, 2026-10-23, 2026-10-27, 2026-10-30, 2026-11-03, 2026-11-06: Incline Dumbbell Press at 50 lb each is a guess/);
+    expect(proposal).toMatch(/"Leg Curl" is Lying Leg Curls/);
+    expect(await apply(store, proposal)).toMatch(/Applied/);
+  });
+
+  it("a percentage block: weights from his maxes, a deload, 16 days in one call", async () => {
+    const { store, units } = setup();
+    await expect(call(store, "propose_week", { reason: "5/3/1", days: [{ date: "2026-11-02", exercises: [{ exercise: "Squat", sets: 1, reps: 5, percent_1rm: 65 }] }] }))
+      .rejects.toThrow(/Back Squat at 65% needs their max/);
+    await maxes(store);
+    expect(await call(store, "set_program", { start: "2026-11-02", weeks: 5, deload_every: 4 })).toMatch(/Saved/);
+    const scheme = [[65, 75, 85, 5], [70, 80, 90, 3], [75, 85, 95, 1], [40, 50, 60, 5]];
+    const lifts = ["Squat", "Bench Press", "Deadlift", "OHP"];
+    const days = weekdays("2026-11-02", 4, [0, 1, 3, 4]).map((date, i) => {
+      const [a, b, c, reps] = scheme[Math.floor(i / 4)], lift = lifts[i % 4], deload = i >= 12;
+      return { date, title: lift, exercises: [
+        { exercise: lift, sets: 1, reps: reps === 1 ? 5 : reps, percent_1rm: a, main: true },
+        { exercise: lift, sets: 1, reps: reps === 1 ? 3 : reps, percent_1rm: b, main: true },
+        { exercise: lift, sets: 1, reps, percent_1rm: c, main: true, note: deload ? "" : "as many as you can" },
+        { exercise: i % 2 ? "Chin-ups" : "Dips", sets: deload ? 2 : 4, reps: 8 },
+      ] };
+    });
+    const proposal = await call(store, "propose_week", { reason: "Mike's 5/3/1 cycle", days });
+    expect(proposal).toMatch(/Weights from percentages of their max:\n- Back Squat, max 315 lb: 40% 125, 50% 160, 60% 190, 65% 205, 70% 220, 75% 235, 80% 250, 85% 270, 90% 285, 95% 300 lb\n- Bench Press, max 225 lb: /);
+    expect(proposal).toMatch(/Monday 2026-11-23 \(week 4, Deload\)/);
+    await apply(store, proposal);
+    expect(Object.keys(units.mike).filter((k) => k.startsWith("plan#"))).toHaveLength(16);
+    expect(await call(store, "get_day", { date: "2026-11-16" })).toMatch(/Back Squat \(back-squat\): 1 × 1 @ 300 lb — “as many as you can”/);
+    await expect(call(store, "propose_session", { date: "2026-11-30", title: "x", reason: "r", exercises: [{ exercise: "Squat", sets: 3, reps: 5, percent_1rm: 70, weight_lb: 220 }] }))
+      .rejects.toThrow(/percent_1rm or a weight, not both/);
   });
 });

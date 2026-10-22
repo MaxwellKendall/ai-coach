@@ -108,21 +108,35 @@ export function exerciseBody(current: { name: string; attributes: { key: string;
 }
 export const nameOf = (slug?: string) => (slug && bySlug.get(slug)?.name) ?? slug ?? "Exercise";
 
+// FIT-218: how coaches' spreadsheets abbreviate and spell the names.
+const SAID: Record<string, string> = { db: "dumbbell", bb: "barbell", kb: "kettlebell", ohp: "overhead press", rdl: "romanian deadlift",
+  sldl: "stiff legged deadlift", pullup: "pull up", chinup: "chin up", pushup: "push up", flye: "fly", flie: "fly" };
 const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean)
-  .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w));
+  .map((w) => (w.length > 2 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w)).flatMap((w) => (SAID[w] ?? w).split(" "));
+/** Common names whose closest catalog wording is a variant: "Overhead Press" is the standing barbell one. */
+const COMMON: Record<string, string> = { "overhead press": "standing-military-press", "military press": "standing-military-press",
+  dip: "dips-chest-version", "cable fly": "cable-crossover" };
+/** Goal lifts, then staples, then the rest: "Barbell Row" is the bent-over row, not the upright one. */
+const rank = (e: Exercise) => (e.tags.includes("goal_lift") ? 0 : e.tags.includes("staple") ? 1 : 2);
+
+/** Whether an agent named an exercise exactly (slug, name or alias), rather than loosely. */
+export const exactly = (said: string) =>
+  bySlug.has(said) || catalog.some((e) => e.name.toLowerCase() === said.toLowerCase() || e.aliases.some((a) => a.toLowerCase() === said.toLowerCase()));
 
 /** A catalog exercise from a slug or a name an agent wrote ("Bench Press", "RDL", "romanian deadlifts"). */
 export function resolve(said: string): Exercise {
   const exact = bySlug.get(said) ?? catalog.find((e) => e.name.toLowerCase() === said.toLowerCase() || e.aliases.some((a) => a.toLowerCase() === said.toLowerCase()));
   if (exact) return exact;
   const want = words(said);
+  const common = bySlug.get(COMMON[want.join(" ")] ?? "");
+  if (common) return common;
   const scored = catalog
     .map((e) => {
       const have = new Set([...words(e.name), ...e.aliases.flatMap(words)]);
       return { e, hit: want.filter((w) => have.has(w)).length, extra: have.size - want.length };
     })
     .filter((s) => s.hit === want.length)
-    .sort((a, b) => a.extra - b.extra || a.e.name.length - b.e.name.length);
+    .sort((a, b) => rank(a.e) - rank(b.e) || a.extra - b.extra || a.e.name.length - b.e.name.length);
   if (scored.length) return scored[0].e;
   const near = catalog.filter((e) => want.some((w) => words(e.name).includes(w))).slice(0, 6).map((e) => `${e.name} (${e.slug})`);
   throw new Error(`No exercise called "${said}" in the catalog.${near.length ? ` Close: ${near.join(", ")}.` : ""} Use find_exercises.`);
@@ -210,9 +224,10 @@ export function sessionLines(plan: PlanRow[]) {
   for (const row of [...plan].filter(working).sort((a, b) => a.at - b.at)) {
     const targets = row.targets.filter((x) => x.metric !== "sets");
     const sets = value(row.targets, "sets") ?? 1;
+    const note = row.note || undefined;
     const last = out[out.length - 1];
-    if (last && last.slug === row.template && JSON.stringify(last.targets) === JSON.stringify(targets)) last.sets += sets;
-    else out.push({ slug: row.template, sets, targets, main: row.main, group: row.group ?? undefined, note: isRun(row) ? row.note : undefined });
+    if (last && last.slug === row.template && last.note === note && JSON.stringify(last.targets) === JSON.stringify(targets)) last.sets += sets;
+    else out.push({ slug: row.template, sets, targets, main: row.main, group: row.group ?? undefined, note });
   }
   return out;
 }
@@ -233,9 +248,13 @@ export function describeTargets(sets: number, t: Measurement[]) {
   return text;
 }
 
+/** A session line's dose, and a lift's coach note (FIT-218: tempo, rest, a rep range). */
+const line = (l: ReturnType<typeof sessionLines>[number]) =>
+  l.slug && RUNS.includes(l.slug) ? describeRun(l.targets, l.note) : `${describeTargets(l.sets, l.targets)}${l.note && l.note !== WARMUP ? ` — “${l.note}”` : ""}`;
+
 export function describeSession(plan: PlanRow[]) {
   const title = plan.find((r) => r.kind === "workout" && r.slot)?.slot;
-  const lines = sessionLines(plan).map((l) => `${l.main ? "★ " : ""}${nameOf(l.slug)} (${l.slug}): ${l.slug && RUNS.includes(l.slug) ? describeRun(l.targets, l.note) : describeTargets(l.sets, l.targets)}${l.group ? ` [superset ${l.group}]` : ""}`);
+  const lines = sessionLines(plan).map((l) => `${l.main ? "★ " : ""}${nameOf(l.slug)} (${l.slug}): ${line(l)}${l.group ? ` [superset ${l.group}]` : ""}`);
   return { title, lines };
 }
 
@@ -416,7 +435,7 @@ const uuid = () => randomUUID().toUpperCase();
 
 export type ExerciseInput = {
   exercise: string; sets?: number; distance_mi?: number; distance_km?: number; minutes?: number; run?: string; reps?: number; seconds?: number; weight_lb?: number; weight_lb_per_hand?: number; rpe?: number;
-  main?: boolean; superset?: number;
+  percent_1rm?: number; main?: boolean; superset?: number; note?: string;
 };
 
 /** A day's new session: one row per exercise, in order, pinned so the app's weekly planning keeps it. Other kinds stay. */
@@ -440,7 +459,7 @@ export function sessionRows(existing: PlanRow[], title: string, exercises: Exerc
     else if (x.weight_lb_per_hand !== undefined) targets.push(m("load_lb_hand", x.weight_lb_per_hand));
     if (x.rpe !== undefined) targets.push(m("rpe", x.rpe));
     return {
-      id: uuid(), kind: "workout", at: start + i, slot: title, template: e.slug, targets, note: "", adjustedReason: reason,
+      id: uuid(), kind: "workout", at: start + i, slot: title, template: e.slug, targets, note: x.note?.trim() ?? "", adjustedReason: reason,
       group: x.superset, main: x.main ?? e.tags.includes("goal_lift"), pinned: true,
     };
   });
@@ -449,9 +468,9 @@ export function sessionRows(existing: PlanRow[], title: string, exercises: Exerc
 
 /** What a new session changes, line by line, for the agent to show before it applies. */
 export function diff(before: PlanRow[], after: PlanRow[]) {
-  const line = (l: ReturnType<typeof sessionLines>[number]) => `${nameOf(l.slug)}: ${l.slug && RUNS.includes(l.slug) ? describeRun(l.targets, l.note) : describeTargets(l.sets, l.targets)}`;
-  const a = sessionLines(before).map(line);
-  const b = sessionLines(after).map(line);
+  const named = (l: ReturnType<typeof sessionLines>[number]) => `${nameOf(l.slug)}: ${line(l)}${l.group ? ` [superset ${l.group}]` : ""}`;
+  const a = sessionLines(before).map(named);
+  const b = sessionLines(after).map(named);
   return [...a.filter((x) => !b.includes(x)).map((x) => `− ${x}`), ...b.filter((x) => !a.includes(x)).map((x) => `+ ${x}`), ...b.filter((x) => a.includes(x)).map((x) => `= ${x}`)];
 }
 
@@ -639,6 +658,12 @@ export function runTime(units: Units, profile: Profile | undefined, race: number
 export function knowsMax(units: Units, profile: Profile | undefined, slug: string, metric = "load_lb") {
   const start = startOf(profile, slug);
   return setsOf(units, slug, metric).length > 0 || (metric === "load_lb" && value(start?.measurements ?? [], "load_lb") !== undefined && value(start?.measurements ?? [], "reps") !== undefined);
+}
+
+/** FIT-218: the max a percentage is of: the best estimate from their logs, else their starting set's (Brzycki). */
+export function maxOf(units: Units, profile: Profile | undefined, slug: string, day: string) {
+  const start = startOf(profile, slug), load = value(start?.measurements ?? [], "load_lb"), reps = value(start?.measurements ?? [], "reps");
+  return bestBy(loggedSets(units), slug, day) ?? (load !== undefined && reps !== undefined ? (load * 36) / (37 - Math.min(reps, 36)) : undefined);
 }
 
 /** Goal lifts with nothing to set weights from: a max goal with no loaded set or starting set, a reps goal with no reps. */

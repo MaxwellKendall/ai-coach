@@ -4,10 +4,10 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
 import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
-import { push } from "./sync.ts";
+import { MAX_UNITS, push } from "./sync.ts";
 import {
   addDays, AREAS, isHardRun, isRun, checkLoads, runTime, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
-  nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
+  exactly, maxOf, nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
 import * as progress from "./progress.ts";
@@ -81,7 +81,9 @@ export const dynamoStore: Store = {
   },
   async write(uid, units, source) {
     const now = new Date().toISOString();
-    await push(uid, units.map((u) => (u.body === null ? { key: u.key, updatedAt: now, deleted: true } : { key: u.key, updatedAt: now, deleted: false, body: u.body })), source);
+    const all = units.map((u) => (u.body === null ? { key: u.key, updatedAt: now, deleted: true } : { key: u.key, updatedAt: now, deleted: false, body: u.body }));
+    // FIT-218: a block of weeks is more units than one push takes.
+    for (let i = 0; i < all.length; i += MAX_UNITS) await push(uid, all.slice(i, i + MAX_UNITS), source);
   },
   async get(uid, key) {
     return (await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: `MCP#${key}` } }))).Item;
@@ -160,9 +162,12 @@ const SESSION = {
     exercise: EXERCISE, sets: { type: "integer", minimum: 1, maximum: 10 }, reps: { type: "integer" }, seconds: { type: "integer" },
     distance_mi: { type: "number", description: "A run's distance in miles." }, minutes: { type: "number", description: "A run's time." },
     run: { type: "string", enum: ["easy", "long", "tempo", "intervals", "race"], description: "A run's kind (default easy). Keep tempo and intervals off the day before, or the day of, heavy legs." },
-    weight_lb: { type: "number" }, weight_lb_per_hand: { type: "number" }, rpe: { type: "number" },
+    weight_lb: { type: "number" }, weight_lb_per_hand: { type: "number" },
+    percent_1rm: { type: "number", minimum: 30, maximum: 105, description: "A load as a percent of their max (\"75%\" is 75), in place of weight_lb: code works out the weight from their logs or starting set, to 5 lb." },
+    rpe: { type: "number", description: "Target RPE; from RIR, 10 minus RIR." },
     main: { type: "boolean", description: "A main lift (defaults to the catalog's goal lifts)." },
-    superset: { type: "integer", description: "Exercises sharing a number are done together in rounds." },
+    superset: { type: "integer", description: "Exercises sharing a number are done together in rounds (A1/A2 is one number)." },
+    note: { type: "string", description: "The coach's cue for this exercise, shown above its sets on their phone: tempo, rest, a rep range, AMRAP on the last set." },
   }, required: ["exercise"] },
 };
 
@@ -320,10 +325,10 @@ export const tools = [
     name: "propose_week",
     title: "Propose a week",
     annotations: { title: "Propose a week", ...READ },
-    description: "Propose several days at once, such as the first week after setup or next week from their logs: each day's whole session, or an empty exercises list for a rest day. Days already logged or past are refused. Checked by the plan rules and their weekly set ceiling; nothing changes until apply. Plan the days they said they train, each fitting their minutes.",
+    description: "Propose several days at once, such as the first week after setup or next week from their logs: each day's whole session, or an empty exercises list for a rest day. Days already logged or past are refused. Checked by the plan rules and their weekly set ceiling; nothing changes until apply. Plan the days they said they train, each fitting their minutes. Up to 6 weeks in one call, such as a whole block a coach brings in.",
     inputSchema: { type: "object", properties: {
       reason: { type: "string", description: "One sentence on the week's aim, shown to them in the app." },
-      days: { type: "array", minItems: 1, maxItems: 14, items: { type: "object", properties: {
+      days: { type: "array", minItems: 1, maxItems: 42, items: { type: "object", properties: {
         date: { type: "string", description: "YYYY-MM-DD" }, title: { type: "string" }, exercises: { ...SESSION, minItems: 0 },
       }, required: ["date", "exercises"] } },
     }, required: ["reason", "days"] },
@@ -339,7 +344,7 @@ export const tools = [
     name: "set_program",
     title: "Set the program",
     annotations: { title: "Set the program", ...write(false, true) },
-    description: "Start a program or change it: how many weeks (or the target date), when it starts, how often to deload, and trips. Weeks run Sunday to Saturday. A new program starts this week unless start says otherwise. Code lays out the phases, deloads and the test week; then plan each week with propose_week, the first one or two now and each next week from their logs.",
+    description: "Start a program or change it: how many weeks (or the target date), when it starts, how often to deload, and trips. Weeks run Sunday to Saturday. A new program starts this week unless start says otherwise. Code lays out the phases, a deload every deload_every weeks, and a light test week as the last; then plan each week with propose_week, the first one or two now and each next week from their logs.",
     inputSchema: { type: "object", properties: {
       weeks: { type: "integer", minimum: 1, maximum: 52, description: "Length in weeks, ending on that week's Saturday." },
       by: { type: "string", description: "Or the target date, YYYY-MM-DD: the program runs through that week." },
@@ -708,7 +713,21 @@ async function propose(uid: string, caller: string, tz: string, today: string, d
   const problems: string[] = [];
   const notes: string[] = [];
   const next = new Map<string, PlanRow[]>();
+  // FIT-218: what a pasted program's names and percentages became, for the agent to check before apply.
+  const loose = new Map<string, string>(), weights = new Map<string, { said: string; pcts: Map<number, number> }>();
   for (const d of days) {
+    d.exercises = (d.exercises ?? []).map((x) => {
+      const e = resolve(x.exercise);
+      if (!exactly(x.exercise)) loose.set(x.exercise, `"${x.exercise}" is ${e.name} (${e.slug})`);
+      if (x.percent_1rm === undefined) return x;
+      if (x.weight_lb !== undefined || x.weight_lb_per_hand !== undefined) throw new Error(`${e.name}: give percent_1rm or a weight, not both.`);
+      const max = maxOf(units, profile, e.slug, today);
+      if (max === undefined) throw new Error(`${e.name} at ${x.percent_1rm}% needs their max. Ask for it, then save it with set_profile starting_sets (a 1RM is weight_lb with reps 1).`);
+      const weight = Math.round((max * x.percent_1rm) / 100 / 5) * 5;
+      const w = weights.get(e.slug) ?? { said: `${e.name}, max ${Math.round(max)} lb`, pcts: new Map() };
+      weights.set(e.slug, w.pcts.set(x.percent_1rm, weight) && w);
+      return { ...x, percent_1rm: undefined, weight_lb: weight };
+    });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date ?? "")) throw new Error(`Not a date: ${d.date}. Use YYYY-MM-DD.`);
     if (d.date < today) throw new Error(`${d.date} is past; plan today or later.`);
     if (logOf(units, d.date).some((r) => r.kind === "workout")) throw new Error(`${d.date} is already logged.`);
@@ -748,8 +767,23 @@ async function propose(uid: string, caller: string, tz: string, today: string, d
   // Kept with whoever proposed it, so a coach's apply finds it; uid is whose plan it changes.
   await store.put(caller, `proposal#${id}`, { uid, days: out, problems }, 2);
   return [`Proposal ${id} — ${reason}`, ...lines,
-    ...(notes.length ? ["", "Check with them:", ...[...new Set(notes)].map((n) => `- ${n}`)] : []),
-    problems.length ? `\nPlan-rule problems; fix these and propose again before applying:\n${problems.map((p) => `- ${p}`).join("\n")}` : "\nIt passes the plan rules. Show them the change, and apply when they agree."].join("\n");
+    ...(loose.size ? ["", "Matched by name; check each is the exercise meant, or use find_exercises and propose again:", ...[...loose.values()].map((l) => `- ${l}`)] : []),
+    ...(weights.size ? ["", "Weights from percentages of their max:", ...[...weights.values()].map((w) =>
+      `- ${w.said}: ${[...w.pcts].sort((a, b) => a[0] - b[0]).map(([p, lb]) => `${p}% ${lb}`).join(", ")} lb`)] : []),
+    ...(notes.length ? ["", "Check with them:", ...byText(notes).map((n) => `- ${n}`)] : []),
+    problems.length ? `\nPlan-rule problems; fix these and propose again before applying:\n${byText(problems).map((p) => `- ${p}`).join("\n")}` : "\nIt passes the plan rules. Show them the change, and apply when they agree."].join("\n");
+}
+
+/** "2026-10-20, 2026-10-27: …" once, for the same note on many days of a block (FIT-218). */
+function byText(list: string[]) {
+  const days = new Map<string, string[]>();
+  for (const item of list) {
+    const [, day, text] = /^(\d{4}-\d{2}-\d{2}): (.*)$/s.exec(item) ?? [, "", item];
+    const seen = days.get(text) ?? [];
+    if (day && !seen.includes(day)) seen.push(day);
+    days.set(text, seen);
+  }
+  return [...days].map(([text, d]) => (d.length ? `${d.join(", ")}: ${text}` : text));
 }
 
 function describeDay(units: Units, day: string) {
@@ -1180,7 +1214,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
         capabilities: { tools: {}, prompts: {} },
         serverInfo: { name: "Barbrabell", version: "0.1.0" },
-        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs. If get_context lists clients, they're a coach: list_clients and roster_review show who needs them, and the planning tools act on one client when given client. To give one client's block to another: get_day with to on the first, then propose_week for the second with loads from the second's own maxes (ask for a starting set if there's none).",
+        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs. If get_context lists clients, they're a coach: list_clients and roster_review show who needs them, and the planning tools act on one client when given client. To give one client's block to another: get_day with to on the first, then propose_week for the second with loads from the second's own maxes (ask for a starting set if there's none). To bring in a client's existing program (a pasted sheet, CSV, PDF or screenshot): get_context with client; save the maxes it's based on with set_profile starting_sets, and the equipment it needs; set_program with start on its first week, weeks its length plus one (the last week is a light test week), and deload_every its deload spacing (12 when it has none); then propose_week its days, up to 6 weeks a call, in the coach's numbers: percent_1rm for percentages, rpe for RPE (10 minus RIR), the same superset number for A1/A2, reps the low end of a range, and note for tempo, rest, the range or AMRAP. Check the names it matched, show the coach, and apply.",
       });
     }
     case "ping":
