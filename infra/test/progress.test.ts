@@ -153,12 +153,12 @@ describe("the weekly review (WeeklyReview)", () => {
 describe("race times (FIT-177)", () => {
   it("reads distances and times as people say them", async () => {
     const { meters, seconds, clock, riegel, runMetric, goalMeters } = await import("../lambda/running.ts");
-    expect([meters("10K"), meters("half"), meters("Marathon"), meters("8 km"), meters("5 mi"), meters(8)]).toEqual([10000, 21097.5, 42195, 8000, 8046.72, 8000]);
+    expect([meters("10K"), meters("half"), meters("Marathon"), meters("8 km"), meters("5 mi"), meters(5)]).toEqual([10000, 21097.5, 42195, 8000, 8046.72, 8046.72]);
     expect([seconds("55:00"), seconds("1:45:30"), seconds("48 min"), seconds(55)]).toEqual([3300, 6330, 2880, 3300]);
     expect([clock(3344), clock(6330)]).toEqual(["55:44", "1:45:30"]);
     expect(() => meters("far")).toThrow(/Not a distance/);
     expect(goalMeters(runMetric(10000))).toBe(10000);
-    // A run under a quarter of the distance, or under 1.6 km, doesn't predict it.
+    // A run under a quarter of the distance, or under a mile, doesn't predict it.
     expect(riegel(420, 1609, 10000)).toBeUndefined();
     expect(Math.round(riegel(1500, 5000, 10000)!)).toBe(3127);
   });

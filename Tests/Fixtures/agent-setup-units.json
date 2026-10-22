@@ -322,7 +322,7 @@
         {
           "metric": "distance_m",
           "unit": "m",
-          "value": 5000
+          "value": 4828
         },
         {
           "metric": "duration_s",

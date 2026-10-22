@@ -531,55 +531,56 @@ describe("agent-first onboarding (FIT-150)", () => {
 
     // An 8 km run in 44:00: Riegel puts a 10K at 44:00 × 1.25^1.06 = 55:44.
     const run = await callTool("log_run", { distance: "8 km", time: "44:00", hr_avg: 152, kind: "tempo", note: "felt strong" }, fresh, store, now);
-    expect(run).toMatch(/Logged Saturday 2026-10-17: 8 km in 44:00 \(5:30\/km\), HR 152, tempo: felt strong\.\n10K: this predicts 55:44; best so far 55:44 \(goal 55:00\)\./);
+    expect(run).toMatch(/Logged Saturday 2026-10-17: 5 mi in 44:00 \(8:51\/mi\), HR 152, tempo: felt strong\.\n10K: this predicts 55:44; best so far 55:44 \(goal 55:00\)\./);
     expect(JSON.parse(units.new["log#2026-10-17"])[0]).toMatchObject({ kind: "workout", template: "trail-running-walking", note: "tempo: felt strong",
       measurements: [{ metric: "distance_m", value: 8000 }, { metric: "duration_s", value: 2640 }, { metric: "hr_avg", value: 152, unit: "bpm" }] });
-    expect(await callTool("get_day", {}, fresh, store, now)).toMatch(/Trail Running\/Walking: 8 km in 44:00 \(5:30\/km\), HR 152 · tempo: felt strong/);
+    expect(await callTool("get_day", {}, fresh, store, now)).toMatch(/Trail Running\/Walking: 5 mi in 44:00 \(8:51\/mi\), HR 152 · tempo: felt strong/);
     const p = await callTool("get_progress", {}, fresh, store, now);
     expect(p).toMatch(/- 10K time: target 55:00 by 2027-04-02 \[goal_id [^\]]+\]\n  Now 55:44 predicted from their runs, from 1:00:00 at the start: 85% of the way\./);
-    expect(p).toMatch(/Best run: 8 km in 44:00 \(5:30\/km\) on 2026-10-17\./);
+    expect(p).toMatch(/Best run: 5 mi in 44:00 \(8:51\/mi\) on 2026-10-17\./);
     expect(await callTool("get_context", {}, fresh, store, now)).toMatch(/- 10K in 55:00 by 2027-04-02 — their runs predict 55:44 now/);
     // A short easy jog doesn't count toward a 10K prediction.
     await callTool("log_run", { distance: "1 mi", time: "7:00", kind: "easy" }, fresh, store, now);
     expect(await callTool("get_progress", {}, fresh, store, now)).toMatch(/Now 55:44 predicted/);
-    expect(await callTool("get_week_review", {}, fresh, store, now)).toMatch(/Ran 9\.6 km\./);
+    expect(await callTool("get_week_review", {}, fresh, store, now)).toMatch(/Ran 6 mi\./);
   });
 
-  it("plans runs beside lifting, counts the week's km, and flags a hard run next to heavy legs (FIT-178)", async () => {
+  it("plans runs beside lifting, counts the week's miles, and flags a hard run next to heavy legs (FIT-178)", async () => {
     const units: Record<string, Record<string, string>> = {};
     const store = memory({}, units);
     await callTool("set_profile", { age: 38, weight_lb: 180, training_days: ["Mon", "Wed", "Fri"], starting_sets: [{ exercise: "Back Squat", weight_lb: 225, reps: 5 }, { exercise: "Bench Press", weight_lb: 185, reps: 5 }] }, fresh, store, now);
     const lift = (date: string, main: string, load: number) => ({ date, title: "Lift", exercises: [{ exercise: main, sets: 4, reps: 5, weight_lb: load, rpe: 7 }, { exercise: "Pull-up", sets: 3, reps: 6 }] });
-    const run = (date: string, km: number, kind: string) => ({ date, title: "Run", exercises: [{ exercise: "Trail Running/Walking", distance_km: km, run: kind }] });
+    const run = (date: string, mi: number, kind: string) => ({ date, title: "Run", exercises: [{ exercise: "Trail Running/Walking", distance_mi: mi, run: kind }] });
     // Sunday easy, Mon squats, Tue easy, Wed bench, Thu tempo, Fri squats: the tempo is the day before squats.
     const week = await callTool("propose_week", { reason: "First week with running.", days: [
-      run("2026-10-18", 5, "easy"), lift("2026-10-19", "Back Squat", 205), run("2026-10-20", 6, "easy"), lift("2026-10-21", "Bench Press", 165),
-      run("2026-10-22", 8, "tempo"), lift("2026-10-23", "Back Squat", 205),
+      // Planned in km still reads (FIT-186).
+      { date: "2026-10-18", title: "Run", exercises: [{ exercise: "Trail Running/Walking", distance_km: 5, run: "easy" }] }, lift("2026-10-19", "Back Squat", 205), run("2026-10-20", 4, "easy"), lift("2026-10-21", "Bench Press", 165),
+      run("2026-10-22", 5, "tempo"), lift("2026-10-23", "Back Squat", 205),
     ] }, fresh, store, now);
-    expect(week).toMatch(/Sunday 2026-10-18 — Run:\n  \+ Trail Running\/Walking: 5 km · easy/);
+    expect(week).toMatch(/Sunday 2026-10-18 — Run:\n  \+ Trail Running\/Walking: 3\.1 mi · easy/);
     expect(week).toMatch(/2026-10-22: a hard run next to heavy legs \(squats or deadlifts on 2026-10-23\)/);
     expect(week).not.toMatch(/2026-10-20: a hard run/);
     expect(week.match(/a hard run next to heavy legs/g)).toHaveLength(1);
     expect(week).toMatch(/passes the plan rules/); // runs aren't held to the sets rules
     await callTool("apply", { proposal_id: week.match(/Proposal (\S+)/)![1] }, fresh, store, now);
     expect(JSON.parse(units.new["plan#2026-10-22"])[0]).toMatchObject({ template: "trail-running-walking", note: "tempo", main: false,
-      targets: [{ metric: "sets", value: 1 }, { metric: "distance_m", value: 8000, unit: "m" }] });
+      targets: [{ metric: "sets", value: 1 }, { metric: "distance_m", value: 8047, unit: "m" }] });
 
     // A run logged beside the lifting stays when the lifting is logged over, and as-planned leaves runs to log_run.
     const later = new Date("2026-10-23T22:00:00Z");
-    // FIT-184: what's left out went as planned. Thursday's 8 km tempo has no time planned, so it asks for one.
+    // FIT-184: what's left out went as planned. Thursday's 5 mi tempo has no time planned, so it asks for one.
     await expect(callTool("log_run", { date: "2026-10-22" }, fresh, store, later)).rejects.toThrow(/no time: ask them how long it took/);
-    expect(await callTool("log_run", { date: "2026-10-22", time: "40:00" }, fresh, store, later)).toMatch(/Logged Thursday 2026-10-22: 8 km in 40:00 \(.*\), tempo\./);
+    expect(await callTool("log_run", { date: "2026-10-22", time: "40:00" }, fresh, store, later)).toMatch(/Logged Thursday 2026-10-22: 5 mi in 40:00 \(8:00\/mi\), tempo\./);
     expect(JSON.parse(units.new["log#2026-10-22"])[0]).toMatchObject({ template: "trail-running-walking", plannedRef: JSON.parse(units.new["plan#2026-10-22"])[0].id, note: "tempo" });
     await expect(callTool("log_run", { date: "2026-10-21" }, fresh, store, later)).rejects.toThrow(/No run is planned 2026-10-21/);
-    await callTool("log_run", { date: "2026-10-23", distance: "3 km", time: "18:00", kind: "easy" }, fresh, store, later);
+    await callTool("log_run", { date: "2026-10-23", distance: "2 mi", time: "18:00", kind: "easy" }, fresh, store, later);
     await callTool("log_session", { date: "2026-10-23", as_planned: true, rpe: 7 }, fresh, store, later);
     await callTool("log_session", { date: "2026-10-23", as_planned: true, rpe: 8, replace: true }, fresh, store, later);
     expect(JSON.parse(units.new["log#2026-10-23"]).filter((r: any) => r.template === "trail-running-walking")).toHaveLength(1);
 
-    // The next week's running against the last: 19 km planned, plus the 3 km run on Friday is 22; 25 is over 10% more.
-    const more = await callTool("propose_week", { reason: "More running.", days: [run("2026-10-25", 10, "long"), run("2026-10-27", 8, "easy"), run("2026-10-29", 7, "easy")] }, fresh, store, later);
-    expect(more).toMatch(/Week of 2026-10-25: 25 km of running, more than 10% over the 22 km most of the 4 weeks before/);
+    // The next week's running against the last: 12.1 mi planned, plus the 2 mi run on Friday is 14.1; 16 is over 10% more.
+    const more = await callTool("propose_week", { reason: "More running.", days: [run("2026-10-25", 6, "long"), run("2026-10-27", 5, "easy"), run("2026-10-29", 5, "easy")] }, fresh, store, later);
+    expect(more).toMatch(/Week of 2026-10-25: 16 mi of running, more than 10% over the 14\.1 mi most of the 4 weeks before/);
     expect(await callTool("get_program", {}, fresh, store, later)).toBe("No program yet. set_program lays one out from this week to a target date.");
   });
 
@@ -609,7 +610,7 @@ describe("what the app reads (FIT-150)", () => {
       { date: "2026-10-17", title: "Lower A", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 175, rpe: 7 }, { exercise: "Plank", sets: 3, seconds: 45 }] },
       { date: "2026-10-19", title: "Upper A", exercises: [{ exercise: "Dumbbell Bench Press", sets: 3, reps: 10, weight_lb_per_hand: 50, superset: 1 }, { exercise: "Pull-up", sets: 3, reps: 5, superset: 1 },
         { exercise: "Landmine Press", sets: 3, reps: 8, weight_lb: 45 }] },
-      { date: "2026-10-18", title: "Easy run", exercises: [{ exercise: "Trail Running/Walking", distance_km: 5, minutes: 30, run: "easy" }] },
+      { date: "2026-10-18", title: "Easy run", exercises: [{ exercise: "Trail Running/Walking", distance_mi: 3, minutes: 30, run: "easy" }] },
     ] }, a, store, now);
     await callTool("apply", { proposal_id: week.match(/Proposal (\S+)/)![1] }, a, store, now);
     await callTool("log_session", { as_planned: true, rpe: 7, effort: 6, note: "Knees fine." }, a, store, now);

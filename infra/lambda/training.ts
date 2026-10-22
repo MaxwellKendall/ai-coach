@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import seed from "../../Resources/Seed/exercises.json" with { type: "json" };
-import { clock, distanceName, goalMeters, meters, OUTDOOR_RUN, pace, riegel, RUNS, runMetric, seconds } from "./running.ts";
+import { clock, distanceName, goalMeters, meters, miles, MILE, OUTDOOR_RUN, pace, riegel, RUNS, runMetric, seconds } from "./running.ts";
 
 // FIT-149: the training data an agent reads and writes, as the app keeps it in FIT-126's sync units
 // (Core/Cloud/SyncUnits.swift: times in seconds since 1970, keys sorted, nil left out). Pure, so it's tested without a
@@ -217,10 +217,10 @@ export function sessionLines(plan: PlanRow[]) {
   return out;
 }
 
-/** "8 km · 45 min · easy". */
+/** "5 mi · 45 min · easy". */
 export function describeRun(t: Measurement[], note?: string) {
   const d = value(t, "distance_m"), s = value(t, "duration_s");
-  return [d ? `${Math.round(d / 100) / 10} km` : "", s ? `${Math.round(s / 60)} min` : "", note ?? ""].filter(Boolean).join(" · ") || "a run";
+  return [d ? miles(d) : "", s ? `${Math.round(s / 60)} min` : "", note ?? ""].filter(Boolean).join(" · ") || "a run";
 }
 
 export function describeTargets(sets: number, t: Measurement[]) {
@@ -244,7 +244,7 @@ export function describeLog(log: LogRow[]) {
   const sets = log.filter((r) => r.kind === "workout" && r.template && !RUNS.includes(r.template));
   const runs = log.filter((r) => r.kind === "workout" && r.template && RUNS.includes(r.template)).map((r) => {
     const d = value(r.measurements, "distance_m"), t = value(r.measurements, "duration_s"), hr = value(r.measurements, "hr_avg");
-    return `${nameOf(r.template)}: ${d ? `${Math.round(d / 100) / 10} km` : ""}${d && t ? " in " : ""}${t ? clock(t) : ""}${d && t ? ` (${pace(t, d)})` : ""}${hr ? `, HR ${hr}` : ""}${r.note ? ` · ${r.note}` : ""}`;
+    return `${nameOf(r.template)}: ${d ? miles(d) : ""}${d && t ? " in " : ""}${t ? clock(t) : ""}${d && t ? ` (${pace(t, d)})` : ""}${hr ? `, HR ${hr}` : ""}${r.note ? ` · ${r.note}` : ""}`;
   });
   const byExercise = new Map<string, string[]>();
   for (const s of sets) {
@@ -415,7 +415,7 @@ export function weeklySets(days: PlanRow[][]) {
 const uuid = () => randomUUID().toUpperCase();
 
 export type ExerciseInput = {
-  exercise: string; sets?: number; distance_km?: number; minutes?: number; run?: string; reps?: number; seconds?: number; weight_lb?: number; weight_lb_per_hand?: number; rpe?: number;
+  exercise: string; sets?: number; distance_mi?: number; distance_km?: number; minutes?: number; run?: string; reps?: number; seconds?: number; weight_lb?: number; weight_lb_per_hand?: number; rpe?: number;
   main?: boolean; superset?: number;
 };
 
@@ -426,8 +426,10 @@ export function sessionRows(existing: PlanRow[], title: string, exercises: Exerc
     const e = resolve(x.exercise);
     if (RUNS.includes(e.slug)) {
       // FIT-178: a run is one row: its distance and/or time, its kind as the note.
-      if (x.distance_km === undefined && x.minutes === undefined) throw new Error(`${e.name}: give distance_km or minutes.`);
-      const run = [m("sets", 1), ...(x.distance_km !== undefined ? [m("distance_m", Math.round(x.distance_km * 1000))] : []), ...(x.minutes !== undefined ? [m("duration_s", Math.round(x.minutes * 60))] : [])];
+      // FIT-186: planned in miles, as the app shows runs; km still read.
+      const distance = x.distance_mi !== undefined ? x.distance_mi * MILE : x.distance_km !== undefined ? x.distance_km * 1000 : undefined;
+      if (distance === undefined && x.minutes === undefined) throw new Error(`${e.name}: give distance_mi or minutes.`);
+      const run = [m("sets", 1), ...(distance !== undefined ? [m("distance_m", Math.round(distance))] : []), ...(x.minutes !== undefined ? [m("duration_s", Math.round(x.minutes * 60))] : [])];
       return { id: uuid(), kind: "workout", at: start + i, slot: title, template: e.slug, targets: run, note: x.run ?? "easy", adjustedReason: reason, group: x.superset, main: false, pinned: true };
     }
     if (x.sets === undefined) throw new Error(`${e.name}: how many sets?`);

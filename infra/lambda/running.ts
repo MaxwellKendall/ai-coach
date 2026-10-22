@@ -8,18 +8,20 @@ export const OUTDOOR_RUN = RUNS[0];
 
 const RACES: Record<string, number> = { "5k": 5000, "10k": 10000, half: 21097.5, "half marathon": 21097.5, marathon: 42195 };
 
-/** "10K", "half", "8 km", "5 mi", "5000 m" or a number of km, in meters. */
+export const MILE = 1609.344;
+
+/** "10K", "half", "8 km", "5 mi", "5000 m" or a number of miles (FIT-186: the app's runs are in miles), in meters. */
 export function meters(said: string | number): number {
   if (typeof said === "number") {
-    if (!(said > 0 && said < 400)) throw new Error("A distance is in km, e.g. 8 or \"10K\".");
-    return said * 1000;
+    if (!(said > 0 && said < 250)) throw new Error("A distance is in miles, e.g. 5, or \"10K\".");
+    return said * MILE;
   }
   const s = said.trim().toLowerCase().replace(/[\s-]+/g, " ");
   if (RACES[s] ?? RACES[s.replace(/ /g, "")]) return RACES[s] ?? RACES[s.replace(/ /g, "")];
   const m = /^(\d+(?:\.\d+)?)\s*(k|km|kilometers?|mi|miles?|m|meters?)?$/.exec(s);
-  if (!m) throw new Error(`Not a distance: ${said}. Say "10K", "half", "8 km" or "5 mi".`);
-  const n = Number(m[1]), unit = m[2] ?? "km";
-  return unit.startsWith("mi") ? n * 1609.344 : unit === "m" || unit.startsWith("meter") ? n : n * 1000;
+  if (!m) throw new Error(`Not a distance: ${said}. Say "5 mi", "10K", "half" or "8 km".`);
+  const n = Number(m[1]), unit = m[2] ?? "mi";
+  return unit.startsWith("mi") ? n * MILE : unit === "m" || unit.startsWith("meter") ? n : n * 1000;
 }
 
 /** "55:00", "1:45:30", "48 min", "3300 s" or a number of minutes, in seconds. */
@@ -43,8 +45,11 @@ export function clock(total: number) {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** "5:30/km". */
-export const pace = (secs: number, m: number) => `${clock(secs / (m / 1000))}/km`;
+/** FIT-186: "5 mi", to a tenth, as the app shows a run. */
+export const miles = (m: number) => `${Math.round((m / MILE) * 10) / 10} mi`;
+
+/** "8:51/mi". */
+export const pace = (secs: number, m: number) => `${clock(secs / (m / MILE))}/mi`;
 
 export const runMetric = (m: number) => `run_${Math.round(m)}m.time_s`;
 /** The goal distance of a run metric, in meters. */
@@ -53,14 +58,14 @@ export function goalMeters(metric: string) {
   return m ? Number(m[1]) : undefined;
 }
 
-/** "10K", "Half marathon", "8 km". */
+/** "10K", "Half marathon", "5 mi". */
 export function distanceName(m: number) {
   if (Math.abs(m - 42195) < 1) return "Marathon";
   if (Math.abs(m - 21098) < 2) return "Half marathon";
-  return m % 1000 === 0 && m <= 50000 ? `${m / 1000}K` : `${Math.round(m / 100) / 10} km`;
+  return m % 1000 === 0 && m <= 50000 ? `${m / 1000}K` : miles(m);
 }
 
-/** Riegel: a run's time carried to another distance. Only runs a quarter of it or longer, and 1.6 km or longer, count. */
+/** Riegel: a run's time carried to another distance. Only runs a quarter of it or longer, and a mile or longer, count. */
 export function riegel(time: number, from: number, to: number) {
   return from >= Math.max(1600, to / 4) ? time * (to / from) ** 1.06 : undefined;
 }

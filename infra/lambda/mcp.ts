@@ -11,7 +11,7 @@ import {
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
 import * as progress from "./progress.ts";
-import { clock, distanceName, goalMeters, meters, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
+import { clock, distanceName, goalMeters, meters, MILE, miles, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
 import { COACH_PRICE, comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
@@ -156,9 +156,9 @@ export const hashToken = (token: string) => createHash("sha256").update(token).d
 const DATE = { type: "string", description: "A day, YYYY-MM-DD. Defaults to today in the person's time zone." };
 const EXERCISE = { type: "string", description: "An exercise by catalog name or slug, e.g. \"Back Squat\" or \"back-squat\"." };
 const SESSION = {
-  type: "array", minItems: 1, description: "The session's exercises, in order. A run is \"Trail Running/Walking\" (or \"Running, Treadmill\") with distance_km and/or minutes and its kind, no sets; it can be a day of its own or beside lifting.", items: { type: "object", properties: {
+  type: "array", minItems: 1, description: "The session's exercises, in order. A run is \"Trail Running/Walking\" (or \"Running, Treadmill\") with distance_mi and/or minutes and its kind, no sets; it can be a day of its own or beside lifting.", items: { type: "object", properties: {
     exercise: EXERCISE, sets: { type: "integer", minimum: 1, maximum: 10 }, reps: { type: "integer" }, seconds: { type: "integer" },
-    distance_km: { type: "number", description: "A run's distance." }, minutes: { type: "number", description: "A run's time." },
+    distance_mi: { type: "number", description: "A run's distance in miles." }, minutes: { type: "number", description: "A run's time." },
     run: { type: "string", enum: ["easy", "long", "tempo", "intervals", "race"], description: "A run's kind (default easy). Keep tempo and intervals off the day before, or the day of, heavy legs." },
     weight_lb: { type: "number" }, weight_lb_per_hand: { type: "number" }, rpe: { type: "number" },
     main: { type: "boolean", description: "A main lift (defaults to the catalog's goal lifts)." },
@@ -257,10 +257,10 @@ export const tools = [
     name: "log_run",
     title: "Log a run",
     annotations: { title: "Log a run", ...write(false, false) },
-    description: "Log a run they did: distance, time, average heart rate if they know it, and what kind (easy, long, tempo, intervals, race). Leave out what went as planned: distance, time and kind default to the day's planned run, so \"did my run\" on a planned 25-minute 3.2 km needs neither. It's added to the day beside any lifting. Race-time goals follow it.",
+    description: "Log a run they did: distance, time, average heart rate if they know it, and what kind (easy, long, tempo, intervals, race). Leave out what went as planned: distance, time and kind default to the day's planned run, so \"did my run\" on a planned 25-minute 2.5 mi needs neither. It's added to the day beside any lifting. Race-time goals follow it.",
     inputSchema: { type: "object", properties: {
       date: DATE,
-      distance: { type: "string", description: "\"8 km\", \"5 mi\", \"10K\". Defaults to the planned run's." },
+      distance: { type: "string", description: "\"5 mi\" (a bare number is miles), \"8 km\", \"10K\". Defaults to the planned run's." },
       time: { type: "string", description: "\"44:00\" or \"1:02:10\". Defaults to the planned run's." },
       hr_avg: { type: "integer", minimum: 60, maximum: 220, description: "Average heart rate, bpm." },
       kind: { type: "string", enum: ["easy", "long", "tempo", "intervals", "race"] },
@@ -408,7 +408,7 @@ export const tools = [
       max_weekly_sets: { type: "integer", minimum: 10, maximum: 120, description: "A ceiling on working sets a week (default 60)." },
       starting_sets: { type: "array", description: "Where they are now, per goal lift and any main lift: their 1RM (weight_lb with reps 1, tested or their best estimate) or a recent heavy set (weight × reps). Required before set_program, and weights are held to it.", items: { type: "object", properties: {
         exercise: EXERCISE, weight_lb: { type: "number" }, reps: { type: "integer" }, seconds: { type: "integer" },
-        distance: { type: "string", description: "For a run (a race-time goal's starting point): \"10K\", \"8 km\", \"5 mi\"." },
+        distance: { type: "string", description: "For a run (a race-time goal's starting point): \"5 mi\", \"10K\", \"8 km\"." },
         time: { type: "string", description: "For a run: its time, \"59:30\"." },
       } } },
     } },
@@ -424,7 +424,7 @@ export const tools = [
       type: { type: "string", enum: ["lift_max", "reps", "body_weight", "timed_distance"] },
       exercise: EXERCISE,
       target: { type: "number", description: "lb for a lift max or body weight; reps for reps." },
-      distance: { type: "string", description: "For a race time: \"5K\", \"10K\", \"half\", \"marathon\", \"8 km\" or \"5 mi\"." },
+      distance: { type: "string", description: "For a race time: \"5K\", \"10K\", \"half\", \"marathon\", \"5 mi\" or \"8 km\"." },
       time: { type: "string", description: "For a race time: the target, \"55:00\" or \"1:45:30\"." },
       by: { type: "string", description: "Deadline, YYYY-MM-DD." },
     }, required: ["action"] },
@@ -601,7 +601,7 @@ function describeProgress(units: Units, today: string, nowSec: number, tz: strin
       const top = progress.best(g.metric, sets, since);
       if (top) {
         const v = (m: string) => top.measurements.find((x) => x.metric === m)?.value;
-        lines.push(time ? `  Best run: ${Math.round(v("distance_m")! / 100) / 10} km in ${clock(v("duration_s")!)} (${runPace(v("duration_s")!, v("distance_m")!)}) on ${top.day}.`
+        lines.push(time ? `  Best run: ${miles(v("distance_m")!)} in ${clock(v("duration_s")!)} (${runPace(v("duration_s")!, v("distance_m")!)}) on ${top.day}.`
           : `  Best set: ${v("load_lb") !== undefined ? `${v("load_lb")} lb × ` : ""}${v("reps")} reps on ${top.day}.`);
       }
       const points = progress.trend(g.metric, sets, weighs, since).slice(-8);
@@ -626,7 +626,7 @@ function describeReview(units: Units, day: string, nowSec: number, tz: string) {
     `Numbers: ${x.workoutsDone} of ${x.workoutsPlanned} workouts, ${x.sets} working sets (${x.push} push, ${x.pull} pull).`
       + (x.protein !== undefined ? ` Protein ${Math.round(x.protein)} g a day.` : "") + (x.kcal !== undefined ? ` ${Math.round(x.kcal).toLocaleString("en-US")} kcal a day.` : "")
       + (x.sleep !== undefined ? ` Sleep ${n(x.sleep)} h a night.` : "") + " (Averages over the days logged.)"
-      + (x.runKm ? ` Ran ${n(x.runKm)} km.` : "")
+      + (x.runKm ? ` Ran ${miles(x.runKm * 1000)}.` : "")
       + (x.weight !== undefined ? ` Weight ${n(x.weight)} lb${x.weightChange !== undefined ? ` (${x.weightChange >= 0 ? "+" : ""}${n(Math.round(x.weightChange * 10) / 10)} on the week before)` : ""}.` : "")];
   if (r.goals.length) {
     out.push("", "Goals this week:");
@@ -658,15 +658,15 @@ function progressWins(units: Units, today: string, tz: string) {
     progress.plannedDays(units), progress.workoutDays(units), today, tz);
 }
 
-/** The km of running a week (Sunday on) holds: logged where a day is logged, else planned. */
-function weekKm(units: Units, sunday: string, planFor: (d: string) => PlanRow[]) {
+/** The miles of running a week (Sunday on) holds: logged where a day is logged, else planned. */
+function weekMiles(units: Units, sunday: string, planFor: (d: string) => PlanRow[]) {
   let m = 0;
   for (let i = 0; i < 7; i++) {
     const d = addDays(sunday, i), logged = logOf(units, d).filter((r) => isRun(r));
     const rows = logged.length ? logged.map((r) => r.measurements) : planFor(d).filter((r) => isRun(r)).map((r) => r.targets);
     m += rows.reduce((n, ms) => n + (ms.find((x) => x.metric === "distance_m")?.value ?? 0), 0);
   }
-  return Math.round(m / 100) / 10;
+  return Math.round((m / MILE) * 10) / 10;
 }
 
 /** Every program week with its kind, aim and what's planned so far. */
@@ -684,8 +684,8 @@ function describeProgram(units: Units, today: string, tz: string) {
     const plans = days.map((d) => planOf(units, d));
     const sessions = plans.filter((p) => p.some((r) => r.kind === "workout")).length;
     const done = days.filter((d) => logOf(units, d).some((r) => r.kind === "workout")).length;
-    const km = weekKm(units, sunday, (d) => planOf(units, d));
-    const planned = sessions ? `${sessions} session(s), ${weeklySets(plans)} sets planned${km ? `, ${km} km of running` : ""}${done ? `, ${done} logged` : ""}` : "Not planned yet";
+    const mi = weekMiles(units, sunday, (d) => planOf(units, d));
+    const planned = sessions ? `${sessions} session(s), ${weeklySets(plans)} sets planned${mi ? `, ${mi} mi of running` : ""}${done ? `, ${done} logged` : ""}` : "Not planned yet";
     out.push(`Week ${i + 1} · ${sunday}${i === now ? " (this week)" : ""} · ${title(w)}: ${why(w)} Aim about ${weeklyTarget(w, profile)} working sets. ${planned}.`);
   });
   return out.join("\n");
@@ -732,8 +732,8 @@ async function propose(uid: string, caller: string, tz: string, today: string, d
     const total = weeklySets(Array.from({ length: 7 }, (_, i) => addDays(sunday, i)).map(planFor));
     if (profile?.maxWeeklySets && total > profile.maxWeeklySets) problems.push(`Week of ${sunday}: ${total} working sets, over their ceiling of ${profile.maxWeeklySets}.`);
     // FIT-178: a week's running more than 10% over the most of the 4 before it.
-    const km = weekKm(units, sunday, planFor), before = Math.max(0, ...[1, 2, 3, 4].map((w) => weekKm(units, addDays(sunday, -7 * w), (d) => planOf(units, d))));
-    if (before > 0 && km > before * 1.1) notes.push(`Week of ${sunday}: ${km} km of running, more than 10% over the ${before} km most of the 4 weeks before.`);
+    const mi = weekMiles(units, sunday, planFor), before = Math.max(0, ...[1, 2, 3, 4].map((w) => weekMiles(units, addDays(sunday, -7 * w), (d) => planOf(units, d))));
+    if (before > 0 && mi > before * 1.1) notes.push(`Week of ${sunday}: ${mi} mi of running, more than 10% over the ${before} mi most of the 4 weeks before.`);
   }
   // FIT-178: a hard run the day of, or the day before, heavy legs (a main squat or hinge).
   const heavyLegs = (d: string) => planFor(d).some((r) => r.kind === "workout" && r.main && ["squat", "hinge"].includes(bySlug.get(r.template ?? "")?.pattern ?? ""));
@@ -952,7 +952,7 @@ export async function callTool(name: string, args: Args, account: Account, store
         const race = goalMeters(g.metric)!, now2 = runTime(after, profileOf(after), race);
         return now2 === undefined ? "" : `\n${distanceName(race)}: this predicts ${clock(Math.round(t * (race / d) ** 1.06))}; best so far ${clock(now2)} (goal ${clock(g.target)}).`;
       }).join("");
-      return `Logged ${weekday(day)} ${day}: ${Math.round(d / 100) / 10} km in ${clock(t)} (${runPace(t, d)})${args.hr_avg ? `, HR ${Math.round(args.hr_avg)}` : ""}${note ? `, ${note}` : ""}.${moved}`;
+      return `Logged ${weekday(day)} ${day}: ${miles(d)} in ${clock(t)} (${runPace(t, d)})${args.hr_avg ? `, HR ${Math.round(args.hr_avg)}` : ""}${note ? `, ${note}` : ""}.${moved}`;
     }
     case "log_daily": {
       if (day > today) throw new Error(`${day} hasn't happened yet.`);
