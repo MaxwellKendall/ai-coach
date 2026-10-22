@@ -68,16 +68,18 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
 }
 
 /** The address bar's path, kept in step with the nav without reloading the page. */
-export function usePath(): [string, (path: string) => (e?: React.MouseEvent) => void] {
+export function usePath(): [string, (path: string, replace?: boolean) => (e?: React.MouseEvent) => void] {
   const [path, setPath] = useState(here);
   useEffect(() => {
     const onPop = () => setPath(here());
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const go = (to: string) => (e?: React.MouseEvent) => {
+  // replace: a redirect, so Back doesn't land on the page that sent you on.
+  const go = (to: string, replace = false) => (e?: React.MouseEvent) => {
     e?.preventDefault();
-    history.pushState(null, "", href(to));
+    if (replace) history.replaceState(null, "", href(to));
+    else history.pushState(null, "", href(to));
     setPath(to);
     window.scrollTo(0, 0);
   };
@@ -150,7 +152,7 @@ function HistoryPage({ config, me }: { config: Config; me: User }) {
   );
 }
 
-function Empty({ config, me, go }: { config: Config; me: User; go: (path: string) => (e?: React.MouseEvent) => void }) {
+function Empty({ config, me, go }: { config: Config; me: User; go: (path: string, replace?: boolean) => (e?: React.MouseEvent) => void }) {
   return (
     <>
       <header className="page">

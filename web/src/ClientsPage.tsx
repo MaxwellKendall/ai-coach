@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Config, User } from "./auth";
+import { coachPlan, hasPlan, needsPlan } from "./billing";
 import { corrections, HistoryView } from "./HistoryView";
 import { href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
@@ -21,10 +22,27 @@ const parseDay = (key: string) => {
 const since = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric", year: "numeric" });
 export const personName = (p: Person) => p.name ?? "Your client";
 
-export function ClientsPage({ config, me, go }: { config: Config; me: User; go: (path: string) => (e?: React.MouseEvent) => void }) {
+type Go = (path: string, replace?: boolean) => (e?: React.MouseEvent) => void;
+const toBilling = (go: Go) => go("/billing?coaching=1", true)();
+
+/**
+ * FIT-148: coaching needs the coach plan. Without it, the coaching pages send the coach to Billing; the server refuses
+ * the same calls (coach.ts requireCoachPlan), so this only saves a trip. Their own program and Billing still work.
+ */
+function usePlan(config: Config, go: Go) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    coachPlan(config).then((plan) => (hasPlan(plan) ? setReady(true) : toBilling(go)), () => setReady(true));
+  }, [config]);
+  return ready;
+}
+
+export function ClientsPage({ config, me, go }: { config: Config; me: User; go: Go }) {
+  const ready = usePlan(config, go);
   const [clients, setClients] = useState<(Person & { triage?: Triage })[]>();
   const [error, setError] = useState<string>();
   useEffect(() => {
+    if (!ready) return;
     myClients(config).then((list) => {
       setClients(list);
       // FIT-132: each client's week and what needs the coach, from their synced units and the session threads.
@@ -36,8 +54,10 @@ export function ClientsPage({ config, me, go }: { config: Config; me: User; go: 
           return c;
         }
       })).then((withTriage) => setClients(byNeed(withTriage)));
-    }, (e: Error) => setError(e.message));
-  }, [config, me.uid]);
+    }, (e: Error) => (needsPlan(e) ? toBilling(go) : setError(e.message)));
+  }, [config, me.uid, ready]);
+
+  if (!ready) return <p className="muted">Loading…</p>;
 
   return (
     <>
@@ -123,8 +143,9 @@ function InviteBox({ config }: { config: Config }) {
 }
 
 export function ClientPage({ config, me, uid, go }: {
-  config: Config; me: User; uid: string; go: (path: string) => (e?: React.MouseEvent) => void;
+  config: Config; me: User; uid: string; go: Go;
 }) {
+  const ready = usePlan(config, go);
   const [client, setClient] = useState<Person | null>();
   const [units, setUnits] = useState<Map<string, Unit>>();
   const [thread, setThread] = useState<Comment[]>([]);
@@ -134,8 +155,9 @@ export function ClientPage({ config, me, uid, go }: {
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    myClients(config).then((list) => setClient(list.find((c) => c.uid === uid) ?? null), (e: Error) => setError(e.message));
-  }, [config, uid]);
+    if (!ready) return;
+    myClients(config).then((list) => setClient(list.find((c) => c.uid === uid) ?? null), (e: Error) => (needsPlan(e) ? toBilling(go) : setError(e.message)));
+  }, [config, uid, ready]);
   // FIT-131: the programs sent to this client, and what they said.
   useEffect(() => {
     if (client) programOffers(config, uid).then(setSent, () => setSent([]));
@@ -154,7 +176,7 @@ export function ClientPage({ config, me, uid, go }: {
   };
 
   if (error) return <p className="error" role="alert">{error}</p>;
-  if (client === undefined) return <p className="muted">Loading…</p>;
+  if (!ready || client === undefined) return <p className="muted">Loading…</p>;
   if (client === null) {
     return (
       <div className="empty">

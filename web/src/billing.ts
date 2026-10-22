@@ -16,6 +16,15 @@ export const coachBillingPortal = (config: Config) =>
 
 export const PRICES = { month: "$19.99/month", year: "$199/year" };
 
+/** FIT-148: Stripe's statuses that still have the plan, as the server's check (coachPlan.ts HAS_PLAN). */
+export const hasPlan = (plan: CoachPlan) => ["active", "trialing", "past_due"].includes(plan.status);
+
+/** What Billing says above the plan when a coaching page sent the coach there. */
+export const COACHING = "Coaching is $19.99 a month. Start the plan to coach your clients.";
+
+/** The server's refusal for a coach without the plan (coach.ts NO_PLAN). */
+export const needsPlan = (error: unknown) => (error as Error)?.message?.startsWith("Coaching needs the coach plan") ?? false;
+
 /** What Billing says about the plan, and which button it offers: start one, or manage the one there is. */
 export function planView(plan: CoachPlan): { title: string; detail: string; action: "start" | "manage" | "none" } {
   const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
@@ -34,10 +43,14 @@ export function planView(plan: CoachPlan): { title: string; detail: string; acti
       return { title: "Your last payment didn't go through", detail: "Update your card in Manage billing to keep the coach plan.", action: "manage" };
     case "canceled":
     case "incomplete_expired":
-      return { title: "Your coach plan has ended", detail: "Coaching is free during the beta. You can start the plan again any time.", action: plan.onSale ? "start" : "none" };
+      return {
+        title: "Your coach plan has ended",
+        detail: "Your clients keep logging, and everything is kept. Start the plan again to see and coach them.",
+        action: plan.onSale ? "start" : "none",
+      };
     default:
       return plan.onSale
-        ? { title: "Coach plan", detail: `${PRICES.month} or ${PRICES.year}. Coaching is free during the beta.`, action: "start" }
-        : { title: "Coach plan", detail: "The coach plan goes on sale soon. Coaching is free during the beta.", action: "none" };
+        ? { title: "Coach plan", detail: `${PRICES.month} or ${PRICES.year}. Invite clients, write their programs and see their training.`, action: "start" }
+        : { title: "Coach plan", detail: "The coach plan goes on sale soon.", action: "none" };
   }
 }
