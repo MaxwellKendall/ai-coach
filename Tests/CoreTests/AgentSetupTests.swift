@@ -58,9 +58,9 @@ struct AgentSetupTests {
 
         let planned = try context.fetch(FetchDescriptor<PlannedActivity>())
         #expect(planned.count == 6)
-        // FIT-178: a planned run, with its distance, time and kind.
+        // FIT-178: a planned run, with its distance (3 miles since FIT-186), time and kind.
         let run = try #require(planned.first { $0.slot == "Easy run" })
-        #expect(run.targets.first { $0.metric == "distance_m" }?.value == 5000 && run.targets.first { $0.metric == "duration_s" }?.value == 1800)
+        #expect(run.targets.first { $0.metric == "distance_m" }?.value == 4828 && run.targets.first { $0.metric == "duration_s" }?.value == 1800)
         #expect(run.note == "easy" && !run.main)
         #expect(planned.contains { $0.templateRef == landmine.id })
         #expect(planned.allSatisfy { $0.pinned && $0.templateRef != nil })
