@@ -114,10 +114,20 @@ export async function planRecord(uid: string, kind: Kind = "coach"): Promise<Pla
   return Item as PlanRecord | undefined;
 }
 
-/** Saves a subscription event, unless a newer one already has (Stripe doesn't promise their order). */
+/**
+ * Saves a subscription event, unless a newer one already has (Stripe doesn't promise their order). FIT-212: a
+ * subscription already kept as the other plan has switched plans outside our portals; saving it would start a second
+ * plan and leave the first at its last status, so it's left for the author to sort out.
+ */
 export async function saveSubscription(sub: Subscription, eventAt: number): Promise<void> {
   const made = recordFrom(sub, eventAt);
   if (!made) return;
+  for (const other of (Object.keys(PLANS) as Kind[]).filter((k) => k !== made.kind)) {
+    if ((await planRecord(made.uid, other))?.subscription === sub.id) {
+      console.error("Subscription switched plans", sub.id, other, "to", made.kind);
+      return;
+    }
+  }
   const fields = Object.entries(made.record).filter(([, v]) => v !== undefined);
   const removed = (["interval", "renews"] as const).filter((k) => made.record[k] === undefined);
   await db.send(new UpdateCommand({
@@ -199,12 +209,51 @@ export async function start(uid: string, interval: string, email?: string, origi
   return session.url;
 }
 
+/** FIT-212: a portal that switches only between the plan's own two prices, so a subscription can't cross plans. */
+export function portalConfigParams(kind: Kind, product: string, prices: string[]) {
+  return {
+    name: kind === "coach" ? "Coach plan" : "Pro",
+    metadata: { plan: kind },
+    features: {
+      payment_method_update: { enabled: true },
+      invoice_history: { enabled: true },
+      subscription_cancel: { enabled: true, mode: "at_period_end" },
+      subscription_update: { enabled: true, default_allowed_updates: ["price"], proration_behavior: "create_prorations", products: [{ product, prices }] },
+    },
+  };
+}
+
+const configs: Partial<Record<Kind, { at: number; id: string }>> = {};
+/**
+ * The plan's portal configuration, found by its metadata and made the first time it's needed, so test and live mode
+ * set themselves up alike; undefined (Stripe's default portal) until the plan has both prices.
+ */
+export async function portalConfiguration(key: string, now = Date.now(), kind: Kind = "coach"): Promise<string | undefined> {
+  const cached = configs[kind];
+  if (cached && now - cached.at <= 5 * 60_000) return cached.id;
+  const found = await stripe<{ data: { id: string; metadata?: Record<string, string> | null }[] }>(key, "billing_portal/configurations?active=true&limit=100");
+  let id = found.data.find((c) => c.metadata?.plan === kind)?.id;
+  if (!id) {
+    const ids = await planPrices(key, now, kind);
+    if (!ids.month || !ids.year) return undefined;
+    const { product } = await stripe<{ product: string }>(key, `prices/${ids.month}`);
+    id = (await stripe<{ id: string }>(key, "billing_portal/configurations", portalConfigParams(kind, product, [ids.month, ids.year]))).id;
+  }
+  configs[kind] = { at: now, id };
+  return id;
+}
+
 /** Stripe's customer portal for the account, or undefined without a customer. */
 export async function portal(uid: string, origin = process.env.APP_ORIGIN!, kind: Kind = "coach"): Promise<string | undefined> {
   const keys = await stripeConfig();
   const customer = (await planRecord(uid, kind))?.customer;
   if (!keys || !customer) return undefined;
-  const session = await stripe<{ url: string }>(keys.secretKey, "billing_portal/sessions", { customer, return_url: returns(kind, origin).portal });
+  // The default portal switches no plans in live (FIT-212), so it's a safe fallback, e.g. for a key without the permission.
+  const configuration = await portalConfiguration(keys.secretKey, Date.now(), kind).catch((error) => {
+    console.error("No portal configuration", kind, (error as Error).message);
+    return undefined;
+  });
+  const session = await stripe<{ url: string }>(keys.secretKey, "billing_portal/sessions", { customer, configuration, return_url: returns(kind, origin).portal });
   return session.url;
 }
 

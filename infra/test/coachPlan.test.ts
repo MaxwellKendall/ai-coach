@@ -9,7 +9,7 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
 const keys = vi.fn();
 vi.mock("../lambda/gifts.ts", () => ({ stripeConfig: () => keys() }));
 
-const { checkoutParams, onSale, planPrices, portal, recordFrom, saveSubscription, shownPlan, start } = await import("../lambda/coachPlan.ts");
+const { checkoutParams, onSale, planPrices, portal, portalConfiguration, recordFrom, saveSubscription, shownPlan, start } = await import("../lambda/coachPlan.ts");
 const { form } = await import("../lambda/stripe.ts");
 
 const sub = {
@@ -60,16 +60,19 @@ describe("checkout for the coach plan", () => {
     await expect(start("sam", "week")).rejects.toThrow("monthly or yearly");
   });
 
-  it("opens the customer portal back to Billing", async () => {
+  it("opens the plan's own customer portal back to Billing", async () => {
     keys.mockResolvedValue({ secretKey: "sk_test_1" });
     send.mockResolvedValue({ Item: { customer: "cus_1" } });
     let sent = "";
-    vi.stubGlobal("fetch", async (_: string, init: RequestInit) => {
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      if (url.includes("configurations")) {
+        return new Response(JSON.stringify({ data: [{ id: "bpc_pro", metadata: { plan: "pro" } }, { id: "bpc_coach", metadata: { plan: "coach" } }] }));
+      }
       sent = String(init.body);
       return new Response(JSON.stringify({ url: "https://billing.stripe.com/p/1" }));
     });
     expect(await portal("sam", "https://app.example.com")).toBe("https://billing.stripe.com/p/1");
-    expect(decodeURIComponent(sent)).toBe("customer=cus_1&return_url=https://app.example.com/billing");
+    expect(decodeURIComponent(sent)).toBe("customer=cus_1&configuration=bpc_coach&return_url=https://app.example.com/billing");
     send.mockResolvedValue({});
     expect(await portal("ann")).toBeUndefined();
   });
@@ -136,13 +139,24 @@ describe("subscription events", () => {
     expect(recordFrom(pro, 100)).toMatchObject({ uid: "sam", kind: "pro", record: { status: "active", interval: "year" } });
     send.mockResolvedValue({});
     await saveSubscription(pro, 100);
-    expect(send.mock.calls[0][0].input.Key).toEqual({ PK: "USER#sam", SK: "PROPLAN" });
+    expect(send.mock.calls.at(-1)![0].input.Key).toEqual({ PK: "USER#sam", SK: "PROPLAN" });
+  });
+
+  it("FIT-212: don't start a second plan for a subscription kept as the other one", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const pro = { ...sub, items: { data: [{ price: { lookup_key: "pro_monthly", recurring: { interval: "month" } } }] } };
+    send.mockResolvedValueOnce({ Item: { subscription: "sub_1", status: "active" } });
+    await saveSubscription(pro, 300);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].input.Key).toEqual({ PK: "USER#sam", SK: "COACHPLAN" });
+    expect(error).toHaveBeenCalledWith("Subscription switched plans", "sub_1", "coach", "to", "pro");
+    error.mockRestore();
   });
 
   it("are saved unless a newer one already was", async () => {
     send.mockResolvedValue({});
     await saveSubscription({ ...sub, status: "past_due" }, 200);
-    const input = send.mock.calls[0][0].input;
+    const input = send.mock.calls.at(-1)![0].input;
     expect(input.Key).toEqual({ PK: "USER#sam", SK: "COACHPLAN" });
     expect(input.ConditionExpression).toBe("attribute_not_exists(eventAt) OR eventAt <= :eventAt");
     expect(input.ExpressionAttributeValues[":status"]).toBe("past_due");
@@ -155,5 +169,38 @@ describe("the plan shown", () => {
     expect(shownPlan(false)).toEqual({ onSale: false, status: "none", interval: undefined, renews: undefined, cancelsAtEnd: false });
     expect(shownPlan(true, { status: "active", interval: "year", renews: "2027-10-17T00:00:00.000Z", cancelsAtEnd: true }))
       .toMatchObject({ onSale: true, status: "active", interval: "year", cancelsAtEnd: true });
+  });
+});
+
+describe("FIT-212: each plan's portal", () => {
+  // Last, and later than the other tests' times, since the price and portal lookups are cached per Lambda.
+  it("is made once, switching only between the plan's own prices, then found by its metadata", async () => {
+    const t = Date.now() + 7_200_000;
+    const calls: string[] = [];
+    let made = "";
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      const path = url.replace("https://api.stripe.com/v1/", "");
+      calls.push(`${init.method} ${path}`);
+      if (path.startsWith("billing_portal/configurations?")) return new Response(JSON.stringify({ data: [{ id: "bpc_default", metadata: {} }] }));
+      if (path.startsWith("prices?")) return new Response(JSON.stringify({ data: [{ id: "price_pm", lookup_key: "pro_monthly" }, { id: "price_py", lookup_key: "pro_yearly" }] }));
+      if (path.startsWith("prices/")) return new Response(JSON.stringify({ product: "prod_pro" }));
+      made = decodeURIComponent(String(init.body));
+      return new Response(JSON.stringify({ id: "bpc_new" }));
+    });
+    expect(await portalConfiguration("sk", t, "pro")).toBe("bpc_new");
+    expect(calls.at(-1)).toBe("POST billing_portal/configurations");
+    expect(made).toContain("metadata[plan]=pro");
+    expect(made).toContain("features[subscription_update][products][0][product]=prod_pro");
+    expect(made).toContain("features[subscription_update][products][0][prices][0]=price_pm&features[subscription_update][products][0][prices][1]=price_py");
+    expect(made).not.toContain("products][1]");
+    expect(made).toContain("features[subscription_cancel][mode]=at_period_end");
+    const before = calls.length;
+    expect(await portalConfiguration("sk", t + 60_000, "pro")).toBe("bpc_new");
+    expect(calls.length).toBe(before);
+  });
+
+  it("is Stripe's default until the plan has both prices", async () => {
+    vi.stubGlobal("fetch", async (url: string) => new Response(JSON.stringify({ data: url.includes("prices?") ? [{ id: "price_m", lookup_key: "coach_monthly" }] : [] })));
+    expect(await portalConfiguration("sk", Date.now() + 10_800_000, "coach")).toBeUndefined();
   });
 });
