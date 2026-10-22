@@ -6,5 +6,6 @@ export default defineConfig({
     // AppSync provides util/extensions at runtime; tests use a stand-in.
     alias: { "@aws-appsync/utils": fileURLToPath(new URL("./test/appsyncUtils.ts", import.meta.url)) },
   },
-  test: { testTimeout: 60_000 },
+  // The stack synth in beforeAll takes over 10 s when several builds share the machine.
+  test: { testTimeout: 60_000, hookTimeout: 120_000 },
 });

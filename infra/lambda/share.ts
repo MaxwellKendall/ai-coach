@@ -2,7 +2,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
 import { giftRoute, type GiftStore } from "./giftPages.ts";
-import { checkout, gift, price, thanks } from "./gifts.ts";
+import { gift, thanks } from "./gifts.ts";
 import { readProgram, readRecap, readSession, readWin, route, type Site, type Store } from "./sharePages.ts";
 
 /**
@@ -80,12 +80,12 @@ export const store: Store = {
   },
 };
 
-// FIT-122: the gift's pages.
-const gifts: GiftStore = { gift, checkout: () => checkout(site.origin), thanks };
+// FIT-122: the gift's pages. FIT-214: no longer sold, so there's no Checkout.
+const gifts: GiftStore = { gift, thanks };
 
 export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunctionURLResult> {
   try {
-    const page = (await giftRoute(event.rawPath, gifts, site, price.cents)) ?? (await route(event.rawPath, store, site));
+    const page = (await giftRoute(event.rawPath, gifts, site)) ?? (await route(event.rawPath, store, site));
     return {
       statusCode: page.status,
       headers: {

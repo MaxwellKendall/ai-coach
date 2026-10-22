@@ -85,41 +85,40 @@ describe("gift pages", () => {
     USEDUSEDUSED: { code: "USEDUSEDUSED", for: "Jo", status: "redeemed" },
     BACKBACKBACK: { code: "BACKBACKBACK", for: "Al", status: "refunded" },
   };
-  const store = (onSale = true): GiftStore => ({
+  const store = (): GiftStore => ({
     gift: async (code) => gifts[code],
-    checkout: async () => (onSale ? "https://checkout.stripe.com/c/pay/cs_test_1" : undefined),
     thanks: async (id) => (id === "cs_test_paid" ? gifts.ABCDEFGHJKLM : undefined),
   });
 
-  it("sells the gift, and goes to Stripe", async () => {
-    const page = (await giftRoute("/gift", store(), site, 3999))!;
-    expect(page.body).toContain("$39.99");
-    expect(page.body).toContain('href="/gift/buy"');
-    expect(await giftRoute("/gift/buy", store(), site, 3999)).toMatchObject({ status: 303, location: "https://checkout.stripe.com/c/pay/cs_test_1", noStore: true });
-    const notYet = (await giftRoute("/gift/buy", store(false), site, 3999))!;
-    expect(notYet.status).toBe(200);
-    expect(notYet.body).toContain("Gifts go on sale soon");
+  it("isn't sold any more, and says so (FIT-214)", async () => {
+    for (const path of ["/gift", "/gift/buy"]) {
+      const page = (await giftRoute(path, store(), site))!;
+      expect(page.status).toBe(200);
+      expect(page.location).toBeUndefined();
+      expect(page.body).toContain("Gifts are no longer sold");
+      expect(page.body.split("<main>")[1]).not.toMatch(/\$\d|\/gift\/buy|\bPro\b/);
+    }
   });
 
   it("goes from Stripe to the gift once it's paid, and waits otherwise", async () => {
-    expect(await giftRoute("/gift/thanks/cs_test_paid", store(), site, 3999)).toMatchObject({ status: 303, location: "/g/ABCDEFGHJKLM" });
-    const waiting = (await giftRoute("/gift/thanks/cs_test_open", store(), site, 3999))!;
+    expect(await giftRoute("/gift/thanks/cs_test_paid", store(), site)).toMatchObject({ status: 303, location: "/g/ABCDEFGHJKLM" });
+    const waiting = (await giftRoute("/gift/thanks/cs_test_open", store(), site))!;
     expect(waiting.body).toContain("on its way");
     expect(waiting.noStore).toBe(true);
   });
 
   it("shows the card with its code, escaped, and how to redeem it", async () => {
-    const page = (await giftRoute("/g/ABCDEFGHJKLM", store(), site, 3999))!;
+    const page = (await giftRoute("/g/ABCDEFGHJKLM", store(), site))!;
     expect(page.status).toBe(200);
     expect(page.noStore).toBe(true);
     expect(page.body).toContain("ABCD-EFGH-JKLM");
     expect(page.body).toContain("A year of coaching, for Sam");
     expect(page.body).toContain("&lt;b&gt;squat&lt;/b&gt;");
     expect(page.body).not.toContain("<b>squat</b>");
-    expect((await giftRoute("/g/USEDUSEDUSED", store(), site, 3999))!.body).toContain("has been redeemed");
-    expect((await giftRoute("/g/BACKBACKBACK", store(), site, 3999))!.status).toBe(404);
-    expect((await giftRoute("/g/nope", store(), site, 3999))!.status).toBe(404);
-    expect(await giftRoute("/w/bench", store(), site, 3999)).toBeUndefined();
+    expect((await giftRoute("/g/USEDUSEDUSED", store(), site))!.body).toContain("has been redeemed");
+    expect((await giftRoute("/g/BACKBACKBACK", store(), site))!.status).toBe(404);
+    expect((await giftRoute("/g/nope", store(), site))!.status).toBe(404);
+    expect(await giftRoute("/w/bench", store(), site)).toBeUndefined();
   });
 
   it("opens in the app when it's installed", () => {

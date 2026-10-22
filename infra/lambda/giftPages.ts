@@ -1,9 +1,12 @@
 import { actions, esc, html, layout, logo, missingPage, type Page, type Site } from "./sharePages.ts";
 
 /**
- * FIT-122: the gift on the web. /gift sells it, /gift/buy goes to Stripe Checkout, Stripe comes back to
- * /gift/thanks/{session}, which goes on to the gift's own page, /g/{code}: the card to send or print, and how to
- * redeem it. Pure, like the share pages: what's stored and Stripe come in through `GiftStore`.
+ * FIT-122: the gift on the web. Stripe came back to /gift/thanks/{session}, which goes on to the gift's own page,
+ * /g/{code}: the card to send or print, and how to redeem it. Pure, like the share pages: what's stored comes in
+ * through `GiftStore`.
+ *
+ * FIT-214: gifts aren't sold any more (author, 2026-10-22). /gift and /gift/buy say so; a gift already bought
+ * still has its page and still redeems.
  */
 
 export interface GiftCard {
@@ -15,24 +18,13 @@ export interface GiftCard {
 
 export interface GiftStore {
   gift(code: string): Promise<GiftCard | undefined>;
-  /** Stripe Checkout's URL for a new gift; undefined while gifts aren't on sale (no Stripe keys yet). */
-  checkout(): Promise<string | undefined>;
   /** The gift a Checkout Session paid for, once it's paid. */
   thanks(sessionId: string): Promise<GiftCard | undefined>;
 }
 
-/** "$39.99". */
-export const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-
 /** The gift's pages, or undefined for any other path. */
-export async function giftRoute(path: string, store: GiftStore, site: Site, cents: number): Promise<Page | undefined> {
-  if (path === "/gift" || path === "/gift/") return html(sellPage(site, cents));
-  if (path === "/gift/buy") {
-    const url = await store.checkout();
-    return url
-      ? { status: 303, type: "text/plain", body: "", location: url, noStore: true }
-      : { ...html(sellPage(site, cents, false)), noStore: true };
-  }
+export async function giftRoute(path: string, store: GiftStore, site: Site): Promise<Page | undefined> {
+  if (path === "/gift" || path === "/gift/" || path === "/gift/buy") return html(offSalePage(site));
   const thanks = /^\/gift\/thanks\/([A-Za-z0-9_]{1,220})$/.exec(path)?.[1];
   if (thanks) {
     const gift = await store.thanks(thanks);
@@ -51,29 +43,15 @@ export async function giftRoute(path: string, store: GiftStore, site: Site, cent
 
 const shown = (code: string) => code.match(/.{1,4}/g)!.join("-");
 
-function sellPage(site: Site, cents: number, onSale = true) {
+function offSalePage(site: Site) {
   return layout(site, {
-    title: `Give a year of ${site.appName} Pro`,
-    description: `A coach for a year: a program written around their goals, every weight set for them, and a coach to talk to. ${dollars(cents)}, no subscription.`,
+    title: "Gifts are no longer sold",
+    description: `${site.appName} gifts are no longer sold. A gift already bought still works.`,
     path: "/gift",
-    body: `${style}
-      <section class="hero">
-        <p class="eyebrow">A gift for someone who lifts</p>
-        <h1>Give a year of coaching</h1>
-        <p class="lede">${esc(site.appName)} Pro writes a program around their goal, sets every weight, and plans each week from what they lifted the week before.</p>
-        <p class="price"><b>${dollars(cents)}</b><span>for a year · doesn't renew</span></p>
-        ${onSale
-          ? `<div class="actions"><a class="button primary" href="/gift/buy" rel="nofollow">Buy the gift</a>
-             <p class="fine">You'll add their first name and a note, then pay with a card, Apple Pay or Google Pay.</p></div>`
-          : `<div class="actions"><p class="fine">Gifts go on sale soon.</p></div>`}
-      </section>
-      <section class="block how">
-        <h2>How it works</h2>
-        <ol>
-          <li><b>Buy it here</b><span>No app or account needed.</span></li>
-          <li><b>Send the card</b><span>A link to text or email, or print it to put under the tree.</span></li>
-          <li><b>They redeem it in the app</b><span>Their year starts the day they do, and nothing is charged after it.</span></li>
-        </ol>
+    body: `<section class="hero">
+        <h1>Gifts are no longer sold</h1>
+        <p class="lede">${esc(site.appName)} is now for coaches and their clients, and the app is free. Already have a gift? It still works: open its link on your iPhone to redeem it.</p>
+        <div class="actions"><a class="button primary" href="/">See ${esc(site.appName)}</a></div>
       </section>`,
   });
 }
@@ -128,7 +106,6 @@ function giftPage(gift: GiftCard, site: Site) {
 }
 
 const style = `<style>
-.price{display:flex;align-items:baseline;gap:8px;margin-top:20px}.price b{font:700 34px var(--round)}.price span{color:var(--muted)}
 .card.gift .for{font:700 44px/1.05 var(--round);letter-spacing:-.02em;margin-top:6px;word-break:break-word}
 .card.gift .note{color:var(--c-soft);font-size:16px;margin-top:14px}
 .card.gift .what{font-weight:650;font-size:15px}

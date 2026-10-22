@@ -101,7 +101,6 @@ const gifts: Record<string, GiftCard> = {
 };
 const giftStore: GiftStore = {
   gift: async (code) => gifts[code],
-  checkout: async () => "/gift/thanks/cs_test_sample",
   thanks: async (id) => (id === "cs_test_sample" ? gifts.ABCDEFGHJKLM : undefined),
 };
 
@@ -119,7 +118,7 @@ createServer(async (req, res) => {
       <body style="font:17px/1.8 -apple-system,sans-serif;padding:24px"><h1>Share page samples</h1>${links.map((l) => `<a href="${l}">${l}</a>`).join("<br>")}`);
     return;
   }
-  const page = (await giftRoute(path, giftStore, site, 3999)) ?? (await route(path, store, site));
+  const page = (await giftRoute(path, giftStore, site)) ?? (await route(path, store, site));
   res.writeHead(page.status, { "content-type": page.type, ...(page.location ? { location: page.location } : {}) });
   res.end(page.body);
 }).listen(port, () => console.log(`Share pages on http://localhost:${port}/samples`));

@@ -376,14 +376,14 @@ function winPage(win: Win, path: string, site: Site, image?: string) {
   return layout(site, {
     view: "w",
     title: w.title,
-    description: `${who} is training with ${site.appName}: a 12-week program written for their goals, and a coach that keeps it on track.`,
+    description: `${who} is training with ${site.appName}: a program written for their goals, and every set logged.`,
     path,
     image,
     body: `
       <section class="hero">
         ${winCard(win, site)}
         <h1>${esc(w.title)}</h1>
-        <p class="lede">${esc(who)} trains with ${esc(site.appName)}. It writes a program around your goals, sets every weight, and moves it along as you log.</p>
+        <p class="lede">${esc(who)} trains with ${esc(site.appName)}: a program written around their goal, every set logged, and every best counted.</p>
         ${actions(site, [
           win.invite && { href: `/join/${encodeURIComponent(win.invite)}`, label: `Train with ${who}` },
           win.program && { href: `/p/${encodeURIComponent(win.program)}`, label: `See ${who}'s program` },
@@ -600,7 +600,7 @@ function claudePage(site: Site, mcpUrl: string) {
           <li><b>Say “Set me up”</b><span>Claude asks about your goals, schedule, equipment and injuries, one at a time, then plans your first week.</span></li>
         </ol>
         <div class="actions"><a class="button primary" href="https://claude.ai/settings/connectors">Open Claude's connectors</a></div>
-        <p class="fine">Once added, it's in the Claude app on your phone too. Free for 14 days; then planning needs Pro, $5.99 a month or $39.99 a year, and logging, progress and sharing stay free. Ask Claude to subscribe when you're ready.</p>
+        <p class="fine">Once added, it's in the Claude app on your phone too. It's free.</p>
       </section>
       <section class="block">
         <h2>Then just say it</h2>
@@ -610,16 +610,18 @@ function claudePage(site: Site, mcpUrl: string) {
   });
 }
 
-/** FIT-190: where Stripe Checkout comes back to once Pro is paid for; they carry on in Claude. */
+/**
+ * FIT-190: where Stripe Checkout came back to once Pro was paid for. FIT-214: Pro isn't sold any more, so this only
+ * catches a Checkout already under way, and doesn't name or price Pro.
+ */
 function proThanksPage(site: Site) {
   return layout(site, {
-    title: `You have ${site.appName} Pro`,
-    description: `Thanks for subscribing to ${site.appName} Pro.`,
+    title: "Thanks",
+    description: site.appName,
     path: "/pro/thanks",
-    body: `<section class="hero"><h1>You have Pro</h1>
-      <p class="lede">Thanks for subscribing. Go back to Claude and carry on: your next plan goes through, with nothing to reconnect.</p>
-      <div class="actions"><a class="button primary" href="https://claude.ai">Back to Claude</a></div>
-      <p class="fine">To change your card or plan, or cancel, ask Claude to manage your subscription.</p></section>`,
+    body: `<section class="hero"><h1>You're all set</h1>
+      <p class="lede">Go back to Claude and carry on, with nothing to reconnect.</p>
+      <div class="actions"><a class="button primary" href="https://claude.ai">Back to Claude</a></div></section>`,
   });
 }
 
@@ -649,9 +651,9 @@ function how(site: Site) {
   return `<section class="block how">
     <h2>How ${esc(site.appName)} works</h2>
     <ol>
-      <li><b>Say what you're training for</b><span>A bench number by December, your first pull-up, a leaner fall.</span></li>
-      <li><b>Get a program built for it</b><span>Phases, days and every weight, from your own starting numbers.</span></li>
-      <li><b>Log by voice, watch it climb</b><span>Each week's weights follow what you actually lifted.</span></li>
+      <li><b>Get a program</b><span>From your coach, written around your goal and your own starting numbers.</span></li>
+      <li><b>Log every set</b><span>A tap per set at the gym. The app is free.</span></li>
+      <li><b>Watch it climb</b><span>Bests, streaks and each week's weights follow what you actually lifted.</span></li>
     </ol>
   </section>`;
 }
