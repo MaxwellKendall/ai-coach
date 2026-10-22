@@ -101,6 +101,24 @@ struct RootView: View {
             await pro.refreshCoaches(signedIn: account.user != nil)
             await checkOffers()
         }
+        // FIT-220: a tapped coaching notification. A changed week is fetched first; a day in this week opens on Today
+        // (TodayScreen takes it from there), a later one on Program.
+        .onChange(of: navigator.pushed, initial: true) { _, target in
+            guard let target else { return }
+            navigator.pushed = nil
+            switch target.kind {
+            case .offer:
+                Task { await checkOffers() }
+            case .plan, .nudge, .reply:
+                if target.kind == .plan { SyncEngine.shared.sync() }
+                if let day = target.day, Week.start(of: day) > Week.start(of: .now) {
+                    tab = .program
+                } else {
+                    tab = .today
+                    navigator.day = target
+                }
+            }
+        }
         // FIT-131: a program a coach sent waits until it's answered.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await checkOffers() } }

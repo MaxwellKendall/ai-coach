@@ -9,6 +9,7 @@ struct YouScreen: View {
     @State private var stopping: Cloud.Person?
     @State private var failure: String?
     @State private var joining = false
+    @State private var nudges = Push.nudges
 
     var body: some View {
         NavigationStack {
@@ -54,8 +55,12 @@ struct YouScreen: View {
                                     .buttonStyle(.borderless)
                             }
                         }
+                        // FIT-220: the evening "Log today's session?" on a planned day with nothing logged.
+                        Toggle(isOn: Binding(get: { nudges }, set: { nudges = $0; Push.nudges = $0 })) {
+                            Label("Evening Reminder", systemImage: "bell")
+                        }
                     } footer: {
-                        Text(failure ?? "Your coach sees your program and training, and can change your program.")
+                        Text(failure ?? "Your coach sees your program and training, and can change your program. The reminder comes the evening of a planned day you haven’t logged.")
                             .foregroundStyle(failure == nil ? Color.secondary : Color.red)
                     }
                 }

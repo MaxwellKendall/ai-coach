@@ -421,9 +421,10 @@ enum Cloud {
     }
 
     /// FIT-53: this iPhone's APNs token, for "Dad started Push day".
-    @MainActor static func registerDevice(_ token: String) async throws {
-        _ = try await run("mutation($t: String!) { registerDevice(token: $t, platform: \"ios\") }", ["t": token],
-                          at: "registerDevice", as: Bool?.self)
+    /// FIT-220: `tz` times the evening nudge; `nudges: false` turns it off.
+    @MainActor static func registerDevice(_ token: String, tz: String, nudges: Bool) async throws {
+        _ = try await run("mutation($t: String!, $z: String, $n: Boolean) { registerDevice(token: $t, platform: \"ios\", tz: $z, nudges: $n) }",
+                          ["t": token, "z": tz, "n": nudges], at: "registerDevice", as: Bool?.self)
     }
 
     // MARK: Real time

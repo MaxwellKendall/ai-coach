@@ -125,6 +125,8 @@ struct TodayScreen: View {
         .animation(.snappy, value: working)
         .animation(.snappy, value: toast)
         .onAppear { if day == nil { day = todayIndex } }
+        // FIT-220: a tapped notification's day; a coach's reply opens that session and its thread.
+        .onChange(of: Navigator.shared.day, initial: true) { _, target in open(target) }
         #if DEBUG
         // `-say "swap deadlifts for RDLs"` runs a spoken request without the mic, for the simulator.
         .task {
@@ -180,6 +182,17 @@ struct TodayScreen: View {
             try? Planner.ensureWeek(in: context)
             guard pro.active else { return }
             await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
+        }
+    }
+
+    private func open(_ target: PushTarget?) {
+        guard let target else { return }
+        Navigator.shared.day = nil
+        let week = week
+        guard let date = target.day, let index = week.firstIndex(where: { Calendar.current.isDate($0, inSameDayAs: date) }) else { return }
+        withAnimation(.snappy) { day = index }
+        if target.kind == .reply, case .done(let done) = cards(week)[index] {
+            sheet = done.run.map { .ran($0) } ?? .record(done.planned)
         }
     }
 

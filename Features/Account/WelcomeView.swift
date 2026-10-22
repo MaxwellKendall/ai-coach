@@ -20,12 +20,20 @@ struct WelcomeView: View {
     @State private var failure: String?
     /// FIT-219: joined; the coach's questions follow.
     @State private var intake = false
+    /// FIT-220: joined, and notifications not yet allowed or refused: asked first, saying why.
+    @State private var askingPush: String?
 
     var body: some View {
-        Group { if intake { IntakeView(onDone: onDone) } else { welcome } }
+        Group {
+            if let coach = askingPush { notifications(coach) } else if intake { IntakeView(onDone: onDone) } else { welcome }
+        }
         #if DEBUG
-            // `-intake YES` opens the coach's questions on a fresh simulator, without signing in or an invite.
-            .onAppear { if UserDefaults.standard.bool(forKey: "intake") { intake = true } }
+            // `-intake YES` opens the coach's questions on a fresh simulator, without signing in or an invite;
+            // `-askPush Sam` the notifications ask before them.
+            .onAppear {
+                if UserDefaults.standard.bool(forKey: "intake") { intake = true }
+                if let coach = UserDefaults.standard.string(forKey: "askPush") { intake = true; askingPush = coach }
+            }
         #endif
     }
 
@@ -144,6 +152,31 @@ struct WelcomeView: View {
         }
     }
 
+    /// FIT-220: why notifications, before the system asks.
+    private func notifications(_ coach: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 24)
+            Image(systemName: "bell.badge").font(.system(size: 40)).padding(.bottom, 20)
+            title("Hear from \(coach)",
+                  "A notification when \(coach) changes your week or replies to a session, and a reminder in the evening of a day you haven’t logged. Turn the reminder off any time on You.")
+            Spacer(minLength: 24)
+            Button {
+                Task {
+                    await Push.request()
+                    withAnimation(.snappy) { askingPush = nil }
+                }
+            } label: {
+                Text("Turn On Notifications").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+            }
+            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+            Button("Not Now") { withAnimation(.snappy) { askingPush = nil } }
+                .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .background(Color(.systemBackground))
+    }
+
     private func problem(_ text: String) -> some View {
         Text(text).font(.footnote).foregroundStyle(.red).padding(.bottom, 12)
     }
@@ -171,7 +204,11 @@ struct WelcomeView: View {
             do {
                 let person = try await Cloud.acceptCoach(code)
                 pro.setCoaches(pro.coaches.filter { $0.uid != person.uid } + [person])
-                withAnimation(.snappy) { intake = true }
+                let ask = await Push.undecided()
+                withAnimation(.snappy) {
+                    intake = true
+                    if ask { askingPush = person.name ?? coach ?? "your coach" }
+                }
             } catch {
                 failure = error.localizedDescription
             }
