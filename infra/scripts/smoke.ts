@@ -4,7 +4,7 @@
 //   AWS_PROFILE=aicoach-dev npm run smoke
 import { AdminGetUserCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { cognito, gql, must, out, rejected, signIn } from "./dev.ts";
 
 const LIVE_FIELDS = "groupId uid workout exercise setIndex setCount loadLb reps seconds rpe state startedAt updatedAt";
@@ -261,6 +261,10 @@ subSpy.close();
 
 // FIT-130: A coaches B. B accepts A's invite; A reads and edits B's units; C can't; the invite is single use; B ends it.
 const bUidNow = JSON.parse(Buffer.from(b.split(".")[1], "base64url").toString()).sub;
+// FIT-148: coaching needs the coach plan. Refused without it; then A gets an active one (no Stripe), as the demo seed does.
+if (!/coach plan/.test(JSON.stringify((await gql(a, `mutation { createClientInvite { code url } }`)).errors ?? []))) throw new Error("an invite without the coach plan");
+const coachPlanKey = { PK: `USER#${aUid}`, SK: "COACHPLAN" };
+await db.send(new PutCommand({ TableName: "AICoach-dev", Item: { ...coachPlanKey, status: "active", interval: "month", renews: new Date(Date.now() + 86_400_000).toISOString(), cancelsAtEnd: false, demo: true } }));
 const invite = must(await gql(a, `mutation { createClientInvite { code url } }`), "createClientInvite").createClientInvite;
 if (!invite.url.endsWith(`/c/${invite.code}`)) throw new Error(`invite url ${invite.url}`);
 if (must(await gql(b, `query($c: String!) { coachInvite(code: $c) }`, { c: invite.code }), "coachInvite").coachInvite !== "Smoke A") throw new Error("coach name");
@@ -301,7 +305,9 @@ if (seenByCoach.find((o: any) => o.id === sent.id)?.status !== "started") throw 
 pass("A sends B a program; B starts it, B's plan has A's session from its start, and A sees it started");
 must(await gql(b, `mutation($u: ID!) { unlinkCoach(uid: $u) }`, { u: aUid }), "unlinkCoach");
 if (!(await gql(a, `query($u: ID) { syncPull(uid: $u) { units { key } } }`, { u: bUidNow })).errors?.length) throw new Error("A still reads B after unlinking");
-pass("A coaches B through a single-use invite (with its page): A reads and edits B's plan and replies on B's session, C can't, and B's unlink ends A's access");
+pass("A coaches B through a single-use invite once on the coach plan (with its page): A reads and edits B's plan and replies on B's session, C can't, and B's unlink ends A's access");
+
+await db.send(new DeleteCommand({ TableName: "AICoach-dev", Key: coachPlanKey }));
 
 // FIT-144: the coach plan. Without the Stripe secret it isn't on sale; with it, a test-mode Checkout opens.
 const plan = must(await gql(a, `query { coachPlan { onSale status cancelsAtEnd } }`), "coachPlan").coachPlan;
