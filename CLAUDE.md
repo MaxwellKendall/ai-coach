@@ -11,7 +11,7 @@ All scope, decisions and status live in Linear. **Read Linear before building an
 
 - Workspace team: **Fitness Planner** (key `FIT`)
 - Project: **AI Coach App** (`P-FIT-12`): https://linear.app/custom-voice-app/project/ai-coach-app-a83b6b0b9285
-- Milestones: M1 Core loop (current) → M2 Accounts, groups and live workouts → M3 Monetization and launch → M4 Coach dashboard (B2B). **Meals: cook windows, recipes and groceries** is its own milestone, parked until training is solid (FIT-11, FIT-17, FIT-60); its order against M2 to M4 is the author's call
+- Milestone: **Coach pilot ready for New Year's** is the only active one (author, 2026-10-22). Coaches are the customers: a web dashboard, plus the MCP for programming in Claude. Athletes get an always-free, simple app; Pro, in-app AI, voice and groups are hidden behind one flag (FIT-215), and Pro is kept in Stripe but not sold (FIT-214). Everything else was cancelled, not deleted. The older milestones (M1–M4, Meals, Realtime, Agent-first) hold only finished or cancelled work
 
 **Workflow per issue**
 1. Read the issue, its parent/sub-issues and its blockers. Only start issues whose blockers are Done.
@@ -137,15 +137,14 @@ xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 P
 
 ---
 
-## 9. Build order for M1 (fastest path to a usable app)
+## 9. Build order for the coach pilot
 
-1. **FIT-1** Core model + 4-tab shell
-2. **FIT-3** Catalog seed (exercises + recipes) and **FIT-13** history import, so real data exists early
-3. **FIT-6** Log (manual, pre-filled from plan) → **FIT-9** voice/NL logging (the differentiator)
-4. **FIT-4** Goals and onboarding
-5. **FIT-5** Plan + **FIT-2** training generator (the meal generator, FIT-11, moved to the Meals milestone)
-6. **FIT-8** Progress, alerts, weekly review
-7. **FIT-15** Wins and share cards
+1. **FIT-214** Pro off sale (MCP, web, gift) and **FIT-215** the free, simple athlete app
+2. **FIT-194** coach access in the MCP → **FIT-196** coach roster tools
+3. **FIT-197** coach features on prod
+4. **FIT-201** first launch: sign in and join your coach → **FIT-202** a coach-written week, start to finish → **FIT-204** check-in
+5. **FIT-200** dashboard corrections, **FIT-189** coach plan billing bug, **FIT-186** miles, **FIT-208** tool descriptions
+6. **FIT-213**'s author steps: privacy (FIT-158), App Review or TestFlight (FIT-59, FIT-89), the first coaches (FIT-211)
 
 Linear's blocking relations win if they disagree with this list.
 
