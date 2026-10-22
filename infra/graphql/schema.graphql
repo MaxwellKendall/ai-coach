@@ -276,7 +276,8 @@ type Mutation {
   ): LiveSet
   endLiveSession(groupId: ID!): LiveSet
   postFeed(groupId: ID!, kind: String!, measurements: AWSJSON): FeedItem
-  registerDevice(token: String!, platform: String!): Boolean
+  # FIT-220: tz (IANA, e.g. "America/New_York") times the evening nudge; nudges: false turns it off. Without tz, no nudge.
+  registerDevice(token: String!, platform: String!, tz: String, nudges: Boolean): Boolean
   deleteAccount: Boolean
   # FIT-102: one Messages API request to Claude, sent on by the aiProxy Lambda with the key. Signed-in users only.
   # FIT-123: entitlement is the app's Pro transaction as Apple signed it (a JWS); without it, a few requests for good.

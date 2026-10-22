@@ -152,13 +152,14 @@ describe("resolvers", () => {
 });
 
 describe("push", () => {
-  it("only runs for LIVE# items and new COMMENT# (FIT-132) and OFFER# (FIT-131) items", () => {
+  it("only runs for LIVE# items, new COMMENT# (FIT-132) and OFFER# (FIT-131) items, and plan days someone else wrote (FIT-220)", () => {
     dev.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
       FilterCriteria: {
         Filters: [
           { Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "LIVE#" }] } } } }) },
           { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "COMMENT#" }] } } } }) },
           { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "OFFER#" }] } } } }) },
+          { Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "SYNC#plan#" }] } }, NewImage: { by: { S: [{ exists: true }] } } } }) },
         ],
       },
     });
@@ -167,6 +168,12 @@ describe("push", () => {
   it("targets APNs sandbox in dev and production in prod", () => {
     dev.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ APNS_HOST: "api.sandbox.push.apple.com" }) } });
     prod.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ APNS_HOST: "api.push.apple.com" }) } });
+  });
+});
+
+describe("the evening nudge (FIT-220)", () => {
+  it("runs each hour, on the hour", () => {
+    dev.hasResourceProperties("AWS::Events::Rule", { ScheduleExpression: "cron(0 * * * ? *)" });
   });
 });
 
@@ -190,7 +197,10 @@ describe("least privilege", () => {
     expect(actionsOf(dev, /^postConfirmation/).filter((a) => a.startsWith("dynamodb:"))).toEqual(["dynamodb:PutItem"]);
     expect(actionsOf(dev, /^deleteAccount/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem", "cognito-idp:AdminDeleteUser"]));
     expect(actionsOf(dev, /^deleteAccount/)).not.toContain("dynamodb:PutItem");
-    expect(actionsOf(dev, /^push/)).not.toContain("dynamodb:PutItem");
+    // FIT-220: PutItem only for the one-push-per-window marker; it never writes a user's data in bulk.
+    expect(actionsOf(dev, /^push/)).not.toContain("dynamodb:BatchWriteItem");
+    expect(actionsOf(dev, /^nudge/).filter((a) => a.startsWith("dynamodb:")).sort())
+      .toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
     expect(actionsOf(dev, /^push/)).toContain("secretsmanager:GetSecretValue");
     expect(actionsOf(dev, /^groupCleanup/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem"]));
     expect(actionsOf(dev, /^groupCleanup/)).not.toContain("dynamodb:PutItem");

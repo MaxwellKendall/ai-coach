@@ -18,6 +18,7 @@ import * as publishWeek from "../resolvers/publishWeek.js";
 import * as clearWeek from "../resolvers/clearWeek.js";
 import * as editComment from "../resolvers/editComment.js";
 import * as deleteComment from "../resolvers/deleteComment.js";
+import * as registerDevice from "../resolvers/registerDevice.js";
 
 const ME = "user-a";
 const OTHER = "user-b";
@@ -245,5 +246,16 @@ describe("FIT-200: a reply's author corrects or deletes it", () => {
     expect(() => editComment.response(ctx({ error: { type: "DynamoDB:ConditionalCheckFailedException", message: "x" } }))).toThrow(/gone/);
     const c = { day: args.day, at: args.at, by: ME, text: "New", PK: "x" };
     expect(editComment.response(ctx({ result: c }))).toEqual({ day: args.day, at: args.at, by: ME, byName: null, text: "New" });
+  });
+});
+
+describe("FIT-220: a device's evening nudge", () => {
+  it("lists a device with a time zone under NUDGE, unless nudges are off", () => {
+    const on = registerDevice.request(ctx({ args: { token: "t1", platform: "ios", tz: "America/New_York" } }));
+    expect(on.attributeValues).toMatchObject({ tz: "America/New_York", GSI1PK: "NUDGE", GSI1SK: `${ME}#t1` });
+    const off = registerDevice.request(ctx({ args: { token: "t1", platform: "ios", tz: "America/New_York", nudges: false } }));
+    expect(off.attributeValues.GSI1PK).toBeUndefined();
+    // An older app sends no time zone, so it gets no nudge.
+    expect(registerDevice.request(ctx({ args: { token: "t1", platform: "ios" } })).attributeValues.GSI1PK).toBeUndefined();
   });
 });

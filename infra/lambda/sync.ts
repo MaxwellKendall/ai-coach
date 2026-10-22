@@ -28,7 +28,8 @@ export function checked(unit: UnitInput, now: Date): UnitInput {
   return unit.deleted ? { key: unit.key, updatedAt, deleted: true } : { key: unit.key, updatedAt, deleted: false, body: unit.body };
 }
 
-export function item(uid: string, unit: UnitInput, changedAt: string) {
+// by: who wrote it, when it isn't the owner (FIT-220: a coach's change to the plan is pushed to the client).
+export function item(uid: string, unit: UnitInput, changedAt: string, by = uid) {
   return {
     PK: `USER#${uid}`,
     SK: `SYNC#${unit.key}`,
@@ -36,6 +37,7 @@ export function item(uid: string, unit: UnitInput, changedAt: string) {
     GSI1SK: `${changedAt}#${unit.key}`,
     ...unit,
     changedAt,
+    ...(by !== uid ? { by } : {}),
   };
 }
 
@@ -43,7 +45,7 @@ function unit(stored: Record<string, any>): Unit {
   return { key: stored.key, updatedAt: stored.updatedAt, deleted: !!stored.deleted, body: stored.body ?? null, changedAt: stored.changedAt };
 }
 
-export async function push(uid: string, units: UnitInput[], source: string | undefined, now = new Date()) {
+export async function push(uid: string, units: UnitInput[], source: string | undefined, now = new Date(), by = uid) {
   if (units.length > MAX_UNITS) throw new Error(`At most ${MAX_UNITS} units per push`);
   const valid = units.map((u) => checked(u, now));
   const changedAt = now.toISOString();
@@ -53,7 +55,7 @@ export async function push(uid: string, units: UnitInput[], source: string | und
       await db.send(
         new PutCommand({
           TableName: process.env.TABLE,
-          Item: item(uid, u, changedAt),
+          Item: item(uid, u, changedAt, by),
           ConditionExpression: "attribute_not_exists(PK) OR updatedAt < :u",
           ExpressionAttributeValues: { ":u": u.updatedAt },
         }),
@@ -106,7 +108,7 @@ export async function handler(event: AppSyncResolverEvent<any>) {
   switch (event.info.fieldName) {
     case "syncPush":
       if (uid !== caller) coachMayWrite(event.arguments.units);
-      return push(uid, event.arguments.units, event.arguments.source);
+      return push(uid, event.arguments.units, event.arguments.source, new Date(), caller);
     case "syncPull":
       return pull(uid, event.arguments.since);
     default:

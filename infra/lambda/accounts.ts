@@ -57,8 +57,8 @@ export async function hasData(uid: string) {
     ExpressionAttributeValues: { ":pk": `USER#${uid}` },
     ProjectionExpression: "SK",
   }));
-  // A new account has a profile, maybe a device and an AI count; those don't matter.
-  if ((own.Items ?? []).some((i) => !/^(PROFILE|DEVICE#|AIUSE#|AIFREE)/.test(String(i.SK)))) return true;
+  // A new account has a profile, maybe a device and an AI count; those don't matter, nor do push bookkeeping (FIT-220).
+  if ((own.Items ?? []).some((i) => !/^(PROFILE|DEVICE#|AIUSE#|AIFREE|NOTIFY#|NUDGE#)/.test(String(i.SK)))) return true;
   const indexed = await db.send(new QueryCommand({
     TableName: TABLE(),
     IndexName: "GSI1",

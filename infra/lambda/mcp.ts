@@ -33,7 +33,8 @@ export type Account = { uid: string; tz: string; agent: string };
 export interface Store {
   account(tokenHash: string): Promise<Account | undefined>;
   units(uid: string): Promise<Units>;
-  write(uid: string, units: { key: string; body: string | null }[], source: string): Promise<void>;
+  /** by: who's writing, when a coach writes a client's units (FIT-220). */
+  write(uid: string, units: { key: string; body: string | null }[], source: string, by?: string): Promise<void>;
   get(uid: string, key: string): Promise<Record<string, any> | undefined>;
   put(uid: string, key: string, item: Record<string, any>, days: number): Promise<void>;
   /** FIT-169: save a share as createShare does (resolvers/createShare.js), and take one down as deleteShare does. */
@@ -79,11 +80,11 @@ export const dynamoStore: Store = {
     } while (start);
     return units;
   },
-  async write(uid, units, source) {
+  async write(uid, units, source, by) {
     const now = new Date().toISOString();
     const all = units.map((u) => (u.body === null ? { key: u.key, updatedAt: now, deleted: true } : { key: u.key, updatedAt: now, deleted: false, body: u.body }));
     // FIT-218: a block of weeks is more units than one push takes.
-    for (let i = 0; i < all.length; i += MAX_UNITS) await push(uid, all.slice(i, i + MAX_UNITS), source);
+    for (let i = 0; i < all.length; i += MAX_UNITS) await push(uid, all.slice(i, i + MAX_UNITS), source, undefined, by);
   },
   async get(uid, key) {
     return (await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: `MCP#${key}` } }))).Item;
@@ -1047,7 +1048,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       const logged = days.filter((d) => logOf(units, d.day).some((r) => r.kind === "workout")).map((d) => d.day);
       if (logged.length) throw new Error(`${logged.join(", ")} has been logged since; propose again without it.`);
       for (const d of days) await store.put(uid, `undo#${d.day}`, { body: units.get(`plan#${d.day}`) ?? null }, 14);
-      await store.write(uid, days.map((d) => ({ key: `plan#${d.day}`, body: JSON.parse(d.rows).length ? d.rows : null })), account.agent);
+      await store.write(uid, days.map((d) => ({ key: `plan#${d.day}`, body: JSON.parse(d.rows).length ? d.rows : null })), account.agent, account.uid);
       const lines = days.map((d) => `${weekday(d.day)} ${d.day}: ${describeSession(JSON.parse(d.rows) as PlanRow[]).title ?? "rest"}`);
       return `Applied:\n${lines.join("\n")}\nIt shows on their phone at its next sync. undo (per day) puts the old session back.`;
     }
@@ -1055,7 +1056,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       const saved = await store.get(uid, `undo#${day}`);
       if (!saved || saved.used) throw new Error(`Nothing to undo on ${day}.`);
       if (logOf(await store.units(uid), day).some((r) => r.kind === "workout")) throw new Error(`${day} has been logged since; it can't be put back.`);
-      await store.write(uid, [{ key: `plan#${day}`, body: saved.body }], account.agent);
+      await store.write(uid, [{ key: `plan#${day}`, body: saved.body }], account.agent, account.uid);
       await store.put(uid, `undo#${day}`, { used: true }, 1);
       return `Put back ${day}'s session as it was.`;
     }

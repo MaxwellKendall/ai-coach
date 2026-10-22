@@ -101,6 +101,13 @@ describe("push and pull", () => {
     expect(next.more).toBe(false);
   });
 
+  it("keeps who wrote a unit when it isn't the owner, and drops it when the owner writes again (FIT-220)", async () => {
+    await push("a", [plan("{}")], "web", t0, "coach");
+    expect(table.get("USER#a|SYNC#plan#2026-10-16")?.by).toBe("coach");
+    await push("a", [plan("{}", later(1).toISOString())], "phone", later(1));
+    expect(table.get("USER#a|SYNC#plan#2026-10-16")).not.toHaveProperty("by");
+  });
+
   it("deleted units come back as tombstones", async () => {
     await push("a", [plan("{}")], undefined, t0);
     await push("a", [{ key: "plan#2026-10-16", updatedAt: later(1).toISOString(), deleted: true }], undefined, later(1));

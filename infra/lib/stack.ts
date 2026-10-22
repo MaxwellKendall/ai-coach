@@ -9,6 +9,8 @@ import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as actions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as events from "aws-cdk-lib/aws-events";
+import * as eventTargets from "aws-cdk-lib/aws-events-targets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
@@ -450,7 +452,8 @@ export class AICoachStack extends Stack {
       // Debug builds register sandbox tokens; TestFlight and App Store builds use production.
       APNS_HOST: isProd ? "api.push.apple.com" : "api.sandbox.push.apple.com",
     });
-    table.grant(push, "dynamodb:Query", "dynamodb:DeleteItem");
+    // GetItem reads the coach's link, PutItem keeps one push per window (FIT-220).
+    table.grant(push, "dynamodb:Query", "dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem");
     apnsSecret.grantRead(push);
     push.addEventSource(
       new DynamoEventSource(table, {
@@ -472,9 +475,20 @@ export class AICoachStack extends Stack {
             eventName: lambda.FilterRule.isEqual("INSERT"),
             dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("OFFER#") } } },
           }),
+          // FIT-220: a plan day someone else wrote (sync.ts's by): the coach changed the client's week.
+          lambda.FilterCriteria.filter({
+            eventName: lambda.FilterRule.or("INSERT", "MODIFY"),
+            dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("SYNC#plan#") } }, NewImage: { by: { S: lambda.FilterRule.exists() } } },
+          }),
         ],
       }),
     );
+
+    // ---- FIT-220: the evening nudge on a planned day with nothing logged, checked each hour ----
+    const nudge = fn("nudge", { APNS_SECRET: apnsSecret.secretName, APNS_HOST: isProd ? "api.push.apple.com" : "api.sandbox.push.apple.com" });
+    table.grant(nudge, "dynamodb:Query", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem");
+    apnsSecret.grantRead(nudge);
+    new events.Rule(this, "NudgeHourly", { schedule: events.Schedule.cron({ minute: "0" }), targets: [new eventTargets.LambdaFunction(nudge)] });
 
     // ---- FIT-61: a group with no members left is deleted, with its invite ----
     const groupCleanup = fn("groupCleanup", {});
