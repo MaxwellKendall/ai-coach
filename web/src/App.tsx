@@ -54,7 +54,7 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
       <div className="brand"><Logo />{APP}</div>
       <h1>Your training, on a bigger screen</h1>
       <p className="lede">Edit your program and look back at every session. Coach others? Invite your clients, write their programs and see how their training goes.</p>
-      <p className="lede">Sign in with the account you use in the app.</p>
+      <p className="lede">Sign in, or make a free account, with Google or Apple. Use the same one as in Claude and the app.</p>
       <div className="buttons">
         {providers.map((p) => (
           <button key={p} className="button primary" onClick={() => signIn(config, p)}>
@@ -167,7 +167,8 @@ function Empty({ config, me, go }: { config: Config; me: User; go: (path: string
       <div className="empty">
         <h2>Training yourself?</h2>
         <p className="muted">
-          Open {APP} on your iPhone, signed in as {me.email ?? me.name ?? "this account"}, and your program shows up here.
+          It's free. <a href="/claude">Connect Claude</a> and say “Set me up”, or open {APP} on your iPhone, signed in
+          as {me.email ?? me.name ?? "this account"}. Your program shows up here.
         </p>
         {me.provider && (
           <p className="muted">

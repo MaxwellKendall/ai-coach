@@ -625,6 +625,11 @@ function homePage(site: Site) {
           <li><b>Invite your first client</b><span>Send them the link.</span></li>
         </ol>
         <div class="actions"><a class="button primary" href="${START}">Start coaching</a></div>
+      </section>
+      <section class="block">
+        <h2>Training yourself?</h2>
+        <p class="lede">${app} is free for you too. Connect Claude and say “Set me up”: it asks about your goals, writes your program, and logs your sessions. Sign in with Google or Apple and your account is made for you.</p>
+        <div class="actions"><a class="button" href="/claude">Connect Claude</a></div>
       </section>`,
   });
 }
@@ -668,7 +673,7 @@ function claudePage(site: Site, mcpUrl: string) {
           <li><b>Copy the connector address</b>
             <button class="code url" type="button" data-copy="${esc(mcpUrl)}" aria-label="Copy the connector address">${esc(mcpUrl)}<small>Copy</small></button></li>
           <li><b>Add it to Claude</b><span>On claude.ai, open Settings › Connectors › Add custom connector. Name it ${esc(site.appName)} and paste the address.</span></li>
-          <li><b>Connect and sign in</b><span>Choose Connect, then the same Google or Apple account you coach with.</span></li>
+          <li><b>Connect and sign in</b><span>Choose Connect, then Google or Apple: the account you coach with, or any account if you're training yourself. A new account is made for you, free.</span></li>
           <li><b>Say “Show me my clients”</b><span>Your roster comes back. Invite clients on the dashboard, or ask Claude for an invite link.</span></li>
         </ol>
         <div class="actions"><a class="button primary" href="https://claude.ai/settings/connectors">Open Claude's connectors</a></div>
@@ -677,7 +682,7 @@ function claudePage(site: Site, mcpUrl: string) {
       <section class="block">
         <h2>Then just say it</h2>
         <ul class="says">${says.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
-        <p class="fine">Claude shows each change before it's saved, and can undo it. Training yourself? The same connector works for you: say “Set me up”. Other agents that speak MCP connect at the same address.</p>
+        <p class="fine">Claude shows each change before it's saved, and can undo it. Training yourself? The same connector works for you, free: say “Set me up” and Claude writes your program. Other agents that speak MCP connect at the same address.</p>
       </section>`,
   });
 }
