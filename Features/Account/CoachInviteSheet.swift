@@ -12,13 +12,32 @@ struct CoachInviteSheet: View {
     @State private var working = false
     @State private var failure: String?
     @State private var accepted: Cloud.Person?
+    /// FIT-225: notifications not yet allowed or refused, so the coach's pushes are asked for here, as on first launch.
+    @State private var askingPush = false
 
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: accepted == nil ? "person.2" : "checkmark.circle")
+            Image(systemName: askingPush ? "bell.badge" : accepted == nil ? "person.2" : "checkmark.circle")
                 .font(.system(size: 44))
                 .padding(.top, 8)
-            if let accepted {
+            if let accepted, askingPush {
+                Text("Hear from \(accepted.title)").font(.title2.bold()).multilineTextAlignment(.center)
+                Text("A notification when \(accepted.title) changes your week or replies to a session, and a reminder in the evening of a day you haven’t logged. Turn the reminder off any time on You.")
+                    .foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Spacer(minLength: 0)
+                VStack(spacing: 8) {
+                    Button {
+                        Task {
+                            await Push.request()
+                            withAnimation(.snappy) { askingPush = false }
+                        }
+                    } label: {
+                        Text("Turn On Notifications").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    Button("Not Now") { withAnimation(.snappy) { askingPush = false } }.controlSize(.large)
+                }
+            } else if let accepted {
                 Text("\(accepted.title) is your coach").font(.title2.bold()).multilineTextAlignment(.center)
                 Text("They'll see your program and how your sessions go, and can change your program. You can stop any time on You.")
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -67,6 +86,7 @@ struct CoachInviteSheet: View {
             do {
                 let person = try await Cloud.acceptCoach(code)
                 pro.setCoaches(pro.coaches.filter { $0.uid != person.uid } + [person])
+                askingPush = await Push.undecided()
                 accepted = person
             } catch {
                 failure = error.localizedDescription
