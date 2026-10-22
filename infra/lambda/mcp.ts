@@ -278,13 +278,14 @@ export const tools = [
     name: "log_daily",
     title: "Log weight, sleep or meals",
     annotations: { title: "Log weight, sleep or meals", ...write(false, false) },
-    description: "Log what they tell you about the rest of the day: a weigh-in, last night's sleep (hours, and quality 1–5 if they say), or meals with kcal and protein (estimate from what they ate when they don't know, and say it's an estimate). Several in one call. A weigh-in or sleep replaces that day's own; meals add up. Body-weight goals follow the weigh-ins.",
+    description: "Log what they tell you about the rest of the day: a weigh-in, last night's sleep (hours, and quality 1–5 if they say), a check-in note for their coach, or meals with kcal and protein (estimate from what they ate when they don't know, and say it's an estimate). Several in one call. A weigh-in or sleep replaces that day's own; meals add up. Body-weight goals follow the weigh-ins.",
     inputSchema: { type: "object", properties: {
       date: DATE,
       weight_lb: { type: "number", description: "Body weight in pounds." },
       sleep_hours: { type: "number", minimum: 0, maximum: 24 },
       sleep_quality: { type: "integer", minimum: 1, maximum: 5 },
       time: { type: "string", description: "When, 24-hour HH:MM, for the weigh-in or sleep. Defaults to now today, or noon on another day." },
+      note: { type: "string", description: "How they feel today, for their coach, in their words: the day's check-in note, as the app's Check In saves it. Replaces that day's." },
       meals: { type: "array", items: { type: "object", properties: {
         name: { type: "string", description: "What they ate, in their words." }, kcal: { type: "number" }, protein_g: { type: "number" },
         time: { type: "string", description: "HH:MM" },
@@ -992,8 +993,8 @@ export async function callTool(name: string, args: Args, account: Account, store
     case "log_daily": {
       if (day > today) throw new Error(`${day} hasn't happened yet.`);
       const input = args as DailyInput;
-      if (input.weight_lb === undefined && input.sleep_hours === undefined && input.sleep_quality === undefined && !input.meals?.length) {
-        throw new Error("Nothing to log: give weight_lb, sleep_hours or meals.");
+      if (input.weight_lb === undefined && input.sleep_hours === undefined && input.sleep_quality === undefined && !input.note?.trim() && !input.meals?.length) {
+        throw new Error("Nothing to log: give weight_lb, sleep_hours, note or meals.");
       }
       const at = (time?: string) => {
         if (time === undefined) return day === today ? Math.floor(now.getTime() / 1000) : epoch(day, 12 * 60, tz);

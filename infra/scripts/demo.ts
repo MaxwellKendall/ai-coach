@@ -1,7 +1,8 @@
 // FIT-221: demo accounts on dev for recording the coach video: one coach and 3 clients with 3 weeks of realistic
 // training, Mon/Wed/Fri. Mike is the flagged one: his squat has stalled at 245 for three weeks, his last set went to
 // RPE 9, and his last session's note says his knee is sore, unanswered. Sara is on a roll; Jen missed one session.
-// This week and next are planned, so "Rebuild next week" in Claude has a week to change.
+// This week and next are planned, so "Rebuild next week" in Claude has a week to change. Mike and Sara check in most
+// mornings (FIT-223); Mike's check-in yesterday says the knee kept him up.
 //
 //   AWS_PROFILE=aicoach-dev npm run demo -- seed [--coach ACCOUNT] [--client ACCOUNT]
 //   AWS_PROFILE=aicoach-dev npm run demo -- who EMAIL
@@ -20,7 +21,7 @@ import { ListUsersCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { item } from "../lambda/sync.ts";
-import { addDays, encode, logRows, mergeProfile, sessionRows, type ExerciseInput, type PlanRow } from "../lambda/training.ts";
+import { addDays, dailyRows, encode, logRows, type DailyInput, mergeProfile, sessionRows, type ExerciseInput, type PlanRow } from "../lambda/training.ts";
 import { cognito, gql, must, out, signIn } from "./dev.ts";
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: out.Region }));
@@ -79,6 +80,8 @@ type Client = {
   logged: (w: number, weekday: number, last: boolean) => { rpe: number; note?: string; effort: number } | undefined;
   /** Changes to a logged session's sets, as the client actually did them. */
   actual?: (w: number, weekday: number, rows: ReturnType<typeof logRows>) => void;
+  /** FIT-223: the morning check-in `daysAgo` days back (1–6), as the app's Check In saves it. */
+  checkIn?: (daysAgo: number) => DailyInput | undefined;
 };
 
 const lb = (start: number, step: number, w: number) => start + step * w;
@@ -109,6 +112,7 @@ const mike: Client = {
     if (w === -2 && day === 1) return { rpe: 8, effort: 4, note: "Squat felt heavy again, couldn't get the 5th rep fast." };
     return { rpe: 7, effort: 3 };
   },
+  checkIn: (n) => ({ weight_lb: Math.round((195.4 + 0.2 * n) * 10) / 10, sleep_hours: n === 1 ? 5 : 7, note: n === 1 ? "Slept badly, the knee kept me up." : undefined }),
   // The stall: every week since the first, the last set of 245 goes to RPE 9.
   actual: (w, day, rows) => {
     if (day !== 1 || w === -WEEKS - 1) return;
@@ -138,6 +142,7 @@ const sara: Client = {
   },
   // Her note is older than a week, so it doesn't flag her.
   logged: (w, day) => (w === -2 && day === 3 ? { rpe: 8, effort: 4, note: "New bench PR! Meet prep feels on track." } : { rpe: 7, effort: 3 }),
+  checkIn: (n) => (n % 2 ? undefined : { weight_lb: 142, sleep_hours: 8 }),
 };
 
 const jen: Client = {
@@ -190,6 +195,12 @@ function units(client: Client, first: number) {
       client.actual?.(w, weekday, rows);
       out.set(`log#${day}`, encode(rows));
     }
+  }
+  for (let n = 6; n >= 1; n--) {
+    const day = addDays(today, -n), input = client.checkIn?.(n);
+    if (!input) continue;
+    const log = out.has(`log#${day}`) ? JSON.parse(out.get(`log#${day}`)!) : [];
+    out.set(`log#${day}`, encode(dailyRows(log, input, () => at(day, 6))));
   }
   return out;
 }

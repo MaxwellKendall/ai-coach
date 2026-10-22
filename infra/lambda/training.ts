@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import seed from "../../Resources/Seed/exercises.json" with { type: "json" };
+import { checkIn } from "../../shared/triage.ts";
 import { clock, distanceName, goalMeters, meters, miles, MILE, OUTDOOR_RUN, pace, riegel, RUNS, runMetric, seconds } from "./running.ts";
 
 // FIT-149: the training data an agent reads and writes, as the app keeps it in FIT-126's sync units
@@ -285,14 +286,15 @@ export function describeLog(log: LogRow[]) {
 // ---- FIT-166: weight, sleep and meals, as LogDraftEntry saves them ----
 
 export type DailyInput = {
-  weight_lb?: number; sleep_hours?: number; sleep_quality?: number; time?: string;
+  weight_lb?: number; sleep_hours?: number; sleep_quality?: number; time?: string; note?: string;
   meals?: { name: string; kcal?: number; protein_g?: number; time?: string }[];
 };
 
 /**
  * A day's log with these added: a weigh-in (kind bodyweight, weight_lb) and a night's sleep (kind sleep, sleep_h and
  * sleep_quality 1–5) replace that day's own, a meal (kind meal, its name as the note, kcal, protein_g) is added. The
- * workout rows stay as they are. `at` gives the moment for an HH:MM, or the default one.
+ * workout rows stay as they are. `at` gives the moment for an HH:MM, or the default one. A note goes where the app's
+ * check-in puts it (FIT-204): on the day's sleep row, else its weight row, else a weight row with no weight.
  */
 export function dailyRows(log: LogRow[], input: DailyInput, at: (time?: string) => number): LogRow[] {
   let out = [...log];
@@ -308,6 +310,12 @@ export function dailyRows(log: LogRow[], input: DailyInput, at: (time?: string) 
     out = out.filter((r) => r.kind !== "sleep");
     const quality = input.sleep_quality === undefined ? undefined : m("sleep_quality", Math.min(5, Math.max(1, Math.round(input.sleep_quality))));
     add("sleep", [m("sleep_h", input.sleep_hours), quality], "", input.time);
+  }
+  const note = input.note?.trim();
+  if (note) {
+    const holder = out.find((r) => r.kind === "sleep") ?? out.find((r) => r.kind === "bodyweight");
+    if (holder) out = out.map((r) => (r === holder ? { ...r, note } : r));
+    else add("bodyweight", [], note, input.time);
   }
   for (const meal of input.meals ?? []) {
     if (!meal.name?.trim()) throw new Error("Each meal needs a name, as they said it.");
@@ -326,6 +334,8 @@ export function describeDaily(log: LogRow[]): string[] {
     const q = value(r.measurements, "sleep_quality");
     out.push(`Sleep ${value(r.measurements, "sleep_h") ?? "?"} h${q ? ` (quality ${q}/5)` : ""}`);
   }
+  const note = checkIn(log)?.note;
+  if (note) out.push(`Check-in note: ${note}`);
   const meals = log.filter((r) => r.kind === "meal").sort((a, b) => a.at - b.at);
   if (meals.length) {
     const kcal = meals.reduce((n, r) => n + (value(r.measurements, "kcal") ?? 0), 0);

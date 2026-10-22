@@ -145,6 +145,8 @@ h3.handle::before { content: "⠿"; color: var(--muted); font-size: 14px; margin
 .days.history .day { grid-template-columns: 110px minmax(0, 1fr); }
 .days.history .date span { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); }
 .note { margin-top: 8px; color: var(--muted); font-style: italic; }
+.checkin { margin-top: 8px; font-variant-numeric: tabular-nums; }
+.checkin .note { margin-top: 4px; }
 @media (max-width: 760px) { .days.history .day { grid-template-columns: 1fr; gap: 6px; } }
 
 /* FIT-130: clients */

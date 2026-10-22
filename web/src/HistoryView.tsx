@@ -3,6 +3,7 @@ import { sessionNote } from "./corrections";
 import { estimated1RMs, estimated1RMTrend, loggedSets, streakLine, streakNow } from "./progress";
 import { useState } from "react";
 import { SessionEditor } from "./SessionEditor";
+import { checkIn, type CheckIn } from "../../shared/triage";
 import type { Config } from "./auth";
 import { deleteComment, editComment, pushLog, unitOf, type Comment, type LogRow, type PlanRow, type Unit } from "./sync";
 
@@ -40,6 +41,17 @@ function Sparkline({ points }: { points: [string, number][] }) {
     <svg className="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
       <path d={d} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
     </svg>
+  );
+}
+
+/** FIT-223: the day's check-in, "183.5 lb · 6 h sleep" and the note; under a session it says it's the check-in. */
+function CheckInLine({ check, inSession }: { check: CheckIn; inSession: boolean }) {
+  const numbers = [check.weight !== undefined && `${check.weight} lb`, check.sleep !== undefined && `${check.sleep} h sleep`].filter(Boolean).join(" · ");
+  return (
+    <div className="checkin">
+      {(numbers || inSession) && <p className="muted">{inSession ? `Check-in${numbers ? `: ${numbers}` : ""}` : numbers}</p>}
+      {check.note && <p className="note">“{check.note}”</p>}
+    </div>
   );
 }
 
@@ -140,7 +152,7 @@ function Thread({ day, comments, me, onReply, corrections }: {
       ))}
       {onReply && (open ? (
         <div className="reply">
-          <textarea autoFocus rows={2} maxLength={1000} placeholder="Reply on this session" value={text}
+          <textarea autoFocus rows={2} maxLength={1000} placeholder="Reply on this day" value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); if (e.key === "Escape") setOpen(false); }} />
           <div>
@@ -172,9 +184,9 @@ export function HistoryView({ units, comments = [], me, onReply, corrections }: 
     .filter(([k, u]) => k.startsWith("log#") && u.body)
     .map(([k, u]) => {
       const all = JSON.parse(u.body!) as LogRow[];
-      return { key: k.slice(4), all, rows: all.filter((r) => r.kind === "workout") };
+      return { key: k.slice(4), all, rows: all.filter((r) => r.kind === "workout"), check: checkIn(all) };
     })
-    .filter((d) => d.rows.length)
+    .filter((d) => d.rows.length || d.check)
     .sort((a, b) => (a.key < b.key ? 1 : -1));
   const title = (key: string) => {
     const body = units.get(`plan#${key}`)?.body;
@@ -230,7 +242,20 @@ export function HistoryView({ units, comments = [], me, onReply, corrections }: 
             byExercise.set(row.template!, [...(byExercise.get(row.template!) ?? []), row]);
           }
           const note = sessionNote(day.rows, title(day.key));
+          const check = day.check && <CheckInLine check={day.check} inSession={day.rows.length > 0} />;
           const thread = <Thread day={day.key} comments={comments.filter((c) => c.day === day.key)} me={me} onReply={onReply} corrections={corrections} />;
+          if (!day.rows.length) {
+            return (
+              <li className="day" key={day.key}>
+                <div className="date"><span>{dayFormat.format(parse(day.key))}</span></div>
+                <div className="session">
+                  <h3>Check-in</h3>
+                  {check}
+                  {thread}
+                </div>
+              </li>
+            );
+          }
           if (editing === day.key && corrections) {
             return (
               <li className="day" key={day.key}>
@@ -259,6 +284,7 @@ export function HistoryView({ units, comments = [], me, onReply, corrections }: 
                   ))}
                 </ul>
                 {note && <p className="note">“{note}”</p>}
+                {check}
                 {thread}
               </div>
             </li>

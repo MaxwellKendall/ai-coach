@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LogRow, PlanRow, Unit } from "./sync";
+import { checkIn } from "../../shared/triage";
 import { byNeed, hurts, triage, type Comment } from "./triage";
 
 // FIT-132's three clients: one on track, one who missed sessions, one who left a note. "Now" is Friday Oct 16.
@@ -62,5 +63,38 @@ describe("which clients need their coach (FIT-132)", () => {
   it("knows the words that mean something hurts", () => {
     expect(hurts("Lower back a bit sore")).toBe(true);
     expect(hurts("Felt great")).toBe(false);
+  });
+});
+
+// FIT-223: a check-in as the app's Check In writes it (FIT-204, SyncUnits.LogRow): weight and sleep rows, the note on
+// the sleep row. The client also has goals and a profile, units that are objects, not rows.
+const checkedIn = (note: string, rows?: unknown[]) => new Map([
+  unit("log#2026-10-15", rows ?? [
+    { id: "6F1C1B0E-4F7B-4D0A-9E59-0F1F4B7B2C11", kind: "bodyweight", at: at("2026-10-15"), measurements: [{ metric: "weight_lb", value: 183.5, unit: "lb" }], note: "" },
+    { id: "0B9D2C61-2E57-4C55-8A0B-7C58F3A4D2E2", kind: "sleep", at: at("2026-10-15"), measurements: [{ metric: "sleep_h", value: 6, unit: "h" }], note },
+  ]),
+  ["goal#1", { key: "goal#1", updatedAt: "", deleted: false, body: JSON.stringify({ kind: "body", metric: "weight_lb", target: 180, unit: "lb", status: "active" }) }] as [string, Unit],
+  ["profile", { key: "profile", updatedAt: "", deleted: false, body: JSON.stringify({ age: 42, equipment: [] }) }] as [string, Unit],
+]);
+
+describe("the client's daily check-in (FIT-223)", () => {
+  const rows = (units: Map<string, Unit>) => JSON.parse(units.get("log#2026-10-15")!.body!) as LogRow[];
+
+  it("reads weight, sleep and the note from the day's log", () => {
+    expect(checkIn(rows(checkedIn("Knee is a bit sore")))).toEqual({ weight: 183.5, sleep: 6, note: "Knee is a bit sore" });
+    expect(checkIn(rows(checkedIn("")))).toEqual({ weight: 183.5, sleep: 6, note: undefined });
+    // A note on its own is a weight row with no weight.
+    const alone = [{ id: "A", kind: "bodyweight", at: at("2026-10-15"), measurements: [], note: "Travelling, back Monday" }];
+    expect(checkIn(rows(checkedIn("", alone)))).toEqual({ weight: undefined, sleep: undefined, note: "Travelling, back Monday" });
+    // A workout's notes and meals aren't a check-in.
+    expect(checkIn([{ id: "W", kind: "workout", measurements: [], note: "Felt great" }, { id: "M", kind: "meal", measurements: [], note: "Oats" }])).toBeUndefined();
+  });
+
+  it("flags a check-in note until the coach replies on that day, pain first", () => {
+    expect(triage(checkedIn("Knee is a bit sore"), [], names, "sam", now).flags).toEqual([{ kind: "pain", text: "Thursday: “Knee is a bit sore”" }]);
+    expect(triage(checkedIn("Slept badly, busy week"), [], names, "sam", now).flags).toEqual([{ kind: "note", text: "Thursday: “Slept badly, busy week”" }]);
+    const reply: Comment = { day: "2026-10-15", at: "", by: "sam", byName: "Sam", text: "Rest up." };
+    expect(triage(checkedIn("Knee is a bit sore"), [reply], names, "sam", now).flags).toEqual([]);
+    expect(triage(checkedIn(""), [], names, "sam", now).flags).toEqual([]);
   });
 });

@@ -36,6 +36,19 @@ const rows = (units: Map<string, string>, key: string): Row[] => {
 };
 const value = (r: Row, metric: string) => r.measurements?.find((m) => m.metric === metric)?.value;
 
+/**
+ * FIT-223: a day's check-in (FIT-204, or log_daily): the weigh-in, the night's sleep, and the client's note, which rides
+ * on the sleep row, else the weight row (a weight row with no weight when the note is all there is). Undefined without one.
+ */
+export type CheckIn = { weight?: number; sleep?: number; note?: string };
+export function checkIn(log: Row[]): CheckIn | undefined {
+  const of = (kind: string) => log.filter((r) => r.kind === kind);
+  const weight = of("bodyweight").map((r) => value(r, "weight_lb")).find((v) => v !== undefined);
+  const sleep = of("sleep").map((r) => value(r, "sleep_h")).find((v) => v !== undefined);
+  const note = [...of("sleep"), ...of("bodyweight")].map((r) => r.note?.trim()).find(Boolean);
+  return weight === undefined && sleep === undefined && !note ? undefined : { weight, sleep, note };
+}
+
 /** Days with a planned workout, and days with a logged one. */
 function trainingDays(units: Map<string, string>) {
   const planned: string[] = [], done: string[] = [];
@@ -97,11 +110,13 @@ export function triage(units: Map<string, string>, comments: Comment[], names: M
   const flags: Flag[] = [];
 
   // A note in the last 7 days that the coach hasn't replied to after. The client's words are on the session's summary
-  // row; each set's note is the session's name (WorkoutDraft.save).
+  // row (each set's note is the session's name, WorkoutDraft.save), or on the day's check-in (FIT-223).
   const weekAgo = addDays(today, -7);
   const replied = (day: string) => comments.some((c) => c.day === day && c.by === coach);
-  for (const day of done.filter((d) => d >= weekAgo).sort().reverse()) {
-    const notes = rows(units, `log#${day}`).filter((r) => r.kind === "workout" && !r.template).map((r) => r.note).filter(Boolean);
+  const logged = [...units.keys()].flatMap((k) => (k.startsWith("log#") && k.slice(4) >= weekAgo ? [k.slice(4)] : []));
+  for (const day of logged.sort().reverse()) {
+    const log = rows(units, `log#${day}`);
+    const notes = [...log.filter((r) => r.kind === "workout" && !r.template).map((r) => r.note), checkIn(log)?.note].filter(Boolean);
     const text = [...new Set(notes)].join(" ");
     if (!text || replied(day)) continue;
     flags.push({ kind: hurts(text) ? "pain" : "note", text: `${weekday(day)}: “${text}”` });

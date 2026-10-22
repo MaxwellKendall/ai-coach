@@ -777,6 +777,54 @@ describe("FIT-196: the coach's roster", () => {
   });
 });
 
+describe("FIT-223: the client's daily check-in", () => {
+  const coach: Account = { uid: "coach", tz, agent: "claude" };
+  // As the app's Check In writes it (FIT-204): a weight row and a sleep row, the note on the sleep row. Mike has a goal
+  // and a profile too, units that are objects, not rows.
+  const setup = (note = "Knee is a bit sore") => {
+    const units: Record<string, Record<string, string>> = { coach: { profile: encode(profile) }, mike: {
+      profile: encode({ ...profile, age: 30 }),
+      "goal#1": encode({ kind: "body", metric: "weight_lb", target: 180, unit: "lb", status: "active" }),
+      "log#2026-10-16": encode([
+        { id: "6F1C1B0E-4F7B-4D0A-9E59-0F1F4B7B2C11", kind: "bodyweight", at: at("2026-10-16", 6 * 60 + 50), measurements: [{ metric: "weight_lb", value: 183.5, unit: "lb" }], note: "" },
+        { id: "0B9D2C61-2E57-4C55-8A0B-7C58F3A4D2E2", kind: "sleep", at: at("2026-10-16", 6 * 60 + 50), measurements: [{ metric: "sleep_h", value: 6, unit: "h" }], note },
+      ]),
+    } };
+    const store = memory({}, units);
+    store.links.push({ coach: "coach", client: "mike", name: "Mike" });
+    return { store, units };
+  };
+
+  it("shows the coach a client's weight, sleep and note in get_day and get_context", async () => {
+    const { store } = setup();
+    expect(await callTool("get_day", { client: "Mike", date: "2026-10-16" }, coach, store, now)).toMatch(/No workout logged\.\nWeight 183\.5 lb\nSleep 6 h\nCheck-in note: Knee is a bit sore$/);
+    expect(await callTool("get_context", { client: "Mike" }, coach, store, now)).toMatch(/Friday 2026-10-16: Weight 183\.5 lb\. Sleep 6 h\. Check-in note: Knee is a bit sore\./);
+    // Only for a coach on the coach plan.
+    store.paying.delete("coach");
+    await expect(callTool("get_day", { client: "Mike", date: "2026-10-16" }, coach, store, now)).rejects.toThrow(/Coaching needs the coach plan/);
+  });
+
+  it("flags the note in the roster until the coach replies on that day", async () => {
+    const { store } = setup();
+    expect(await callTool("roster_review", {}, coach, store, now)).toMatch(/^Mike \[mike\]: .*Flags: pain: Friday: “Knee is a bit sore”\./);
+    await callTool("add_note", { client: "Mike", date: "2026-10-16", note: "Keep the squats light today." }, coach, store, now);
+    expect(await callTool("list_clients", {}, coach, store, now)).toMatch(/Mike \[mike\]: .* No flags\./);
+  });
+
+  it("logs a check-in note where the app puts it", async () => {
+    const units = data();
+    const store = memory({}, units);
+    // A note on its own is a weight row with no weight, which no weigh-in counts.
+    expect(await callTool("log_daily", { note: "Travelling, back Monday" }, me, store, now)).toMatch(/Check-in note: Travelling, back Monday/);
+    expect(JSON.parse(units.me["log#2026-10-17"])).toMatchObject([{ kind: "bodyweight", measurements: [], note: "Travelling, back Monday" }]);
+    // With sleep it rides on the sleep row, and replaces the day's note.
+    await callTool("log_daily", { weight_lb: 186, sleep_hours: 7, note: "Slept well" }, me, store, now);
+    const log = JSON.parse(units.me["log#2026-10-17"]);
+    expect(log.map((r: any) => [r.kind, r.note])).toEqual([["bodyweight", ""], ["sleep", "Slept well"]]);
+    expect(await callTool("get_day", {}, me, store, now)).toMatch(/Weight 186 lb\nSleep 7 h\nCheck-in note: Slept well/);
+  });
+});
+
 describe("FIT-148: coaching needs the coach plan", () => {
   const coach: Account = { uid: "coach", tz, agent: "claude" };
   const setup = () => {
