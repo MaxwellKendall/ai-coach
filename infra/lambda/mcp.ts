@@ -14,6 +14,7 @@ import * as progress from "./progress.ts";
 import { clock, distanceName, goalMeters, meters, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
+import { createInvite, INVITE_DAYS, isCoachOf, list as linked, type Person } from "./coach.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
 /**
@@ -38,6 +39,10 @@ export interface Store {
   unshare(uid: string, id: string): Promise<boolean>;
   /** Their display name, as updateProfile sets it: shown on what they share. */
   setName(uid: string, name: string): Promise<void>;
+  /** FIT-194: a coach's clients (coach.ts's links), whether a link is there now, and an invite link as the dashboard makes. */
+  clients(coach: string): Promise<Person[]>;
+  coachOf(coach: string, client: string): Promise<boolean>;
+  invite(coach: string): Promise<{ code: string; url: string }>;
 }
 
 export type ShareKind = "win" | "recap" | "program" | "session";
@@ -98,6 +103,9 @@ export const dynamoStore: Store = {
       ExpressionAttributeNames: { "#id": "uid" }, ExpressionAttributeValues: { ":n": name, ":u": now, ":id": uid },
     }));
   },
+  clients: (coach) => linked(coach, "CLIENT#"),
+  coachOf: isCoachOf,
+  invite: (coach) => createInvite(coach, undefined),
   async unshare(uid, id) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
     if (!Item || Item.uid !== uid) return false;
@@ -417,6 +425,13 @@ export const tools = [
     description: "Put back the session a day had before the last apply.",
     inputSchema: { type: "object", properties: { date: DATE }, required: ["date"] },
   },
+  {
+    name: "invite_client",
+    title: "Invite a client",
+    annotations: { title: "Invite a client", ...write(false, false) },
+    description: "For a coach: a link to send one new client, the same as the dashboard's invite. They open it on their phone, get the free Barbrabell app and accept; then they're in get_context's clients. It works once, for 14 days.",
+    inputSchema: { type: "object", properties: {} },
+  },
 ];
 
 type Args = Record<string, any>;
@@ -653,7 +668,7 @@ function startOf(units: Units, day: string, tz: string) {
 type DayInput = { date: string; title?: string; exercises: ExerciseInput[] };
 
 /** One or more days' new sessions, checked by the plan rules, stored for apply. */
-async function propose(uid: string, tz: string, today: string, days: DayInput[], reason: string, store: Store) {
+async function propose(uid: string, caller: string, tz: string, today: string, days: DayInput[], reason: string, store: Store) {
   const units = await store.units(uid);
   const profile = profileOf(units);
   const out: { day: string; rows: string }[] = [];
@@ -698,14 +713,50 @@ async function propose(uid: string, tz: string, today: string, days: DayInput[],
     }
   }
   const id = randomUUID();
-  await store.put(uid, `proposal#${id}`, { days: out, problems }, 2);
+  // Kept with whoever proposed it, so a coach's apply finds it; uid is whose plan it changes.
+  await store.put(caller, `proposal#${id}`, { uid, days: out, problems }, 2);
   return [`Proposal ${id} — ${reason}`, ...lines,
     ...(notes.length ? ["", "Check with them:", ...[...new Set(notes)].map((n) => `- ${n}`)] : []),
     problems.length ? `\nPlan-rule problems; fix these and propose again before applying:\n${problems.map((p) => `- ${p}`).join("\n")}` : "\nIt passes the plan rules. Show them the change, and apply when they agree."].join("\n");
 }
 
+// ---- FIT-194: a coach acts on a linked client ----
+
+/** The tools a coach can point at a client. Logging and sharing stay the client's own. */
+export const CLIENT_TOOLS = new Set(["get_context", "get_day", "find_exercises", "swap_options", "create_exercise", "edit_exercise", "clear_day",
+  "propose_session", "propose_week", "apply", "undo", "get_program", "set_program", "get_progress", "get_week_review", "set_profile", "set_goal"]);
+const CLIENT = { type: "string", description: "Coaches only: the client, by name or id as get_context lists them. Leave it out for your own training." };
+for (const t of tools) if (CLIENT_TOOLS.has(t.name)) (t.inputSchema.properties as Record<string, unknown>).client = CLIENT;
+
+const shownName = (p: Person) => p.name ?? `a client without a name (${p.uid})`;
+
+/** The client a coach named, by uid or by name (whole, or first name when only one has it). */
+export function pickClient(clients: Person[], said: string): Person {
+  const s = said.trim().toLowerCase();
+  const first = (p: Person) => p.name?.trim().toLowerCase().split(/\s+/)[0];
+  const found = clients.filter((p) => p.uid.toLowerCase() === s);
+  const named = found.length ? found : clients.filter((p) => p.name?.trim().toLowerCase() === s);
+  const matched = named.length ? named : clients.filter((p) => first(p) === s);
+  if (matched.length === 1) return matched[0];
+  const all = clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ");
+  if (matched.length > 1) throw new Error(`More than one client is called ${said}: ${matched.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. Use the id.`);
+  throw new Error(clients.length ? `No client called ${said}. Their clients: ${all}.` : "They have no clients yet. invite_client makes an invite link.");
+}
+
+/** Checked on every call: the account named is the caller's own, or a client linked to them now. */
+async function clientOf(caller: string, said: unknown, store: Store): Promise<Person | undefined> {
+  if (said === undefined || said === null || said === "") return undefined;
+  const client = pickClient(await store.clients(caller), String(said));
+  if (!(await store.coachOf(caller, client.uid))) throw new Error(`They don't coach ${shownName(client)} any more.`);
+  return client;
+}
+
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
-  const { uid, tz } = account;
+  const { tz } = account;
+  if (args.client !== undefined && !CLIENT_TOOLS.has(name)) throw new Error(`${name} is the client's own to do, so it takes no client.`);
+  const client = await clientOf(account.uid, args.client, store);
+  // Whose data this call is about. A coach's changes reach the client's phone at its next sync, as the dashboard's do.
+  const uid = client?.uid ?? account.uid;
   useAccountExercises(await store.units(uid)); // FIT-173: their own exercises, beside the catalog
   const today = dayOf(now, tz);
   const day = (args.date as string | undefined) ?? today;
@@ -713,7 +764,14 @@ export async function callTool(name: string, args: Args, account: Account, store
   switch (name) {
     case "get_context": {
       const units = await store.units(uid);
-      return context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
+      const text = context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
+      if (client) return `Client: ${shownName(client)}, coached by them since ${client.since.slice(0, 10)}. Everything below is the client's.\n\n${text}`;
+      const clients = await store.clients(uid);
+      return clients.length ? `${text}\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.` : text;
+    }
+    case "invite_client": {
+      const made = await store.invite(uid);
+      return `Invite link: ${made.url}\nSend it to one client. They open it on their phone, install the free Barbrabell app and accept; then they're your client here. It works once, for ${INVITE_DAYS} days.`;
     }
     case "get_day": {
       const units = await store.units(uid);
@@ -840,15 +898,17 @@ export async function callTool(name: string, args: Args, account: Account, store
     case "clear_day": {
       const units = await store.units(uid);
       if (!planOf(units, day).some((r) => r.kind === "workout")) throw new Error(`Nothing is planned on ${day}.`);
-      return propose(uid, tz, today, [{ date: day, exercises: [] }], String(args.reason), store);
+      return propose(uid, account.uid, tz, today, [{ date: day, exercises: [] }], String(args.reason), store);
     }
     case "propose_session":
-      return propose(uid, tz, today, [{ date: day, title: args.title, exercises: args.exercises }], String(args.reason), store);
+      return propose(uid, account.uid, tz, today, [{ date: day, title: args.title, exercises: args.exercises }], String(args.reason), store);
     case "propose_week":
-      return propose(uid, tz, today, args.days as DayInput[], String(args.reason), store);
+      return propose(uid, account.uid, tz, today, args.days as DayInput[], String(args.reason), store);
     case "apply": {
-      const proposal = await store.get(uid, `proposal#${args.proposal_id}`);
+      const proposal = await store.get(account.uid, `proposal#${args.proposal_id}`);
       if (!proposal) throw new Error("No such proposal (they last 2 days). Propose again.");
+      const owner = (proposal.uid as string | undefined) ?? account.uid;
+      if (owner !== uid) throw new Error(`That proposal is for ${owner === account.uid ? "their own training" : "another client"}: ${owner === account.uid ? "leave client out" : `pass client ${owner}`}.`);
       if (proposal.problems?.length) throw new Error("That proposal breaks the plan rules; fix them and propose again.");
       const days = proposal.days as { day: string; rows: string }[];
       const units = await store.units(uid);
@@ -961,6 +1021,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       const units = await store.units(uid);
       const current = units.get("profile");
       const name = typeof args.name === "string" ? args.name.trim().slice(0, 40) : "";
+      if (name && client) throw new Error("A client's name is theirs to set, in the app.");
       if (name) await store.setName(uid, name);
       if (Object.keys(args).every((k) => k === "name")) {
         if (!name) throw new Error("Nothing to save.");

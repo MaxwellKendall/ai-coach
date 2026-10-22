@@ -15,11 +15,19 @@ const row = (template: string, sets: number, extra: Partial<PlanRow> = {}, t = a
   note: "", main: template === "back-squat", pinned: false, ...extra,
 });
 
-function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }> } {
+type Link = { coach: string; client: string; name: string | null };
+
+function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }>; links: Link[]; invites: string[] } {
   const extra = new Map<string, Record<string, any>>();
   const shared = new Map<string, { uid: string; kind: string; payload: any }>();
+  const links: Link[] = [], invites: string[] = [];
   return {
     shared,
+    links,
+    invites,
+    async clients(coach) { return links.filter((l) => l.coach === coach).map((l) => ({ uid: l.client, name: l.name, since: "2026-10-01T00:00:00.000Z" })); },
+    async coachOf(coach, client) { return links.some((l) => l.coach === coach && l.client === client); },
+    async invite(coach) { invites.push(coach); return { code: "ABCDEFGHJK", url: "https://example.com/c/ABCDEFGHJK" }; },
     async share(uid, kind, payload) {
       const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
       shared.set(id, { uid, kind, payload: JSON.parse(JSON.stringify(payload)) });
@@ -117,7 +125,7 @@ describe("mcp", () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
     const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
-    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise", "log_run"];
+    const writes = ["invite_client", "log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise", "log_run"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
@@ -629,5 +637,80 @@ describe("FIT-214: no Pro in the MCP", () => {
     await expect(callTool("manage_subscription", {}, me, store, now)).rejects.toThrow(/Unknown tool/);
     const init: any = await answer({ jsonrpc: "2.0", id: 1, method: "initialize" }, me, store);
     expect(init.result.instructions).not.toMatch(/Pro\b|trial|subscribe/);
+  });
+});
+
+describe("FIT-194: a coach acts on a linked client", () => {
+  const coach: Account = { uid: "coach", tz, agent: "claude" };
+  const setup = () => {
+    const units = { ...data(), coach: { profile: encode(profile) } as Record<string, string>, other: { profile: encode({ ...profile, age: 30 }) } as Record<string, string> };
+    const store = memory({}, units);
+    store.links.push({ coach: "coach", client: "me", name: "Sarah Jones" }, { coach: "someone", client: "other", name: "Mike" });
+    return { store, units };
+  };
+  const exercises = [{ exercise: "Back Squat", sets: 3, reps: 5, weight_lb: 205 }];
+  // One call per client tool, each valid for Sarah's data.
+  const calls: Record<string, Record<string, unknown>> = {
+    get_context: {}, get_day: { date: "2026-10-15" }, find_exercises: { query: "squat" }, swap_options: { exercise: "Back Squat" },
+    create_exercise: { name: "Zercher Box Squat", pattern: "squat", equipment: ["barbell"] }, edit_exercise: { exercise: "Back Squat", name: "x" },
+    clear_day: { date: "2026-10-17", reason: "rest" }, propose_session: { date: "2026-10-19", title: "Lower", reason: "r", exercises },
+    propose_week: { reason: "r", days: [{ date: "2026-10-19", exercises }] }, apply: { proposal_id: "none" }, undo: { date: "2026-10-19" },
+    get_program: {}, set_program: { weeks: 8 }, get_progress: {}, get_week_review: {}, set_profile: { session_minutes: 60 },
+    set_goal: { action: "add", type: "body_weight", target: 180 },
+  };
+
+  it("takes a client on exactly the planning and reading tools", async () => {
+    const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, coach, setup().store);
+    const taking = list.result.tools.filter((t: any) => t.inputSchema.properties.client).map((t: any) => t.name);
+    expect(taking.sort()).toEqual(Object.keys(calls).sort());
+    for (const own of ["log_session", "log_run", "log_daily", "delete_log", "share", "stop_sharing", "invite_client"]) {
+      await expect(callTool(own, { client: "Sarah" }, coach, setup().store, now)).rejects.toThrow(/client's own|takes no client/);
+    }
+  });
+
+  it("refuses every client tool for someone who isn't their client, and for a link that has ended", async () => {
+    for (const [tool, args] of Object.entries(calls)) {
+      const { store, units } = setup();
+      const before = JSON.stringify(units);
+      await expect(callTool(tool, { ...args, client: "Mike" }, coach, store, now), tool).rejects.toThrow(/No client called Mike/);
+      await expect(callTool(tool, { ...args, client: "other" }, coach, store, now), tool).rejects.toThrow(/No client called other/);
+      expect(JSON.stringify(units), tool).toBe(before);
+      // The list said so, but the link is gone by the time it's checked.
+      store.coachOf = async () => false;
+      await expect(callTool(tool, { ...args, client: "Sarah" }, coach, store, now), tool).rejects.toThrow(/don't coach Sarah Jones any more/);
+    }
+  });
+
+  it("reads and changes a linked client's data, not the coach's", async () => {
+    const { store, units } = setup();
+    expect(await callTool("get_context", { client: "sarah" }, coach, store, now)).toMatch(/^Client: Sarah Jones[\s\S]*Note: Knee a bit stiff/);
+    expect(await callTool("get_day", { client: "Sarah Jones", date: "2026-10-15" }, coach, store, now)).toMatch(/Back Squat/);
+    const proposal = await callTool("propose_session", { client: "me", ...calls.propose_session }, coach, store, now);
+    const id = proposal.match(/Proposal (\S+)/)![1];
+    // The proposal is Sarah's: it applies only to her.
+    await expect(callTool("apply", { proposal_id: id }, coach, store, now)).rejects.toThrow(/pass client me/);
+    expect(await callTool("apply", { proposal_id: id, client: "Sarah" }, coach, store, now)).toMatch(/Applied/);
+    expect(units.me["plan#2026-10-19"]).toMatch(/back-squat/);
+    expect(units.coach["plan#2026-10-19"]).toBeUndefined();
+    expect(await callTool("undo", { client: "Sarah", date: "2026-10-19" }, coach, store, now)).toMatch(/Put back/);
+    expect(units.me["plan#2026-10-19"]).toBeUndefined();
+    await callTool("set_goal", { client: "Sarah", action: "add", type: "body_weight", target: 180 }, coach, store, now);
+    expect(Object.keys(units.me).filter((k) => k.startsWith("goal#"))).toHaveLength(3);
+    await expect(callTool("set_profile", { client: "Sarah", name: "Sal" }, coach, store, now)).rejects.toThrow(/theirs to set/);
+  });
+
+  it("lists a coach's clients in their own context, and makes invite links", async () => {
+    const { store } = setup();
+    expect(await callTool("get_context", {}, coach, store, now)).toMatch(/They coach 1 client: Sarah Jones \[me\]/);
+    expect(await callTool("get_context", {}, me, store, now)).not.toMatch(/They coach/);
+    expect(await callTool("invite_client", {}, coach, store, now)).toMatch(/https:\/\/example\.com\/c\/ABCDEFGHJK[\s\S]*once, for 14 days/);
+    expect(store.invites).toEqual(["coach"]);
+  });
+
+  it("asks which client when a name is ambiguous", async () => {
+    const { store } = setup();
+    store.links.push({ coach: "coach", client: "other2", name: "Sarah Lee" });
+    await expect(callTool("get_day", { client: "Sarah" }, coach, store, now)).rejects.toThrow(/More than one client is called Sarah/);
+    expect(await callTool("get_day", { client: "Sarah Lee" }, coach, store, now)).toMatch(/Nothing planned/);
   });
 });

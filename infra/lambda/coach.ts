@@ -112,7 +112,7 @@ export async function accept(client: string, input: string, claims: Record<strin
   return { uid: coach, name: coachName, since };
 }
 
-async function list(uid: string, prefix: "COACH#" | "CLIENT#"): Promise<Person[]> {
+export async function list(uid: string, prefix: "COACH#" | "CLIENT#"): Promise<Person[]> {
   const { Items } = await db.send(new QueryCommand({
     TableName: TABLE(),
     KeyConditionExpression: "PK = :pk AND begins_with(SK, :p)",
