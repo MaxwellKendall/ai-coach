@@ -38,4 +38,12 @@ struct PilotTests {
         #expect(pro.active)
         #expect(pro.giftUntil == nil)
     }
+
+    /// FIT-201: the app plans weeks only for a program of its own; a coach's client gets the coach's weeks.
+    @Test func onlyAProgramOfItsOwnIsPlannedByTheApp() {
+        #expect(Pilot.plansWeeks(hasProgram: true, coached: false))
+        #expect(!Pilot.plansWeeks(hasProgram: true, coached: true))
+        #expect(!Pilot.plansWeeks(hasProgram: false, coached: true))
+        #expect(!Pilot.plansWeeks(hasProgram: false, coached: false))
+    }
 }

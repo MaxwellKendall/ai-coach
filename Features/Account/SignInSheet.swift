@@ -4,14 +4,8 @@ import SwiftUI
 /// FIT-52: Apple first (guideline 4.8), Google second, a hint under the one used last.
 /// Shown only when something needs an account; groups (FIT-16) pass their own reason.
 struct SignInSheet: View {
-    @Environment(Account.self) private var account
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var scheme
     var reason = "Sign in to share goals with a group."
-
-    @State private var working: Account.Provider?
-    @State private var failure: String?
-    @State private var apple = Account.AppleRequest()
 
     var body: some View {
         VStack(spacing: 12) {
@@ -19,6 +13,30 @@ struct SignInSheet: View {
                 .font(.title3.weight(.semibold))
                 .multilineTextAlignment(.center)
                 .padding(.bottom, 12)
+            SignInButtons { dismiss() }
+            Spacer(minLength: 0)
+            Text("Your program and workouts are kept with your account, so they're backed up and you can see them on the web. Groups see only what you choose to share.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+    }
+}
+
+/// Apple's and Google's buttons, and what went wrong; the sheet above, or FIT-201's first launch, around them.
+struct SignInButtons: View {
+    @Environment(Account.self) private var account
+    @Environment(\.colorScheme) private var scheme
+    var onSignedIn: () -> Void
+
+    @State private var working: Account.Provider?
+    @State private var failure: String?
+    @State private var apple = Account.AppleRequest()
+
+    var body: some View {
+        VStack(spacing: 12) {
             ForEach(Account.Provider.allCases) { provider in
                 VStack(spacing: 6) {
                     button(provider)
@@ -30,14 +48,7 @@ struct SignInSheet: View {
             if let failure {
                 Text(failure).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
             }
-            Spacer(minLength: 0)
-            Text("Your program and workouts are kept with your account, so they're backed up and you can see them on the web. Groups see only what you choose to share.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
         }
-        .padding(24)
-        .presentationDetents([.medium])
         .interactiveDismissDisabled(working != nil)
     }
 
@@ -95,7 +106,7 @@ struct SignInSheet: View {
             defer { working = nil }
             do {
                 try await account.signIn(apple: credential, nonce: nonce)
-                dismiss()
+                onSignedIn()
             } catch {
                 failure = "Couldn't sign in with Apple. Try again."
             }
@@ -108,7 +119,7 @@ struct SignInSheet: View {
         Task {
             defer { working = nil }
             do {
-                if try await account.signIn(with: provider) { dismiss() }
+                if try await account.signIn(with: provider) { onSignedIn() }
             } catch {
                 failure = "Couldn't sign in with \(provider.title). Try again."
             }

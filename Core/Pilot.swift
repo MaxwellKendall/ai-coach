@@ -10,4 +10,8 @@ enum Pilot {
     static var inAppAI: Bool { !simple }
     /// Groups, live workouts, and sessions or programs shared with friends.
     static var groups: Bool { !simple }
+
+    /// FIT-201: in the pilot the app plans weeks itself only for a program of its own. A coach's client gets the weeks
+    /// the coach writes; someone logging on their own, none.
+    static func plansWeeks(hasProgram: Bool, coached: Bool) -> Bool { !simple || (hasProgram && !coached) }
 }

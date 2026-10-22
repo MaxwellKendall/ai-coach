@@ -82,4 +82,16 @@ enum InviteLink {
         let alphabet = Set("23456789ABCDEFGHJKLMNPQRSTUVWXYZ")
         return code.count == 10 && code.allSatisfy(alphabet.contains) ? code : nil
     }
+
+    /// FIT-201: a coach's code typed or pasted: the link (or the message it came in), or the code with any spaces or
+    /// dashes, any case.
+    static func coach(typed text: String) -> String? {
+        for word in text.split(whereSeparator: \.isWhitespace) {
+            let word = word.trimmingCharacters(in: .punctuationCharacters.subtracting(["/", ":"]))
+            if let url = URL(string: word), url.scheme != nil, let code = coach(from: url) { return code }
+        }
+        let code = text.uppercased().filter { $0 != "-" && !$0.isWhitespace }
+        let alphabet = Set("23456789ABCDEFGHJKLMNPQRSTUVWXYZ")
+        return code.count == 10 && code.allSatisfy(alphabet.contains) ? code : nil
+    }
 }

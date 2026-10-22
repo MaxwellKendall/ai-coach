@@ -59,6 +59,13 @@ struct ProgramScreen: View {
                     case .goals: goalList(weeks, start: start, current: current, profile: profile)
                     case .wins: WinsScreen()
                     }
+                } else if tab == .wins {
+                    WinsScreen()
+                } else {
+                    // FIT-201: a coach's client, or someone logging on their own, has no program of the app's.
+                    ContentUnavailableView(pro.coaches.isEmpty ? "No program" : "Your coach writes your program",
+                                           systemImage: tab == .program ? "calendar" : "target",
+                                           description: Text(pro.coaches.isEmpty ? "Log your workouts from Today." : "This week’s sessions are on Today."))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -100,7 +107,7 @@ struct ProgramScreen: View {
                         Button("Share Program", systemImage: "square.and.arrow.up") { pro.gate { shareProgram(profile) } }
                     }
                 }
-                if tab == .program, let profile = profiles.first {
+                if tab == .program, let profile = profiles.first, profile.programStart != nil {
                     ToolbarItem(placement: .primaryAction) {
                         Button("Whole program", systemImage: "list.bullet") {
                             pro.gate {
@@ -340,7 +347,9 @@ struct ProgramScreen: View {
     private func open(_ date: Date, monday: Date) {
         // FIT-120: the program can be looked through without Pro; running it is Pro.
         guard pro.active else { return pro.paywall = true }
-        if dayItems(in: monday).isEmpty { try? Planner.generate(weekOf: monday, in: context) }
+        if dayItems(in: monday).isEmpty, Pilot.plansWeeks(hasProgram: true, coached: !pro.coaches.isEmpty) {
+            try? Planner.generate(weekOf: monday, in: context)
+        }
         opened = Calendar.current.startOfDay(for: date)
     }
 

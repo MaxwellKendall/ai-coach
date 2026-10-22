@@ -6,6 +6,9 @@ struct RootView: View {
     @Query private var profiles: [Profile]
     /// Set while onboarding; presenting by item hands the profile straight to the cover.
     @State private var onboarding: Profile?
+    /// FIT-201: the pilot's first launch, sign in and join your coach, in place of onboarding.
+    @State private var welcoming = false
+    @AppStorage("welcomed") private var welcomed = false
     @Bindable private var navigator = Navigator.shared
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
@@ -72,7 +75,11 @@ struct RootView: View {
                 context.insert(profile)
                 return profile
             }()
-            if !profile.isComplete || profile.programStart == nil { onboarding = profile }
+            if Pilot.simple {
+                if profile.programStart == nil, !welcomed { welcoming = true }
+            } else if !profile.isComplete || profile.programStart == nil {
+                onboarding = profile
+            }
         }
         // FIT-53: a tapped "started a workout" notification opens that group.
         .sheet(item: $navigator.group) { group in
@@ -108,7 +115,10 @@ struct RootView: View {
             }
             // FIT-130: a coach's invite asks to allow them; it needs an account.
             if let code = InviteLink.coach(from: url) {
-                if account.user == nil {
+                // FIT-201: first launch answers it in place, signing in first.
+                if welcoming {
+                    navigator.coachInvite = code
+                } else if account.user == nil {
                     pendingCoach = code
                     signingInToJoin = true
                 } else {
@@ -163,11 +173,11 @@ struct RootView: View {
                              set: { if $0 == nil { navigator.session = nil } })) { ref in
             JoinSessionSheet(id: ref.id).tint(Self.accent)
         }
-        .sheet(item: Binding(get: { onboarding == nil && navigator.coachInvite == nil ? navigator.offer : nil },
+        .sheet(item: Binding(get: { onboarding == nil && !welcoming && navigator.coachInvite == nil ? navigator.offer : nil },
                              set: { if $0 == nil { navigator.offer = nil } })) { offer in
             ProgramOfferSheet(offer: offer).tint(Self.accent)
         }
-        .sheet(item: Binding(get: { onboarding == nil ? navigator.coachInvite.map(CoachInviteRef.init) : nil },
+        .sheet(item: Binding(get: { onboarding == nil && !welcoming ? navigator.coachInvite.map(CoachInviteRef.init) : nil },
                              set: { if $0 == nil { navigator.coachInvite = nil } })) { ref in
             CoachInviteSheet(code: ref.id).tint(Self.accent)
         }
@@ -188,6 +198,14 @@ struct RootView: View {
                     self.invite = nil
                 }
             }
+            .tint(Self.accent)
+        }
+        .fullScreenCover(isPresented: $welcoming) {
+            WelcomeView {
+                welcomed = true
+                welcoming = false
+            }
+            .interactiveDismissDisabled()
             .tint(Self.accent)
         }
         .fullScreenCover(item: $onboarding) { profile in

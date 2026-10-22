@@ -8,6 +8,7 @@ struct YouScreen: View {
     @State private var signingIn = false
     @State private var stopping: Cloud.Person?
     @State private var failure: String?
+    @State private var joining = false
 
     var body: some View {
         NavigationStack {
@@ -58,6 +59,12 @@ struct YouScreen: View {
                             .foregroundStyle(failure == nil ? Color.secondary : Color.red)
                     }
                 }
+                // FIT-201: someone who started without a coach joins one later, by link or code.
+                if pro.coaches.isEmpty, account.isAvailable {
+                    Section {
+                        Button { joining = true } label: { Label("Join Your Coach", systemImage: "person.2") }
+                    }
+                }
                 if let user = account.user {
                     Section {
                         NavigationLink { AccountView() } label: {
@@ -78,6 +85,7 @@ struct YouScreen: View {
             } message: { coach in
                 Text("\(coach.title) won't see your program or training any more. Your program stays as it is.")
             }
+            .sheet(isPresented: $joining) { WelcomeView { joining = false } }
             .sheet(isPresented: $signingIn) {
                 SignInSheet(reason: "Sign in to back up your program and see it on the web.")
             }

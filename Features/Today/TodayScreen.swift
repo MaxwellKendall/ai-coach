@@ -72,6 +72,15 @@ struct TodayScreen: View {
 
     private var todayIndex: Int { week.firstIndex { Calendar.current.isDateInToday($0) } ?? 0 }
 
+    /// FIT-201: coached, with no session planned from this Monday on.
+    private var awaitingCoach: Bool {
+        #if DEBUG
+        // `-awaitingCoach YES`: a client whose coach hasn't written a week yet, without signing in.
+        if UserDefaults.standard.bool(forKey: "awaitingCoach") { return true }
+        #endif
+        return !pro.coaches.isEmpty && !planned.contains { $0.kind == .workout && $0.date >= week[0] }
+    }
+
     private var thisWeeksPlan: Plan? { plans.first { $0.weekStart == week[0] } }
     /// The coach is designing the shown week, and hasn't yet.
     private var planning: Bool { Planner.designing.weeks.contains(week[0]) && thisWeeksPlan?.designedBy == nil }
@@ -170,7 +179,8 @@ struct TodayScreen: View {
             if let celebrating { CelebrationSheet(wins: celebrating) }
         }
         // A new week, or a profile that just finished onboarding, gets a plan; the coach designs it with Pro (FIT-120).
-        .task(id: "\(profiles.first?.isComplete == true) \(pro.active)") {
+        .task(id: "\(profiles.first?.isComplete == true) \(pro.active) \(pro.coaches.isEmpty)") {
+            guard Pilot.plansWeeks(hasProgram: profiles.first?.programStart != nil, coached: !pro.coaches.isEmpty) else { return }
             try? Planner.ensureWeek(in: context)
             guard pro.active else { return }
             await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
@@ -351,6 +361,16 @@ struct TodayScreen: View {
                 .transition(.opacity)
             case .plan(let plan): planCard(plan, isToday: isToday, isPast: isPast)
             case .done(let done): doneCard(done)
+            // FIT-201: a coach's client with nothing planned from this week on is waiting on the coach, not resting.
+            case .rest where awaitingCoach:
+                VStack(spacing: 8) {
+                    Text(planned.contains { $0.kind == .workout } ? "Your coach is writing this week" : "Your coach is writing your first week")
+                        .font(.title2.bold()).multilineTextAlignment(.center)
+                    Text("It shows up here as soon as it’s ready.").font(.subheadline).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    if isToday { logOwnButton(run: nil).padding(.top, 18) }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .rest(let coach):
                 VStack(spacing: 8) {
                     Text("Rest").font(.system(size: 30, weight: .bold)).tracking(-0.4)

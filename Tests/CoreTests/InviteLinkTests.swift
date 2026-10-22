@@ -60,4 +60,14 @@ struct SessionLinkTests {
         #expect(InviteLink.coach(from: URL(string: "https://example.com/c/LT7JWBW6S2")!) == nil)
         #expect(InviteLink.code(from: URL(string: "https://barbrabell.com/c/LT7JWBW6S2")!) == nil)
     }
+
+    /// FIT-201: a coach's code typed on first launch, or pasted with the message it came in.
+    @Test func typedCoachCodes() {
+        #expect(InviteLink.coach(typed: "lt7jw bw6s") == nil)
+        #expect(InviteLink.coach(typed: " lt7jw-bw6s2 ") == "LT7JWBW6S2")
+        #expect(InviteLink.coach(typed: "Join me: https://barbrabell.com/c/LT7JWBW6S2.") == "LT7JWBW6S2")
+        #expect(InviteLink.coach(typed: "https://example.com/c/LT7JWBW6S2") == nil)
+        #expect(InviteLink.coach(typed: "LT7JWBW6S0") == nil)
+        #expect(InviteLink.coach(typed: "tomorrow") == nil)
+    }
 }
