@@ -3,7 +3,8 @@
 // RPE 9, and his last session's note says his knee is sore, unanswered. Sara is on a roll; Jen missed one session.
 // This week and next are planned, so "Rebuild next week" in Claude has a week to change.
 //
-//   AWS_PROFILE=aicoach-dev npm run demo -- seed [--coach EMAIL] [--client EMAIL]
+//   AWS_PROFILE=aicoach-dev npm run demo -- seed [--coach ACCOUNT] [--client ACCOUNT]
+//   AWS_PROFILE=aicoach-dev npm run demo -- who EMAIL
 //   AWS_PROFILE=aicoach-dev npm run demo -- delete
 //
 // Without options every account is a dev test user (the dashboard's dev server can use the coach's session, written
@@ -11,6 +12,10 @@
 // with, then pass them: --coach is the coach you'll connect Claude as, and --client becomes Mike, on the phone. Their
 // own sync units on these days are replaced, and a coach without a plan is given an active one (no Stripe). Re-run
 // seed before each take: it rewrites the same days from today.
+//
+// ACCOUNT is an email, google:EMAIL or apple:EMAIL, or a uid. One email can be two accounts, Apple's and Google's,
+// when they aren't linked (FIT-137): then say which, e.g. --coach google:me@gmail.com --client apple:me@gmail.com.
+// who lists an email's accounts.
 import { ListUsersCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -24,14 +29,40 @@ const args = process.argv.slice(2);
 const option = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 const uidOf = (token: string) => JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).sub as string;
 
-/** A dev account: an existing one by email (signed in on dev before), or a test user. */
-async function account(email: string | undefined, testUser: string, name: string) {
-  if (email) {
-    const { Users = [] } = await cognito.send(new ListUsersCommand({ UserPoolId: out.UserPoolId, Filter: `email = "${email}"` }));
-    const sub = Users[0]?.Attributes?.find((a) => a.Name === "sub")?.Value;
-    if (!sub) throw new Error(`No dev account with ${email}. Sign in on dev.barbrabell.com/app with it first.`);
-    const { Item } = await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `USER#${sub}`, SK: "PROFILE" } }));
-    return { uid: sub, name: (Item?.displayName as string | undefined) ?? email };
+const PROVIDERS: Record<string, string> = { Google: "google", SignInWithApple: "apple" };
+
+/** The dev accounts with an email, and how each signs in: google, apple, or the provider each one is linked to. */
+async function accounts(email: string) {
+  const { Users = [] } = await cognito.send(new ListUsersCommand({ UserPoolId: out.UserPoolId, Filter: `email = "${email}"` }));
+  return Users.map((u) => {
+    const attr = (n: string) => u.Attributes?.find((a) => a.Name === n)?.Value;
+    // A federated user is named Provider_id; a linked one lists its providers in identities.
+    const linked = (JSON.parse(attr("identities") ?? "[]") as { providerName: string }[]).map((i) => i.providerName);
+    const via = [...new Set([u.Username!.split("_")[0], ...linked])].map((p) => PROVIDERS[p]).filter(Boolean);
+    return { uid: attr("sub")!, via };
+  });
+}
+
+/** The uid an ACCOUNT names: a uid, an email with one account, or google:EMAIL / apple:EMAIL. */
+async function uidFor(spec: string) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(spec)) return spec;
+  const [, provider, email] = /^(?:(google|apple):)?(.+)$/i.exec(spec)!;
+  const all = await accounts(email);
+  if (!all.length) throw new Error(`No dev account with ${email}. Sign in on dev.barbrabell.com/app with it first.`);
+  const found = provider ? all.filter((a) => a.via.includes(provider.toLowerCase())) : all;
+  if (found.length === 1) return found[0].uid;
+  const list = all.map((a) => `  ${a.via.join("+") || "?"}:${email}  ${a.uid}`).join("\n");
+  throw new Error(found.length
+    ? `${email} is ${all.length} dev accounts. Pass google:${email}, apple:${email} or a uid:\n${list}`
+    : `No ${provider} sign-in for ${email} on dev. Its accounts:\n${list}`);
+}
+
+/** A dev account: an existing one (signed in on dev before), or a test user. */
+async function account(spec: string | undefined, testUser: string, name: string) {
+  if (spec) {
+    const uid = await uidFor(spec);
+    const { Item } = await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `USER#${uid}`, SK: "PROFILE" } }));
+    return { uid, name: (Item?.displayName as string | undefined) ?? spec.replace(/^(google|apple):/i, "") };
   }
   const token = await signIn(testUser);
   must(await gql(token, `mutation($n: String!) { updateProfile(displayName: $n) { uid } }`, { n: name }), `${testUser} profile`);
@@ -195,6 +226,7 @@ if (command === "seed") {
   }
   for (const [client, first, email] of [[mike, -WEEKS - 1, option("--client")], [sara, -WEEKS, undefined], [jen, -WEEKS, undefined]] as const) {
     const who = await account(email, client.testUser, client.name);
+    if (who.uid === coach.uid) throw new Error("--coach and --client are the same account; a coach can't coach themselves.");
     await put(who.uid, units(client, first), !email);
     await link(coach, who);
     console.log(`${who.name}: ${first === -WEEKS - 1 ? WEEKS + 1 : WEEKS} weeks logged, this week and next planned, coached by ${coach.name}.`);
@@ -218,7 +250,9 @@ if (command === "seed") {
     console.log(`Deleted ${testUser}.`);
   }
   console.log("Accounts passed with --coach or --client keep their seeded days; seed again or clear them in the app.");
+} else if (command === "who" && args[1]) {
+  for (const a of await accounts(args[1])) console.log(`${a.via.join("+") || "?"}:${args[1]}  ${a.uid}`);
 } else {
-  console.log("usage: npm run demo -- seed [--coach EMAIL] [--client EMAIL] | delete");
+  console.log("usage: npm run demo -- seed [--coach ACCOUNT] [--client ACCOUNT] | who EMAIL | delete");
 }
 
