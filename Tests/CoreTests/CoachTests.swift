@@ -44,6 +44,13 @@ struct CoachTests {
         #expect(Coach.plan(deload: false, reasons: ["shoulder injury: bench → push-up"]) == "Working around the shoulder.")
     }
 
+    /// FIT-202: a coach's session shows what the coach wrote, not the app's tip.
+    @Test func aCoachsSessionSpeaksForTheCoach() {
+        #expect(Coach.coached(reasons: ["First week."], coach: "Sam") == "First week.")
+        #expect(Coach.coached(reasons: ["edited", "From Sam"], coach: "Sam") == "From Sam")
+        #expect(Coach.coached(reasons: [], coach: "Sam") == "From Sam")
+    }
+
     @Test func restLineNamesTheNextSession() {
         let calendar = Calendar(identifier: .gregorian)
         let thu = calendar.date(from: DateComponents(year: 2026, month: 10, day: 1))!

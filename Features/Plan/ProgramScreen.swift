@@ -61,11 +61,12 @@ struct ProgramScreen: View {
                     }
                 } else if tab == .wins {
                     WinsScreen()
-                } else {
+                } else if tab == .program {
                     // FIT-201: a coach's client, or someone logging on their own, has no program of the app's.
-                    ContentUnavailableView(pro.coaches.isEmpty ? "No program" : "Your coach writes your program",
-                                           systemImage: tab == .program ? "calendar" : "target",
-                                           description: Text(pro.coaches.isEmpty ? "Log your workouts from Today." : "This week’s sessions are on Today."))
+                    plannedWeeks
+                } else {
+                    ContentUnavailableView("No goals yet", systemImage: "target",
+                                           description: Text("Your goals show here once your program starts."))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -107,7 +108,7 @@ struct ProgramScreen: View {
                         Button("Share Program", systemImage: "square.and.arrow.up") { pro.gate { shareProgram(profile) } }
                     }
                 }
-                if tab == .program, let profile = profiles.first, profile.programStart != nil {
+                if tab == .program, let profile = profiles.first, profile.programStart != nil, !coached {
                     ToolbarItem(placement: .primaryAction) {
                         Button("Whole program", systemImage: "list.bullet") {
                             pro.gate {
@@ -168,6 +169,62 @@ struct ProgramScreen: View {
         }
     }
 
+    private var coached: Bool { !pro.coaches.isEmpty }
+
+    /// FIT-202, FIT-203: without a program of the app's, the weeks that were planned (the coach's), one card each:
+    /// past ones with what was done, this one, and any ahead.
+    @ViewBuilder private var plannedWeeks: some View {
+        let this = Week.start(of: .now)
+        let mondays = plannedMondays(through: this)
+        if mondays.isEmpty {
+            ContentUnavailableView(coached ? "Your coach writes your program" : "No program", systemImage: "calendar",
+                                   description: Text(coached ? "Each week shows here once it’s written." : "Log your workouts from Today."))
+        } else {
+            let current = mondays.firstIndex(of: this) ?? 0
+            SwipeDeck(index: Binding(get: { min(selected ?? current, mondays.count - 1) }, set: { selected = $0 }),
+                      count: mondays.count) { index in
+                plannedWeekCard(mondays[index], this: this)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 18)
+            .padding(.bottom, 20)
+        }
+    }
+
+    /// Every Monday from the first planned week through this one or the last planned, whichever is later.
+    private func plannedMondays(through this: Date) -> [Date] {
+        let weeks = Set(planned.filter { $0.kind == .workout }.map { Week.start(of: $0.date) })
+        guard let first = weeks.min(), let last = weeks.max() else { return [] }
+        return Array(sequence(first: min(first, this)) { Calendar.current.date(byAdding: .day, value: 7, to: $0)! }
+            .prefix { $0 <= max(last, this) })
+    }
+
+    private func plannedWeekCard(_ monday: Date, this: Date) -> some View {
+        let sunday = Calendar.current.date(byAdding: .day, value: 6, to: monday)!
+        let weeks = Calendar.current.dateComponents([.day], from: this, to: monday).day.map { $0 / 7 } ?? 0
+        let eyebrow = switch weeks {
+        case 0: "This week"
+        case 1: "Next week"
+        case -1: "Last week"
+        default: "Week of \(monday.formatted(.dateTime.month(.abbreviated).day()))"
+        }
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(eyebrow.uppercased()).font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
+                Spacer()
+                Text("\(monday.formatted(.dateTime.month(.abbreviated).day())) – \(sunday.formatted(.dateTime.month(.abbreviated).day()))")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 18)
+            Spacer(minLength: 12)
+            if coached { Text("Your coach plans each week.").font(.footnote).foregroundStyle(.tertiary) }
+        }
+        .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+        .clipShape(.rect(cornerRadius: 30))
+    }
+
     private func weekCard(_ index: Int, weeks: [ProgramWeek], start: Date, current: Int, profile: Profile) -> some View {
         let week = weeks[index]
         let monday = ProgramPlan.monday(index, start: start)
@@ -189,8 +246,9 @@ struct ProgramScreen: View {
             Text(ProgramPlan.why(week, tests: tests)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
             if index == current || index == current + 1 {
                 let saved = index == current || !dayItems(in: monday).isEmpty
+                // FIT-202: a coach's client follows the coach's weeks; pinning is for weeks the app plans.
                 sessions(saved ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped(),
-                         pinnable: saved, monday: monday)
+                         pinnable: saved && !coached, monday: monday)
                     .padding(.top, 18)
                 Spacer(minLength: 12)
                 // FIT-215: planning the week again is the in-app AI's.
@@ -208,6 +266,8 @@ struct ProgramScreen: View {
                             .buttonBorderShape(.capsule)
                         }
                     }
+                } else if coached {
+                    Text("Your coach plans each week.").font(.footnote).foregroundStyle(.tertiary)
                 } else {
                     Text(saved ? "Pinned sessions stay. The rest is planned again when this week ends."
                          : "Planned from this week. Changes after this week ends.").font(.footnote).foregroundStyle(.tertiary)

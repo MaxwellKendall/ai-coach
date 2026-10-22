@@ -12,6 +12,7 @@ struct WorkoutModeView: View {
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
     @Query private var profiles: [Profile]
+    @Query private var planned: [PlannedActivity]
     @State var draft: WorkoutDraft
     var onSaved: () -> Void = {}
     @State private var startedAt = Date.now
@@ -244,6 +245,9 @@ struct WorkoutModeView: View {
             Text(exercises.map { names[$0] ?? $0 }.joined(separator: " + "))
                 .font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
                 .lineLimit(2).minimumScaleFactor(0.7)
+            if let cue = cue(rows) {
+                Text(cue).font(.subheadline).foregroundStyle(.secondary).padding(.top, 6).lineLimit(3)
+            }
             Spacer(minLength: 12)
             VStack(spacing: 16) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -288,6 +292,15 @@ struct WorkoutModeView: View {
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
         .clipShape(.rect(cornerRadius: 30))
         .accessibilityAction(named: "Unlog") { if done { unlog(line) } }
+    }
+
+    /// FIT-202: what the coach wrote on these sets' exercises (tempo, rest, AMRAP…), where the set is logged.
+    private func cue(_ rows: [SetRow]) -> String? {
+        let ids = Set(rows.compactMap(\.plannedRef))
+        let notes = planned.filter { ids.contains($0.id) }.map(\.note)
+            .filter { !$0.isEmpty && $0 != TrainingGenerator.warmupNote }
+        let unique = notes.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        return unique.isEmpty ? nil : unique.joined(separator: " · ")
     }
 
     /// Up skips a set or a rest; down unlogs a logged set.

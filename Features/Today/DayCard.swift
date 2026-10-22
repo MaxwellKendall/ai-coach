@@ -58,7 +58,8 @@ enum DayCard {
             ?? runMinutes.flatMap { $0 > 0 ? Int($0.rounded()) : nil } ?? context.sessionMinutes
         return .plan(Planned(items: items, session: Planner.session(items, templates: context.templates),
                              title: first.slot ?? "Workout", start: first.date, minutes: minutes,
-                             coach: liftsPlanned ? Coach.plan(deload: context.deload, reasons: reasons) : Coach.run(kind: first.note),
+                             coach: !liftsPlanned ? Coach.run(kind: first.note)
+                                : context.coach.map { Coach.coached(reasons: reasons, coach: $0) } ?? Coach.plan(deload: context.deload, reasons: reasons),
                              ran: ran))
     }
 
@@ -67,6 +68,8 @@ enum DayCard {
         var sessionMinutes: Int
         var deload: Bool
         var tier: AgeTier
+        /// FIT-202: the coach's name while coached; their sessions speak for them.
+        var coach: String? = nil
     }
 
     @MainActor

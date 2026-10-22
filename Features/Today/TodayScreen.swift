@@ -74,11 +74,7 @@ struct TodayScreen: View {
 
     /// FIT-201: coached, with no session planned from this Monday on.
     private var awaitingCoach: Bool {
-        #if DEBUG
-        // `-awaitingCoach YES`: a client whose coach hasn't written a week yet, without signing in.
-        if UserDefaults.standard.bool(forKey: "awaitingCoach") { return true }
-        #endif
-        return !pro.coaches.isEmpty && !planned.contains { $0.kind == .workout && $0.date >= week[0] }
+        !pro.coaches.isEmpty && !planned.contains { $0.kind == .workout && $0.date >= week[0] }
     }
 
     private var thisWeeksPlan: Plan? { plans.first { $0.weekStart == week[0] } }
@@ -321,7 +317,7 @@ struct TodayScreen: View {
         let workouts = planned.filter { $0.kind == .workout }
         let context = DayCard.Context(templates: templates, sessionMinutes: profile?.sessionMinutes ?? 45,
                                       deload: thisWeeksPlan?.warnings.contains { $0.hasPrefix("Deload") } == true,
-                                      tier: AgeTier.of(age: profile?.age ?? 30))
+                                      tier: AgeTier.of(age: profile?.age ?? 30), coach: pro.coaches.first?.title)
         return week.map { day in
             let next = workouts.first { $0.date >= Calendar.current.date(byAdding: .day, value: 1, to: day)! }
             return DayCard.make(day: day, planned: workouts, entries: entries,
@@ -475,7 +471,8 @@ struct TodayScreen: View {
                 Button("Train with a Friend", systemImage: "person.2") { trainWithFriend(plan) }
             }
             // Changing the program's week is Pro (FIT-120).
-            if pro.active, let plan = thisWeeksPlan {
+            // FIT-202: a coach's client follows the coach's week; Edit exercises still swaps and skips.
+            if pro.active, pro.coaches.isEmpty, let plan = thisWeeksPlan {
                 Button("Change this week", systemImage: "slider.horizontal.3") { sheet = .adjust(plan) }
             }
             if pro.active, Pilot.inAppAI {

@@ -77,6 +77,12 @@ final class Pro {
 
     /// The account's coaches, from the server; signed out, none. Offline, the last answer stands.
     func refreshCoaches(signedIn: Bool) async {
+        #if DEBUG
+        // `-coach Sam`: coached by Sam, signed in or not, to look at a client's screens on a simulator (FIT-202).
+        if let name = UserDefaults.standard.string(forKey: "coach") {
+            return setCoaches([Cloud.Person(uid: "debug-coach", name: name, since: "2026-10-22")])
+        }
+        #endif
         guard signedIn else { return setCoaches([]) }
         guard let coaches = try? await Cloud.myCoaches() else { return }
         setCoaches(coaches)

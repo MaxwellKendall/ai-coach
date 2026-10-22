@@ -16,6 +16,18 @@ struct AICoachApp: App {
             try Seeder.seed(container.mainContext)
             // FIT-82: plans made when weeks began on Monday.
             try Planner.rekeyWeeks(in: container.mainContext)
+            #if DEBUG
+            // `-units PATH`: sync units from a JSON file ({key: body}), applied as if the server sent them, e.g. a
+            // coach's week from Tests/Fixtures (FIT-202).
+            if let path = UserDefaults.standard.string(forKey: "units"), let data = FileManager.default.contents(atPath: path),
+               let units = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                for (key, value) in units.sorted(by: { ($0.key.hasPrefix("template#") ? 0 : 1, $0.key) < ($1.key.hasPrefix("template#") ? 0 : 1, $1.key) }) {
+                    let body = String(decoding: try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]), as: UTF8.self)
+                    try SyncUnits.apply(key, body: body, in: container.mainContext)
+                }
+                try container.mainContext.save()
+            }
+            #endif
         } catch {
             fatalError("Could not open the data store: \(error)")
         }

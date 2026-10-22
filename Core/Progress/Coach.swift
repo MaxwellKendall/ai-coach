@@ -14,6 +14,12 @@ enum Coach {
         return "Leave a rep or two in the tank on every set."
     }
 
+    /// FIT-202: a coach's session says what the coach wrote for it (the week's reason, "From Sam"), not the app's tips.
+    /// "edited" is the dashboard's mark for a changed row, not something to show.
+    static func coached(reasons: [String], coach: String) -> String {
+        reasons.first { !$0.isEmpty && $0 != "edited" } ?? "From \(coach)"
+    }
+
     /// A rest day points at the next session.
     static func rest(next: (name: String, date: Date)?, from day: Date, calendar: Calendar = .current) -> String {
         guard let next else { return "Nothing planned. Enjoy the day off." }
