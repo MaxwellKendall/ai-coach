@@ -96,7 +96,7 @@ export const dynamoStore: Store = {
   },
   async share(uid, kind, payload) {
     const body = JSON.stringify(payload);
-    if (body.length > 8000) throw new Error("That's too much to share.");
+    if (body.length > 8000) throw new Error("That's too much for one shared page: share a week's recap or one session instead.");
     const profile = (await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROFILE" } }))).Item;
     const id = randomUUID().replace(/-/g, "").slice(0, 12);
     await db.send(new PutCommand({
@@ -183,7 +183,7 @@ export const tools = [
     name: "get_context",
     title: "Get training context",
     annotations: { title: "Get training context", ...READ },
-    description: "Start here. The person's goals with deadlines and where they stand, their profile (age, equipment, injuries, never list, schedule), the planned sessions from today on, and recent logged sessions with RPE and notes, plus estimated maxes for the lifts they train. Read it before suggesting, logging or changing anything.",
+    description: "Start here in every conversation, and again with client before working on a coach's client. Their goals (with goal ids, deadlines and where each stands), profile (age, weight, schedule, equipment, injuries, never list), the plan from today on, recent logged sessions with RPE and notes, and estimated maxes. It says NOT SET UP YET for someone new, and lists a coach's clients. In every tool, \"they\" is the person whose training it is: the caller, or the client named with client.",
     inputSchema: { type: "object", properties: {
       days_back: { type: "integer", minimum: 1, maximum: 120, description: "How many past days of logs to include (default 21)." },
       days_ahead: { type: "integer", minimum: 0, maximum: 28, description: "How many days of plan to include from today (default 7)." },
@@ -193,28 +193,28 @@ export const tools = [
     name: "get_day",
     title: "Get a day",
     annotations: { title: "Get a day", ...READ },
-    description: "One day in full: the planned session (each exercise with sets, reps or seconds, load and RPE) and what was logged. With to, every day from date to to (up to 28), e.g. a whole block to copy to another client.",
+    description: "One day in full: the planned session (each exercise's sets, reps or seconds, load, RPE, superset and coach note) and what was logged, with weight, sleep and meals. With to, every day from date through to (up to 28), e.g. to read a block before changing it or copying it to another client.",
     inputSchema: { type: "object", properties: { date: DATE, to: { type: "string", description: "The last day of a range, YYYY-MM-DD; days with nothing planned or logged are left out." } } },
   },
   {
     name: "find_exercises",
     title: "Find exercises",
     annotations: { title: "Find exercises", ...READ },
-    description: "Search the exercise catalog (700 exercises) by name words, movement pattern (squat, hinge, horizontal_push, vertical_pull, lunge, carry, core…) or muscle. Only exercises their equipment allows and not on their never list.",
+    description: "Search the exercise catalog (about 700, plus their own) by name words, movement pattern (squat, hinge, horizontal_push, vertical_pull, lunge, carry, core…) or muscle, returning names and slugs. Only what their equipment allows and not on their never list. Use it to map a program's exercise names before proposing, and before create_exercise.",
     inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
   },
   {
     name: "swap_options",
     title: "Swap options",
     annotations: { title: "Swap options", ...READ },
-    description: "Alternatives for an exercise: the same movement with their equipment, best first. Use it when they want to replace one exercise.",
+    description: "Alternatives for one exercise: the same movement with their equipment, best first. Use it when they can't or won't do one (pain, missing equipment, a busy gym); then propose_session with the swap.",
     inputSchema: { type: "object", properties: { exercise: EXERCISE }, required: ["exercise"] },
   },
   {
     name: "create_exercise",
     title: "Create an exercise",
     annotations: { title: "Create an exercise", ...write(false, false) },
-    description: "Add an exercise of their own that the catalog doesn't have (check find_exercises first). Then plan and log it like any other; it shows by name on their phone, in the plan and the library.",
+    description: "Add an exercise the catalog doesn't have, as their own (search find_exercises first: a coach's named variation, say). It's then planned and logged like any other and shows by name on their phone, in the plan and the library.",
     inputSchema: { type: "object", properties: {
       name: { type: "string", description: "As they call it, e.g. \"Landmine Press\"." },
       pattern: { type: "string", enum: PATTERNS, description: "Its movement pattern, which the plan rules and the review count." },
@@ -227,7 +227,7 @@ export const tools = [
     name: "edit_exercise",
     title: "Edit their exercise",
     annotations: { title: "Edit their exercise", ...write(false, true) },
-    description: "Change one of their own exercises: its name, pattern, equipment, muscles or cues. Catalog exercises can't be changed.",
+    description: "Change one of their own exercises (made with create_exercise): its name, pattern, equipment, muscles or cues. Catalog exercises can't be changed; create one instead.",
     inputSchema: { type: "object", properties: {
       exercise: EXERCISE,
       name: { type: "string" }, pattern: { type: "string", enum: PATTERNS }, equipment: { type: "array", items: { type: "string", enum: EQUIPMENT } },
@@ -238,7 +238,7 @@ export const tools = [
     name: "log_session",
     title: "Log a session",
     annotations: { title: "Log a session", ...write(true, false) },
-    description: "Log a workout they did: each set with load, reps (or seconds) and RPE, and a note on how it went (soreness, sleep, how it felt). as_planned logs the day's planned lifting; add sets to record what differed. Runs, planned or not, go to log_run. A day already logged needs replace: true. Confirm the numbers with them first when unsure.",
+    description: "Record a workout they did, today or earlier: each set with load, reps (or seconds) and RPE, and their note on how it went (soreness, sleep, how it felt). as_planned logs the day's planned lifting as is; add sets for what differed. Runs go to log_run; weight, sleep and meals to log_daily. A day already logged needs replace: true. Confirm the numbers with them when unsure. Logging is the person's own: a coach can't log for a client.",
     inputSchema: { type: "object", properties: {
       date: DATE,
       as_planned: { type: "boolean", description: "Log every planned set as planned." },
@@ -307,14 +307,14 @@ export const tools = [
     name: "clear_day",
     title: "Make a day a rest day",
     annotations: { title: "Make a day a rest day", ...READ },
-    description: "Propose taking a planned session off a day (today or later), making it a rest day. Nothing changes until apply, and undo puts it back.",
+    description: "Propose making a planned day (today or later) a rest day. Nothing changes until apply, and undo puts the session back. To move a session instead, propose_session it on the new day too.",
     inputSchema: { type: "object", properties: { date: DATE, reason: { type: "string", description: "One sentence on why." } }, required: ["reason"] },
   },
   {
     name: "propose_session",
     title: "Propose a session",
     annotations: { title: "Propose a session", ...READ },
-    description: "Propose a new session for a day not yet logged (today or later): the whole list of exercises, in order. Nothing changes until apply. Base it on get_context: their goals, recent logs and RPE, notes, equipment and injuries; keep the goal lifts progressing. Returns what changes and any plan-rule problems to fix first.",
+    description: "Propose one day's whole session (today or later, not yet logged): every exercise in order, with sets, reps or seconds, load (weight_lb, weight_lb_per_hand or percent_1rm), RPE, superset and note. Once applied it replaces that day's session; nothing changes until apply. Returns the change line by line, any names it matched loosely, weights it worked out from percentages, cautions to check with them, and plan-rule problems to fix first. Base it on get_context: their goals, recent logs and RPE, notes, equipment and injuries; keep the goal lifts progressing.",
     inputSchema: { type: "object", properties: {
       date: DATE,
       title: { type: "string", description: "The session's name, e.g. \"Upper · chest first\"." },
@@ -326,7 +326,7 @@ export const tools = [
     name: "propose_week",
     title: "Propose a week",
     annotations: { title: "Propose a week", ...READ },
-    description: "Propose several days at once, such as the first week after setup or next week from their logs: each day's whole session, or an empty exercises list for a rest day. Days already logged or past are refused. Checked by the plan rules and their weekly set ceiling; nothing changes until apply. Plan the days they said they train, each fitting their minutes. Up to 6 weeks in one call, such as a whole block a coach brings in.",
+    description: "Propose several days at once, up to 6 weeks: the first weeks after set_program, next week from their logs, or a block a coach brings in. Each day is a whole session as in propose_session, or an empty exercises list for a rest day; days left out keep what they have. Past or logged days are refused. Checked against the plan rules, each program week's kind and their weekly set ceiling; nothing changes until apply. Plan the days they said they train, each fitting their minutes.",
     inputSchema: { type: "object", properties: {
       reason: { type: "string", description: "One sentence on the week's aim, shown to them in the app." },
       days: { type: "array", minItems: 1, maxItems: 42, items: { type: "object", properties: {
@@ -345,7 +345,7 @@ export const tools = [
     name: "set_program",
     title: "Set the program",
     annotations: { title: "Set the program", ...write(false, true) },
-    description: "Start a program or change it: how many weeks (or the target date), when it starts, how often to deload, and trips. Weeks run Sunday to Saturday. A new program starts this week unless start says otherwise. Code lays out the phases, a deload every deload_every weeks, and a light test week as the last; then plan each week with propose_week, the first one or two now and each next week from their logs.",
+    description: "Start or change the multi-week program: its length (weeks, or a target date with by), when it starts, how often to deload, trips, and its brief (phases). Weeks run Sunday to Saturday; a new program starts this week unless start says otherwise. Code lays out the phases (base, build, peak), a deload every deload_every weeks, and a light test week as the last. Each goal lift needs a max or starting set first (set_profile). It plans no sessions: then propose_week, the first one or two weeks now and each next week from their logs.",
     inputSchema: { type: "object", properties: {
       weeks: { type: "integer", minimum: 1, maximum: 52, description: "Length in weeks, ending on that week's Saturday." },
       by: { type: "string", description: "Or the target date, YYYY-MM-DD: the program runs through that week." },
@@ -392,14 +392,14 @@ export const tools = [
     name: "stop_sharing",
     title: "Stop sharing a link",
     annotations: { title: "Stop sharing a link", ...write(true, true) },
-    description: "Take a shared link down: its page then says it has expired.",
+    description: "Take down a link that share made, when they ask: its page then says it has expired. Their other links stay up.",
     inputSchema: { type: "object", properties: { link: { type: "string", description: "The link, or its id." } }, required: ["link"] },
   },
   {
     name: "set_profile",
     title: "Set profile",
     annotations: { title: "Set profile", ...write(false, true) },
-    description: "Save what they tell you about themselves, merging into what's there. Call it as each answer comes in during setup, and whenever something changes. A new profile needs age and weight_lb first.",
+    description: "Save what they tell you about themselves; only the fields given change. Call it as each answer comes in during setup and whenever something changes: schedule, equipment, injuries, the never list, and starting_sets (their maxes or recent heavy sets), which programs and weights need. A new profile needs age and weight_lb first. A coach can set everything for a client but their name.",
     inputSchema: { type: "object", properties: {
       name: { type: "string", description: "What to call them, as their shared pages show it (their first name, say)." },
       age: { type: "integer", minimum: 13, maximum: 100 },
@@ -439,21 +439,21 @@ export const tools = [
     name: "apply",
     title: "Apply a proposal",
     annotations: { title: "Apply a proposal", ...write(false, false) },
-    description: "Apply a proposal from propose_session after they agree. It replaces that day's session on their phone.",
+    description: "Make a proposal real once they agree: each day in it (from propose_session, propose_week or clear_day) gets its new session, on their phone at its next sync. Give the proposal_id it returned; one with plan-rule problems is refused. A coach passes the same client the proposal was for.",
     inputSchema: { type: "object", properties: { proposal_id: { type: "string" } }, required: ["proposal_id"] },
   },
   {
     name: "undo",
     title: "Undo an apply",
     annotations: { title: "Undo an apply", ...write(false, false) },
-    description: "Put back the session a day had before the last apply.",
+    description: "Put back the session one day had before the last apply changed it (within 14 days, once). A day logged since can't be put back.",
     inputSchema: { type: "object", properties: { date: DATE }, required: ["date"] },
   },
   {
     name: "list_clients",
     title: "List clients",
     annotations: { title: "List clients", ...READ },
-    description: "For a coach: every client, those who need them first, with this week's sessions done of planned (Sunday to Saturday), their last session, streak, and the dashboard's flags: pain or an unanswered note, missed sessions, RPE 9+ on a main lift, a main lift stalled 3 weeks, nothing logged in 2 weeks.",
+    description: "For a coach: every client with their id, those who need them first, with this week's sessions done of planned (Sunday to Saturday), their last session, streak, and the dashboard's flags: pain or an unanswered note, missed sessions, RPE 9+ on a main lift, a main lift stalled 3 weeks, nothing logged in 2 weeks. Then pass client to get_context, add_note or a planning tool.",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -731,7 +731,7 @@ async function propose(uid: string, caller: string, tz: string, today: string, d
     });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date ?? "")) throw new Error(`Not a date: ${d.date}. Use YYYY-MM-DD.`);
     if (d.date < today) throw new Error(`${d.date} is past; plan today or later.`);
-    if (logOf(units, d.date).some((r) => r.kind === "workout")) throw new Error(`${d.date} is already logged.`);
+    if (logOf(units, d.date).some((r) => r.kind === "workout")) throw new Error(`${d.date} is already logged, so its plan stays as it was done: leave it out and propose the other days.`);
     const before = planOf(units, d.date);
     const after = d.exercises.length ? sessionRows(before, d.title ?? "Workout", d.exercises, startOf(units, d.date, tz), reason) : before.filter((r) => r.kind !== "workout");
     next.set(d.date, after);
@@ -823,7 +823,7 @@ function weekLines(units: Units, day: string, nowSec: number, tz: string) {
 /** The tools a coach can point at a client. Logging and sharing stay the client's own. */
 export const CLIENT_TOOLS = new Set(["get_context", "get_day", "add_note", "find_exercises", "swap_options", "create_exercise", "edit_exercise", "clear_day",
   "propose_session", "propose_week", "apply", "undo", "get_program", "set_program", "get_progress", "get_week_review", "set_profile", "set_goal"]);
-const CLIENT = { type: "string", description: "Coaches only: the client, by name or id as get_context lists them. Leave it out for your own training." };
+const CLIENT = { type: "string", description: "Coaches only: the client to act on, by name or id as get_context and list_clients show them. Leave it out for the caller's own training." };
 for (const t of tools) if (CLIENT_TOOLS.has(t.name)) (t.inputSchema.properties as Record<string, unknown>).client = CLIENT;
 
 const shownName = (p: Person) => p.name ?? `a client without a name (${p.uid})`;
@@ -845,7 +845,7 @@ export function pickClient(clients: Person[], said: string): Person {
 async function clientOf(caller: string, said: unknown, store: Store): Promise<Person | undefined> {
   if (said === undefined || said === null || said === "") return undefined;
   const client = pickClient(await store.clients(caller), String(said));
-  if (!(await store.coachOf(caller, client.uid))) throw new Error(`They don't coach ${shownName(client)} any more.`);
+  if (!(await store.coachOf(caller, client.uid))) throw new Error(`They don't coach ${shownName(client)} any more: one of them ended the link. invite_client makes a new invite if they both want it.`);
   await needsPlan(caller, store);
   return client;
 }
@@ -890,7 +890,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (args.to === undefined) return describeDay(units, day);
       const to = String(args.to);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(to) || to < day) throw new Error("to is YYYY-MM-DD, on or after date.");
-      if (to > addDays(day, 27)) throw new Error("At most 28 days at a time.");
+      if (to > addDays(day, 27)) throw new Error("At most 28 days at a time: ask for the rest in another call.");
       const days: string[] = [];
       for (let d = day; d <= to; d = addDays(d, 1)) if (planOf(units, d).length || logOf(units, d).length) days.push(describeDay(units, d));
       return days.length ? days.join("\n\n") : `Nothing planned or logged from ${day} to ${to}.`;
@@ -937,7 +937,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "log_session": {
       const units = await store.units(uid);
-      if (day > today) throw new Error("That day hasn't happened yet.");
+      if (day > today) throw new Error("That day hasn't happened yet: log it on the day, or plan it with propose_session.");
       const existing = logOf(units, day);
       if (existing.some((r) => r.kind === "workout" && !isRun(r)) && !args.replace) {
         throw new Error(`${day} is already logged:\n${describeLog(existing).lines.join("\n")}\nPass replace: true to replace it, or add_note to add context.`);
@@ -1010,7 +1010,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (args.confirm !== true) throw new Error("Ask them first, then call again with confirm: true.");
       const units = await store.units(uid);
       const log = logOf(units, day);
-      if (!log.length) throw new Error(`Nothing is logged on ${day}.`);
+      if (!log.length) throw new Error(`Nothing is logged on ${day}, so there's nothing to delete. Check the date with get_day.`);
       const kinds: Record<string, string> = { workout: "workout", weight: "bodyweight", sleep: "sleep", meal: "meal" };
       let gone: typeof log;
       if (args.what === "all") gone = log;
@@ -1022,7 +1022,7 @@ export async function callTool(name: string, args: Args, account: Account, store
         if (gone.length !== 1) throw new Error(meals.length ? `Which meal? ${day} has: ${meals.map((r) => r.note || "Meal").join("; ")}.` : `No meals logged on ${day}.`);
       } else if (kinds[args.what]) gone = log.filter((r) => r.kind === kinds[args.what]);
       else throw new Error("what is workout, weight, sleep, meal or all.");
-      if (!gone.length) throw new Error(`No ${args.what} logged on ${day}.`);
+      if (!gone.length) throw new Error(`No ${args.what} logged on ${day}. get_day shows what is.`);
       const kept = log.filter((r) => !gone.includes(r));
       await store.write(uid, [{ key: `log#${day}`, body: kept.length ? encode(kept) : null }], account.agent);
       const said = args.what === "workout" ? describeLog(gone).lines : describeDaily(gone);
@@ -1030,7 +1030,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "clear_day": {
       const units = await store.units(uid);
-      if (!planOf(units, day).some((r) => r.kind === "workout")) throw new Error(`Nothing is planned on ${day}.`);
+      if (!planOf(units, day).some((r) => r.kind === "workout")) throw new Error(`Nothing is planned on ${day}; it's already a rest day.`);
       return propose(uid, account.uid, tz, today, [{ date: day, exercises: [] }], String(args.reason), store);
     }
     case "propose_session":
@@ -1042,7 +1042,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (!proposal) throw new Error("No such proposal (they last 2 days). Propose again.");
       const owner = (proposal.uid as string | undefined) ?? account.uid;
       if (owner !== uid) throw new Error(`That proposal is for ${owner === account.uid ? "their own training" : "another client"}: ${owner === account.uid ? "leave client out" : `pass client ${owner}`}.`);
-      if (proposal.problems?.length) throw new Error("That proposal breaks the plan rules; fix them and propose again.");
+      if (proposal.problems?.length) throw new Error(`That proposal breaks the plan rules; fix these and propose again:\n${proposal.problems.map((p: string) => `- ${p}`).join("\n")}`);
       const days = proposal.days as { day: string; rows: string }[];
       const units = await store.units(uid);
       const logged = days.filter((d) => logOf(units, d.day).some((r) => r.kind === "workout")).map((d) => d.day);
@@ -1054,7 +1054,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "undo": {
       const saved = await store.get(uid, `undo#${day}`);
-      if (!saved || saved.used) throw new Error(`Nothing to undo on ${day}.`);
+      if (!saved || saved.used) throw new Error(`Nothing to undo on ${day}: undo puts back a day apply changed in the last 14 days, once. To change it now, propose_session.`);
       if (logOf(await store.units(uid), day).some((r) => r.kind === "workout")) throw new Error(`${day} has been logged since; it can't be put back.`);
       await store.write(uid, [{ key: `plan#${day}`, body: saved.body }], account.agent, account.uid);
       await store.put(uid, `undo#${day}`, { used: true }, 1);
@@ -1071,7 +1071,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       let payload: Record<string, unknown> | undefined, what = "";
       if (kind === "win") {
         const program = programOf(profile, tz);
-        if (!program || !profile?.programStart || !profile.targetDate) throw new Error("Wins count from a program's start; there's no program yet.");
+        if (!program || !profile?.programStart || !profile.targetDate) throw new Error("Wins count from a program's start; there's no program yet (set_program makes one).");
         const won = progressWins(units, today, tz);
         const win = won.find((w) => w.key === args.win);
         if (!win) throw new Error(`No win with that id. get_progress lists them${won.length ? `, e.g. ${won[0].key}` : ""}.`);
@@ -1081,11 +1081,11 @@ export async function callTool(name: string, args: Args, account: Account, store
         const r = progress.weekReport(units, day, Math.floor(now.getTime() / 1000), tz);
         const program = programOf(profile, tz);
         payload = program && recapPayload(r, program.weeks, progressWins(units, today, tz), programSessions(units, program.start, today), show);
-        if (!payload) throw new Error("A recap is a week of a program; there's no program yet.");
+        if (!payload) throw new Error("A recap is a week of a program; there's no program yet (set_program makes one).");
         what = `Week ${payload.week} of ${payload.weeks}: ${(payload.sessions as any).done} of ${(payload.sessions as any).planned} sessions, ${payload.bests} new best(s)`;
       } else if (kind === "session") {
         const rows = planOf(units, day);
-        if (!rows.some((r) => r.kind === "workout")) throw new Error(`Nothing is planned on ${day}.`);
+        if (!rows.some((r) => r.kind === "workout")) throw new Error(`Nothing is planned on ${day} to share. get_context lists the planned days.`);
         payload = sessionPayload(rows, day, tz, show);
         what = `${payload.title} on ${weekday(day)} ${day}`;
       } else if (kind === "program") {
@@ -1098,7 +1098,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "stop_sharing": {
       const id = /([0-9a-f]{12})\/?$/.exec(String(args.link ?? "").trim())?.[1];
-      if (!id || !(await store.unshare(uid, id))) throw new Error("That isn't one of their shared links.");
+      if (!id || !(await store.unshare(uid, id))) throw new Error("That isn't one of their shared links: give the link share made, or the 12-character id at its end.");
       return "Stopped sharing it: the link now says it has expired.";
     }
     case "get_program":
@@ -1129,7 +1129,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (args.trip) {
         const from = date(args.trip.from, "trip.from")!, to = date(args.trip.to, "trip.to")!;
         const added = travelWeeks(from, to, start, count, p.trainingDays ?? []);
-        if (!added.length) throw new Error("That trip doesn't miss a training day in the program.");
+        if (!added.length) throw new Error("That trip doesn't miss a training day in the program, so nothing changes. get_program shows the program's dates.");
         trips = [...new Set([...trips, ...added])].sort((a, b) => a - b);
       }
       p.travelWeeks = trips;
@@ -1157,7 +1157,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (name && client) throw new Error("A client's name is theirs to set, in the app.");
       if (name) await store.setName(uid, name);
       if (Object.keys(args).every((k) => k === "name")) {
-        if (!name) throw new Error("Nothing to save.");
+        if (!name) throw new Error("Nothing to save: give at least one field.");
         return `Saved: they're ${name} on what they share.`;
       }
       const merged = mergeProfile(current ? JSON.parse(current) : undefined, args as ProfileInput);
@@ -1198,11 +1198,21 @@ export async function callTool(name: string, args: Args, account: Account, store
       return args.action === "drop" ? "Dropped." : `Changed: ${goal.metric} ${goal.target} ${goal.unit}${by ? ` by ${by}` : ""}.`;
     }
     default:
-      throw new Error(`Unknown tool ${name}`);
+      throw new Error(`Unknown tool ${name}. The tools: ${tools.map((t) => t.name).join(", ")}.`);
   }
 }
 
 // ---- MCP over HTTP ----
+
+/** FIT-208: what an agent reads first, in short paragraphs it can follow step by step. */
+const INSTRUCTIONS = [
+  "Barbrabell holds a person's strength training: goals, a multi-week program, planned sessions and what they logged, shared with their phone app. In every tool, \"they\" is the person whose training it is: the caller, or the client a coach names with client.",
+  "Start with get_context. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal; then lay out the program to their goal date with set_program, propose_week for the first days, and apply when they agree.",
+  "Day to day: log what they did with log_session, log_run and log_daily, with RPE and their notes. Change days with propose_session, propose_week or clear_day: nothing changes until apply, so show the change and apply only once they agree; undo reverses an apply. Near the end of each week, review it (get_week_review) and plan the next from get_program and their logs. Ask before delete_log, and before share (it makes a public link).",
+  "Coaches: if get_context lists clients, the caller coaches them. list_clients and roster_review show who needs them; pass client to read or plan one client's training, and to add_note a reply on their session. Logging and sharing stay the client's. Changes reach the client's phone at its next sync. Coaching needs the coach plan; when it has lapsed, the tools say so with the link to pay.",
+  "To give one client's block to another: get_day with to on the first, then propose_week for the second with loads from the second's own maxes (ask for a starting set if there's none).",
+  "To bring in a client's existing program (a pasted sheet, CSV, PDF or screenshot): get_context with client; save the maxes it's based on with set_profile starting_sets, and the equipment it needs; set_program with start on its first week, weeks its length plus one (the last week is a light test week), and deload_every its deload spacing (12 when it has none); then propose_week its days, up to 6 weeks a call, in the coach's numbers: percent_1rm for percentages, rpe for RPE (10 minus RIR), the same superset number for A1/A2, reps the low end of a range, and note for tempo, rest, the range or AMRAP. Check the names it matched loosely, show the coach, and apply.",
+].join("\n\n");
 
 type Rpc = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: any };
 
@@ -1215,7 +1225,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
         capabilities: { tools: {}, prompts: {} },
         serverInfo: { name: "Barbrabell", version: "0.1.0" },
-        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs. If get_context lists clients, they're a coach: list_clients and roster_review show who needs them, and the planning tools act on one client when given client. To give one client's block to another: get_day with to on the first, then propose_week for the second with loads from the second's own maxes (ask for a starting set if there's none). To bring in a client's existing program (a pasted sheet, CSV, PDF or screenshot): get_context with client; save the maxes it's based on with set_profile starting_sets, and the equipment it needs; set_program with start on its first week, weeks its length plus one (the last week is a light test week), and deload_every its deload spacing (12 when it has none); then propose_week its days, up to 6 weeks a call, in the coach's numbers: percent_1rm for percentages, rpe for RPE (10 minus RIR), the same superset number for A1/A2, reps the low end of a range, and note for tempo, rest, the range or AMRAP. Check the names it matched, show the coach, and apply.",
+        instructions: INSTRUCTIONS,
       });
     }
     case "ping":

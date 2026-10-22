@@ -151,7 +151,7 @@ describe("mcp", () => {
     const init: any = await answer({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }, me, store);
     expect(init.result.capabilities).toEqual({ tools: {}, prompts: {} });
     const list: any = await answer({ jsonrpc: "2.0", id: 2, method: "prompts/list" }, me, store);
-    expect(list.result.prompts.map((p: any) => p.name)).toEqual(["set_me_up", "plan_next_week", "weekly_review", "log_today", "change_today"]);
+    expect(list.result.prompts.map((p: any) => p.name)).toEqual(["set_me_up", "plan_next_week", "weekly_review", "log_today", "change_today", "bring_in_client"]);
     expect(list.result.prompts[3]).toEqual({ name: "log_today", title: "Log today", description: expect.any(String), arguments: [{ name: "what", description: expect.any(String) }] });
     const got: any = await answer({ jsonrpc: "2.0", id: 3, method: "prompts/get", params: { name: "log_today", arguments: { what: "squats felt heavy" } } }, me, store);
     expect(got.result.messages).toEqual([{ role: "user", content: { type: "text", text: expect.stringMatching(/They said: "squats felt heavy"[\s\S]*log_session/) } }]);
@@ -912,5 +912,24 @@ describe("FIT-218: bringing a client's program in", () => {
     expect(await call(store, "get_day", { date: "2026-11-16" })).toMatch(/Back Squat \(back-squat\): 1 × 1 @ 300 lb — “as many as you can”/);
     await expect(call(store, "propose_session", { date: "2026-11-30", title: "x", reason: "r", exercises: [{ exercise: "Squat", sets: 3, reps: 5, percent_1rm: 70, weight_lb: 220 }] }))
       .rejects.toThrow(/percent_1rm or a weight, not both/);
+  });
+});
+
+describe("FIT-208: agent-readable tools and errors", () => {
+  it("describes every tool, and defines who \"they\" are for a coach", async () => {
+    const store = memory({}, data());
+    const init: any = await answer({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, me, store);
+    expect(init.result.instructions).toMatch(/"they" is the person whose training it is: the caller, or the client a coach names with client/);
+    const list: any = await answer({ jsonrpc: "2.0", id: 2, method: "tools/list" }, me, store);
+    for (const t of list.result.tools) expect(t.description.length, t.name).toBeGreaterThan(60);
+  });
+
+  it("says what to do next when it refuses", async () => {
+    const store = memory({}, data());
+    const bad = await callTool("propose_session", { date: "2026-10-19", title: "Upper", reason: "r", exercises: [{ exercise: "Bench Press", sets: 8, reps: 5 }] }, me, store, now);
+    await expect(callTool("apply", { proposal_id: bad.match(/Proposal (\S+)/)![1] }, me, store, now))
+      .rejects.toThrow(/fix these and propose again:\n- 2026-10-19: Bench Press: 8 sets is more than the 5 allowed/);
+    await expect(callTool("undo", { date: "2026-10-20" }, me, store, now)).rejects.toThrow(/last 14 days, once\. To change it now, propose_session/);
+    await expect(callTool("nope", {}, me, store, now)).rejects.toThrow(/Unknown tool nope\. The tools: get_context, get_day/);
   });
 });

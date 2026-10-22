@@ -65,6 +65,19 @@ Change today's session${a.why ? ` because: "${a.why}"` : ""}.
 2. Keep the main lift if you can; use swap_options for one they can't do, and trim accessories for time. Stay within the plan rules and this week's kind.
 3. propose_session for today with a one-line reason, show them the change, and apply when they agree. undo puts the old session back.`,
   },
+  {
+    name: "bring_in_client", title: "Bring a client in", description: "For a coach: make a client's existing program (a sheet, CSV, PDF or screenshot) their program here.",
+    arguments: [{ name: "client", description: "The client, by name as list_clients shows them." }],
+    text: (a) => `You're helping a coach move ${a.client ? `${a.client}'s` : "a client's"} program into Barbrabell, working through its tools with client${a.client ? ` "${a.client}"` : ""}. Keep it short, and never apply until the coach says yes.
+
+Bring the program in:
+1. If they haven't attached or pasted it, ask for it. get_context with client: the client's profile, goals, maxes and what's planned.
+2. Read the program: its weeks and days, each exercise's sets, reps, load (weight, % of max, RPE or RIR), supersets, and notes on tempo, rest or rep ranges. Ask about anything unclear rather than guessing.
+3. The maxes it's based on: for each lift loaded by percent, and each main lift with a weight, save the max the coach gives with set_profile starting_sets (a 1RM is reps 1); add any equipment it needs.
+4. set_program with start on its first week, weeks its length plus one (the last program week is a light test week), and deload_every its deload spacing (12 when it has none).
+5. propose_week its days, up to 6 weeks a call, in the coach's own numbers: percent_1rm for percentages, rpe for RPE (10 minus RIR), the same superset number for A1/A2, reps the low end of a range, and note for tempo, rest, the range or AMRAP. Map a name with find_exercises when unsure, or create_exercise one the catalog lacks.
+6. Check the names it matched loosely and the weights it worked out, fix any plan-rule problems, and show the coach the weeks in a few lines. apply when they agree: it's on the client's phone at its next sync.`,
+  },
 ];
 
 export const listed = () => prompts.map(({ text: _, ...p }) => p);

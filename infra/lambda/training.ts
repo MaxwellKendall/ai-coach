@@ -451,7 +451,7 @@ export function sessionRows(existing: PlanRow[], title: string, exercises: Exerc
       const run = [m("sets", 1), ...(distance !== undefined ? [m("distance_m", Math.round(distance))] : []), ...(x.minutes !== undefined ? [m("duration_s", Math.round(x.minutes * 60))] : [])];
       return { id: uuid(), kind: "workout", at: start + i, slot: title, template: e.slug, targets: run, note: x.run ?? "easy", adjustedReason: reason, group: x.superset, main: false, pinned: true };
     }
-    if (x.sets === undefined) throw new Error(`${e.name}: how many sets?`);
+    if (x.sets === undefined) throw new Error(`${e.name}: give sets, 1 to 10.`);
     const targets = [m("sets", x.sets)];
     if (x.seconds !== undefined) targets.push(m("duration_s", x.seconds));
     else if (x.reps !== undefined) targets.push(m("reps", x.reps));
