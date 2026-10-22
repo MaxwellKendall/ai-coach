@@ -15,19 +15,11 @@ const row = (template: string, sets: number, extra: Partial<PlanRow> = {}, t = a
   note: "", main: template === "back-squat", pinned: false, ...extra,
 });
 
-type Billing = { trialStart?: string; pro: boolean; onSale: boolean; customer: boolean };
-
-function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }>; billing: Billing } {
+function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }> } {
   const extra = new Map<string, Record<string, any>>();
   const shared = new Map<string, { uid: string; kind: string; payload: any }>();
-  const billing: Billing = { pro: false, onSale: true, customer: false };
   return {
     shared,
-    billing,
-    async access(_, at) { billing.trialStart ??= at.toISOString(); return { trialStart: billing.trialStart, pro: billing.pro }; },
-    async onSale() { return billing.onSale; },
-    async checkout(uid, interval) { return billing.onSale ? `https://checkout.stripe.com/c/${uid}-${interval}` : undefined; },
-    async billingPortal(uid) { return billing.customer ? `https://billing.stripe.com/p/${uid}` : undefined; },
     async share(uid, kind, payload) {
       const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
       shared.set(id, { uid, kind, payload: JSON.parse(JSON.stringify(payload)) });
@@ -124,13 +116,13 @@ describe("mcp", () => {
   it("annotates every tool: reads, writes, the destructive ones, nothing open-world", async () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
-    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day", "manage_subscription"];
-    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise", "log_run", "subscribe"];
+    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
+    const writes = ["log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise", "log_run"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
-      // A share is a public page (FIT-169), and Pro is bought through Stripe (FIT-190); everything else stays in the account.
-      expect(t.annotations).toMatchObject({ title: t.title, openWorldHint: ["share", "subscribe", "manage_subscription"].includes(t.name) });
+      // A share is a public page (FIT-169); everything else stays in the account.
+      expect(t.annotations).toMatchObject({ title: t.title, openWorldHint: t.name === "share" });
     }
     for (const n of reads) expect(by[n].annotations.readOnlyHint).toBe(true);
     for (const n of writes) expect(by[n].annotations.readOnlyHint).toBe(false);
@@ -622,48 +614,20 @@ describe("what the app reads (FIT-150)", () => {
   });
 });
 
-describe("FIT-190: Pro after the trial", () => {
+describe("FIT-214: no Pro in the MCP", () => {
   const week = { days: [{ date: "2026-11-24", exercises: [{ exercise: "Back Squat", sets: 3, reps: 5, weight_lb: 205 }] }], reason: "a week ahead" };
-  const later = (days: number) => new Date(now.getTime() + days * 86_400_000);
+  const later = new Date(now.getTime() + 30 * 86_400_000); // well past the old 14-day trial
 
-  it("starts the trial on the first call and says so only in its last 3 days", async () => {
+  it("lets anyone plan, with no trial and nothing to buy", async () => {
     const store = memory({}, data());
-    expect(await callTool("get_context", {}, me, store, now)).not.toMatch(/Trial/);
-    expect(store.billing.trialStart).toBe(now.toISOString());
-    expect(await callTool("get_context", {}, me, store, later(11))).toMatch(/Trial: 3 days left[\s\S]*\$5\.99 a month or \$39\.99 a year/);
-    expect(await callTool("get_context", {}, me, store, later(13))).toMatch(/Trial: 1 day left/);
-    expect(await callTool("get_context", {}, me, store, later(14))).toMatch(/Trial over: planning/);
-  });
-
-  it("holds back only planning once the trial is over, and asks them to subscribe", async () => {
-    const store = memory({}, data());
-    await callTool("get_context", {}, me, store, now);
-    await expect(callTool("propose_week", week, me, store, later(13))).resolves.toMatch(/Proposal/);
-    await expect(callTool("propose_week", week, me, store, later(14))).rejects.toThrow(/Planning needs Pro[\s\S]*subscribe/);
-    await expect(callTool("set_program", { weeks: 8 }, me, store, later(14))).rejects.toThrow(/Planning needs Pro/);
-    await expect(callTool("get_day", {}, me, store, later(14))).resolves.toBeTruthy();
-    await expect(callTool("log_session", { date: "2026-10-17", as_planned: true }, me, store, later(14))).resolves.toBeTruthy();
-  });
-
-  it("lets Pro, or a Pro not yet on sale, plan after the trial", async () => {
-    const store = memory({}, data());
-    await callTool("get_context", {}, me, store, now);
-    store.billing.onSale = false;
-    await expect(callTool("propose_week", week, me, store, later(30))).resolves.toMatch(/Proposal/);
-    expect(await callTool("get_context", {}, me, store, later(30))).not.toMatch(/Trial/);
-    store.billing.onSale = true;
-    store.billing.pro = true;
-    await expect(callTool("propose_week", week, me, store, later(30))).resolves.toMatch(/Proposal/);
-    expect(await callTool("get_context", {}, me, store, later(30))).not.toMatch(/Trial/);
-  });
-
-  it("gives a checkout link, and Stripe's portal once they have a customer", async () => {
-    const store = memory({}, data());
-    expect(await callTool("subscribe", { interval: "year" }, me, store, now)).toMatch(/\$39\.99 a year: https:\/\/checkout\.stripe\.com\/c\/me-year/);
-    expect(await callTool("manage_subscription", {}, me, store, now)).toBe("They're on the free trial: 14 days left.");
-    store.billing.pro = true;
-    store.billing.customer = true;
-    expect(await callTool("subscribe", { interval: "month" }, me, store, now)).toMatch(/already have Pro/);
-    expect(await callTool("manage_subscription", {}, me, store, now)).toMatch(/They have Pro\.\n.*https:\/\/billing\.stripe\.com\/p\/me/);
+    await expect(callTool("propose_week", week, me, store, later)).resolves.toMatch(/Proposal/);
+    await expect(callTool("propose_session", { date: "2026-11-25", title: "Lower", reason: "r", exercises: [{ exercise: "Back Squat", sets: 3, reps: 5, weight_lb: 205 }] }, me, store, later)).resolves.toMatch(/Proposal/);
+    await callTool("set_profile", { starting_sets: [{ exercise: "Pull-up", reps: 5 }] }, me, store, later);
+    await expect(callTool("set_program", { weeks: 8 }, me, store, later)).resolves.toMatch(/Saved/);
+    expect(await callTool("get_context", {}, me, store, later)).not.toMatch(/Trial|Pro\b|subscribe/);
+    await expect(callTool("subscribe", { interval: "year" }, me, store, now)).rejects.toThrow(/Unknown tool/);
+    await expect(callTool("manage_subscription", {}, me, store, now)).rejects.toThrow(/Unknown tool/);
+    const init: any = await answer({ jsonrpc: "2.0", id: 1, method: "initialize" }, me, store);
+    expect(init.result.instructions).not.toMatch(/Pro\b|trial|subscribe/);
   });
 });
