@@ -70,6 +70,13 @@ struct YouScreen: View {
                         Button { joining = true } label: { Label("Join Your Coach", systemImage: "person.2") }
                     }
                 }
+                // FIT-59: the policy, the terms, and a way to reach us or report a problem (guideline 1.2).
+                Section {
+                    Link(destination: URL(string: "https://barbrabell.com/support")!) { Label("Help and Report a Problem", systemImage: "questionmark.circle") }
+                    Link(destination: URL(string: "https://barbrabell.com/privacy")!) { Label("Privacy Policy", systemImage: "hand.raised") }
+                    Link(destination: URL(string: "https://barbrabell.com/terms")!) { Label("Terms", systemImage: "doc.text") }
+                }
+                .tint(.primary)
                 if let user = account.user {
                     Section {
                         NavigationLink { AccountView() } label: {
