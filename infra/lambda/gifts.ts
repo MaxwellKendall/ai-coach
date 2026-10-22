@@ -63,9 +63,12 @@ export interface StripeConfig {
 }
 
 let config: StripeConfig | undefined;
-/** The Stripe secret, or undefined until the author has created it (the page then says gifts aren't on sale yet). */
+/**
+ * The Stripe secret, or undefined until the author has created it (the page then says gifts aren't on sale yet).
+ * FIT-189: kept for the Lambda's life only once it has the webhook secret too, so adding that needs no restart.
+ */
 export async function stripeConfig(): Promise<StripeConfig | undefined> {
-  if (!config) {
+  if (!config?.webhookSecret) {
     try {
       const secret = await secrets.send(new GetSecretValueCommand({ SecretId: process.env.STRIPE_SECRET! }));
       const parsed = JSON.parse(secret.SecretString ?? "{}") as Partial<StripeConfig>;

@@ -9,7 +9,8 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
 const keys = vi.fn();
 vi.mock("../lambda/gifts.ts", () => ({ stripeConfig: () => keys() }));
 
-const { checkoutParams, onSale, planPrices, portal, portalConfiguration, recordFrom, saveSubscription, shownPlan, start } = await import("../lambda/coachPlan.ts");
+const { checkoutParams, onSale, planPrices, portal, portalConfiguration, recordFrom, replaces, saveSubscription, shownPlan, start } = await import("../lambda/coachPlan.ts");
+const { ConditionalCheckFailedException } = await import("@aws-sdk/client-dynamodb");
 const { form } = await import("../lambda/stripe.ts");
 
 const sub = {
@@ -58,6 +59,39 @@ describe("checkout for the coach plan", () => {
     send.mockResolvedValue({ Item: { customer: "cus_1", status: "active" } });
     await expect(start("sam", "month")).rejects.toThrow("already have the coach plan");
     await expect(start("sam", "week")).rejects.toThrow("monthly or yearly");
+  });
+
+  it("FIT-189: won't start a second plan Stripe already has, though the webhook hasn't said so", async () => {
+    keys.mockResolvedValue({ secretKey: "sk_test_1" });
+    send.mockResolvedValue({ Item: { customer: "cus_1", status: "canceled", subscription: "sub_0", eventAt: 50 } });
+    const calls: string[] = [];
+    let listed: object[] = [{ ...sub, id: "sub_2", metadata: {} }];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      const path = url.replace("https://api.stripe.com/v1/", "");
+      calls.push(`${init.method} ${path}`);
+      const body = path.startsWith("subscriptions") ? { data: listed }
+        : path.startsWith("prices") ? { data: [{ id: "price_m", lookup_key: "coach_monthly" }, { id: "price_y", lookup_key: "coach_yearly" }] }
+        : { url: "https://checkout.stripe.com/c/3" };
+      return new Response(JSON.stringify(body));
+    });
+    await expect(start("sam", "month")).rejects.toThrow("already have the coach plan");
+    expect(calls).toEqual(["GET subscriptions?customer=cus_1&limit=100"]);
+    // The record catches up with Stripe, for the uid the subscription's metadata lacked.
+    const saved = send.mock.calls.at(-1)![0].input;
+    expect(saved.Key).toEqual({ PK: "USER#sam", SK: "COACHPLAN" });
+    expect(saved.ExpressionAttributeValues).toMatchObject({ ":subscription": "sub_2", ":status": "active" });
+    // Pro's subscription, or one that has ended, isn't the coach plan.
+    listed = [{ ...sub, id: "sub_3", status: "incomplete_expired" }, { ...sub, id: "sub_4", items: { data: [{ price: { lookup_key: "pro_monthly" } }] } }];
+    expect(await start("sam", "month")).toBe("https://checkout.stripe.com/c/3");
+    // A key that can't list them goes on to Checkout.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    listed = undefined as never;
+    vi.stubGlobal("fetch", async (url: string) => url.includes("subscriptions")
+      ? new Response(JSON.stringify({ error: { message: "The provided key does not have the required permissions" } }), { status: 403 })
+      : new Response(JSON.stringify(url.includes("prices") ? { data: [{ id: "price_m", lookup_key: "coach_monthly" }] } : { url: "https://checkout.stripe.com/c/4" })));
+    expect(await start("sam", "month")).toBe("https://checkout.stripe.com/c/4");
+    expect(error).toHaveBeenCalledWith("Couldn't list subscriptions", expect.any(String));
+    error.mockRestore();
   });
 
   it("opens the plan's own customer portal back to Billing", async () => {
@@ -153,14 +187,63 @@ describe("subscription events", () => {
     error.mockRestore();
   });
 
-  it("are saved unless a newer one already was", async () => {
+  it("are saved unless a newer one already was, if the record is still the one read", async () => {
     send.mockResolvedValue({});
     await saveSubscription({ ...sub, status: "past_due" }, 200);
-    const input = send.mock.calls.at(-1)![0].input;
+    let input = send.mock.calls.at(-1)![0].input;
     expect(input.Key).toEqual({ PK: "USER#sam", SK: "COACHPLAN" });
-    expect(input.ConditionExpression).toBe("attribute_not_exists(eventAt) OR eventAt <= :eventAt");
+    expect(input.ConditionExpression).toBe("attribute_not_exists(eventAt)");
     expect(input.ExpressionAttributeValues[":status"]).toBe("past_due");
     expect(input.ExpressionAttributeValues[":eventAt"]).toBe(200);
+    send.mockReset();
+    send.mockResolvedValueOnce({}).mockResolvedValueOnce({ Item: { subscription: "sub_1", status: "active", eventAt: 100 } }).mockResolvedValueOnce({});
+    await saveSubscription({ ...sub, status: "past_due" }, 200);
+    input = send.mock.calls.at(-1)![0].input;
+    expect(input.ConditionExpression).toBe("eventAt = :seen");
+    expect(input.ExpressionAttributeValues[":seen"]).toBe(100);
+  });
+
+  it("FIT-189: read again when another event saved first", async () => {
+    send.mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ Item: { subscription: "sub_1", status: "active", eventAt: 100 } })
+      .mockRejectedValueOnce(new ConditionalCheckFailedException({ message: "changed", $metadata: {} }))
+      .mockResolvedValueOnce({ Item: { subscription: "sub_1", status: "active", eventAt: 300 } });
+    await saveSubscription({ ...sub, status: "past_due" }, 200);
+    // The newer event saved in between wins: no second write.
+    expect(send).toHaveBeenCalledTimes(4);
+  });
+
+  it("FIT-189: an ended duplicate's event leaves the active plan alone", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    send.mockResolvedValueOnce({}).mockResolvedValueOnce({ Item: { subscription: "sub_2", status: "active", eventAt: 100 } });
+    await saveSubscription({ ...sub, id: "sub_1", status: "canceled" }, 300);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalledWith("Kept the plan's subscription", "sub_2", "over", "sub_1", "canceled");
+    error.mockRestore();
+  });
+});
+
+describe("FIT-189: which event replaces the plan kept", () => {
+  const kept = { subscription: "sub_a", status: "active", eventAt: 100 };
+  it("is the newest, for the same subscription", () => {
+    expect(replaces(undefined, { subscription: "sub_a", status: "active", eventAt: 1 })).toBe(true);
+    expect(replaces({ customer: "cus_1" }, { subscription: "sub_a", status: "active", eventAt: 1 })).toBe(true);
+    expect(replaces(kept, { subscription: "sub_a", status: "canceled", eventAt: 200 })).toBe(true);
+    expect(replaces(kept, { subscription: "sub_a", status: "canceled", eventAt: 50 })).toBe(false);
+  });
+
+  it("never takes away a plan another subscription still has", () => {
+    expect(replaces(kept, { subscription: "sub_b", status: "canceled", eventAt: 200 })).toBe(false);
+    expect(replaces({ ...kept, status: "past_due" }, { subscription: "sub_b", status: "unpaid", eventAt: 200 })).toBe(false);
+  });
+
+  it("gives the plan to a subscription that has it, newer or after the kept one ended", () => {
+    expect(replaces(kept, { subscription: "sub_b", status: "active", eventAt: 200 })).toBe(true);
+    expect(replaces(kept, { subscription: "sub_b", status: "trialing", eventAt: 50 })).toBe(false);
+    const ended = { ...kept, status: "canceled" };
+    expect(replaces(ended, { subscription: "sub_b", status: "active", eventAt: 0 })).toBe(true);
+    expect(replaces(ended, { subscription: "sub_b", status: "incomplete_expired", eventAt: 200 })).toBe(true);
+    expect(replaces(ended, { subscription: "sub_b", status: "incomplete_expired", eventAt: 50 })).toBe(false);
   });
 });
 

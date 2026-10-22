@@ -84,13 +84,18 @@ export interface Subscription {
   items?: { data: { current_period_end?: number; price?: { lookup_key?: string | null; recurring?: { interval?: string } | null } }[] };
 }
 
-/** What a subscription event says about the account's plans; a price without a lookup key is the coach plan's. */
+/** Which plan a subscription is, by its price's lookup key; a price without one is the coach plan's. */
+export function kindOf(sub: Subscription): Kind | undefined {
+  const key = sub.items?.data[0]?.price?.lookup_key;
+  return !key ? "coach" : (Object.keys(PLANS) as Kind[]).find((k) => Object.values(PLANS[k].keys).includes(key as never));
+}
+
+/** What a subscription event says about the account's plans. */
 export function recordFrom(sub: Subscription, eventAt: number): { uid: string; kind: Kind; record: PlanRecord } | undefined {
   const uid = sub.metadata?.uid;
   if (!uid) return undefined;
   const item = sub.items?.data[0];
-  const key = item?.price?.lookup_key;
-  const kind = !key ? "coach" : (Object.keys(PLANS) as Kind[]).find((k) => Object.values(PLANS[k].keys).includes(key as never));
+  const kind = kindOf(sub);
   if (!kind) return undefined;
   return {
     uid,
@@ -115,8 +120,21 @@ export async function planRecord(uid: string, kind: Kind = "coach"): Promise<Pla
 }
 
 /**
- * Saves a subscription event, unless a newer one already has (Stripe doesn't promise their order). FIT-212: a
- * subscription already kept as the other plan has switched plans outside our portals; saving it would start a second
+ * FIT-189: whether an event replaces the plan kept. For the same subscription the newest event wins (Stripe doesn't
+ * promise their order). Another subscription's event (a duplicate the coach paid for twice) never takes away a plan
+ * the kept one still has: one that has the plan replaces it if newer, or whenever the kept one has ended.
+ */
+export function replaces(kept: PlanRecord | undefined, event: PlanRecord): boolean {
+  const newer = kept?.eventAt === undefined || kept.eventAt <= event.eventAt!;
+  if (!kept?.subscription || kept.subscription === event.subscription) return newer;
+  const keptHas = HAS_PLAN.includes(kept.status ?? "");
+  if (!HAS_PLAN.includes(event.status ?? "")) return !keptHas && newer;
+  return !keptHas || newer;
+}
+
+/**
+ * Saves a subscription event if it replaces the plan kept, writing only if the record is still the one read. FIT-212:
+ * a subscription already kept as the other plan has switched plans outside our portals; saving it would start a second
  * plan and leave the first at its last status, so it's left for the author to sort out.
  */
 export async function saveSubscription(sub: Subscription, eventAt: number): Promise<void> {
@@ -130,16 +148,28 @@ export async function saveSubscription(sub: Subscription, eventAt: number): Prom
   }
   const fields = Object.entries(made.record).filter(([, v]) => v !== undefined);
   const removed = (["interval", "renews"] as const).filter((k) => made.record[k] === undefined);
-  await db.send(new UpdateCommand({
-    TableName: TABLE(),
-    Key: planKey(made.uid, made.kind),
-    UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(", ")}${removed.length ? ` REMOVE ${removed.map((k) => `#${k}`).join(", ")}` : ""}`,
-    ConditionExpression: "attribute_not_exists(eventAt) OR eventAt <= :eventAt",
-    ExpressionAttributeNames: Object.fromEntries([...fields.map(([k]) => k), ...removed].map((k) => [`#${k}`, k])),
-    ExpressionAttributeValues: Object.fromEntries(fields.map(([k, v]) => [`:${k}`, v])),
-  })).catch((error) => {
-    if (!(error instanceof ConditionalCheckFailedException)) throw error;
-  });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const kept = await planRecord(made.uid, made.kind);
+    if (!replaces(kept, made.record)) {
+      if (kept?.subscription !== sub.id) console.error("Kept the plan's subscription", kept?.subscription, "over", sub.id, sub.status);
+      return;
+    }
+    // Unchanged since read: the same event time, or none yet.
+    const seen = kept?.eventAt !== undefined;
+    try {
+      await db.send(new UpdateCommand({
+        TableName: TABLE(),
+        Key: planKey(made.uid, made.kind),
+        UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(", ")}${removed.length ? ` REMOVE ${removed.map((k) => `#${k}`).join(", ")}` : ""}`,
+        ConditionExpression: seen ? "eventAt = :seen" : "attribute_not_exists(eventAt)",
+        ExpressionAttributeNames: Object.fromEntries([...fields.map(([k]) => k), ...removed].map((k) => [`#${k}`, k])),
+        ExpressionAttributeValues: { ...Object.fromEntries(fields.map(([k, v]) => [`:${k}`, v])), ...(seen ? { ":seen": kept.eventAt } : {}) },
+      }));
+      return;
+    } catch (error) {
+      if (!(error instanceof ConditionalCheckFailedException)) throw error;
+    }
+  }
 }
 
 export class PlanError extends Error {}
@@ -190,14 +220,30 @@ async function customerFor(key: string, uid: string, email: string | undefined, 
   }
 }
 
+const already = (kind: Kind) => kind === "coach" ? "You already have the coach plan. Use Manage billing to change it." : "They already have Pro: manage_subscription changes it.";
+
+/** The customer's subscription to the plan that still has it, if Stripe has one (the list leaves out canceled ones). */
+export async function activeSubscription(key: string, customer: string, kind: Kind): Promise<Subscription | undefined> {
+  const found = await stripe<{ data: Subscription[] }>(key, `subscriptions?customer=${customer}&limit=100`);
+  return found.data.find((s) => HAS_PLAN.includes(s.status) && kindOf(s) === kind);
+}
+
 /** A Checkout URL for the plan, or undefined while it isn't on sale. */
 export async function start(uid: string, interval: string, email?: string, origin = process.env.APP_ORIGIN!, kind: Kind = "coach"): Promise<string | undefined> {
   if (interval !== "month" && interval !== "year") throw new PlanError("Choose monthly or yearly.");
   const keys = await stripeConfig();
   if (!keys) return undefined;
   const current = await planRecord(uid, kind);
-  if (current?.status && !["canceled", "incomplete_expired"].includes(current.status)) {
-    throw new PlanError(kind === "coach" ? "You already have the coach plan. Use Manage billing to change it." : "They already have Pro: manage_subscription changes it.");
+  if (current?.status && !["canceled", "incomplete_expired"].includes(current.status)) throw new PlanError(already(kind));
+  // FIT-189: a late or missed webhook leaves the record behind Stripe; ask Stripe before a second Checkout. A key that
+  // can't read subscriptions (a restricted key without the permission) goes on to Checkout as before.
+  const live = current?.customer && await activeSubscription(keys.secretKey, current.customer, kind).catch((error) => {
+    console.error("Couldn't list subscriptions", (error as Error).message);
+    return undefined;
+  });
+  if (live) {
+    await saveSubscription({ ...live, metadata: { ...live.metadata, uid } }, 0);
+    throw new PlanError(already(kind));
   }
   const price = (await planPrices(keys.secretKey, Date.now(), kind))[interval];
   if (!price) {
