@@ -14,7 +14,8 @@ import * as progress from "./progress.ts";
 import { clock, distanceName, goalMeters, meters, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
-import { createInvite, INVITE_DAYS, isCoachOf, list as linked, type Person } from "./coach.ts";
+import { comments, createInvite, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
+import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
 /**
@@ -43,6 +44,9 @@ export interface Store {
   clients(coach: string): Promise<Person[]>;
   coachOf(coach: string, client: string): Promise<boolean>;
   invite(coach: string): Promise<{ code: string; url: string }>;
+  /** FIT-196: a client's session threads (FIT-132), and a coach's reply on one, shown in the app as the coach's. */
+  comments(coach: string, client: string): Promise<Comment[]>;
+  comment(coach: string, client: string, day: string, text: string): Promise<void>;
 }
 
 export type ShareKind = "win" | "recap" | "program" | "session";
@@ -106,6 +110,8 @@ export const dynamoStore: Store = {
   clients: (coach) => linked(coach, "CLIENT#"),
   coachOf: isCoachOf,
   invite: (coach) => createInvite(coach, undefined),
+  comments: (coach, client) => comments(coach, client),
+  async comment(coach, client, day, text) { await postComment(coach, undefined, client, day, text); },
   async unshare(uid, id) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
     if (!Item || Item.uid !== uid) return false;
@@ -169,8 +175,8 @@ export const tools = [
     name: "get_day",
     title: "Get a day",
     annotations: { title: "Get a day", ...READ },
-    description: "One day in full: the planned session (each exercise with sets, reps or seconds, load and RPE) and what was logged.",
-    inputSchema: { type: "object", properties: { date: DATE } },
+    description: "One day in full: the planned session (each exercise with sets, reps or seconds, load and RPE) and what was logged. With to, every day from date to to (up to 28), e.g. a whole block to copy to another client.",
+    inputSchema: { type: "object", properties: { date: DATE, to: { type: "string", description: "The last day of a range, YYYY-MM-DD; days with nothing planned or logged are left out." } } },
   },
   {
     name: "find_exercises",
@@ -232,7 +238,7 @@ export const tools = [
     name: "add_note",
     title: "Add a note",
     annotations: { title: "Add a note", ...write(false, false) },
-    description: "Add context to a day already logged, in their words (\"left knee sore on the last set\", \"slept 5 hours\").",
+    description: "Add context to a day already logged, in their words (\"left knee sore on the last set\", \"slept 5 hours\"). For a coach with client: a reply on the client's session that day, shown in their app as the coach's, and it answers that day's note in list_clients.",
     inputSchema: { type: "object", properties: { date: DATE, note: { type: "string" } }, required: ["note"] },
   },
   {
@@ -424,6 +430,20 @@ export const tools = [
     annotations: { title: "Undo an apply", ...write(false, false) },
     description: "Put back the session a day had before the last apply.",
     inputSchema: { type: "object", properties: { date: DATE }, required: ["date"] },
+  },
+  {
+    name: "list_clients",
+    title: "List clients",
+    annotations: { title: "List clients", ...READ },
+    description: "For a coach: every client, those who need them first, with this week's sessions done of planned (Sunday to Saturday), their last session, streak, and the dashboard's flags: pain or an unanswered note, missed sessions, RPE 9+ on a main lift, a main lift stalled 3 weeks, nothing logged in 2 weeks.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "roster_review",
+    title: "Review the roster's week",
+    annotations: { title: "Review the roster's week", ...READ },
+    description: "For a coach: the week holding date across every client, those who need them first: flags, workouts done of planned, sets, each goal's pace, the week's alerts, and whether next week is planned yet. For \"who needs me this week\"; then get_week_review or get_context with client for one in full.",
+    inputSchema: { type: "object", properties: { date: DATE } },
   },
   {
     name: "invite_client",
@@ -720,10 +740,41 @@ async function propose(uid: string, caller: string, tz: string, today: string, d
     problems.length ? `\nPlan-rule problems; fix these and propose again before applying:\n${problems.map((p) => `- ${p}`).join("\n")}` : "\nIt passes the plan rules. Show them the change, and apply when they agree."].join("\n");
 }
 
+function describeDay(units: Units, day: string) {
+  const s = describeSession(planOf(units, day)), l = describeLog(logOf(units, day));
+  return [`${weekday(day)} ${day}`, s.lines.length ? `Planned${s.title ? ` — ${s.title}` : ""}:\n${s.lines.map((x) => `  ${x}`).join("\n")}` : "Nothing planned.",
+    l.lines.length ? `Logged:\n${l.lines.map((x) => `  ${x}`).join("\n")}${l.note ? `\n  Note: ${l.note}` : ""}` : "No workout logged.",
+    ...describeDaily(logOf(units, day))].join("\n");
+}
+
+// ---- FIT-196: the coach's roster ----
+
+/** A client's line in list_clients: the week so far and the dashboard's flags (shared/triage.ts). */
+function rosterLine(client: Person, t: Triage) {
+  const streak = t.streak && t.streak >= 2 ? `, ${t.streak} weeks in a row` : "";
+  const last = t.lastSession ? `last session ${weekday(t.lastSession)} ${t.lastSession}` : "nothing logged yet";
+  const flags = t.flags.length ? ` Flags: ${t.flags.map((f) => `${f.kind}: ${f.text}`).join("; ")}.` : " No flags.";
+  return `${shownName(client)} [${client.uid}]: ${t.done} of ${t.planned} sessions this week, ${last}${streak}.${flags}`;
+}
+
+/** roster_review's few lines per client: the week's numbers, goals' pace and alerts, and whether next week is planned. */
+function weekLines(units: Units, day: string, nowSec: number, tz: string) {
+  const r = progress.weekReport(units, day, nowSec, tz), x = r.numbers;
+  const out = [`Week ${r.from} to ${r.to}${r.programWeek !== undefined ? ` (program week ${r.programWeek + 1} of ${r.programWeeks})` : ", no program"}: ${x.workoutsDone} of ${x.workoutsPlanned} workouts, ${x.sets} working sets.`];
+  for (const g of r.goals) {
+    const f = (v: number) => (g.option.measure === "time" ? clock(v) : progress.number(Math.round(v * 10) / 10));
+    out.push(`${g.option.name}: ${f(g.to)} of ${f(g.goal.target)}${g.option.measure === "time" ? "" : ` ${g.goal.unit}`}, ${PACE[g.pace]}.`);
+  }
+  for (const a of r.alerts) out.push(`Alert: ${a.title}. ${a.detail}`);
+  const next = Array.from({ length: 7 }, (_, i) => addDays(r.from, 7 + i)).filter((d) => planOf(units, d).some((row) => row.kind === "workout"));
+  out.push(next.length ? `Next week: ${next.length} session(s) planned.` : "Next week: nothing planned yet.");
+  return out;
+}
+
 // ---- FIT-194: a coach acts on a linked client ----
 
 /** The tools a coach can point at a client. Logging and sharing stay the client's own. */
-export const CLIENT_TOOLS = new Set(["get_context", "get_day", "find_exercises", "swap_options", "create_exercise", "edit_exercise", "clear_day",
+export const CLIENT_TOOLS = new Set(["get_context", "get_day", "add_note", "find_exercises", "swap_options", "create_exercise", "edit_exercise", "clear_day",
   "propose_session", "propose_week", "apply", "undo", "get_program", "set_program", "get_progress", "get_week_review", "set_profile", "set_goal"]);
 const CLIENT = { type: "string", description: "Coaches only: the client, by name or id as get_context lists them. Leave it out for your own training." };
 for (const t of tools) if (CLIENT_TOOLS.has(t.name)) (t.inputSchema.properties as Record<string, unknown>).client = CLIENT;
@@ -775,10 +826,27 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "get_day": {
       const units = await store.units(uid);
-      const s = describeSession(planOf(units, day)), l = describeLog(logOf(units, day));
-      return [`${weekday(day)} ${day}`, s.lines.length ? `Planned${s.title ? ` — ${s.title}` : ""}:\n${s.lines.map((x) => `  ${x}`).join("\n")}` : "Nothing planned.",
-        l.lines.length ? `Logged:\n${l.lines.map((x) => `  ${x}`).join("\n")}${l.note ? `\n  Note: ${l.note}` : ""}` : "No workout logged.",
-        ...describeDaily(logOf(units, day))].join("\n");
+      if (args.to === undefined) return describeDay(units, day);
+      const to = String(args.to);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(to) || to < day) throw new Error("to is YYYY-MM-DD, on or after date.");
+      if (to > addDays(day, 27)) throw new Error("At most 28 days at a time.");
+      const days: string[] = [];
+      for (let d = day; d <= to; d = addDays(d, 1)) if (planOf(units, d).length || logOf(units, d).length) days.push(describeDay(units, d));
+      return days.length ? days.join("\n\n") : `Nothing planned or logged from ${day} to ${to}.`;
+    }
+    case "list_clients":
+    case "roster_review": {
+      const clients = await store.clients(uid);
+      if (!clients.length) return "They have no clients yet. invite_client makes an invite link to send one.";
+      const rows = await Promise.all(clients.map(async (c) => {
+        if (!(await store.coachOf(uid, c.uid))) return undefined;
+        const [units, thread] = await Promise.all([store.units(c.uid), store.comments(uid, c.uid)]);
+        useAccountExercises(units);
+        return { client: c, units, triage: triage(units, thread, new Map([...bySlug].map(([slug, e]) => [slug, e.name])), uid, today, tz) };
+      }));
+      const sorted = byNeed(rows.filter((r) => r !== undefined));
+      if (name === "list_clients") return [`${sorted.length} client${sorted.length === 1 ? "" : "s"}, those who need them first:`, ...sorted.map((r) => `- ${rosterLine(r.client, r.triage)}`)].join("\n");
+      return sorted.map((r) => `${rosterLine(r.client, r.triage)}\n${weekLines(r.units, day, Math.floor(now.getTime() / 1000), tz).map((l) => `  ${l}`).join("\n")}`).join("\n\n");
     }
     case "find_exercises": {
       const found = find(String(args.query ?? ""), profileOf(await store.units(uid)));
@@ -820,6 +888,10 @@ export async function callTool(name: string, args: Args, account: Account, store
       return `Logged ${weekday(day)} ${day}:\n${l.lines.join("\n")}${l.note ? `\nNote: ${l.note}` : ""}\nIt shows on their phone at its next sync.`;
     }
     case "add_note": {
+      if (client) {
+        await store.comment(account.uid, uid, day, String(args.note ?? ""));
+        return `Replied on ${shownName(client)}'s ${weekday(day)} ${day}: ${String(args.note).trim()}\nIt shows in their app as yours.`;
+      }
       const units = await store.units(uid);
       const log = logOf(units, day);
       const summary = log.find((r) => r.kind === "workout" && !r.template);
@@ -1082,7 +1154,7 @@ export async function answer(message: Rpc, account: Account, store: Store, now =
         protocolVersion: typeof asked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : "2025-06-18",
         capabilities: { tools: {}, prompts: {} },
         serverInfo: { name: "Barbrabell", version: "0.1.0" },
-        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs.",
+        instructions: "The person's strength training: goals, plan, logged sessions. Call get_context first. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal, then lay out the program to their goal date with set_program, propose_week for the first days and apply when they agree. Otherwise, log what they did with RPE and notes, and change days with propose_session or propose_week, showing the change before apply. Near the end of each week, plan the next one from get_program and their logs. If get_context lists clients, they're a coach: list_clients and roster_review show who needs them, and the planning tools act on one client when given client. To give one client's block to another: get_day with to on the first, then propose_week for the second with loads from the second's own maxes (ask for a starting set if there's none).",
       });
     }
     case "ping":

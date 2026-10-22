@@ -1,6 +1,7 @@
 import type { LambdaFunctionURLEvent } from "aws-lambda";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import type { Comment } from "../../shared/triage.ts";
 import { answer, callTool, hashToken, serve, type Account, type Store } from "../lambda/mcp.ts";
 import { readProgram, readRecap, readSession, readWin } from "../lambda/sharePages.ts";
 import { checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
@@ -17,14 +18,18 @@ const row = (template: string, sets: number, extra: Partial<PlanRow> = {}, t = a
 
 type Link = { coach: string; client: string; name: string | null };
 
-function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }>; links: Link[]; invites: string[] } {
+function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }>; links: Link[]; invites: string[]; threads: (Comment & { owner: string })[] } {
   const extra = new Map<string, Record<string, any>>();
   const shared = new Map<string, { uid: string; kind: string; payload: any }>();
   const links: Link[] = [], invites: string[] = [];
+  const threads: (Comment & { owner: string })[] = [];
   return {
     shared,
     links,
     invites,
+    threads,
+    async comments(_, client) { return threads.filter((c) => c.owner === client); },
+    async comment(coach, client, day, text) { threads.push({ owner: client, day, at: now.toISOString(), by: coach, byName: "Coach", text }); },
     async clients(coach) { return links.filter((l) => l.coach === coach).map((l) => ({ uid: l.client, name: l.name, since: "2026-10-01T00:00:00.000Z" })); },
     async coachOf(coach, client) { return links.some((l) => l.coach === coach && l.client === client); },
     async invite(coach) { invites.push(coach); return { code: "ABCDEFGHJK", url: "https://example.com/c/ABCDEFGHJK" }; },
@@ -124,7 +129,7 @@ describe("mcp", () => {
   it("annotates every tool: reads, writes, the destructive ones, nothing open-world", async () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
-    const reads = ["get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
+    const reads = ["list_clients", "roster_review", "get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
     const writes = ["invite_client", "log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise", "log_run"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
@@ -651,7 +656,7 @@ describe("FIT-194: a coach acts on a linked client", () => {
   const exercises = [{ exercise: "Back Squat", sets: 3, reps: 5, weight_lb: 205 }];
   // One call per client tool, each valid for Sarah's data.
   const calls: Record<string, Record<string, unknown>> = {
-    get_context: {}, get_day: { date: "2026-10-15" }, find_exercises: { query: "squat" }, swap_options: { exercise: "Back Squat" },
+    get_context: {}, get_day: { date: "2026-10-15" }, add_note: { date: "2026-10-15", note: "Ice the knee." }, find_exercises: { query: "squat" }, swap_options: { exercise: "Back Squat" },
     create_exercise: { name: "Zercher Box Squat", pattern: "squat", equipment: ["barbell"] }, edit_exercise: { exercise: "Back Squat", name: "x" },
     clear_day: { date: "2026-10-17", reason: "rest" }, propose_session: { date: "2026-10-19", title: "Lower", reason: "r", exercises },
     propose_week: { reason: "r", days: [{ date: "2026-10-19", exercises }] }, apply: { proposal_id: "none" }, undo: { date: "2026-10-19" },
@@ -663,7 +668,7 @@ describe("FIT-194: a coach acts on a linked client", () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, coach, setup().store);
     const taking = list.result.tools.filter((t: any) => t.inputSchema.properties.client).map((t: any) => t.name);
     expect(taking.sort()).toEqual(Object.keys(calls).sort());
-    for (const own of ["log_session", "log_run", "log_daily", "delete_log", "share", "stop_sharing", "invite_client"]) {
+    for (const own of ["log_session", "log_run", "log_daily", "delete_log", "share", "stop_sharing", "invite_client", "list_clients", "roster_review"]) {
       await expect(callTool(own, { client: "Sarah" }, coach, setup().store, now)).rejects.toThrow(/client's own|takes no client/);
     }
   });
@@ -712,5 +717,55 @@ describe("FIT-194: a coach acts on a linked client", () => {
     store.links.push({ coach: "coach", client: "other2", name: "Sarah Lee" });
     await expect(callTool("get_day", { client: "Sarah" }, coach, store, now)).rejects.toThrow(/More than one client is called Sarah/);
     expect(await callTool("get_day", { client: "Sarah Lee" }, coach, store, now)).toMatch(/Nothing planned/);
+  });
+});
+
+describe("FIT-196: the coach's roster", () => {
+  const coach: Account = { uid: "coach", tz, agent: "claude" };
+  const setup = () => {
+    const units: Record<string, Record<string, string>> = { ...data(), coach: { profile: encode(profile) }, mike: { profile: encode({ ...profile, age: 30 }) } };
+    const store = memory({}, units);
+    store.links.push({ coach: "coach", client: "me", name: "Sarah Jones" }, { coach: "coach", client: "mike", name: "Mike" });
+    return { store, units };
+  };
+
+  it("lists clients with the dashboard's flags, those who need the coach first", async () => {
+    const { store } = setup();
+    const text = await callTool("list_clients", {}, coach, store, now);
+    expect(text).toMatch(/^2 clients, those who need them first:\n- Sarah Jones \[me\]: 1 of 1 sessions this week, last session Thursday 2026-10-15\. Flags: note: Thursday: “Knee a bit stiff”\.\n- Mike \[mike\]: 0 of 0 sessions this week, nothing logged yet\. No flags\./);
+    // A reply answers the note.
+    await callTool("add_note", { client: "Sarah", date: "2026-10-15", note: "Ice it and keep the squat at RPE 7." }, coach, store, now);
+    expect(store.threads).toMatchObject([{ owner: "me", day: "2026-10-15", by: "coach", text: "Ice it and keep the squat at RPE 7." }]);
+    expect(await callTool("list_clients", {}, coach, store, now)).toMatch(/Sarah Jones \[me\]: .* No flags\./);
+    expect(await callTool("list_clients", {}, me, store, now)).toMatch(/no clients yet[\s\S]*invite_client/);
+  });
+
+  it("leaves out a client whose link ended after listing", async () => {
+    const { store } = setup();
+    store.coachOf = async (_, client) => client !== "me";
+    expect(await callTool("list_clients", {}, coach, store, now)).toMatch(/^1 client, those who need them first:\n- Mike/);
+  });
+
+  it("reviews the week across the roster", async () => {
+    const { store } = setup();
+    const text = await callTool("roster_review", {}, coach, store, now);
+    expect(text).toMatch(/^Sarah Jones \[me\]: [\s\S]*\n  Week 2026-10-11 to 2026-10-17, no program: 1 of 2 workouts, \d+ working sets\.[\s\S]*Next week: nothing planned yet\.\n\nMike \[mike\]/);
+  });
+
+  it("copies one client's block to another: read a range, propose it for the other", async () => {
+    const { store, units } = setup();
+    const range = await callTool("get_day", { client: "Sarah", date: "2026-10-11", to: "2026-10-17" }, coach, store, now);
+    expect(range).toMatch(/^Thursday 2026-10-15\nNothing planned\.\nLogged:[\s\S]*\n\nSaturday 2026-10-17\nPlanned — Lower A:\n  ★ Back Squat/);
+    expect(range).not.toMatch(/Sunday 2026-10-11/);
+    await expect(callTool("get_day", { date: "2026-10-01", to: "2026-11-01" }, coach, store, now)).rejects.toThrow(/At most 28 days/);
+    const block = { client: "Mike", reason: "Sarah's block at Mike's numbers", days: [{ date: "2026-10-24", title: "Lower A", exercises: [{ exercise: "Back Squat", sets: 4, reps: 5, weight_lb: 185 }] }] };
+    // The loads are held to Mike's own max, so it's asked for first.
+    expect(await callTool("propose_week", block, coach, store, now)).toMatch(/Back Squat is a main lift with a weight but no known max/);
+    await callTool("set_profile", { client: "Mike", starting_sets: [{ exercise: "Back Squat", weight_lb: 245, reps: 1 }] }, coach, store, now);
+    const week = await callTool("propose_week", block, coach, store, now);
+    expect(week).toMatch(/passes the plan rules/);
+    await callTool("apply", { client: "Mike", proposal_id: week.match(/Proposal (\S+)/)![1] }, coach, store, now);
+    expect(units.mike["plan#2026-10-24"]).toMatch(/back-squat/);
+    expect(units.me["plan#2026-10-24"]).toBeUndefined();
   });
 });

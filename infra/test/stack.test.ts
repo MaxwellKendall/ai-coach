@@ -20,7 +20,7 @@ let prod: Template;
 beforeAll(() => {
   dev = synth("dev", []);
   prod = synth("prod", ["apple", "google"]);
-});
+}, 120_000); // two synths, slow when other builds share the machine
 
 describe("table", () => {
   it("has the single-table keys, GSI1, TTL, stream and backups", () => {

@@ -14,7 +14,11 @@ const log = (day: string, over: Partial<LogRow> = {}): [string, Unit] =>
 
 const onTrack = new Map([plan("2026-10-12"), plan("2026-10-14"), plan("2026-10-17"), log("2026-10-12"), log("2026-10-14")]);
 const missing = new Map([plan("2026-10-12"), plan("2026-10-14"), plan("2026-10-16"), log("2026-10-09")]);
-const noted = new Map([plan("2026-10-14"), log("2026-10-14", { note: "Knee felt tight on the last set" })]);
+// As the app saves a session: each set's note is the session's name, the client's words are on the summary row.
+const noted = new Map([plan("2026-10-14"), unit("log#2026-10-14", [
+  { id: "l-1", kind: "workout", at: at("2026-10-14"), plannedRef: "p-2026-10-14", template: "back-squat", measurements: [], note: "Lower" },
+  { id: "l-2", kind: "workout", at: at("2026-10-14") + 1, measurements: [], note: "Knee felt tight on the last set" },
+])]);
 
 describe("which clients need their coach (FIT-132)", () => {
   it("counts this week's sessions and the last one", () => {
