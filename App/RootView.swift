@@ -55,7 +55,7 @@ struct RootView: View {
         // FIT-65: Talk to Coach opens the coach, which starts listening; without Apple Intelligence, Today.
         .onChange(of: navigator.coach, initial: true) { _, wanted in
             guard wanted else { return }
-            tab = LanguageModel.isAvailable ? .coach : .today
+            tab = Pilot.inAppAI && LanguageModel.isAvailable ? .coach : .today
             navigator.coach = false
         }
         // The group's name and whether anyone's live: a minute is soon enough, and push says when a workout starts.
