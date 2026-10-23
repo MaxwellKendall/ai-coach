@@ -143,6 +143,16 @@ final class Account {
         return true
     }
 
+    enum PasswordSignInError: Error { case notSignedIn }
+
+    /// FIT-229: email and password, for the accounts we make with admin rights (App Review's). There's no sign-up:
+    /// preSignUp refuses it, so this only signs in.
+    func signIn(email: String, password: String) async throws {
+        let result = try await Amplify.Auth.signIn(username: email.trimmingCharacters(in: .whitespaces).lowercased(), password: password)
+        guard result.isSignedIn else { throw PasswordSignInError.notSignedIn }
+        await refresh()
+    }
+
     func signOut() async {
         _ = await Amplify.Auth.signOut()
         user = nil

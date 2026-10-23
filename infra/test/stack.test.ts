@@ -63,10 +63,10 @@ describe("auth", () => {
     }
   });
 
-  it("the iOS client allows federated hosted-UI sign-in, native Apple (custom auth, FIT-138) and refresh, no passwords", () => {
+  it("the iOS client allows federated hosted-UI sign-in, native Apple (custom auth, FIT-138), email and password for accounts we make (SRP, FIT-229) and refresh", () => {
     prod.hasResourceProperties("AWS::Cognito::UserPoolClient", {
       ClientName: "ios",
-      ExplicitAuthFlows: ["ALLOW_CUSTOM_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"],
+      ExplicitAuthFlows: ["ALLOW_CUSTOM_AUTH", "ALLOW_USER_SRP_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"],
       SupportedIdentityProviders: ["SignInWithApple", "Google"],
       AllowedOAuthFlows: ["code"],
       CallbackURLs: ["aicoach://auth/callback"],

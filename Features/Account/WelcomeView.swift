@@ -82,7 +82,8 @@ struct WelcomeView: View {
     private func title(_ text: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(text).font(.system(size: 32, weight: .bold)).tracking(-0.4)
-            Text(detail).font(.body).foregroundStyle(.secondary)
+            // Whole even with the keyboard up for Sign in with email (FIT-229).
+            Text(detail).font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.bottom, 28)
     }

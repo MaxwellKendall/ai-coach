@@ -21,7 +21,8 @@ struct SignInSheet: View {
                 .multilineTextAlignment(.center)
         }
         .padding(24)
-        .presentationDetents([.medium])
+        // Large too, for the email form and its keyboard (FIT-229).
+        .presentationDetents([.medium, .large])
     }
 }
 
@@ -34,6 +35,11 @@ struct SignInButtons: View {
     @State private var working: Account.Provider?
     @State private var failure: String?
     @State private var apple = Account.AppleRequest()
+    /// FIT-229: email and password, folded away under the two providers.
+    @State private var withEmail = false
+    @State private var email = ""
+    @State private var password = ""
+    @State private var signingInWithEmail = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -45,11 +51,56 @@ struct SignInButtons: View {
                     }
                 }
             }
+            if withEmail { emailForm } else {
+                Button("Sign in with email") { withAnimation(.snappy) { withEmail = true } }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .disabled(working != nil)
+            }
             if let failure {
                 Text(failure).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
             }
         }
-        .interactiveDismissDisabled(working != nil)
+        .interactiveDismissDisabled(working != nil || signingInWithEmail)
+    }
+
+    private var emailForm: some View {
+        VStack(spacing: 10) {
+            TextField("Email", text: $email)
+                .textContentType(.username)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.next)
+            SecureField("Password", text: $password)
+                .textContentType(.password)
+                .submitLabel(.go)
+                .onSubmit(signInWithEmail)
+            Button(action: signInWithEmail) {
+                Group { if signingInWithEmail { ProgressView() } else { Text("Sign In") } }
+                    .font(.body.weight(.medium))
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .disabled(email.isEmpty || password.isEmpty || signingInWithEmail || working != nil)
+        }
+        .textFieldStyle(.roundedBorder)
+    }
+
+    private func signInWithEmail() {
+        guard !email.isEmpty, !password.isEmpty else { return }
+        signingInWithEmail = true
+        failure = nil
+        Task {
+            defer { signingInWithEmail = false }
+            do {
+                try await account.signIn(email: email, password: password)
+                onSignedIn()
+            } catch {
+                failure = "Couldn't sign in. Check the email and password."
+            }
+        }
     }
 
     @ViewBuilder private func button(_ provider: Account.Provider) -> some View {
@@ -65,7 +116,7 @@ struct SignInButtons: View {
             .frame(height: 50)
             .clipShape(.capsule)
             .overlay { if working == .apple { Capsule().fill(.background.opacity(0.6)); ProgressView() } }
-            .disabled(working != nil)
+            .disabled(working != nil || signingInWithEmail)
         } else {
             webButton(provider)
         }
@@ -88,7 +139,7 @@ struct SignInButtons: View {
             .frame(maxWidth: .infinity, minHeight: 50)
         }
         .buttonStyle(BrandButtonStyle(provider: provider))
-        .disabled(working != nil)
+        .disabled(working != nil || signingInWithEmail)
     }
 
     private func signInWithApple(_ result: Result<ASAuthorization, Error>) {

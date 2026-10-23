@@ -103,7 +103,7 @@ export class AICoachStack extends Stack {
     const userPool = new cognito.UserPool(this, "Users", {
       userPoolName: `AICoach-${stage}`,
       featurePlan: cognito.FeaturePlan.LITE,
-      // Federated users are created through sign-up, so it stays on; no client allows password sign-in.
+      // Federated users are created through sign-up, so it stays on; preSignUp refuses self sign-up with a password.
       selfSignUpEnabled: true,
       accountRecovery: cognito.AccountRecovery.NONE,
       standardAttributes: {
@@ -174,8 +174,10 @@ export class AICoachStack extends Stack {
         logoutUrls: ["aicoach://auth/signout"],
       },
     });
-    // Hosted-UI federation, native Apple (custom auth, FIT-138) and refresh: no SRP or password flows on the public client.
-    (appClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_CUSTOM_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"];
+    // Hosted-UI federation, native Apple (custom auth, FIT-138), refresh, and SRP for the email-and-password accounts we
+    // make with admin rights, such as App Review's (FIT-229). preSignUp still refuses self sign-up, and Apple users'
+    // passwords are random and never leave appleStart, so SRP opens nothing else.
+    (appClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_CUSTOM_AUTH", "ALLOW_USER_SRP_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"];
     providers.forEach((p) => appClient.node.addDependency(p));
 
     // FIT-138: finds or creates the user for Apple's identity token before custom auth signs them in.

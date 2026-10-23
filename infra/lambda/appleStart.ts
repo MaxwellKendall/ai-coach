@@ -40,7 +40,7 @@ async function createUser(claims: AppleClaims, name: string | undefined) {
     ...(name ? [{ Name: "name", Value: name }] : []),
   ];
   const created = await cognito.send(new AdminCreateUserCommand({ UserPoolId, Username, UserAttributes: attributes, MessageAction: "SUPPRESS" }));
-  // A password nobody knows, only to leave FORCE_CHANGE_PASSWORD: no client allows password sign-in.
+  // A password nobody knows, only to leave FORCE_CHANGE_PASSWORD. The iOS client allows SRP (FIT-229), so it must stay unguessable.
   await cognito.send(new AdminSetUserPasswordCommand({ UserPoolId, Username, Password: `${randomBytes(24).toString("base64url")}aA1!`, Permanent: true }));
   const uid = created.User?.Attributes?.find((a) => a.Name === "sub")?.Value;
   if (uid) await saveProfile(uid, name);
