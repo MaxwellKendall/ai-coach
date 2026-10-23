@@ -1,0 +1,236 @@
+[
+  {
+    "slug": "full-body-3",
+    "name": "Full Body 3-Day",
+    "summary": "The classic way to start lifting: squat, press, pull and deadlift with a barbell, a little heavier each session.",
+    "level": "new",
+    "place": "gym",
+    "days": [3],
+    "weeks": 12,
+    "minutes": 45,
+    "equipment": ["barbell", "rack", "bench", "cable"],
+    "sessions": [
+      { "name": "Day A", "exercises": [
+        { "exercise": "back-squat", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "bench-press", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "bent-over-barbell-row", "sets": 3, "reps": [5, 5], "start": 45, "step": 5 }
+      ] },
+      { "name": "Day B", "exercises": [
+        { "exercise": "deadlift", "sets": 3, "reps": [5, 5], "start": 95, "step": 10, "main": true },
+        { "exercise": "standing-military-press", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "wide-grip-lat-pulldown", "or": ["chin-up", "dumbbell-row"], "sets": 3, "reps": [8, 12], "start": 50 }
+      ] }
+    ]
+  },
+  {
+    "slug": "full-body-2",
+    "name": "Full Body 2-Day",
+    "summary": "Two full-body sessions a week: the least time that still builds real strength, for busy weeks.",
+    "level": "new",
+    "place": "gym",
+    "days": [2],
+    "weeks": 12,
+    "minutes": 50,
+    "equipment": ["barbell", "rack", "bench", "dumbbells", "cable"],
+    "sessions": [
+      { "name": "Day A", "exercises": [
+        { "exercise": "back-squat", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "bench-press", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "seated-cable-rows", "or": ["dumbbell-row"], "sets": 3, "reps": [8, 12], "start": 50 },
+        { "exercise": "plank", "sets": 3, "seconds": [20, 60] }
+      ] },
+      { "name": "Day B", "exercises": [
+        { "exercise": "deadlift", "sets": 3, "reps": [5, 5], "start": 95, "step": 10, "main": true },
+        { "exercise": "standing-military-press", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "wide-grip-lat-pulldown", "or": ["chin-up"], "sets": 3, "reps": [8, 12], "start": 50 },
+        { "exercise": "dumbbell-lunges", "sets": 3, "reps": [8, 12], "start": 15 }
+      ] }
+    ]
+  },
+  {
+    "slug": "dumbbell-full-body",
+    "name": "Dumbbell Full Body",
+    "summary": "A full-body start with a pair of dumbbells at home. Add reps each session, then go up a dumbbell.",
+    "level": "new",
+    "place": "dumbbells",
+    "days": [2, 3],
+    "weeks": 12,
+    "minutes": 40,
+    "equipment": ["dumbbells"],
+    "sessions": [
+      { "name": "Day A", "exercises": [
+        { "exercise": "split-squat-with-dumbbells", "sets": 3, "reps": [8, 12], "start": 15, "main": true },
+        { "exercise": "dumbbell-floor-press", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "dumbbell-romanian-deadlift", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "plank", "sets": 3, "seconds": [20, 60] }
+      ] },
+      { "name": "Day B", "exercises": [
+        { "exercise": "goblet-squat", "sets": 3, "reps": [8, 12], "start": 25, "main": true },
+        { "exercise": "dumbbell-shoulder-press", "sets": 3, "reps": [8, 12], "start": 15 },
+        { "exercise": "bent-over-two-dumbbell-row", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "plank", "sets": 3, "seconds": [20, 60] }
+      ] }
+    ]
+  },
+  {
+    "slug": "bodyweight-basics",
+    "name": "Bodyweight Basics",
+    "summary": "No equipment. Each exercise has an easier and a harder version: reach the top of the reps, then move up.",
+    "level": "new",
+    "place": "bodyweight",
+    "days": [2, 3],
+    "weeks": 12,
+    "minutes": 35,
+    "equipment": [],
+    "optional": ["pull_up_bar"],
+    "sessions": [
+      { "name": "Full Body", "exercises": [
+        { "ladder": ["scapular-pull-up", "chin-up", "pull-up"], "sets": 3, "reps": [5, 8], "group": 1 },
+        { "ladder": ["bodyweight-squat", "bodyweight-walking-lunge"], "sets": 3, "reps": [8, 15], "group": 1 },
+        { "ladder": ["incline-push-up", "push-up", "decline-push-up"], "sets": 3, "reps": [5, 10], "group": 2 },
+        { "ladder": ["butt-lift-bridge", "single-leg-glute-bridge"], "sets": 3, "reps": [8, 15], "group": 2 },
+        { "exercise": "plank", "sets": 2, "seconds": [20, 60], "group": 3 },
+        { "exercise": "side-bridge", "sets": 2, "seconds": [15, 45], "group": 3 },
+        { "exercise": "dead-bug", "sets": 2, "reps": [8, 12] }
+      ] }
+    ]
+  },
+  {
+    "slug": "upper-lower-4",
+    "name": "Upper / Lower",
+    "summary": "Four days: two upper-body, two lower-body. Every muscle twice a week, with heavier lifts first and lighter work after.",
+    "level": "new",
+    "place": "gym",
+    "days": [4],
+    "weeks": 12,
+    "minutes": 60,
+    "equipment": ["barbell", "rack", "bench", "dumbbells", "cable", "machine"],
+    "sessions": [
+      { "name": "Upper A", "exercises": [
+        { "exercise": "bench-press", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "bent-over-barbell-row", "sets": 3, "reps": [5, 5], "start": 45, "step": 5 },
+        { "exercise": "wide-grip-lat-pulldown", "or": ["chin-up"], "sets": 3, "reps": [8, 12], "start": 50 },
+        { "exercise": "dumbbell-shoulder-press", "sets": 3, "reps": [8, 12], "start": 15 },
+        { "exercise": "hammer-curls", "sets": 2, "reps": [10, 15], "start": 15, "group": 1 },
+        { "exercise": "triceps-pushdown", "or": ["dumbbell-tricep-extension-pronated-grip"], "sets": 2, "reps": [10, 15], "start": 30, "group": 1 }
+      ] },
+      { "name": "Lower A", "exercises": [
+        { "exercise": "back-squat", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "romanian-deadlift", "sets": 3, "reps": [8, 12], "start": 65 },
+        { "exercise": "leg-press", "or": ["split-squat-with-dumbbells"], "sets": 3, "reps": [8, 12], "start": 90, "step": 10 },
+        { "exercise": "lying-leg-curls", "or": ["dumbbell-romanian-deadlift"], "sets": 3, "reps": [10, 15], "start": 40 },
+        { "exercise": "standing-calf-raises", "or": ["standing-dumbbell-calf-raise"], "sets": 3, "reps": [10, 15], "start": 50 }
+      ] },
+      { "name": "Upper B", "exercises": [
+        { "exercise": "standing-military-press", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "seated-cable-rows", "or": ["dumbbell-row"], "sets": 3, "reps": [8, 12], "start": 50 },
+        { "exercise": "incline-dumbbell-press", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "chin-up", "or": ["wide-grip-lat-pulldown"], "sets": 3, "reps": [5, 10] },
+        { "exercise": "side-lateral-raise", "sets": 2, "reps": [12, 15], "start": 10, "group": 1 },
+        { "exercise": "dumbbell-bicep-curl", "sets": 2, "reps": [10, 15], "start": 15, "group": 1 }
+      ] },
+      { "name": "Lower B", "exercises": [
+        { "exercise": "deadlift", "sets": 3, "reps": [5, 5], "start": 95, "step": 10, "main": true },
+        { "exercise": "split-squat-with-dumbbells", "sets": 3, "reps": [8, 12], "start": 15 },
+        { "exercise": "barbell-hip-thrust", "sets": 3, "reps": [8, 12], "start": 65 },
+        { "exercise": "plank", "sets": 3, "seconds": [20, 60] }
+      ] }
+    ]
+  },
+  {
+    "slug": "dumbbell-upper-lower",
+    "name": "Dumbbell Upper / Lower",
+    "summary": "Four days at home with dumbbells: two upper-body, two lower-body. Add reps each session, then go up a dumbbell.",
+    "level": "some",
+    "place": "dumbbells",
+    "days": [4],
+    "weeks": 12,
+    "minutes": 45,
+    "equipment": ["dumbbells"],
+    "optional": ["bench"],
+    "sessions": [
+      { "name": "Upper A", "exercises": [
+        { "exercise": "dumbbell-floor-press", "sets": 3, "reps": [8, 12], "start": 20, "main": true },
+        { "exercise": "dumbbell-row", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "dumbbell-shoulder-press", "sets": 3, "reps": [8, 12], "start": 15 },
+        { "exercise": "hammer-curls", "sets": 2, "reps": [10, 15], "start": 15, "group": 1 },
+        { "exercise": "dumbbell-tricep-extension-pronated-grip", "sets": 2, "reps": [10, 15], "start": 10, "group": 1 }
+      ] },
+      { "name": "Lower A", "exercises": [
+        { "exercise": "goblet-squat", "sets": 3, "reps": [8, 12], "start": 25, "main": true },
+        { "exercise": "dumbbell-romanian-deadlift", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "dumbbell-lunges", "sets": 3, "reps": [8, 12], "start": 15 },
+        { "exercise": "standing-dumbbell-calf-raise", "sets": 3, "reps": [12, 15], "start": 20 },
+        { "exercise": "plank", "sets": 2, "seconds": [20, 60] }
+      ] },
+      { "name": "Upper B", "exercises": [
+        { "exercise": "incline-dumbbell-press", "or": ["dumbbell-floor-press"], "sets": 3, "reps": [8, 12], "start": 20, "main": true },
+        { "exercise": "bent-over-two-dumbbell-row", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "ladder": ["incline-push-up", "push-up", "decline-push-up"], "sets": 3, "reps": [5, 10] },
+        { "exercise": "side-lateral-raise", "sets": 2, "reps": [12, 15], "start": 10, "group": 1 },
+        { "exercise": "dumbbell-bicep-curl", "sets": 2, "reps": [10, 15], "start": 15, "group": 1 }
+      ] },
+      { "name": "Lower B", "exercises": [
+        { "exercise": "split-squat-with-dumbbells", "sets": 3, "reps": [8, 12], "start": 15, "main": true },
+        { "exercise": "dumbbell-step-ups", "sets": 3, "reps": [8, 12], "start": 15 },
+        { "ladder": ["butt-lift-bridge", "single-leg-glute-bridge"], "sets": 3, "reps": [8, 15] },
+        { "exercise": "dead-bug", "sets": 2, "reps": [8, 12] }
+      ] }
+    ]
+  },
+  {
+    "slug": "push-pull-legs",
+    "name": "Push / Pull / Legs",
+    "summary": "Pull, push and leg days in turn: six days to train each muscle twice a week, or three for once.",
+    "level": "some",
+    "place": "gym",
+    "days": [3, 5, 6],
+    "weeks": 12,
+    "minutes": 65,
+    "equipment": ["barbell", "rack", "bench", "dumbbells", "cable", "machine"],
+    "sessions": [
+      { "name": "Pull A", "exercises": [
+        { "exercise": "deadlift", "sets": 3, "reps": [5, 5], "start": 95, "step": 10, "main": true },
+        { "exercise": "wide-grip-lat-pulldown", "or": ["chin-up"], "sets": 3, "reps": [8, 12], "start": 50 },
+        { "exercise": "seated-cable-rows", "or": ["dumbbell-row"], "sets": 3, "reps": [8, 12], "start": 50 },
+        { "exercise": "face-pull", "or": ["side-lateral-raise"], "sets": 3, "reps": [15, 20], "start": 20 },
+        { "exercise": "hammer-curls", "sets": 3, "reps": [8, 12], "start": 15 }
+      ] },
+      { "name": "Push A", "exercises": [
+        { "exercise": "bench-press", "sets": 4, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "standing-military-press", "sets": 3, "reps": [8, 12], "start": 45 },
+        { "exercise": "incline-dumbbell-press", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "triceps-pushdown", "or": ["dumbbell-tricep-extension-pronated-grip"], "sets": 3, "reps": [8, 12], "start": 30, "group": 1 },
+        { "exercise": "side-lateral-raise", "sets": 3, "reps": [15, 20], "start": 10, "group": 1 }
+      ] },
+      { "name": "Legs", "exercises": [
+        { "exercise": "back-squat", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "romanian-deadlift", "sets": 3, "reps": [8, 12], "start": 65 },
+        { "exercise": "leg-press", "or": ["split-squat-with-dumbbells"], "sets": 3, "reps": [8, 12], "start": 90, "step": 10 },
+        { "exercise": "lying-leg-curls", "or": ["dumbbell-romanian-deadlift"], "sets": 3, "reps": [8, 12], "start": 40 },
+        { "exercise": "standing-calf-raises", "or": ["standing-dumbbell-calf-raise"], "sets": 4, "reps": [8, 12], "start": 50 }
+      ] },
+      { "name": "Pull B", "exercises": [
+        { "exercise": "bent-over-barbell-row", "sets": 4, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "chin-up", "or": ["wide-grip-lat-pulldown"], "sets": 3, "reps": [5, 10] },
+        { "exercise": "dumbbell-row", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "face-pull", "or": ["side-lateral-raise"], "sets": 3, "reps": [15, 20], "start": 20 },
+        { "exercise": "dumbbell-bicep-curl", "sets": 3, "reps": [8, 12], "start": 15 }
+      ] },
+      { "name": "Push B", "exercises": [
+        { "exercise": "standing-military-press", "sets": 4, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "bench-press", "sets": 3, "reps": [8, 12], "start": 45 },
+        { "exercise": "incline-dumbbell-press", "sets": 3, "reps": [8, 12], "start": 20 },
+        { "exercise": "triceps-pushdown", "or": ["dumbbell-tricep-extension-pronated-grip"], "sets": 3, "reps": [8, 12], "start": 30, "group": 1 },
+        { "exercise": "side-lateral-raise", "sets": 3, "reps": [15, 20], "start": 10, "group": 1 }
+      ] },
+      { "name": "Legs", "exercises": [
+        { "exercise": "back-squat", "sets": 3, "reps": [5, 5], "start": 45, "step": 5, "main": true },
+        { "exercise": "romanian-deadlift", "sets": 3, "reps": [8, 12], "start": 65 },
+        { "exercise": "leg-press", "or": ["split-squat-with-dumbbells"], "sets": 3, "reps": [8, 12], "start": 90, "step": 10 },
+        { "exercise": "lying-leg-curls", "or": ["dumbbell-romanian-deadlift"], "sets": 3, "reps": [8, 12], "start": 40 },
+        { "exercise": "standing-calf-raises", "or": ["standing-dumbbell-calf-raise"], "sets": 4, "reps": [8, 12], "start": 50 }
+      ] }
+    ]
+  }
+]

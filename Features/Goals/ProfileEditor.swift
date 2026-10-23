@@ -135,7 +135,7 @@ struct ProfileEditor: View {
 }
 
 /// Seven toggles, Sunday first.
-private struct DayPicker: View {
+struct DayPicker: View {
     @Binding var days: [Int]
 
     var body: some View {
@@ -147,7 +147,7 @@ private struct DayPicker: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 36)
                 .background(on ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.secondary.opacity(0.15)), in: .circle)
-                .foregroundStyle(on ? Color.white : .primary)
+                .foregroundStyle(on ? Color(.systemBackground) : .primary)
                 .buttonStyle(.plain)
                 .accessibilityLabel(ProfileEditor.weekdays[day])
                 .accessibilityAddTraits(on ? .isSelected : [])
@@ -158,6 +158,8 @@ private struct DayPicker: View {
 
 extension Profile {
     var isComplete: Bool { (13...100).contains(age) && weightLb > 0 && !trainingDays.isEmpty }
+    /// The app can plan the weeks: a complete profile, or a ready-made program, which needs no age or weight (FIT-230).
+    var plansItself: Bool { isComplete || (ReadyProgram.named(programSlug) != nil && !trainingDays.isEmpty) }
 
     /// "lower_back, Shoulders ," → ["lower_back", "shoulders"].
     static func list(_ text: String) -> [String] {

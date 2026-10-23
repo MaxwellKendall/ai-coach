@@ -155,9 +155,9 @@ struct ProgramScreen: View {
     private func program(_ weeks: [ProgramWeek], start: Date, current: Int, profile: Profile) -> some View {
         let index = Binding(get: { min(selected ?? current, weeks.count - 1) }, set: { selected = $0 })
         return VStack(spacing: 0) {
-            PhaseBars(weeks: weeks, current: current, selected: index.wrappedValue) { week in
+            PhaseBars(weeks: weeks, current: current, selected: index.wrappedValue, tap: { week in
                 withAnimation(.snappy) { selected = week }
-            }
+            }, phases: profile.programSlug == nil)
             .padding(.horizontal, 22)
             .padding(.top, 12)
             SwipeDeck(index: index, count: weeks.count) { week in
@@ -242,8 +242,9 @@ struct ProgramScreen: View {
                 Text("\(monday.formatted(.dateTime.month(.abbreviated).day())) – \(sunday.formatted(.dateTime.month(.abbreviated).day()))")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            Text(ProgramPlan.title(week)).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 6)
-            Text(ProgramPlan.why(week, tests: tests)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+            let ready = ReadyProgram.named(profile.programSlug)
+            Text(ready?.title(week) ?? ProgramPlan.title(week)).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 6)
+            Text(ready?.why(week) ?? ProgramPlan.why(week, tests: tests)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
             if index == current || index == current + 1 {
                 let saved = index == current || !dayItems(in: monday).isEmpty
                 // FIT-202: a coach's client follows the coach's weeks; pinning is for weeks the app plans.

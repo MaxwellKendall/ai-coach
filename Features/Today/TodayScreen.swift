@@ -154,7 +154,7 @@ struct TodayScreen: View {
         } message: { Text(message ?? "") }
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
-        .sheet(isPresented: $you) { YouScreen() }
+        .sheet(isPresented: $you) { YouScreen().tint(RootView.accent) }
         .sheet(isPresented: $checkingIn) {
             CheckInSheet(lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
         }
@@ -182,7 +182,7 @@ struct TodayScreen: View {
             if let celebrating { CelebrationSheet(wins: celebrating) }
         }
         // A new week, or a profile that just finished onboarding, gets a plan; the coach designs it with Pro (FIT-120).
-        .task(id: "\(profiles.first?.isComplete == true) \(pro.active) \(pro.coaches.isEmpty)") {
+        .task(id: "\(profiles.first?.plansItself == true) \(profiles.first?.programSlug ?? "") \(pro.active) \(pro.coaches.isEmpty)") {
             guard Pilot.plansWeeks(hasProgram: profiles.first?.programStart != nil, coached: !pro.coaches.isEmpty) else { return }
             try? Planner.ensureWeek(in: context)
             guard pro.active else { return }

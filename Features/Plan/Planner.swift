@@ -281,14 +281,11 @@ enum Planner {
     /// Idempotent: replaces whatever was planned for that week.
     @discardableResult
     static func generate(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) throws -> Plan? {
-        guard let profile = try context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete else { return nil }
+        guard let profile = try context.fetch(FetchDescriptor<Profile>()).first, profile.plansItself else { return nil }
         let monday = Week.start(of: date, calendar: calendar)
         let templates = try context.fetch(FetchDescriptor<Template>())
         let history = loggedSets(try context.fetch(FetchDescriptor<LogEntry>()), templates: templates)
-        let week = TrainingGenerator.week(
-            startingOn: monday, settings: profile.trainingSettings, catalog: catalog(templates), history: history,
-            weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar),
-            program: profile.programWeek(of: monday, calendar: calendar)?.week, calendar: calendar)
+        let week = trainingWeek(monday, profile: profile, templates: templates, history: history, calendar: calendar)
         let kitchen = KitchenSchedule.week(startingOn: monday, cookWindows: profile.cookWindows,
                                            groceryDay: profile.groceryDay, calendar: calendar)
 
@@ -308,14 +305,47 @@ enum Planner {
     /// A week's sessions as they'd be planned now, from the history so far (FIT-39). Next week is shown this way and
     /// never saved: it's planned for real when it starts, from how this week went.
     static func preview(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) throws -> [PlannedWorkout] {
-        guard let profile = try context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete else { return [] }
+        guard let profile = try context.fetch(FetchDescriptor<Profile>()).first, profile.plansItself else { return [] }
         let monday = Week.start(of: date, calendar: calendar)
         let templates = try context.fetch(FetchDescriptor<Template>())
         let history = loggedSets(try context.fetch(FetchDescriptor<LogEntry>()), templates: templates)
+        return trainingWeek(monday, profile: profile, templates: templates, history: history, calendar: calendar).workouts
+    }
+
+    /// FIT-230: the week from the ready-made program being followed, else from the generator.
+    private static func trainingWeek(_ monday: Date, profile: Profile, templates: [Template], history: [LoggedSet],
+                                     calendar: Calendar) -> TrainingWeek {
+        if let ready = ReadyProgram.named(profile.programSlug), let start = profile.programStart {
+            return ready.week(startingOn: monday, start: start, settings: profile.trainingSettings, catalog: catalog(templates),
+                              history: history, program: profile.program ?? [], calendar: calendar)
+        }
         return TrainingGenerator.week(
             startingOn: monday, settings: profile.trainingSettings, catalog: catalog(templates), history: history,
             weeksSinceDeload: Training.weeksSinceDeload(history, before: monday, calendar: calendar),
-            program: profile.programWeek(of: monday, calendar: calendar)?.week, calendar: calendar).workouts
+            program: profile.programWeek(of: monday, calendar: calendar)?.week, calendar: calendar)
+    }
+
+    /// FIT-230: start a ready-made program today, on these days and with this equipment. This week is planned from
+    /// today on; days already past keep what they had.
+    static func start(_ ready: ReadyProgram, days: [Int], equipment: [String], profile: Profile, in context: ModelContext,
+                      now: Date = .now, calendar: Calendar = .current) throws {
+        profile.programSlug = ready.slug
+        profile.trainingDays = Week.ordered(days)
+        profile.daysPerWeek = days.count
+        profile.sessionMinutes = ready.minutes
+        profile.equipment = equipment
+        profile.programStart = now
+        profile.targetDate = calendar.date(byAdding: .day, value: 7 * ready.weeks - 1, to: Week.start(of: now, calendar: calendar))
+        profile.travelWeeks = []
+        profile.brief = nil
+        profile.updatedAt = now
+        try context.save()
+        if let plan = try plan(weekOf: now, in: context) {
+            try replan(plan, with: preview(weekOf: now, in: context, calendar: calendar), keep: [], today: now,
+                       templates: try context.fetch(FetchDescriptor<Template>()), in: context, calendar: calendar)
+        } else {
+            try generate(weekOf: now, in: context, calendar: calendar)
+        }
     }
 
     /// Exercises in a session share a start time; `order` seconds keep them in the generator's order.

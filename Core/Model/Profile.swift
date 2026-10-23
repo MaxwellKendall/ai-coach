@@ -37,6 +37,8 @@ final class Profile {
     /// The program (FIT-36): its first Monday and the target date that sets its length.
     var programStart: Date?
     var targetDate: Date?
+    /// FIT-230: the ready-made program being followed (`ReadyProgram`), when there's no coach; its sessions make the weeks.
+    var programSlug: String?
     /// Program weeks away from the usual gym, 0-based.
     var travelWeeks: [Int] = []
     var starts: [StartingSet] = []
@@ -89,12 +91,14 @@ final class Profile {
                          starts: starts, bodyWeight: weightLb)
     }
 
-    /// The program's weeks, when there is one.
+    /// The program's weeks, when there is one. A ready-made program (FIT-230) has no phases or test week, only deloads.
     var program: [ProgramWeek]? {
         guard let programStart, let targetDate else { return nil }
-        return ProgramPlan.weeks(count: ProgramPlan.weekCount(start: programStart, target: targetDate),
-                                 deloadEvery: deloadEveryWeeks ?? AgeTier.of(age: age).deloadEveryWeeks,
-                                 travel: Set(travelWeeks))
+        let weeks = ProgramPlan.weeks(count: ProgramPlan.weekCount(start: programStart, target: targetDate),
+                                      deloadEvery: deloadEveryWeeks ?? AgeTier.of(age: age).deloadEveryWeeks,
+                                      travel: Set(travelWeeks))
+        guard programSlug != nil else { return weeks }
+        return weeks.map { ProgramWeek(phase: .base, kind: $0.kind == .deload ? .deload : .base, travel: $0.travel) }
     }
 
     /// The program week a date falls in, if it's within the program.

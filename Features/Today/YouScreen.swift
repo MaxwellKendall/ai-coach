@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// The account and the library, top right on Today. Program, Progress and Groups are tabs since FIT-64.
 struct YouScreen: View {
@@ -10,6 +11,9 @@ struct YouScreen: View {
     @State private var failure: String?
     @State private var joining = false
     @State private var nudges = Push.nudges
+    @Query private var profiles: [Profile]
+    /// FIT-230: picking or changing the ready-made program.
+    @State private var choosing = false
 
     var body: some View {
         NavigationStack {
@@ -32,6 +36,19 @@ struct YouScreen: View {
                     // FIT-122: a year of Pro bought as a gift on the web.
                     if Pilot.sellsPro, account.isAvailable {
                         NavigationLink { RedeemGiftView() } label: { Label("Redeem a gift", systemImage: "gift") }
+                    }
+                }
+                // FIT-230: without a coach, the ready-made program being followed, and a way to pick another.
+                if pro.coaches.isEmpty {
+                    Section {
+                        Button { choosing = true } label: {
+                            LabeledContent {
+                                Text(ReadyProgram.named(profiles.first?.programSlug)?.name ?? "Pick One")
+                            } label: {
+                                Label("Program", systemImage: "list.bullet.rectangle")
+                            }
+                        }
+                        .tint(.primary)
                     }
                 }
                 // FIT-126: signed out, a way in: the account keeps the program backed up and on the web.
@@ -98,6 +115,7 @@ struct YouScreen: View {
                 Text("\(coach.title) won't see your program or training any more. Your program stays as it is.")
             }
             .sheet(isPresented: $joining) { WelcomeView { joining = false } }
+            .sheet(isPresented: $choosing) { ProgramPicker { choosing = false }.tint(RootView.accent) }
             .sheet(isPresented: $signingIn) {
                 SignInSheet(reason: "Sign in to back up your program and see it on the web.")
             }

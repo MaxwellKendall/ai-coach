@@ -208,6 +208,8 @@ struct PhaseBars: View {
     var current: Int?
     var selected: Int?
     var tap: ((Int) -> Void)?
+    /// Base, Build and Peak under the bars; a ready-made program has none (FIT-230).
+    var phases = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -236,15 +238,19 @@ struct PhaseBars: View {
             }
             .frame(height: 42, alignment: .bottom)
             // Sized by its text, so a larger text size pushes what's below down instead of running under it.
-            PhaseLabels(count: weeks.count, starts: groups.map(\.start)) {
-                ForEach(groups, id: \.start) { group in
-                    Text(group.phase.rawValue.capitalized)
-                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .accessibilityHidden(true)
+            if phases { phaseLabels }
         }
+    }
+
+    private var phaseLabels: some View {
+        PhaseLabels(count: weeks.count, starts: groups.map(\.start)) {
+            ForEach(groups, id: \.start) { group in
+                Text(group.phase.rawValue.capitalized)
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     private struct Group { var phase: ProgramPhase; var start: Int; var count: Int }

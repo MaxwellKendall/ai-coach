@@ -1,12 +1,14 @@
 import SwiftUI
+import SwiftData
 
 /// FIT-201: the pilot's first launch. Sign in, then join your coach: the coach's invite link opens the join step with
 /// its code, or the code is typed or pasted. There's no goal or program setup; the coach writes the program. Without a
-/// coach the app is a log of your own.
+/// coach, a ready-made program to pick (FIT-230), or a log of your own.
 struct WelcomeView: View {
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
     @Bindable private var navigator = Navigator.shared
+    @Query private var profiles: [Profile]
     var onDone: () -> Void
 
     @State private var typed = ""
@@ -22,10 +24,20 @@ struct WelcomeView: View {
     @State private var intake = false
     /// FIT-220: joined, and notifications not yet allowed or refused: asked first, saying why.
     @State private var askingPush: String?
+    /// FIT-230: no coach, and no program yet: pick one.
+    @State private var picking = false
 
     var body: some View {
         Group {
-            if let coach = askingPush { notifications(coach) } else if intake { IntakeView(onDone: onDone) } else { welcome }
+            if let coach = askingPush {
+                notifications(coach)
+            } else if intake {
+                IntakeView(onDone: onDone)
+            } else if picking {
+                ProgramPicker(onDone: onDone)
+            } else {
+                welcome
+            }
         }
         #if DEBUG
             // `-intake YES` opens the coach's questions on a fresh simulator, without signing in or an invite;
@@ -48,8 +60,8 @@ struct WelcomeView: View {
                 join
             }
             Spacer(minLength: 24)
-            Button(account.user == nil ? "No coach? Log on your own" : "I don’t have a coach") {
-                onDone()
+            Button(account.user == nil ? "No coach? Train on your own" : "I don’t have a coach") {
+                if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
             }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

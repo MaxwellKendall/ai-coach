@@ -179,7 +179,9 @@ struct WholeProgramSheet: View {
                     .frame(width: 14, height: PhaseBars.height(week))
                     .frame(width: 22, height: 30, alignment: .bottom)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(index + 1)  \(ProgramPlan.title(week))")
+                    // FIT-230: a ready-made program has no phases, only its deloads.
+                    Text(ReadyProgram.named(profile.programSlug) == nil ? "\(index + 1)  \(ProgramPlan.title(week))"
+                         : "Week \(index + 1)" + (week.kind == .deload ? " · Deload" : ""))
                         .fontWeight(index == selected ? .bold : .regular)
                         .foregroundStyle(week.kind == .deload ? .secondary : .primary)
                     Text(line(index)).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
