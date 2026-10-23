@@ -1,10 +1,15 @@
 """App Store header artwork, built from the committed screenshots in this folder.
 
-    python3 make_header.py                      # both sizes, default copy
-    python3 make_header.py "Headline." "Sub."   # 16:9 only, with other copy
+    python3 make_header.py                 # both sizes, default headline
+    python3 make_header.py "Headline."     # both sizes, other headline
 
-Needs Pillow. The text column is capped short of the phones and each line shrinks
-to fit, so copy of any length stays clear of the devices.
+Needs Pillow. The iPhone product page shows only the middle of the header: about the
+centre 54% of the width and the top 64% of the height of the 16:9 image (measured on
+App Store Connect's preview, 2026-10-23), with the Dynamic Island and the back and
+share buttons over the top 11%, and the icon card over everything below. So the
+headline and the phones are centred, the headline sits just under the island, and
+only the phones' lower halves and the background reach the parts iPad and Mac add.
+No price or "free" in the art: Apple's asset guidelines don't allow pricing.
 """
 from pathlib import Path
 
@@ -13,14 +18,14 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 HERE = str(Path(__file__).resolve().parent) + "/"
 SHOTS = OUT = HERE
 
-WORDMARK = "barbrabell"
 HEADLINE = "Train with your coach."
-SUB = "Their plan, your sets — always free."
 
-BG = (237, 237, 241)
-INK = (0, 0, 0)
-MUTED = (110, 110, 118)
+# The app icon's own gradient, top to bottom.
+TOP = (253, 118, 70)
+BOTTOM = (216, 44, 81)
+INK = (255, 255, 255)
 BEZEL = (24, 24, 27)
+SHADOW = (90, 0, 20)
 
 
 def font(size, weight="Bold"):
@@ -42,6 +47,14 @@ def fitted(text, size, weight, max_w):
     return font(size, weight)
 
 
+def gradient(w, h):
+    column = Image.new("RGB", (1, h))
+    for y in range(h):
+        t = y / (h - 1)
+        column.putpixel((0, y), tuple(round(a + (b - a) * t) for a, b in zip(TOP, BOTTOM)))
+    return column.resize((w, h))
+
+
 def device(path, width):
     """A screenshot in a dark bezel with a soft shadow, as RGBA."""
     shot = Image.open(path).convert("RGB")
@@ -58,72 +71,45 @@ def device(path, width):
     ImageDraw.Draw(frame).rounded_rectangle([0, 0, fw - 1, fh - 1], radius + pad, fill=BEZEL + (255,))
     frame.paste(shot, (pad, pad), mask)
 
-    blur = round(width * 0.05)
-    canvas = Image.new("RGBA", (fw + blur * 4, fh + blur * 4), (0, 0, 0, 0))
+    blur = round(width * 0.06)
+    # Room for the blur on every side, and more below, where the shadow is offset.
+    canvas = Image.new("RGBA", (fw + blur * 6, fh + blur * 8), (0, 0, 0, 0))
     shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     ImageDraw.Draw(shadow).rounded_rectangle(
-        [blur * 2, blur * 2 + blur, blur * 2 + fw, blur * 2 + fh + blur], radius + pad, fill=(0, 0, 0, 70)
+        [blur * 3, blur * 3 + blur, blur * 3 + fw, blur * 3 + fh + blur], radius + pad, fill=SHADOW + (110,)
     )
     canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(blur)))
-    canvas.alpha_composite(frame, (blur * 2, blur * 2))
-    return canvas
+    canvas.alpha_composite(frame, (blur * 3, blur * 3))
+    return canvas, blur * 3
 
 
-def compose(w, h, phone_w, shots, offsets, gap, text_x, wordmark_px, head_px, sub_px, name,
-            headline=None, sub_text=None, outdir=None):
-    img = Image.new("RGB", (w, h), BG)
+def compose(w, h, name, headline=None, outdir=None):
+    """Every measure is a fraction of the height, so the 16:9 and 21:9 files share one centred layout."""
+    img = gradient(w, h).convert("RGBA")
     d = ImageDraw.Draw(img)
+    cx = w // 2
 
-    devices = [device(SHOTS + s, phone_w) for s in shots]
-    total = sum(x.width for x in devices) - gap * (len(devices) - 1)
-    left = w - round(w * 0.05) - total
-    base = h // 2
-    spots, x = [], left
-    for dev, off in zip(devices, offsets):
-        spots.append((dev, x, base - dev.height // 2 + off))
-        x += dev.width - gap
-    # Left-most in front, so the eye lands on Today first.
-    for dev, px, py in reversed(spots):
-        img.paste(dev, (px, py), dev)
+    # Headline: just under the Dynamic Island and between the back and share buttons.
+    head = fitted(headline or HEADLINE, round(h * 0.056), "Bold", round(h * 0.80))
+    box = d.textbbox((0, 0), headline or HEADLINE, font=head)
+    d.text((cx - (box[2] - box[0]) / 2 - box[0], round(h * 0.135)), headline or HEADLINE, font=head, fill=INK)
 
-    # The text never reaches the phones: its column stops a clear gutter short of them.
-    max_w = left + round(phone_w * 0.05) - text_x - round(w * 0.045)
-    headline = headline or HEADLINE
-    sub_text = sub_text or SUB
-    wm = fitted(WORDMARK, wordmark_px, "Bold", max_w)
-    head = fitted(headline, head_px, "Bold", max_w)
-    sub = fitted(sub_text, sub_px, "Regular", max_w)
+    # Program and Progress behind, Today in front: the eye lands on today's session.
+    side_w, mid_w = round(h * 0.215), round(h * 0.245)
+    spread = round(h * 0.245)
+    for shot, dx, top, width in [("05-program.png", -spread, 0.300, side_w),
+                                 ("04-progress.png", spread, 0.300, side_w),
+                                 ("01-today.png", 0, 0.255, mid_w)]:
+        dev, inset = device(SHOTS + shot, width)
+        img.alpha_composite(dev, (cx + dx - dev.width // 2, round(h * top) - inset))
 
-    block = wordmark_px * 1.5 + head_px * 1.25 + sub_px * 1.5
-    y = (h - block) / 2
-    d.text((text_x, y), WORDMARK, font=wm, fill=INK)
-    y += wordmark_px * 1.5
-    d.text((text_x, y), headline, font=head, fill=INK)
-    y += head_px * 1.25
-    d.text((text_x, y), sub_text, font=sub, fill=MUTED)
-
-    img.save((outdir or OUT) + name)
-    print(name, img.size, "| headline", head.size, "sub", sub.size)
-
-
-def wide(name, headline=None, sub_text=None, outdir=None):
-    compose(5244, 2950, 830, ["01-today.png", "05-program.png", "04-progress.png"],
-            [0, -70, 0], 70, 360, 260, 168, 122, name, headline, sub_text, outdir)
-
-
-def ultrawide(name, headline=None, sub_text=None, outdir=None):
-    compose(3840, 1646, 590, ["01-today.png", "05-program.png", "04-progress.png"],
-            [0, -50, 0], 50, 270, 186, 120, 86, name, headline, sub_text, outdir)
+    img.convert("RGB").save((outdir or OUT) + name)
+    print(name, img.size, "| headline", head.size)
 
 
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) > 1:
-        headline, sub_text = sys.argv[1], sys.argv[2]
-        outdir = sys.argv[3] if len(sys.argv) > 3 else None
-        name = sys.argv[4] if len(sys.argv) > 4 else "header-5244x2950.png"
-        wide(name, headline, sub_text, outdir)
-    else:
-        wide("header-5244x2950.png")
-        ultrawide("header-3840x1646.png")
+    headline = sys.argv[1] if len(sys.argv) > 1 else None
+    compose(5244, 2950, "header-5244x2950.png", headline)
+    compose(3840, 1646, "header-3840x1646.png", headline)
