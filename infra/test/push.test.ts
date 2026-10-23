@@ -12,7 +12,7 @@ vi.mock("@aws-sdk/client-secrets-manager", async (orig) => {
 });
 const sendAlerts = vi.fn(async () => new Map());
 vi.mock("../lambda/apns.ts", () => ({ sendAlerts }));
-const { handler, dayIn, firstUpcoming, weekText, WEEK_WINDOW_MS } = await import("../lambda/push.ts");
+const { handler, dayIn, firstUpcoming, offerText, replyText, weekText, WEEK_WINDOW_MS } = await import("../lambda/push.ts");
 const { marshall } = await import("@aws-sdk/util-dynamodb");
 
 const record = (eventName: string, item: Record<string, unknown>) => ({
@@ -100,5 +100,13 @@ describe("FIT-220: the coach updated your week", () => {
     expect(firstUpcoming(["2026-10-25", "2026-10-20", "2026-10-21"], "2026-10-21")).toBe("2026-10-21");
     expect(firstUpcoming(["2026-10-20"], "2026-10-21")).toBeUndefined();
     expect(weekText(null, "2026-10-21", "2026-10-21")).toEqual({ title: "Your coach updated your week", body: "Today's session changed. Take a look before you start." });
+  });
+
+  it("titles read with the coach's name and without one (FIT-227)", () => {
+    expect(weekText("Sam", "2026-10-21", "2026-10-21").title).toBe("Sam updated your week");
+    expect(offerText("Sam", 4, "").title).toBe("Sam sent you a 4-week program");
+    expect(offerText(null, 4, "").title).toBe("Your coach sent you a 4-week program");
+    expect(replyText("Sam", "2026-10-21", "Nice").title).toBe("Sam replied on Wednesday's session");
+    expect(replyText(undefined, "2026-10-21", "Nice").title).toBe("Your coach replied on Wednesday's session");
   });
 });

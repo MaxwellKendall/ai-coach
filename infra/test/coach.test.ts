@@ -66,6 +66,14 @@ describe("coach invites (FIT-130)", () => {
     expect(await coach.inviteName(code, now)).toBe("Samantha");
   });
 
+  it("from a coach with no name read as no name: the app's ask and the link (FIT-227)", async () => {
+    table.set("USER#sam|PROFILE", { PK: "USER#sam", SK: "PROFILE", displayName: "  " });
+    const { code } = await coach.createInvite("sam", { name: "" }, now);
+    expect(table.get(`COACHINVITE#${code}|META`)).toMatchObject({ coachName: null });
+    expect(await coach.inviteName(code, now)).toBe("Your coach");
+    expect(await coach.accept("ann", code, undefined, now)).toMatchObject({ uid: "sam", name: null });
+  });
+
   it("link both sides once, then are used up", async () => {
     const { code } = await coach.createInvite("sam", undefined, now);
     expect(await coach.accept("ann", code, undefined, now)).toMatchObject({ uid: "sam", name: "Sam Coach" });

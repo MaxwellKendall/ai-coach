@@ -33,7 +33,7 @@ async function nameOf(uid: string, claims?: Record<string, unknown>) {
   const fromToken = typeof claims?.name === "string" && claims.name.trim() ? claims.name.trim() : undefined;
   if (fromToken) return fromToken;
   const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROFILE" } }));
-  return (Item?.displayName as string | undefined) ?? null;
+  return (Item?.displayName as string | undefined)?.trim() || null;
 }
 
 export async function isCoachOf(coach: string, client: string) {
@@ -110,7 +110,11 @@ async function invite(code: string, now: Date) {
   return Item && Item.expiresAt > now.getTime() / 1000 ? Item : undefined;
 }
 
-/** The coach's name on an invite, for the app to ask "Let Sam coach you?"; null when it's used up or expired. */
+/**
+ * The coach's name on an invite, for the app to ask "Let Sam coach you?"; null when it's used up or expired.
+ * FIT-227: "Your coach" when the coach has no name, which the app reads as no name (`Cloud.coachInvite`). It stays a
+ * string so build 5, which shows whatever comes back, still reads "Your coach will see your program".
+ */
 export async function inviteName(input: string, now = new Date()) {
   const code = readCode(input);
   if (!code) return null;

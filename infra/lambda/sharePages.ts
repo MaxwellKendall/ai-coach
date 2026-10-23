@@ -85,8 +85,8 @@ export interface Store {
   program(id: string): Promise<Program | undefined>;
   invite(code: string): Promise<Invite | undefined>;
   session(id: string): Promise<Session | undefined>;
-  /** FIT-130: the coach's name on a client invite still open. */
-  coachInvite?(code: string): Promise<{ coach: string } | undefined>;
+  /** FIT-130: the coach's name on a client invite still open; null when the coach has none (FIT-227). */
+  coachInvite?(code: string): Promise<{ coach: string | null } | undefined>;
   /** FIT-110: one more view of a kind of page today. */
   count?(kind: string): Promise<void>;
 }
@@ -542,20 +542,24 @@ function invitePage(invite: Invite, code: string, path: string, site: Site, imag
   });
 }
 
-/** FIT-130: a coach's invite, opened somewhere other than the app (the app takes /c/* itself). */
-function coachInvitePage(coach: string, path: string, site: Site) {
-  const who = first(coach);
+/**
+ * FIT-130: a coach's invite, opened somewhere other than the app (the app takes /c/* itself). FIT-227: a coach with no
+ * name (Sign in with Apple without one) is "a coach", never a first word of a fallback.
+ */
+function coachInvitePage(coach: string | null, path: string, site: Site) {
+  const who = coach?.trim() ? first(coach) : null;
+  const app = esc(site.appName);
   return layout(site, {
-    title: `${who} invited you to train with them`,
-    description: `${who} will write your program and follow your training in ${site.appName}.`,
+    title: who ? `${who} invited you to train with them` : `You're invited to train with a coach on ${site.appName}`,
+    description: `${who ?? "Your coach"} will write your program and follow your training in ${site.appName}.`,
     path,
     body: `
       <section class="hero">
-        <p class="eyebrow">${esc(who)} invited you</p>
-        <h1>Train with ${esc(who)} as your coach</h1>
-        <p class="lede">${esc(who)} writes your program and sees how your sessions go. You log in the app, and you can stop sharing any time.</p>
+        <p class="eyebrow">${who ? `${esc(who)} invited you` : "You're invited"}</p>
+        <h1>${who ? `Train with ${esc(who)} as your coach` : `Train with a coach on ${app}`}</h1>
+        <p class="lede">${who ? esc(who) : "Your coach"} writes your program and sees how your sessions go. You log in the app, and you can stop sharing any time.</p>
         <ol class="steps">
-          <li><b>Get ${esc(site.appName)}</b><span>Free on the App Store.</span></li>
+          <li><b>Get ${app}</b><span>Free on the App Store.</span></li>
           <li><b>Open this link again on your iPhone</b><span>It opens the app and asks you to allow it.</span></li>
         </ol>
         ${actions(site, [])}

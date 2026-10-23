@@ -49,7 +49,7 @@ struct YouScreen: View {
                     Section {
                         ForEach(pro.coaches) { coach in
                             HStack {
-                                Label("Coached by \(coach.title)", systemImage: "person.2")
+                                Label(coach.name.map { "Coached by \($0)" } ?? "You have a coach", systemImage: "person.2")
                                 Spacer()
                                 Button("Stop", role: .destructive) { stopping = coach }
                                     .buttonStyle(.borderless)
@@ -91,7 +91,7 @@ struct YouScreen: View {
                 }
             }
             .navigationTitle("You")
-            .confirmationDialog("Stop sharing with \(stopping?.title ?? "your coach")?", isPresented: Binding(get: { stopping != nil }, set: { if !$0 { stopping = nil } }),
+            .confirmationDialog("Stop sharing with \(stopping?.mention ?? "your coach")?", isPresented: Binding(get: { stopping != nil }, set: { if !$0 { stopping = nil } }),
                                 titleVisibility: .visible, presenting: stopping) { coach in
                 Button("Stop Sharing", role: .destructive) { stop(coach) }
             } message: { coach in

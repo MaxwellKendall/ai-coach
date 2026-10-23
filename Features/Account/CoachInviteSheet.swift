@@ -7,7 +7,7 @@ struct CoachInviteSheet: View {
     @Environment(\.dismiss) private var dismiss
     let code: String
 
-    @State private var coach: String?
+    @State private var coach: Cloud.CoachInvite?
     @State private var loaded = false
     @State private var working = false
     @State private var failure: String?
@@ -21,8 +21,8 @@ struct CoachInviteSheet: View {
                 .font(.system(size: 44))
                 .padding(.top, 8)
             if let accepted, askingPush {
-                Text("Hear from \(accepted.title)").font(.title2.bold()).multilineTextAlignment(.center)
-                Text("A notification when \(accepted.title) changes your week or replies to a session, and a reminder in the evening of a day you haven’t logged. Turn the reminder off any time on You.")
+                Text("Hear from \(accepted.mention)").font(.title2.bold()).multilineTextAlignment(.center)
+                Text("A notification when \(accepted.mention) changes your week or replies to a session, and a reminder in the evening of a day you haven’t logged. Turn the reminder off any time on You.")
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Spacer(minLength: 0)
                 VStack(spacing: 8) {
@@ -38,7 +38,7 @@ struct CoachInviteSheet: View {
                     Button("Not Now") { withAnimation(.snappy) { askingPush = false } }.controlSize(.large)
                 }
             } else if let accepted {
-                Text("\(accepted.title) is your coach").font(.title2.bold()).multilineTextAlignment(.center)
+                Text(accepted.name.map { "\($0) is your coach" } ?? "You've joined your coach").font(.title2.bold()).multilineTextAlignment(.center)
                 Text("They'll see your program and how your sessions go, and can change your program. You can stop any time on You.")
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Spacer(minLength: 0)
@@ -48,8 +48,8 @@ struct CoachInviteSheet: View {
                 ProgressView()
                 Spacer(minLength: 0)
             } else if let coach {
-                Text("Let \(coach) coach you?").font(.title2.bold()).multilineTextAlignment(.center)
-                Text("\(coach) will see your program and how your sessions go, and can change your program. You can stop any time on You.")
+                Text(coach.name.map { "Let \($0) coach you?" } ?? "A coach invited you").font(.title2.bold()).multilineTextAlignment(.center)
+                Text("\(coach.name ?? "Your coach") will see your program and how your sessions go, and can change your program. You can stop any time on You.")
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
                 if let failure {
                     Text(failure).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)

@@ -70,4 +70,14 @@ struct SessionLinkTests {
         #expect(InviteLink.coach(typed: "LT7JWBW6S0") == nil)
         #expect(InviteLink.coach(typed: "tomorrow") == nil)
     }
+
+    /// FIT-227: a coach with no name is "your coach" in a sentence, never "Your" of a fallback.
+    @Test func aCoachWithNoName() {
+        #expect(Cloud.CoachInvite(answer: "Sam Coach").name == "Sam Coach")
+        #expect(Cloud.CoachInvite(answer: "Your coach").name == nil)
+        let nameless = Cloud.Person(uid: "c", name: nil, since: "2026-10-23")
+        #expect(nameless.title == "Your coach")
+        #expect(nameless.mention == "your coach")
+        #expect(Cloud.Person(uid: "c", name: "Sam", since: "2026-10-23").mention == "Sam")
+    }
 }

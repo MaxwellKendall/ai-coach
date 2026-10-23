@@ -12,8 +12,8 @@ struct WelcomeView: View {
     @State private var typed = ""
     /// The invite being answered: the link the app was opened with, or the code typed.
     @State private var code: String?
-    /// The name on the invite being answered; nil until it's looked up.
-    @State private var coach: String?
+    /// The invite being answered, once it's looked up; nil when it's used up or expired.
+    @State private var coach: Cloud.CoachInvite?
     /// The code `coach` was looked up for.
     @State private var lookedUp: String?
     @State private var working = false
@@ -100,8 +100,8 @@ struct WelcomeView: View {
             if lookedUp != code {
                 ProgressView().frame(maxWidth: .infinity)
             } else if let coach {
-                title("Let \(coach) coach you?",
-                      "\(coach) will see your program and how your sessions go, and can change your program. You can stop any time on You.")
+                title(coach.name.map { "Let \($0) coach you?" } ?? "A coach invited you",
+                      "\(coach.name ?? "Your coach") will see your program and how your sessions go, and can change your program. You can stop any time on You.")
                 if let failure { problem(failure) }
                 Button { accept(code) } label: {
                     Group { if working { ProgressView() } else { Text("Allow") } }
@@ -207,7 +207,7 @@ struct WelcomeView: View {
                 let ask = await Push.undecided()
                 withAnimation(.snappy) {
                     intake = true
-                    if ask { askingPush = person.name ?? coach ?? "your coach" }
+                    if ask { askingPush = person.name ?? coach?.name ?? "your coach" }
                 }
             } catch {
                 failure = error.localizedDescription

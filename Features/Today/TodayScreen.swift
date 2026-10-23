@@ -349,7 +349,7 @@ struct TodayScreen: View {
         let workouts = planned.filter { $0.kind == .workout }
         let context = DayCard.Context(templates: templates, sessionMinutes: profile?.sessionMinutes ?? 45,
                                       deload: thisWeeksPlan?.warnings.contains { $0.hasPrefix("Deload") } == true,
-                                      tier: AgeTier.of(age: profile?.age ?? 30), coach: pro.coaches.first?.title)
+                                      tier: AgeTier.of(age: profile?.age ?? 30), coach: pro.coaches.first?.mention)
         return week.map { day in
             let next = workouts.first { $0.date >= Calendar.current.date(byAdding: .day, value: 1, to: day)! }
             return DayCard.make(day: day, planned: workouts, entries: entries,

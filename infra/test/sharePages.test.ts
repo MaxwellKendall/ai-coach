@@ -13,6 +13,7 @@ const store: Store = {
   session: async (id) => (id === "leg" ? { name: "Max Kendall", title: "Lower body", date: "2026-10-15", minutes: 50,
     exercises: [{ name: "Back Squat", sets: 4, reps: 5 }, { name: "Plank", sets: 3, seconds: 45 }], invite: "X7K2PQ" } : undefined),
   invite: async (code) => (code === "X7K2PQ" ? { group: "Dawn Patrol", by: "Max", members: ["Max", "Jo"], recent: [] } : undefined),
+  coachInvite: async (code) => ({ SAMCOACH22: { coach: "Sam Coach" }, NONAME2222: { coach: null } })[code],
 };
 
 describe("share pages (FIT-105)", () => {
@@ -148,5 +149,25 @@ describe("the coach landing page (FIT-217)", () => {
   it("links the App Store for clients once there's a listing", async () => {
     const listed = await route("/", {} as Store, { ...site, appStoreUrl: "https://apps.apple.com/app/id1" });
     expect(listed.body).toContain('href="https://apps.apple.com/app/id1"');
+  });
+});
+
+describe("a coach's invite page (FIT-130)", () => {
+  it("names the coach by first name", async () => {
+    const page = await route("/c/samcoach22", store, site);
+    expect(page.body).toContain("<title>Sam invited you to train with them</title>");
+    expect(page.body).toContain("Train with Sam as your coach");
+  });
+
+  it("reads naturally when the coach has no name (FIT-227)", async () => {
+    const page = await route("/c/NONAME2222", store, site);
+    expect(page.body).toContain("<title>You&#39;re invited to train with a coach on Barbrabell</title>");
+    expect(page.body).toContain("Train with a coach on Barbrabell");
+    expect(page.body).toContain("Your coach writes your program");
+    expect(page.body).not.toMatch(/\bYour invited\b|with Your as/);
+  });
+
+  it("is a 404 once it's used up or expired", async () => {
+    expect((await route("/c/GONE222222", store, site)).status).toBe(404);
   });
 });

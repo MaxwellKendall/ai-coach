@@ -60,7 +60,7 @@ export const store: Store = {
   async coachInvite(code) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `COACHINVITE#${code}`, SK: "META" } }));
     if (!Item || Item.expiresAt <= Date.now() / 1000) return undefined;
-    return { coach: (Item.coachName as string | null) ?? "Your coach" };
+    return { coach: (Item.coachName as string | null) ?? null };
   },
   async invite(code) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `INVITE#${code}`, SK: "META" } }));

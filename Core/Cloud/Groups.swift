@@ -183,12 +183,24 @@ enum Cloud {
         var name: String?
         var since: String
         var id: String { uid }
+        /// At the start of a sentence.
         var title: String { name ?? "Your coach" }
+        /// FIT-227: inside a sentence, "Hear from your coach".
+        var mention: String { name ?? "your coach" }
     }
 
-    /// The coach's name on an invite, or nil when it's been used or has expired.
-    @MainActor static func coachInvite(_ code: String) async throws -> String? {
-        try await run("query($c: String!) { coachInvite(code: $c) }", ["c": code], at: "coachInvite", as: String?.self, query: true)
+    /// FIT-227: an invite still open; `name` is nil when the coach has none (Sign in with Apple without one).
+    struct CoachInvite: Equatable, Sendable {
+        var name: String?
+
+        /// The server answers "Your coach" for a coach with no name, so build 5, which shows it as it is, still reads.
+        init(answer: String) { name = answer == "Your coach" ? nil : answer }
+    }
+
+    /// The invite's coach, or nil when it's been used or has expired.
+    @MainActor static func coachInvite(_ code: String) async throws -> CoachInvite? {
+        let answer = try await run("query($c: String!) { coachInvite(code: $c) }", ["c": code], at: "coachInvite", as: String?.self, query: true)
+        return answer.map(CoachInvite.init(answer:))
     }
 
     @MainActor static func acceptCoach(_ code: String) async throws -> Person {
