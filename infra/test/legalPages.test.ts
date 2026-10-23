@@ -32,6 +32,26 @@ describe("privacy, terms and support (FIT-158)", () => {
     expect(body).toContain("never for advertising or marketing, never sold");
   });
 
+  it("the policy names the controller, the reasons, the rights and where data goes, for the GDPR (FIT-59)", () => {
+    const body = legalRoute("/privacy", site)!.body;
+    expect(body).toContain("its controller under the GDPR and the UK GDPR");
+    expect(body).toContain("With your permission:</b> heart rate from Apple Health");
+    expect(body).toContain("ask for a copy of your data");
+    expect(body).toContain("complain to your local data protection authority");
+    expect(body).toContain("include the EU Standard Contractual Clauses");
+  });
+
+  it("the pages the app opens don't link home, where the coach plan is sold (3.1.1(a), FIT-59)", async () => {
+    for (const path of ["/privacy", "/terms", "/support"]) {
+      const body = legalRoute(path, site)!.body;
+      expect(body).toContain('<span class="brand">');
+      expect(body).not.toContain('href="/"');
+    }
+    const claude = (await route("/claude", {} as Store, { ...site, mcpUrl: "https://example.com/mcp" })).body;
+    expect(claude).not.toContain('href="/"');
+    expect((await route("/nope", {} as Store, site)).body).toContain('<a href="/" class="brand">');
+  });
+
   it("every page's footer links them", async () => {
     const body = (await route("/nope", {} as Store, site)).body;
     for (const path of ["/privacy", "/terms", "/support"]) expect(body).toContain(`href="${path}"`);

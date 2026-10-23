@@ -10,7 +10,7 @@ import { esc, html, layout, type Page, type Site } from "./sharePages.ts";
 export const SUPPORT_EMAIL = "maxwell.n.kendall@gmail.com";
 
 /** The date the policy and terms last changed in substance. */
-export const UPDATED = "October 22, 2026";
+export const UPDATED = "October 23, 2026";
 
 export function legalRoute(path: string, site: Site): Page | undefined {
   if (path === "/privacy") return html(privacyPage(site));
@@ -26,6 +26,7 @@ function doc(site: Site, path: string, title: string, description: string, secti
     title: `${title} · ${site.appName}`,
     description,
     path,
+    linkHome: false,
     body: `${style}<article class="doc">
       <h1>${esc(title)}</h1>
       <p class="fine">Last updated ${UPDATED}</p>
@@ -69,6 +70,17 @@ function privacyPage(site: Site) {
     <h2>Deleting your account</h2>
     <p>In the app, open You › Account › Delete Account. That deletes your account and everything above from our servers at once: your profile, training, shares, coach links and sign-in. If you can't use the app, email ${mail} from the address you signed in with and we'll delete it for you within 30 days.</p>
     <p>Backups of our database are kept for up to 35 days and then expire.</p>
+
+    <h2>Your rights</h2>
+    <p>Maxwell Kendall runs ${app} and is responsible for your data (its controller under the GDPR and the UK GDPR). Contact: ${mail}.</p>
+    <p>Why we use it:</p>
+    <ul>
+      <li><b>To run the service you signed up for:</b> your account, training, sync, and the link with your coach.</li>
+      <li><b>With your permission:</b> heart rate from Apple Health, your location during a run you track, and notifications. You can take it back at any time in the iPhone's Settings.</li>
+      <li><b>To keep the service safe:</b> sign-in tokens, stopping abuse, and counting page views without knowing who opened them.</li>
+    </ul>
+    <p>Wherever you live, you can ask for a copy of your data (in a format you can take elsewhere), have it corrected or deleted, or object to or limit how we use it. Most of it you can see, change and delete yourself in the app. For anything else, email ${mail} and we'll answer within 30 days. If you're in the EU, the UK or Switzerland, you can also complain to your local data protection authority.</p>
+    <p>Your data is stored and processed in the United States. Amazon Web Services stores it, Apple delivers notifications, and Stripe handles coaches' billing, each under its data processing terms, which include the EU Standard Contractual Clauses.</p>
 
     <h2>Children</h2>
     <p>${app} isn't meant for children under 13, and we don't knowingly keep their data.</p>

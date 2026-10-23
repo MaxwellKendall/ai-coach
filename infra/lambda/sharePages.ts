@@ -664,6 +664,7 @@ function claudePage(site: Site, mcpUrl: string) {
     title: "Connect Claude",
     description: `Connect ${site.appName} to Claude: write and change your clients' training from their logged sets.`,
     path: "/claude",
+    linkHome: false,
     body: `
       <section class="hero left">
         <p class="eyebrow">Connect Claude</p>
@@ -737,7 +738,11 @@ function how(site: Site) {
 
 export const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.5"/><rect x="9.5" y="8.5" width="5" height="12.5" rx="1.5"/><rect x="16" y="3" width="5" height="18" rx="1.5"/></svg>`;
 
-export function layout(site: Site, page: { title: string; description: string; path: string; body: string; image?: string; view?: string }) {
+/**
+ * `linkHome: false` leaves the logo unlinked: on the pages the iPhone app opens (privacy, terms, support, and /claude
+ * one tap on), so the app has no path to the home page's coach plan checkout (App Review 3.1.1(a), FIT-59).
+ */
+export function layout(site: Site, page: { title: string; description: string; path: string; body: string; image?: string; view?: string; linkHome?: boolean }) {
   const url = `${site.origin}${page.path}`;
   return `<!doctype html>
 <html lang="en">
@@ -761,7 +766,7 @@ export function layout(site: Site, page: { title: string; description: string; p
 <style>${css}</style>
 </head>
 <body>
-<header class="top"><a href="/" class="brand">${logo}${esc(site.appName)}</a></header>
+<header class="top">${page.linkHome === false ? `<span class="brand">${logo}${esc(site.appName)}</span>` : `<a href="/" class="brand">${logo}${esc(site.appName)}</a>`}</header>
 <main>${page.body}</main>
 <footer class="foot"><nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a></nav>© ${new Date().getUTCFullYear()} ${esc(site.appName)}</footer>
 <script>${page.view ? `\nfetch("/v/${page.view}", { cache: "no-store", keepalive: true }).catch(() => {});` : ""}
