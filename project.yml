@@ -14,7 +14,7 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "4"
+    CURRENT_PROJECT_VERSION: "5"
     # Signing team for device builds and App Store archives.
     DEVELOPMENT_TEAM: 7GZKY29XJH
     CODE_SIGN_STYLE: Automatic
