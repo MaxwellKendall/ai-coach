@@ -1,14 +1,15 @@
 import SwiftUI
 import SwiftData
 
-/// FIT-230: no coach: where you'll train and how many days, one tap each, then the ready-made program that fits, to
-/// start on Today. Opened again from You, it starts on the program being followed, with the questions a step back.
+/// FIT-230: no coach: what you have to train with, then how many days (one tap), then the ready-made program that fits,
+/// to start on Today. Opened again from You, it starts on the program being followed, with the questions a step back.
 struct ProgramPicker: View {
     @Query private var profiles: [Profile]
     var onDone: () -> Void
 
     @State private var path: [Step] = []
-    @State private var place = ReadyProgram.Place.gym
+    /// Catalog equipment ticked on "What do you have?".
+    @State private var have: Set<String> = []
     @State private var days = 3
     @State private var started = false
 
@@ -16,10 +17,17 @@ struct ProgramPicker: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            question("Where will you train?", "Pick the closest. You can change the program later.") {
-                option("A gym", "Barbells, machines and cables") { place = .gym }
-                option("At home, with dumbbells", "A pair, or a few sets") { place = .dumbbells }
-                option("No equipment", "Just your body weight") { place = .bodyweight }
+            question("What do you have?", "Tick what you can use. The program only uses these.") {
+                KitList(have: $have)
+                Text(have.isEmpty ? "Nothing ticked: a body-weight program." : " ")
+                    .font(.footnote).foregroundStyle(.secondary).padding(.top, 4)
+            }
+            .safeAreaBar(edge: .bottom) {
+                Button { path.append(.days) } label: {
+                    Text("Continue").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+                .padding(.horizontal, 24).padding(.bottom, 8)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(profiles.first?.programSlug == nil ? "Skip" : "Cancel", action: onDone) }
@@ -29,22 +37,22 @@ struct ProgramPicker: View {
                 case .days:
                     question("How many days a week?", "The days themselves come next.") {
                         ForEach(2...6, id: \.self) { count in
-                            option("\(count) days", nil) { days = count }
+                            option("\(count) days") { days = count }
                         }
                     }
                 case .program:
-                    ProgramChoice(place: place, days: days, onStart: onDone)
+                    ProgramChoice(have: $have, days: days, onStart: onDone)
                 }
             }
         }
         .onAppear(perform: resume)
     }
 
-    /// From You: the program being followed, from its place and days.
+    /// From You: the program being followed, with its equipment and days.
     private func resume() {
-        guard !started, let profile = profiles.first, let ready = ReadyProgram.named(profile.programSlug) else { return }
+        guard !started, let profile = profiles.first, ReadyProgram.named(profile.programSlug) != nil else { return }
         started = true
-        place = ready.place
+        have = Set(profile.equipment)
         days = profile.trainingDays.count
         path = [.days, .program]
     }
@@ -62,17 +70,14 @@ struct ProgramPicker: View {
         .toolbarTitleDisplayMode(.inline)
     }
 
-    /// A one-tap answer: it's set and the next step opens.
-    private func option(_ title: String, _ detail: String?, set: @escaping () -> Void) -> some View {
+    /// A one-tap answer: it's set and the program opens.
+    private func option(_ title: String, set: @escaping () -> Void) -> some View {
         Button {
             set()
-            path.append(path.isEmpty ? .days : .program)
+            path.append(.program)
         } label: {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                    if let detail { Text(detail).font(.subheadline).foregroundStyle(.secondary) }
-                }
+                Text(title).font(.headline)
                 Spacer()
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
             }
@@ -85,28 +90,69 @@ struct ProgramPicker: View {
     }
 }
 
+/// "What do you have?": a full gym ticks every line; each line is some of the catalog's equipment.
+private struct KitList: View {
+    @Binding var have: Set<String>
+
+    private var everything: Set<String> { Set(ReadyProgram.kit.flatMap(\.equipment)) }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            row("A full gym", on: have.isSuperset(of: everything)) { on in
+                have = on ? have.union(everything) : have.subtracting(everything)
+            }
+            ForEach(ReadyProgram.kit, id: \.name) { line in
+                row(line.name, on: have.isSuperset(of: line.equipment)) { on in
+                    have = on ? have.union(line.equipment) : have.subtracting(line.equipment)
+                }
+            }
+        }
+    }
+
+    private func row(_ title: String, on: Bool, set: @escaping (Bool) -> Void) -> some View {
+        Button { withAnimation(.snappy) { set(!on) } } label: {
+            HStack {
+                Text(title).font(.headline)
+                Spacer()
+                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                    .font(.title3).foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+            }
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// "A full gym", "Dumbbells, Pull-up bar", "None".
+    static func summary(_ have: Set<String>) -> String {
+        let lines = ReadyProgram.kit.filter { have.isSuperset(of: $0.equipment) }
+        return lines.count == ReadyProgram.kit.count ? "A full gym" : lines.isEmpty ? "None" : lines.map(\.name).joined(separator: ", ")
+    }
+}
+
 /// The program that fits best, what a week of it looks like and its days, then Start. The others that fit, and every
 /// other program, are below it.
 private struct ProgramChoice: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [Profile]
     @Query private var templates: [Template]
-    var place: ReadyProgram.Place
+    @Binding var have: Set<String>
     var days: Int
     var onStart: () -> Void
 
     @State private var selected: ReadyProgram?
     @State private var trainingDays: [Int] = []
-    /// Optional equipment switched on: a pull-up bar, a bench.
-    @State private var extras: Set<String> = []
     @State private var showsAll = false
     @State private var failure: String?
     /// Following a program already: starting one begins again at week 1, so it's asked first.
     @State private var confirming = false
 
-    private var matches: [ReadyProgram] { ReadyProgram.matches(place: place, days: days) }
+    private var matches: [ReadyProgram] { ReadyProgram.matches(have: have, days: days) }
     private var program: ReadyProgram? { selected ?? matches.first }
-    private var equipment: [String] { place.equipment + extras.sorted() }
+    private var equipment: [String] { ReadyProgram.equipment(have) }
 
     var body: some View {
         ScrollViewReader { scroll in
@@ -115,12 +161,12 @@ private struct ProgramChoice: View {
                     VStack(alignment: .leading, spacing: 0) {
                         header(program).id("top")
                         daysRow(program).padding(.top, 24)
-                        ForEach(program.optional ?? [], id: \.self) { item in
-                            Toggle(Self.have[item] ?? item, isOn: Binding { extras.contains(item) } set: { on in
-                                if on { extras.insert(item) } else { extras.remove(item) }
-                            })
-                            .padding(.top, 16)
+                        DisclosureGroup {
+                            KitList(have: $have).padding(.top, 12)
+                        } label: {
+                            LabeledContent("Equipment", value: KitList.summary(have)).font(.headline)
                         }
+                        .padding(.top, 24)
                         week(program).padding(.top, 28)
                         others(program, scroll: scroll).padding(.top, 36)
                     }
@@ -135,12 +181,13 @@ private struct ProgramChoice: View {
         .onAppear {
             guard selected == nil else { return }
             let profile = profiles.first
-            let current = ReadyProgram.named(profile?.programSlug)
-            select(current?.place == place && current?.days.contains(days) == true ? current! : matches.first,
-                   days: current != nil && profile?.trainingDays.count == days ? profile?.trainingDays : nil)
-            // The switches as they were, for the program being followed; equipment from another place doesn't carry over.
-            if let profile, current?.place == place { extras = Set(profile.equipment).intersection(selected?.optional ?? []) }
+            // The program being followed, while the answers are still the ones it was started with.
+            let same = profile.map { Set($0.equipment) == Set(equipment) && $0.trainingDays.count == days } ?? false
+            let current = same ? ReadyProgram.named(profile?.programSlug) : nil
+            select(current ?? matches.first, days: current != nil ? profile?.trainingDays : nil)
         }
+        // Equipment changed here: the best program for it, as the questions would have picked.
+        .onChange(of: have) { withAnimation(.snappy) { select(matches.first) } }
     }
 
     private func header(_ program: ReadyProgram) -> some View {
@@ -279,6 +326,5 @@ private struct ProgramChoice: View {
 
     static func level(_ program: ReadyProgram) -> String { program.level == "new" ? "New to lifting" : "Some experience" }
 
-    static let places: [ReadyProgram.Place: String] = [.gym: "Gym", .dumbbells: "Dumbbells", .bodyweight: "No equipment"]
-    static let have = ["pull_up_bar": "I have a pull-up bar", "bench": "I have a bench"]
+    static let places: [ReadyProgram.Place: String] = [.gym: "Barbell", .dumbbells: "Dumbbells", .bodyweight: "No equipment"]
 }

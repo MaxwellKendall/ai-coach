@@ -62,19 +62,32 @@ struct ReadyProgramTests {
         }
     }
 
-    @Test func matchesPlaceAndDays() {
-        #expect(ReadyProgram.matches(place: .gym, days: 3).first?.slug == "full-body-3")
-        #expect(ReadyProgram.matches(place: .gym, days: 2).first?.slug == "full-body-2")
-        #expect(ReadyProgram.matches(place: .gym, days: 4).first?.slug == "upper-lower-4")
-        #expect(ReadyProgram.matches(place: .gym, days: 6).first?.slug == "push-pull-legs")
-        #expect(ReadyProgram.matches(place: .dumbbells, days: 3).first?.slug == "dumbbell-full-body")
-        #expect(ReadyProgram.matches(place: .dumbbells, days: 6).first?.slug == "dumbbell-upper-lower")
-        // A gym can run every program; dumbbells, the dumbbell and bodyweight ones; no equipment, only bodyweight.
-        #expect(ReadyProgram.matches(place: .gym, days: 3).count == 7)
-        #expect(Set(ReadyProgram.matches(place: .dumbbells, days: 3).map(\.place)) == [.dumbbells, .bodyweight])
-        #expect(ReadyProgram.matches(place: .bodyweight, days: 5).map(\.slug) == ["bodyweight-basics"])
+    @Test func matchesWhatYouHave() {
+        let gym = Set(Profile.allEquipment)
+        #expect(ReadyProgram.matches(have: gym, days: 3).first?.slug == "full-body-3")
+        #expect(ReadyProgram.matches(have: gym, days: 2).first?.slug == "full-body-2")
+        #expect(ReadyProgram.matches(have: gym, days: 4).first?.slug == "upper-lower-4")
+        #expect(ReadyProgram.matches(have: gym, days: 6).first?.slug == "push-pull-legs")
+        #expect(ReadyProgram.matches(have: gym, days: 3).count == 7)
+        // Dumbbells only: the dumbbell programs first, then body weight; nothing with a barbell.
+        #expect(ReadyProgram.matches(have: ["dumbbells"], days: 3).map(\.slug) == ["dumbbell-full-body", "bodyweight-basics", "dumbbell-upper-lower"])
+        #expect(ReadyProgram.matches(have: ["dumbbells"], days: 6).first?.slug == "dumbbell-upper-lower")
+        #expect(ReadyProgram.matches(have: [], days: 5).map(\.slug) == ["bodyweight-basics"])
         #expect(program("bodyweight-basics").days(nearest: 5) == 3)
         #expect(program("push-pull-legs").days(nearest: 4) == 3)
+    }
+
+    /// A home gym without cables or machines runs the barbell programs, with chin-ups and dumbbells standing in.
+    @Test func homeGymUsesStandIns() {
+        let home = ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"]
+        #expect(ReadyProgram.matches(have: Set(home), days: 4).first?.slug == "upper-lower-4")
+        let first = week("full-body-3", date(10, 25), equipment: home)
+        #expect(first.workouts.contains { $0.exercise == "chin-up" } && !first.workouts.contains { $0.exercise == "wide-grip-lat-pulldown" })
+        let ul = week("upper-lower-4", date(10, 25), equipment: home, days: [0, 1, 3, 4])
+        #expect(!ul.workouts.contains { ["triceps-pushdown", "leg-press", "lying-leg-curls", "seated-cable-rows"].contains($0.exercise) })
+        // Every line ticked is a full gym; fewer keeps just those.
+        #expect(ReadyProgram.equipment(Set(ReadyProgram.kit.flatMap(\.equipment))) == Profile.allEquipment)
+        #expect(ReadyProgram.equipment(["dumbbells", "pull_up_bar"]) == ["dumbbells", "pull_up_bar"])
     }
 
     /// Week 1 from a Sunday: A, B, A at the program's starting loads, each saying to find the weight.

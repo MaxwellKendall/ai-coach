@@ -3,17 +3,25 @@ import Foundation
 /// FIT-230: a ready-made program for someone training without a coach, from `Resources/Seed/programs.json`. Generic
 /// structures anyone may use (full-body A/B, upper/lower, push/pull/legs), under our own names, never a brand's.
 struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
-    /// Onboarding's "Where will you train?".
+    /// What a program is built around: a barbell, dumbbells or body weight.
     enum Place: String, Codable, CaseIterable, Sendable {
         case gym, dumbbells, bodyweight
 
-        var equipment: [String] {
-            switch self {
-            case .gym: Profile.allEquipment
-            case .dumbbells: ["dumbbells"]
-            case .bodyweight: []
-            }
+        /// What equipment someone has is mostly for: a barbell makes the barbell programs the fit.
+        init(_ have: Set<String>) {
+            self = have.isSuperset(of: ["barbell", "rack"]) ? .gym : have.contains("dumbbells") ? .dumbbells : .bodyweight
         }
+    }
+
+    /// Onboarding's "What do you have?": each line and the catalog equipment it stands for.
+    static let kit: [(name: String, equipment: [String])] = [
+        ("Barbell and rack", ["barbell", "rack"]), ("Bench", ["bench"]), ("Dumbbells", ["dumbbells"]),
+        ("Pull-up bar", ["pull_up_bar"]), ("Cables and machines", ["cable", "machine"]),
+    ]
+
+    /// The equipment kept on the profile: every line ticked is a full gym, with the rest of the catalog's equipment.
+    static func equipment(_ have: Set<String>) -> [String] {
+        kit.allSatisfy({ have.isSuperset(of: $0.equipment) }) ? Profile.allEquipment : Profile.allEquipment.filter(have.contains)
     }
 
     struct Item: Codable, Equatable, Sendable {
@@ -54,7 +62,7 @@ struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
     var weeks: Int
     var minutes: Int
     var equipment: [String]
-    /// Equipment it uses when there is some, shown as a switch: a pull-up bar adds pull-ups.
+    /// Equipment it uses when there is some: a pull-up bar adds pull-ups.
     var optional: [String]?
     /// Done in turn, one per training day, carrying on across weeks.
     var sessions: [Session]
@@ -66,10 +74,10 @@ struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
 
     static func named(_ slug: String?) -> ReadyProgram? { all.first { $0.slug == slug } }
 
-    /// The programs the place's equipment allows, best first: nearest in days a week, then the place's own, then the
-    /// file's order (which lists beginner programs first).
-    static func matches(place: Place, days: Int, in programs: [ReadyProgram] = all) -> [ReadyProgram] {
-        let have = Set(place.equipment)
+    /// The programs the equipment allows, best first: nearest in days a week, then the ones built around what the
+    /// equipment is mostly for, then the file's order (which lists beginner programs first).
+    static func matches(have: Set<String>, days: Int, in programs: [ReadyProgram] = all) -> [ReadyProgram] {
+        let place = Place(have)
         return programs.enumerated()
             .filter { Set($0.element.equipment).isSubset(of: have) }
             .sorted { a, b in
