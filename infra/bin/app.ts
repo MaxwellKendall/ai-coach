@@ -6,7 +6,7 @@ const app = new App();
 const stage = app.node.getContext("stage") as Stage;
 const stages = app.node.getContext("stages") as Record<Stage, {
   identityProviders: IdentityProvider[];
-  web?: { zone: string; hosts: string[]; openaiAppsChallenge?: string };
+  web?: { zone: string; hosts: string[]; openaiAppsChallenge?: string; mcpRegistryAuth?: string };
   app?: boolean;
 }>;
 const dashboard = stages[stage].app;

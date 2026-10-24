@@ -22,6 +22,7 @@ const site: Site = {
   appId: process.env.APP_ID!,
   mcpUrl: process.env.MCP_URL || undefined,
   openaiAppsChallenge: process.env.OPENAI_APPS_CHALLENGE || undefined,
+  mcpRegistryAuth: process.env.MCP_REGISTRY_AUTH || undefined,
 };
 
 const first = (name: unknown) => (typeof name === "string" && name.trim() ? name.trim().split(/\s+/)[0] : undefined);

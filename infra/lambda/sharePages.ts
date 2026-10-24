@@ -103,6 +103,8 @@ export interface Site {
   mcpUrl?: string;
   /** FIT-237: ChatGPT's domain-verification token for the MCP server's host. */
   openaiAppsChallenge?: string;
+  /** FIT-243: the MCP Registry's domain record, "v=MCPv1; k=ed25519; p=…". */
+  mcpRegistryAuth?: string;
 }
 
 export interface Page {
@@ -244,6 +246,9 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
   }
   if (path === "/.well-known/openai-apps-challenge" && site.openaiAppsChallenge) {
     return { status: 200, type: "text/plain; charset=utf-8", body: site.openaiAppsChallenge };
+  }
+  if (path === "/.well-known/mcp-registry-auth" && site.mcpRegistryAuth) {
+    return { status: 200, type: "text/plain; charset=utf-8", body: site.mcpRegistryAuth };
   }
   if (path === "/.well-known/apple-app-site-association") {
     return { status: 200, type: "application/json", body: JSON.stringify(associationFile(site)) };
