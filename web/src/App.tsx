@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { finishSignIn, idToken, signIn, signOut, startLink, user, type Config, type Provider, type User } from "./auth";
+import { coachPlan, hasPlan } from "./billing";
 import { BillingPage } from "./BillingPage";
 import { ClientPage, ClientsPage } from "./ClientsPage";
 import { corrections, HistoryView } from "./HistoryView";
+import { homePath } from "./home";
 import { here, href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
 import { comments, postComment, pullAll, type Comment, type Unit } from "./sync";
@@ -52,9 +54,10 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
   return (
     <main className="signin">
       <div className="brand"><Logo />{APP}</div>
-      <h1>Your training, on a bigger screen</h1>
-      <p className="lede">Edit your program and look back at every session. Coach others? Invite your clients, write their programs and see how their training goes.</p>
-      <p className="lede">Sign in, or make a free account, with Google or Apple. Use the same one as in Claude and the app.</p>
+      {/* FIT-242: coaches are the customer; the landing page's words. */}
+      <h1>Your clients log in a free app. You coach them from Claude.</h1>
+      <p className="lede">Invite your clients, see who trained, who's slipping and who's hurting, and manage your coach plan.</p>
+      <p className="lede">Sign in, or make a free account, with Google or Apple. Use the same one you connect Claude with.</p>
       <div className="buttons">
         {providers.map((p) => (
           <button key={p} className="button primary" onClick={() => signIn(config, p)}>
@@ -63,6 +66,7 @@ function SignIn({ config, error }: { config: Config; error?: string }) {
         ))}
       </div>
       {error && <p className="error" role="alert">{error}</p>}
+      <p className="muted">Training yourself? Sign in the same way: your program and history show up here, free.</p>
     </main>
   );
 }
@@ -98,9 +102,10 @@ function Dashboard({ config, me, notice }: { config: Config; me: User; notice?: 
       <aside className="nav">
         <div className="brand"><Logo />{APP}</div>
         <nav>
-          {link("/", "Program", path === "/")}
-          {link("/history", "History", path.startsWith("/history"))}
+          {/* FIT-242: Clients first; their own training after it. */}
           {link("/clients", "Clients", path.startsWith("/clients"))}
+          {link("/program", "Program", path.startsWith("/program"))}
+          {link("/history", "History", path.startsWith("/history"))}
           {link("/billing", "Billing", path.startsWith("/billing"))}
           {link("/account", "Account", path.startsWith("/account"))}
         </nav>
@@ -123,12 +128,26 @@ function Dashboard({ config, me, notice }: { config: Config; me: User; notice?: 
           <ClientPage key={path} config={config} me={me} uid={path.slice("/clients/".length)} go={go} />
         ) : path.startsWith("/clients") ? (
           <ClientsPage config={config} me={me} go={go} />
-        ) : (
+        ) : path.startsWith("/program") ? (
           <ProgramPage config={config} me={me} empty={<Empty config={config} me={me} go={go} />} />
+        ) : (
+          <Home config={config} go={go} />
         )}
       </main>
     </div>
   );
+}
+
+/** FIT-242: "/" opens Clients, or their own program for someone training themselves (home.ts). */
+function Home({ config, go }: { config: Config; go: (path: string, replace?: boolean) => (e?: React.MouseEvent) => void }) {
+  useEffect(() => {
+    (async () => {
+      const paid = await coachPlan(config).then(hasPlan, () => false);
+      const units = paid ? undefined : await pullAll(config).catch(() => undefined);
+      go(homePath(paid, units), true)();
+    })();
+  }, [config]);
+  return <p className="muted">Loading…</p>;
 }
 
 function HistoryPage({ config, me }: { config: Config; me: User }) {

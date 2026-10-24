@@ -136,7 +136,7 @@ describe("Train with Claude (FIT-152)", () => {
 });
 
 describe("the coach landing page (FIT-217)", () => {
-  it("is the home page: the value proposition, the price, and Start coaching to the dashboard's billing", async () => {
+  it("is the home page: the value proposition, the price, and Start coaching to the dashboard's Clients", async () => {
     for (const path of ["/", "/coaches"]) {
       const page = await route(path, {} as Store, { ...site, mcpUrl: "https://example.com/mcp" });
       expect(page.status).toBe(200);
@@ -144,7 +144,10 @@ describe("the coach landing page (FIT-217)", () => {
       expect(page.body).toContain("$19.99");
       expect(page.body).toContain("$199 a year");
       expect(page.body).toContain("Clients are free");
-      expect(page.body).toContain('<a class="button primary" href="/app/billing">Start coaching</a>');
+      expect(page.body).toContain('<a class="button primary" href="/app/clients">Start coaching</a>');
+      // FIT-242: the roster, as the dashboard shows it.
+      expect(page.body).toContain('aria-label="The dashboard\'s Clients page"');
+      expect(page.body).toContain("RPE 9+ on Back Squat");
       expect(page.body).toContain('href="/claude"');
       // Someone training themselves has a way in too: free, through Claude.
       expect(page.body).toContain("Training yourself?");

@@ -572,8 +572,11 @@ function coachInvitePage(coach: string | null, path: string, site: Site) {
   });
 }
 
-/** FIT-217: where a coach starts. Sign-in, the plan's Checkout and inviting clients are on the dashboard (/app). */
-export const START = "/app/billing";
+/**
+ * FIT-217: where a coach starts. Sign-in, the plan's Checkout and inviting clients are on the dashboard (/app).
+ * FIT-242: Clients, which for someone new is the coach start: their sample client (FIT-240) and Start the coach plan.
+ */
+export const START = "/app/clients";
 
 /**
  * FIT-217: the home page is for coaches, the customer since the pilot (author, 2026-10-22). It says who it's for,
@@ -609,6 +612,11 @@ function homePage(site: Site) {
         </ol>
       </section>
       <section class="block">
+        <h2>Your roster</h2>
+        ${rosterFigure()}
+        <p class="fine">The dashboard's Clients, those who need you first. Claude reads the same flags when you ask who needs you this week.</p>
+      </section>
+      <section class="block">
         <h2>What it looks like in Claude</h2>
         <ul class="chat">${chat.map((m) => `<li class="${m.who}">${esc(m.text)}</li>`).join("")}</ul>
         <p class="fine">Mike's phone shows the new week as soon as it's applied.</p>
@@ -629,8 +637,8 @@ function homePage(site: Site) {
         <h2>Get started</h2>
         <ol class="steps">
           <li><b>Sign in</b><span>With Google or Apple.</span></li>
+          <li><b>Connect Claude</b><span>Paste one address into Claude's connectors, and try it on your sample client.</span></li>
           <li><b>Start the coach plan</b><span>Monthly or yearly, through Stripe.</span></li>
-          <li><b>Connect Claude</b><span>Paste one address into Claude's connectors.</span></li>
           <li><b>Invite your first client</b><span>Send them the link.</span></li>
         </ol>
         <div class="actions"><a class="button primary" href="${START}">Start coaching</a></div>
@@ -643,7 +651,29 @@ function homePage(site: Site) {
   });
 }
 
+/** FIT-242: the dashboard's Clients as a coach sees it: FIT-221's demo clients and the flags shared/triage.ts gives them. */
+function rosterFigure() {
+  const rows = [
+    { name: "Mike Torres", week: "3 of 3 this week · last Fri", flags: [["pain", "Fri: “Left knee is sore, worse on squats”"], ["hard", "RPE 9+ on Back Squat"], ["plateau", "No new best on Back Squat in 3 weeks"]] },
+    { name: "Jen Alvarez", week: "2 of 3 this week · last Wed", flags: [] },
+    { name: "Sara Kim", week: "3 of 3 this week · 5 weeks in a row", flags: [] },
+  ];
+  return `<figure class="roster" aria-label="The dashboard's Clients page">
+    <ul>${rows.map((r) => `<li><span class="who"><b>${esc(r.name)}</b><span>${esc(r.week)}</span></span>${r.flags.length
+      ? `<span class="flags">${r.flags.map(([kind, text]) => `<span class="${kind}">${esc(text)}</span>`).join("")}</span>`
+      : `<span class="flags"><span>No flags</span></span>`}</li>`).join("")}</ul>
+  </figure>`;
+}
+
 const coachStyle = `<style>
+.roster ul{list-style:none;display:grid;gap:8px}
+.roster li{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.roster .who{display:grid;gap:2px}.roster .who span{color:var(--muted);font-size:14px}
+.roster .flags{display:flex;flex-wrap:wrap;gap:6px}
+.roster .flags span{font-size:13px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.roster .flags .pain,.roster .flags .hard{color:#b0541f;border-color:currentColor}
+.roster .flags .plateau{color:var(--text);border-color:var(--text)}
+@media (prefers-color-scheme:dark){.roster .flags .pain,.roster .flags .hard{color:#f0a46b}}
 .chat{list-style:none;display:grid;gap:8px}
 .chat li{border-radius:18px;padding:10px 14px;font-size:15px;max-width:88%;width:fit-content}
 .chat .coach{justify-self:end;background:var(--button);color:var(--button-text);border-bottom-right-radius:6px}

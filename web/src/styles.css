@@ -234,3 +234,4 @@ h3 .copy:hover { color: var(--text); }
 
 /* FIT-234: the invite code, read aloud or typed. */
 .invite .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; }
+.signin > .muted:last-child { margin-top: 28px; font-size: 15px; }
