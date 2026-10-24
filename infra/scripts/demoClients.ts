@@ -1,6 +1,6 @@
 // FIT-221's demo clients: three weeks of realistic training, Mon/Wed/Fri, as sync units. demo.ts seeds them on dev for
 // the coach video; review-account.ts --coach (FIT-236) gives them to the account Claude's directory reviewers sign in with.
-import { addDays, dailyRows, encode, logRows, type DailyInput, mergeProfile, sessionRows, type ExerciseInput, type PlanRow } from "../lambda/training.ts";
+import { addDays, dailyRows, encode, goalBody, logRows, type DailyInput, type GoalInput, mergeProfile, sessionRows, type ExerciseInput, type PlanRow } from "../lambda/training.ts";
 
 type Week = (w: number) => ExerciseInput[];
 export type Client = {
@@ -12,6 +12,8 @@ export type Client = {
   actual?: (w: number, weekday: number, rows: ReturnType<typeof logRows>) => void;
   /** FIT-223: the morning check-in `daysAgo` days back (1–6), as the app's Check In saves it. */
   checkIn?: (daysAgo: number) => DailyInput | undefined;
+  /** FIT-236: the program, from their first logged week, and the goals it aims at, each from where it started. */
+  program: { weeks: number; goals: { goal: GoalInput; baseline: number }[] };
 };
 
 const lb = (start: number, step: number, w: number) => start + step * w;
@@ -43,6 +45,10 @@ export const mike: Client = {
     return { rpe: 7, effort: 3 };
   },
   checkIn: (n) => ({ weight_lb: Math.round((195.4 + 0.2 * n) * 10) / 10, sleep_hours: n === 1 ? 5 : 7, note: n === 1 ? "Slept badly, the knee kept me up." : undefined }),
+  program: { weeks: 16, goals: [
+    { goal: { type: "lift_max", exercise: "Back Squat", target: 315 }, baseline: 276 },
+    { goal: { type: "lift_max", exercise: "Deadlift", target: 405 }, baseline: 332 },
+  ] },
   // The stall: every week since the first, the last set of 245 goes to RPE 9.
   actual: (w, day, rows) => {
     if (day !== 1 || w === -WEEKS - 1) return;
@@ -73,6 +79,12 @@ export const sara: Client = {
   // Her note is older than a week, so it doesn't flag her.
   logged: (w, day) => (w === -2 && day === 3 ? { rpe: 8, effort: 4, note: "New bench PR! Meet prep feels on track." } : { rpe: 7, effort: 3 }),
   checkIn: (n) => (n % 2 ? undefined : { weight_lb: 142, sleep_hours: 8 }),
+  // A meet at the end of the program.
+  program: { weeks: 12, goals: [
+    { goal: { type: "lift_max", exercise: "Back Squat", target: 225 }, baseline: 185 },
+    { goal: { type: "lift_max", exercise: "Bench Press", target: 145 }, baseline: 117 },
+    { goal: { type: "lift_max", exercise: "Deadlift", target: 300 }, baseline: 228 },
+  ] },
 };
 
 export const jen: Client = {
@@ -96,6 +108,10 @@ export const jen: Client = {
   },
   // One session missed last week (two would flag her).
   logged: (w, day) => (w === -1 && day === 3 ? undefined : { rpe: 7, effort: 3 }),
+  program: { weeks: 12, goals: [
+    { goal: { type: "body_weight", target: 150 }, baseline: 161 },
+    { goal: { type: "lift_max", exercise: "Wide-Grip Lat Pulldown", target: 140 }, baseline: 107 },
+  ] },
 };
 
 const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -104,14 +120,24 @@ export const sunday = addDays(today, -new Date(`${today}T12:00:00Z`).getUTCDay()
 /** Epoch seconds at a local time on a day. */
 export const at = (day: string, hour: number) => new Date(`${day}T${String(hour).padStart(2, "0")}:00:00`).getTime() / 1000;
 
-/** The client's sync units: profile, every planned day from their first week through next week, and what they logged. */
-export function units(client: Client, first: number) {
+/**
+ * The client's sync units: profile, every planned day from their first week through next week, and what they logged.
+ * With `program` (FIT-236), also their program and goals, as set_program and set_goal write them.
+ */
+export function units(client: Client, first: number, program = false) {
   const out = new Map<string, string>();
   const start = addDays(sunday, 7 * first + 1);
+  const target = addDays(sunday, 7 * (first + client.program.weeks) - 1);
   out.set("profile", encode({
     ...mergeProfile(undefined, { age: client.age, weight_lb: client.weight, training_days: ["Mon", "Wed", "Fri"], session_minutes: 60, style: client.style }),
-    programStart: at(start, 0),
+    // Noon, so the days are the same in any US time zone the account reads them in.
+    ...(program ? { programStart: at(addDays(start, -1), 12), targetDate: at(target, 12) } : { programStart: at(start, 0) }),
   }));
+  if (program) {
+    client.program.goals.forEach(({ goal, baseline }, i) => {
+      out.set(`goal#${client.testUser.toUpperCase()}-${i + 1}`, encode(goalBody(goal, at(target, 12), baseline)));
+    });
+  }
   const days = Object.keys(client.days).map(Number);
   const last = [0, -1].flatMap((w) => days.map((d) => addDays(sunday, 7 * w + d))).filter((d) => d < today).sort().at(-1);
   for (let w = first; w <= 1; w++) {

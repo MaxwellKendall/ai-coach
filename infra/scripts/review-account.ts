@@ -12,8 +12,8 @@
 // (default "App Review"), so a second account, such as one for recording onboarding, isn't confused with it.
 //
 // FIT-236: --coach also makes it a coach, for Claude's directory reviewers, who sign in to the connector with it: an
-// active coach plan with no Stripe behind it, and FIT-221's three demo clients (no sign-in of their own) with three
-// weeks logged and this week and next planned. Run it again to bring their weeks up to today.
+// active coach plan with no Stripe behind it, and FIT-221's three demo clients (no sign-in of their own) with a
+// program and goals, three weeks logged and this week and next planned. Run it again to bring their weeks up to today.
 import { randomBytes } from "node:crypto";
 import {
   AdminCreateUserCommand,
@@ -101,7 +101,7 @@ if (process.argv.includes("--coach")) {
   const since = new Date(at(addDays(sunday, -7 * (WEEKS + 1)), 9) * 1000).toISOString();
   for (const [client, first] of [[mike, -WEEKS - 1], [sara, -WEEKS], [jen, -WEEKS]] as const) {
     const clientUid = `${client.testUser}-for-${uid}`;
-    const bodies = units(client, first);
+    const bodies = units(client, first, true);
     await db.send(new PutCommand({ TableName: TABLE, Item: { PK: `USER#${clientUid}`, SK: "PROFILE", uid: clientUid, displayName: client.name, units: "lb", createdAt: since, updatedAt: now } }));
     // Days from an earlier run outside this one's weeks go, so the weeks always end at next week.
     const { Items = [] } = await db.send(new QueryCommand({
