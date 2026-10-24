@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "barbrabell",
   "version": "1.0.0",
-  "description": "Coach strength clients from ChatGPT: write their program, review your roster each week, and bring in programs you already have. Changes land in your clients' free Barbrabell iPhone app.",
+  "description": "Plan, log and track strength training: today's workout, logging sets, body weight and sleep, progress toward lift and race goals, and swaps for exercises that hurt. Coaches use it to write and review their clients' training.",
   "author": {
     "name": "Barbrabell",
     "url": "https://barbrabell.com"
@@ -21,9 +21,9 @@
       "interface": {
         "displayName": "Barbrabell",
         "shortDescription": "Your assistant strength coach",
-        "longDescription": "Barbrabell is an assistant coach for personal trainers and online strength coaches. Connect it, and ChatGPT reads each client's goals, program, planned sessions and every logged set, then helps you write and change their training. Your clients follow it in the free Barbrabell iPhone app, where they check off sets and log how it went, with no AI account needed.\n\nAsk \"Who needs me this week?\" and it goes through your roster: pain in a client's notes, missed sessions, sets at RPE 9, lifts that have stalled, and whose next week isn't written. Ask it to rebuild a week around a sore knee, program a block to a meet, or bring in a program you already have in a spreadsheet or PDF. It works from each client's own maxes and logs, shows you every change first, and saves it only when you say yes, with undo. Changes reach the client's phone at its next sync.\n\nTraining yourself? Say \"Set me up\" and it writes your program, or tell it what you did and it logs the workout.\n\nWho it's for: strength coaches with clients, and people training themselves. Coaching clients needs a Barbrabell coach plan, set up on barbrabell.com. It plans strength training; it doesn't give medical advice, and it isn't for nutrition prescriptions.",
+        "longDescription": "Barbrabell plans, logs and tracks strength training. It holds a person's goals, their multi-week program, each day's planned session and every set they log, and shares them with the Barbrabell iPhone app.\n\nAsk what today's workout is and it shows each exercise with its sets, reps, load and the coach's notes. Say how the session went and it logs it, set by set with RPE. Tell it your weigh-in or how you slept and it saves them. Ask how you're doing and it reports each goal (a lift max, reps in a row, body weight or a race time) against your program's pace, from your own logged sets. If an exercise hurts, it suggests alternatives that fit your equipment, and changes a planned session only when you say yes, with undo.\n\nStrength coaches use the same tools for their clients: see who needs attention this week, write and adjust a client's program from what they logged, and invite new clients to the app.\n\nWho it's for: people following a strength program, and the coaches who write them. It plans and records training; it doesn't give medical advice or diagnose injuries.",
         "developerName": "Barbrabell",
-        "category": "Productivity",
+        "category": "Other",
         "websiteURL": "https://barbrabell.com",
         "supportURL": "https://barbrabell.com/support",
         "privacyPolicyURL": "https://barbrabell.com/privacy",

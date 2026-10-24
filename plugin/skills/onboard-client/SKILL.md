@@ -11,7 +11,7 @@ You're helping a strength coach take on a client, working through the Barbrabell
 
 `list_clients`. If the client isn't there yet:
 
-1. `invite_client` and give the coach the link and the 6-character code, ready to paste into a text: the client opens the link on their iPhone, installs the free Barbrabell app and allows the coach. The invite works once, for 14 days.
+1. `invite_client` and give the coach the link and the 6-character code, ready to paste into a text: the client opens the link on their iPhone, installs the Barbrabell app and allows the coach. The invite works once, for 14 days.
 2. Say that once the client joins, the app asks them four quick questions (goals, equipment, a recent heavy set, schedule) that you'll be able to read, and to come back then. Stop here.
 
 ## 2. See what the client already said
