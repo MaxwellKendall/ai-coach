@@ -90,7 +90,7 @@
         "commerce": false
       },
       "publication": {
-        "release_notes": "First release: coach your strength clients from ChatGPT. Roster review, programs and weekly plans from each client's own logs, bringing in existing programs, and client invites, with every change shown before it's saved."
+        "release_notes": "First release: plan, log and track strength training in ChatGPT. See today's workout, log it set by set with RPE, record body weight and sleep, check progress toward lift and race goals, and get alternatives for an exercise that hurts. Changes to a planned session are shown first and saved only when you agree, with undo. Coaches can use the same tools for their clients."
       }
     }
   }
