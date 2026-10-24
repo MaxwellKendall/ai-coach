@@ -3,10 +3,19 @@
   "name": "barbrabell",
   "version": "1.0.0",
   "description": "Coach strength clients from ChatGPT: write their program, review your roster each week, and bring in programs you already have. Changes land in your clients' free Barbrabell iPhone app.",
-  "author": { "name": "Barbrabell", "url": "https://barbrabell.com" },
+  "author": {
+    "name": "Barbrabell",
+    "url": "https://barbrabell.com"
+  },
   "homepage": "https://barbrabell.com/docs",
   "license": "MIT",
-  "keywords": ["fitness", "strength training", "coaching", "personal trainer", "programming"],
+  "keywords": [
+    "fitness",
+    "strength training",
+    "coaching",
+    "personal trainer",
+    "programming"
+  ],
   "extensions": {
     "com.openai": {
       "interface": {
@@ -14,7 +23,7 @@
         "shortDescription": "Your assistant strength coach",
         "longDescription": "Barbrabell is an assistant coach for personal trainers and online strength coaches. Connect it, and ChatGPT reads each client's goals, program, planned sessions and every logged set, then helps you write and change their training. Your clients follow it in the free Barbrabell iPhone app, where they check off sets and log how it went, with no AI account needed.\n\nAsk \"Who needs me this week?\" and it goes through your roster: pain in a client's notes, missed sessions, sets at RPE 9, lifts that have stalled, and whose next week isn't written. Ask it to rebuild a week around a sore knee, program a block to a meet, or bring in a program you already have in a spreadsheet or PDF. It works from each client's own maxes and logs, shows you every change first, and saves it only when you say yes, with undo. Changes reach the client's phone at its next sync.\n\nTraining yourself? Say \"Set me up\" and it writes your program, or tell it what you did and it logs the workout.\n\nWho it's for: strength coaches with clients, and people training themselves. Coaching clients needs a Barbrabell coach plan, set up on barbrabell.com. It plans strength training; it doesn't give medical advice, and it isn't for nutrition prescriptions.",
         "developerName": "Barbrabell",
-        "category": "Health & Fitness",
+        "category": "Productivity",
         "websiteURL": "https://barbrabell.com",
         "supportURL": "https://barbrabell.com/support",
         "privacyPolicyURL": "https://barbrabell.com/privacy",
@@ -64,15 +73,15 @@
           ],
           "negative": [
             {
-              "description": "Unrelated request.",
+              "description": "Unrelated request. Barbrabell holds strength training, not weather, so none of its tools should run; ChatGPT answers on its own or says it can't help.",
               "prompt": "What's the weather in Denver this weekend?"
             },
             {
-              "description": "Medical diagnosis, which the app doesn't give.",
+              "description": "Medical diagnosis. Barbrabell plans training and gives no medical advice, so it shouldn't diagnose or call a tool; the expected answer suggests seeing a doctor or physical therapist, and may offer to plan around the pain once they have.",
               "prompt": "My knee clicks when I bend it. Is it a torn meniscus?"
             },
             {
-              "description": "General writing request with no training data involved.",
+              "description": "General writing with no training involved. None of Barbrabell's tools apply, so none should run; ChatGPT writes the poem itself.",
               "prompt": "Write a short poem about the ocean."
             }
           ]
