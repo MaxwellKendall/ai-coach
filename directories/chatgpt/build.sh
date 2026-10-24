@@ -5,14 +5,16 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-if grep -q '"demo_recording_url": ""' "$here/plugin.json"; then
-  echo "Set review.demo_recording_url in plugin.json first: ChatGPT's review requires a demo video link." >&2
-  exit 1
-fi
 out="$here/dist"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 cp "$here/plugin.json" "$here/mcp.json" "$stage/"
+# Review needs a demo video link. Without one in plugin.json the field is left out, to be given in the portal's
+# Review details instead, since an empty one would be rejected.
+if grep -q '"demo_recording_url": ""' "$here/plugin.json"; then
+  python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); del p["extensions"]["com.openai"]["review"]["demo_recording_url"]; json.dump(p, open(sys.argv[1], "w"), indent=2)' "$stage/plugin.json"
+  echo "No demo video link in plugin.json: add it in the portal's Review details before submitting." >&2
+fi
 cp -R "$here/assets" "$stage/assets"
 cp -R "$root/plugin/skills" "$stage/skills"
 mkdir -p "$out"
