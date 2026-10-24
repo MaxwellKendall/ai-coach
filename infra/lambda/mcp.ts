@@ -1218,14 +1218,15 @@ export async function callTool(name: string, args: Args, account: Account, store
 
 // ---- MCP over HTTP ----
 
-/** FIT-208: what an agent reads first, in short paragraphs it can follow step by step. */
+/**
+ * FIT-208: what an agent reads first. FIT-237: only rules that span tools, the key ones in the first 512 characters, no
+ * persona and no tool descriptions repeated, as ChatGPT's review asks. The routines live in the prompts and skills.
+ */
 const INSTRUCTIONS = [
-  "Barbrabell holds a person's strength training: goals, a multi-week program, planned sessions and what they logged, shared with their phone app. In every tool, \"they\" is the person whose training it is: the caller, or the client a coach names with client.",
-  "When the conversation is about their training, call get_context first. If it says NOT SET UP YET, get to know them before planning: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and add_goal; then lay out the program to their goal date with set_program, propose_week for the first days, and apply when they agree.",
-  "Day to day: log what they did with log_session, log_run and log_daily, with RPE and their notes. Change days with propose_session, propose_week or clear_day: nothing changes until apply, so show the change and apply only once they agree; undo reverses an apply. Near the end of each week, review it (get_week_review) and plan the next from get_program and their logs. Ask before delete_log, and before share (it makes a public link).",
-  "Coaches: if get_context lists clients, the caller coaches them. list_clients and roster_review show who needs them; pass client to read or plan one client's training, and to add_note a reply on their session. Logging and sharing stay the client's. Changes reach the client's phone at its next sync. Coaching needs the coach plan; when it has lapsed, the tools say so and where to start it.",
-  "To give one client's block to another: get_day with to on the first, then propose_week for the second with loads from the second's own maxes (ask for a starting set if there's none).",
-  "To bring in a client's existing program (a pasted sheet, CSV, PDF or screenshot): get_context with client; save the maxes it's based on with set_profile starting_sets, and the equipment it needs; set_program with start on its first week, weeks its length plus one (the last week is a light test week), and deload_every its deload spacing (12 when it has none); then propose_week its days, up to 6 weeks a call, in the coach's numbers: percent_1rm for percentages, rpe for RPE (10 minus RIR), the same superset number for A1/A2, reps the low end of a range, and note for tempo, rest, the range or AMRAP. Check the names it matched loosely, show the coach, and apply.",
+  "Barbrabell holds a person's strength training (goals, a multi-week program, planned sessions and logs), synced with its phone app. In every tool, \"they\" is the person whose training it is: the caller, or the client a coach names with client.",
+  "Call get_context first when working on someone's training. Plan changes from propose_session, propose_week and clear_day take effect only through apply, once they agree; undo reverses an apply. Ask before delete_log and share.",
+  "For someone new (get_context says NOT SET UP YET): save their goals with add_goal, and their schedule, equipment, injuries, age, weight and a recent heavy set for each goal lift with set_profile, before set_program and propose_week.",
+  "Coaches: list_clients and roster_review show who needs attention; pass client to read or plan one client's training. Logging and sharing stay the client's.",
 ].join("\n\n");
 
 type Rpc = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: any };

@@ -972,6 +972,10 @@ describe("FIT-208: agent-readable tools and errors", () => {
     const store = memory({}, data());
     const init: any = await answer({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, me, store);
     expect(init.result.instructions).toMatch(/"they" is the person whose training it is: the caller, or the client a coach names with client/);
+    // FIT-237: short, cross-tool, the key rules first, no persona (ChatGPT's review).
+    expect(init.result.instructions.length).toBeLessThan(1000);
+    expect(init.result.instructions.slice(0, 512)).toMatch(/get_context first[\s\S]*only through apply, once they agree/);
+    expect(init.result.instructions).not.toMatch(/be their coach|link to pay|Checkout/);
     const list: any = await answer({ jsonrpc: "2.0", id: 2, method: "tools/list" }, me, store);
     for (const t of list.result.tools) expect(t.description.length, t.name).toBeGreaterThan(60);
   });
