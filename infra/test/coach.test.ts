@@ -13,6 +13,11 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
           const input = command.input;
           switch (command.constructor.name) {
             case "GetCommand": return { Item: table.get(id(input.Key)) };
+            case "PutCommand": {
+              if (input.ConditionExpression && table.has(id(input.Item))) throw Object.assign(new Error("x"), { name: "ConditionalCheckFailedException" });
+              table.set(id(input.Item), input.Item);
+              return {};
+            }
             case "DeleteCommand": table.delete(id(input.Key)); return {};
             case "QueryCommand": {
               const v = input.ExpressionAttributeValues;
@@ -223,6 +228,32 @@ describe("coaching needs the coach plan (FIT-148)", () => {
     plan("active");
     expect(await owner("sam", "ann")).toBe("ann");
     expect(await as("sam", "myClients")).toHaveLength(1);
+  });
+
+  // FIT-240
+  it("gives a coach with no clients a sample client, theirs to coach without the plan, and only once", async () => {
+    plan(undefined);
+    const [sample] = await as("sam", "myClients");
+    expect(sample).toMatchObject({ uid: "sample-mike-sam", name: "Mike Torres (sample)" });
+    expect(table.get("USER#sample-mike-sam|PROFILE")).toMatchObject({ displayName: "Mike Torres", sample: true });
+    expect([...table.keys()].filter((k) => k.startsWith("USER#sample-mike-sam|SYNC#plan#")).length).toBeGreaterThan(10);
+    expect(await owner("sam", "sample-mike-sam")).toBe("sample-mike-sam");
+    await expect(as("sam", "createClientInvite")).rejects.toThrow(/coach plan/);
+    // Removed, it stays gone; and without the plan, real clients wait for it while the sample shows.
+    await as("sam", "removeClient", { uid: "sample-mike-sam" });
+    await expect(as("sam", "myClients")).rejects.toThrow(/coach plan/);
+    expect(table.has("USER#sam|CLIENT#sample-mike-sam")).toBe(false);
+  });
+
+  it("shows a lapsed coach only the sample while their real clients wait", async () => {
+    plan(undefined);
+    await as("sam", "myClients");
+    plan("active");
+    await linked();
+    plan(undefined);
+    expect((await as("sam", "myClients")).map((c: { uid: string }) => c.uid)).toEqual(["sample-mike-sam"]);
+    plan("active");
+    expect(await as("sam", "myClients")).toHaveLength(2);
   });
 
   it("still lets a lapsed coach end a link", async () => {

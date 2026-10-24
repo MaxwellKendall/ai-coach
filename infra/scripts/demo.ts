@@ -22,7 +22,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { item } from "../lambda/sync.ts";
 import { addDays } from "../lambda/training.ts";
-import { at, jen, mike, sara, sunday, units, WEEKS } from "./demoClients.ts";
+import { at, jen, mike, sara, sunday, units, WEEKS } from "../lambda/demoClients.ts";
 import { cognito, gql, must, out, signIn } from "./dev.ts";
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: out.Region }));

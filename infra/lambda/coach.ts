@@ -3,6 +3,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { HAS_PLAN, planRecord } from "./coachPlan.ts";
+import { ensureSample, isSample } from "./sample.ts";
 
 // FIT-130: coaches and their clients. A coach (any account) makes an invite link; the client opens it in the app and
 // allows it. The link is two items, one in each partition (USER#client COACH#coach, USER#coach CLIENT#client), so
@@ -62,8 +63,21 @@ export async function requireCoachPlan(uid: string) {
  */
 export async function canCoach(coach: string, client: string) {
   if (!(await isCoachOf(coach, client))) return false;
-  await requireCoachPlan(coach);
+  if (!isSample(client)) await requireCoachPlan(coach); // FIT-240: the sample client is free to coach
   return true;
+}
+
+/**
+ * The dashboard's Clients. FIT-240: a coach with no clients gets the sample client first. Without the coach plan they
+ * see only sample clients, and with none of those, Billing.
+ */
+export async function myClients(coach: string, now = new Date()) {
+  let clients = await list(coach, "CLIENT#");
+  if (!clients.length && (await ensureSample(coach, now.toISOString().slice(0, 10)))) clients = await list(coach, "CLIENT#");
+  if (await hasCoachPlan(coach)) return clients;
+  const samples = clients.filter((c) => isSample(c.uid));
+  if (!samples.length) throw new CoachError(NO_PLAN);
+  return samples;
 }
 
 /** Whether an account has a coach: the client's Pro while linked (FIT-130). */
@@ -209,7 +223,7 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
       case "coachInvite": return await inviteName(args.code);
       case "acceptCoach": return await accept(me, args.code, identity.claims);
       case "myCoaches": return await list(me, "COACH#");
-      case "myClients": await requireCoachPlan(me); return await list(me, "CLIENT#");
+      case "myClients": return await myClients(me);
       case "unlinkCoach": return await unlink(args.uid, me);
       case "removeClient": return await unlink(me, args.uid);
       case "postComment": return await postComment(me, identity.claims, args.uid, args.day, args.text);

@@ -24,6 +24,7 @@ function memory(accounts: Record<string, Account>, units: Record<string, Record<
   const links: Link[] = [], invites: string[] = [];
   const threads: (Comment & { owner: string })[] = [];
   const paying = new Set(["coach"]);
+  const samples = new Set<string>();
   return {
     shared,
     links,
@@ -31,6 +32,15 @@ function memory(accounts: Record<string, Account>, units: Record<string, Record<
     threads,
     paying,
     async coachPlan(uid) { return paying.has(uid); },
+    // FIT-240: as sample.ts, once per coach: the sample client's link, and a planned day so there's a week to read.
+    async sample(coach, today) {
+      if (samples.has(coach)) return false;
+      samples.add(coach);
+      const uid = `sample-mike-${coach}`;
+      units[uid] = { [`plan#${today}`]: encode([row("back-squat", 4, {}, at(today))]) };
+      links.push({ coach, client: uid, name: "Mike Torres (sample)" });
+      return true;
+    },
     async comments(_, client) { return threads.filter((c) => c.owner === client); },
     async comment(coach, client, day, text) { threads.push({ owner: client, day, at: now.toISOString(), by: coach, byName: "Coach", text }); },
     async clients(coach) { return links.filter((l) => l.coach === coach).map((l) => ({ uid: l.client, name: l.name, since: "2026-10-01T00:00:00.000Z" })); },
@@ -746,9 +756,8 @@ describe("FIT-196: the coach's roster", () => {
     await callTool("add_note", { client: "Sarah", date: "2026-10-15", note: "Ice it and keep the squat at RPE 7." }, coach, store, now);
     expect(store.threads).toMatchObject([{ owner: "me", day: "2026-10-15", by: "coach", text: "Ice it and keep the squat at RPE 7." }]);
     expect(await callTool("list_clients", {}, coach, store, now)).toMatch(/Sarah Jones \[me\]: .* No flags\./);
-    await expect(callTool("list_clients", {}, me, store, now)).rejects.toThrow(/Coaching needs the coach plan/);
-    store.paying.add("me");
-    expect(await callTool("list_clients", {}, me, store, now)).toMatch(/no clients yet[\s\S]*invite_client/);
+    // FIT-240: someone with no clients gets the sample client, plan or not.
+    expect(await callTool("list_clients", {}, me, store, now)).toMatch(/^1 client, those who need them first:\n- Mike Torres \(sample\)/);
   });
 
   it("leaves out a client whose link ended after listing", async () => {
@@ -1003,5 +1012,52 @@ describe("the connector's documentation (FIT-236)", () => {
     expect(page.body).toMatch(/<code>delete_log<\/code> Delete from a day&#39;s log <span class="tag">Changes or deletes data<\/span>/);
     expect(page.body).toMatch(/<code>propose_week<\/code> Propose a week <span class="tag">Proposes a change<\/span><span class="tag">Coaches: for a client<\/span>/);
     expect(page.body).toContain('<a href="/privacy">privacy policy</a>');
+  });
+});
+
+describe("FIT-240: a sample client to coach before paying", () => {
+  const coach: Account = { uid: "newcoach", tz, agent: "claude" };
+  const setup = () => {
+    const store = memory({}, { ...data(), newcoach: { profile: encode(profile) } });
+    store.paying.clear();
+    return store;
+  };
+
+  it("gives a new coach one sample client to list, review, read, plan and apply, without the plan", async () => {
+    const store = setup();
+    const listed = await callTool("list_clients", {}, coach, store, now);
+    expect(listed).toMatch(/^1 client, those who need them first:\n- Mike Torres \(sample\) \[sample-mike-newcoach\]/);
+    expect(listed).toMatch(/is a sample client[\s\S]*nothing reaches a phone\. Inviting and coaching real clients needs the coach plan; how it works: .*\/coaches\./);
+    await expect(callTool("roster_review", {}, coach, store, now)).resolves.toMatch(/Mike Torres \(sample\)/);
+    await expect(callTool("get_context", { client: "Mike" }, coach, store, now)).resolves.toMatch(/^Client: Mike Torres \(sample\)/);
+    const proposed = await callTool("propose_session", { client: "Mike", date: "2026-10-19", title: "Lower", reason: "knee", exercises: [{ exercise: "Plank", sets: 3, seconds: 45 }] }, coach, store, now);
+    await callTool("apply", { client: "Mike", proposal_id: proposed.match(/Proposal (\S+)/)![1] }, coach, store, now);
+    await expect(callTool("get_day", { client: "Mike", date: "2026-10-19" }, coach, store, now)).resolves.toMatch(/Plank/);
+    // Made once: a second look doesn't make another.
+    await callTool("list_clients", {}, coach, store, now);
+    expect(store.links.filter((l) => l.coach === "newcoach")).toHaveLength(1);
+  });
+
+  it("keeps inviting and real clients behind the plan", async () => {
+    const store = setup();
+    await callTool("list_clients", {}, coach, store, now);
+    await expect(callTool("invite_client", {}, coach, store, now)).rejects.toThrow(/coach plan, which this account doesn't have/);
+    expect(store.invites).toEqual([]);
+    store.links.push({ coach: "newcoach", client: "me", name: "Sarah" });
+    await expect(callTool("get_day", { client: "Sarah", date: "2026-10-15" }, coach, store, now)).rejects.toThrow(/coach plan/);
+    const listed = await callTool("list_clients", {}, coach, store, now);
+    expect(listed).not.toMatch(/Sarah/);
+    const own = await callTool("get_context", {}, coach, store, now);
+    expect(own).toMatch(/They coach 1 client, but their coach plan has ended[\s\S]*They coach 1 client meanwhile: Mike Torres \(sample\)/);
+  });
+
+  it("doesn't give a coach with clients a sample, and a paying coach sees everyone", async () => {
+    const store = setup();
+    store.links.push({ coach: "newcoach", client: "me", name: "Sarah" });
+    await expect(callTool("list_clients", {}, coach, store, now)).rejects.toThrow(/coach plan/);
+    store.paying.add("newcoach");
+    const listed = await callTool("list_clients", {}, coach, store, now);
+    expect(listed).toMatch(/^1 client/);
+    expect(listed).not.toMatch(/sample/);
   });
 });

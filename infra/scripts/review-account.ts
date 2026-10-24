@@ -25,7 +25,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { item } from "../lambda/sync.ts";
 import { addDays } from "../lambda/training.ts";
-import { at, jen, mike, sara, sunday, units, WEEKS } from "./demoClients.ts";
+import { at, jen, mike, sara, sunday, units, WEEKS } from "../lambda/demoClients.ts";
 import { stackOutputs } from "./stack.ts";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));

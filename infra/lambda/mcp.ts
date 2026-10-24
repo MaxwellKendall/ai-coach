@@ -16,6 +16,7 @@ import { clock, distanceName, goalMeters, meters, MILE, miles, OUTDOOR_RUN, pace
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
 import { comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
+import { ensureSample, isSample } from "./sample.ts";
 import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
@@ -51,6 +52,8 @@ export interface Store {
   comment(coach: string, client: string, day: string, text: string): Promise<void>;
   /** FIT-148: whether they have the coach plan. */
   coachPlan(uid: string): Promise<boolean>;
+  /** FIT-240: makes the coach's sample client the first time (sample.ts); whether it made one now. */
+  sample(coach: string, today: string): Promise<boolean>;
 }
 
 export type ShareKind = "win" | "recap" | "program" | "session";
@@ -119,6 +122,7 @@ export const dynamoStore: Store = {
   comments: (coach, client) => comments(coach, client),
   async comment(coach, client, day, text) { await postComment(coach, undefined, client, day, text); },
   coachPlan: hasCoachPlan,
+  sample: ensureSample,
   async unshare(uid, id) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
     if (!Item || Item.uid !== uid) return false;
@@ -857,7 +861,7 @@ async function clientOf(caller: string, said: unknown, store: Store): Promise<Pe
   if (said === undefined || said === null || said === "") return undefined;
   const client = pickClient(await store.clients(caller), String(said));
   if (!(await store.coachOf(caller, client.uid))) throw new Error(`They don't coach ${shownName(client)} any more: one of them ended the link. invite_client makes a new invite if they both want it.`);
-  await needsPlan(caller, store);
+  if (!isSample(client.uid)) await needsPlan(caller, store);
   return client;
 }
 
@@ -870,13 +874,34 @@ async function needsPlan(coach: string, store: Store) {
   throw new Error(`Coaching needs the coach plan, which this account doesn't have; their clients stay free and keep logging meanwhile. `
     + `How it works: ${ORIGIN}/coaches. Once it's on, coaching works on their next request; there's nothing to reconnect.`);
 }
-const COACH_ONLY = new Set(["list_clients", "roster_review", "invite_client"]);
+
+/**
+ * FIT-240: the clients a coach sees now. One with no clients gets the sample client first; without the coach plan only
+ * sample clients show, and with none of those it's the plan's message.
+ */
+async function roster(coach: string, store: Store, today: string) {
+  let clients = await store.clients(coach);
+  if (!clients.length && (await store.sample(coach, today))) clients = await store.clients(coach);
+  if (await store.coachPlan(coach)) return { clients, paid: true };
+  const samples = clients.filter((c) => isSample(c.uid));
+  if (!samples.length) await needsPlan(coach, store);
+  return { clients: samples, paid: false };
+}
+
+/** What a coach is told when their list has a sample client in it. */
+function sampleNote(clients: Person[], paid: boolean) {
+  const samples = clients.filter((c) => isSample(c.uid));
+  if (!samples.length) return "";
+  const note = `\n\n${samples.map(shownName).join(" and ")} ${samples.length === 1 ? "is a sample client" : "are sample clients"}, there to try coaching on: `
+    + "plan, apply and undo work as for a real client, but nothing reaches a phone.";
+  return paid ? note : `${note} Inviting and coaching real clients needs the coach plan; how it works: ${ORIGIN}/coaches.`;
+}
 
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
   const { tz } = account;
   if (args.client !== undefined && !CLIENT_TOOLS.has(name)) throw new Error(`${name} is the client's own to do, so it takes no client.`);
   const client = await clientOf(account.uid, args.client, store);
-  if (COACH_ONLY.has(name)) await needsPlan(account.uid, store);
+  if (name === "invite_client") await needsPlan(account.uid, store);
   // Whose data this call is about. A coach's changes reach the client's phone at its next sync, as the dashboard's do.
   const uid = client?.uid ?? account.uid;
   useAccountExercises(await store.units(uid)); // FIT-173: their own exercises, beside the catalog
@@ -888,9 +913,12 @@ export async function callTool(name: string, args: Args, account: Account, store
       const units = await store.units(uid);
       const text = context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
       if (client) return `Client: ${shownName(client)}, coached by them since ${client.since.slice(0, 10)}. Everything below is the client's.\n\n${text}`;
-      const clients = await store.clients(uid);
-      if (clients.length && !(await store.coachPlan(uid))) return `${text}\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}, but their coach plan has ended, so they can't see or change them until it's paid again (any coaching tool gives the link). Their own training above is free as ever.`;
-      return clients.length ? `${text}\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.` : text;
+      const all = await store.clients(uid);
+      const paid = all.length > 0 && (await store.coachPlan(uid));
+      const clients = paid ? all : all.filter((p) => isSample(p.uid)), waiting = all.length - clients.length;
+      const ended = waiting ? `\n\nThey coach ${waiting} client${waiting === 1 ? "" : "s"}, but their coach plan has ended, so they can't see or change them until it's paid again (any coaching tool gives the link). Their own training above is free as ever.` : "";
+      const shown = clients.length ? `\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}${waiting ? " meanwhile" : ""}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.${sampleNote(clients, paid)}` : "";
+      return `${text}${ended}${shown}`;
     }
     case "invite_client": {
       const made = await store.invite(uid);
@@ -908,7 +936,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "list_clients":
     case "roster_review": {
-      const clients = await store.clients(uid);
+      const { clients, paid } = await roster(uid, store, today);
       if (!clients.length) return "They have no clients yet. invite_client makes an invite link to send one.";
       const rows = await Promise.all(clients.map(async (c) => {
         if (!(await store.coachOf(uid, c.uid))) return undefined;
@@ -917,8 +945,9 @@ export async function callTool(name: string, args: Args, account: Account, store
         return { client: c, units, triage: triage(units, thread, new Map([...bySlug].map(([slug, e]) => [slug, e.name])), uid, today, tz) };
       }));
       const sorted = byNeed(rows.filter((r) => r !== undefined));
-      if (name === "list_clients") return [`${sorted.length} client${sorted.length === 1 ? "" : "s"}, those who need them first:`, ...sorted.map((r) => `- ${rosterLine(r.client, r.triage)}`)].join("\n");
-      return sorted.map((r) => `${rosterLine(r.client, r.triage)}\n${weekLines(r.units, day, Math.floor(now.getTime() / 1000), tz).map((l) => `  ${l}`).join("\n")}`).join("\n\n");
+      const note = sampleNote(clients, paid);
+      if (name === "list_clients") return [`${sorted.length} client${sorted.length === 1 ? "" : "s"}, those who need them first:`, ...sorted.map((r) => `- ${rosterLine(r.client, r.triage)}`)].join("\n") + note;
+      return sorted.map((r) => `${rosterLine(r.client, r.triage)}\n${weekLines(r.units, day, Math.floor(now.getTime() / 1000), tz).map((l) => `  ${l}`).join("\n")}`).join("\n\n") + note;
     }
     case "find_exercises": {
       const found = find(String(args.query ?? ""), profileOf(await store.units(uid)));

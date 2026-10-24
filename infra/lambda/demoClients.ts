@@ -1,6 +1,7 @@
 // FIT-221's demo clients: three weeks of realistic training, Mon/Wed/Fri, as sync units. demo.ts seeds them on dev for
-// the coach video; review-account.ts --coach (FIT-236) gives them to the account Claude's directory reviewers sign in with.
-import { addDays, dailyRows, encode, goalBody, logRows, type DailyInput, type GoalInput, mergeProfile, sessionRows, type ExerciseInput, type PlanRow } from "../lambda/training.ts";
+// the coach video; review-account.ts --coach (FIT-236) gives them to the account Claude's directory reviewers sign in with;
+// sample.ts gives Mike to every new coach (FIT-240).
+import { addDays, dailyRows, encode, goalBody, logRows, type DailyInput, type GoalInput, mergeProfile, sessionRows, type ExerciseInput, type PlanRow } from "./training.ts";
 
 type Week = (w: number) => ExerciseInput[];
 export type Client = {
@@ -115,16 +116,20 @@ export const jen: Client = {
 };
 
 const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** The Sunday that starts a day's week. */
+export const sundayOf = (day: string) => addDays(day, -new Date(`${day}T12:00:00Z`).getUTCDay());
 export const today = key(new Date());
-export const sunday = addDays(today, -new Date(`${today}T12:00:00Z`).getUTCDay());
+export const sunday = sundayOf(today);
 /** Epoch seconds at a local time on a day. */
 export const at = (day: string, hour: number) => new Date(`${day}T${String(hour).padStart(2, "0")}:00:00`).getTime() / 1000;
 
 /**
  * The client's sync units: profile, every planned day from their first week through next week, and what they logged.
- * With `program` (FIT-236), also their program and goals, as set_program and add_goal write them.
+ * With `program` (FIT-236), also their program and goals, as set_program and add_goal write them. `today` is the
+ * module's own day for the scripts; a Lambda passes the day it's asked on, since a warm one outlives the day it loaded.
  */
-export function units(client: Client, first: number, program = false) {
+export function units(client: Client, first: number, program = false, today = key(new Date())) {
+  const sunday = sundayOf(today);
   const out = new Map<string, string>();
   const start = addDays(sunday, 7 * first + 1);
   const target = addDays(sunday, 7 * (first + client.program.weeks) - 1);

@@ -26,19 +26,20 @@ type Go = (path: string, replace?: boolean) => (e?: React.MouseEvent) => void;
 const toBilling = (go: Go) => go("/billing?coaching=1", true)();
 
 /**
- * FIT-148: coaching needs the coach plan. Without it, the coaching pages send the coach to Billing; the server refuses
- * the same calls (coach.ts requireCoachPlan), so this only saves a trip. Their own program and Billing still work.
+ * FIT-148: coaching needs the coach plan. FIT-240: without it a coach still sees and coaches their sample client; the
+ * server answers only with that (coach.ts myClients), and sends the coach to Billing when there's none.
  */
-function usePlan(config: Config, go: Go) {
-  const [ready, setReady] = useState(false);
+function usePaid(config: Config) {
+  const [paid, setPaid] = useState<boolean>();
   useEffect(() => {
-    coachPlan(config).then((plan) => (hasPlan(plan) ? setReady(true) : toBilling(go)), () => setReady(true));
+    coachPlan(config).then((plan) => setPaid(hasPlan(plan)), () => setPaid(true));
   }, [config]);
-  return ready;
+  return paid;
 }
 
 export function ClientsPage({ config, me, go }: { config: Config; me: User; go: Go }) {
-  const ready = usePlan(config, go);
+  const paid = usePaid(config);
+  const ready = paid !== undefined;
   const [clients, setClients] = useState<(Person & { triage?: Triage })[]>();
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -65,7 +66,15 @@ export function ClientsPage({ config, me, go }: { config: Config; me: User; go: 
         <h1>Clients</h1>
         <p className="lede">Write their program, see how their sessions go, and change it as they train.</p>
       </header>
-      <InviteBox config={config} />
+      {paid ? <InviteBox config={config} /> : (
+        <div className="invite">
+          <p>
+            <strong>Try coaching on your sample client.</strong> Plan their week in Claude and apply it, or open them here.
+            Inviting your own clients needs the coach plan.
+          </p>
+          <a className="button primary" href={href("/billing?coaching=1")} onClick={go("/billing?coaching=1")}>Start the coach plan</a>
+        </div>
+      )}
       {error && <p className="error" role="alert">Couldn't load your clients: {error}</p>}
       {clients && clients.length > 0 && (
         <ul className="clients">
@@ -147,7 +156,7 @@ function InviteBox({ config }: { config: Config }) {
 export function ClientPage({ config, me, uid, go }: {
   config: Config; me: User; uid: string; go: Go;
 }) {
-  const ready = usePlan(config, go);
+  const ready = true; // FIT-240: the server says when this client needs the plan (needsPlan below)
   const [client, setClient] = useState<Person | null>();
   const [units, setUnits] = useState<Map<string, Unit>>();
   const [thread, setThread] = useState<Comment[]>([]);
