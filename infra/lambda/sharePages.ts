@@ -95,6 +95,8 @@ export interface Site {
   appName: string;
   /** "https://repandrecipe.com", for link previews. */
   origin: string;
+  /** FIT-244: the site's main address (barbrabell.com, where origin is share.barbrabell.com): the one search engines are pointed at. */
+  home?: string;
   /** Until the app is on the App Store, the buttons lead to the waitlist anchor instead. */
   appStoreUrl?: string;
   /** Team ID and bundle ID, for Apple's app-site-association file. */
@@ -804,6 +806,7 @@ export function layout(site: Site, page: { title: string; description: string; p
 <meta property="og:title" content="${esc(page.title)}">
 <meta property="og:description" content="${esc(page.description)}">
 <meta property="og:url" content="${esc(url)}">
+<link rel="canonical" href="${esc(`${site.home ?? site.origin}${page.path}`)}">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">${
   page.image

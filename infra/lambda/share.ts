@@ -18,6 +18,7 @@ const TABLE = process.env.TABLE!;
 const site: Site = {
   appName: "Barbrabell",
   origin: process.env.SHARE_ORIGIN!,
+  home: process.env.HOME_ORIGIN || undefined,
   appStoreUrl: process.env.APP_STORE_URL || undefined,
   appId: process.env.APP_ID!,
   mcpUrl: process.env.MCP_URL || undefined,

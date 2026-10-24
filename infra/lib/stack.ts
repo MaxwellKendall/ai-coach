@@ -538,6 +538,8 @@ export class AICoachStack extends Stack {
       });
       const share = fn("share", {
         SHARE_ORIGIN: shareOrigin,
+        // FIT-244: the address the sitemap, robots.txt, llms.txt and canonical links give, whichever host served the page.
+        HOME_ORIGIN: `https://${primary}`,
         APP_ID: "7GZKY29XJH.com.maxwellkendall.aicoach",
         APP_STORE_URL: "",
         MCP_URL: `https://${mcpHost}/mcp`,

@@ -44,3 +44,17 @@ describe("comparison pages (FIT-244)", () => {
     expect(body).toContain("https://example.com/compare/truecoach");
   });
 });
+
+describe("the site's main address (FIT-244)", () => {
+  const shared: Site = { ...site, origin: "https://share.example.com", home: "https://example.com" };
+
+  it("points search engines at it, whichever host served the file", () => {
+    expect(compareRoute("/robots.txt", shared)!.body).toContain("Sitemap: https://example.com/sitemap.xml");
+    expect(compareRoute("/sitemap.xml", shared)!.body).not.toContain("share.example.com");
+    expect(compareRoute("/llms.txt", shared)!.body).toContain("https://example.com/compare/truecoach");
+  });
+
+  it("is every page's canonical link", () => {
+    expect(compareRoute("/compare/trainera", shared)!.body).toContain('<link rel="canonical" href="https://example.com/compare/trainera">');
+  });
+});

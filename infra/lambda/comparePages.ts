@@ -349,7 +349,8 @@ export const rivals: Rival[] = [
 
 const bySlug = new Map(rivals.map((r) => [r.slug, r]));
 
-export function compareRoute(path: string, site: Site): Page | undefined {
+export function compareRoute(path: string, served: Site): Page | undefined {
+  const site = { ...served, origin: served.home ?? served.origin };
   if (path === "/compare") return html(hub(site));
   const slug = /^\/compare\/([a-z-]+)$/.exec(path)?.[1];
   const rival = slug && bySlug.get(slug);
