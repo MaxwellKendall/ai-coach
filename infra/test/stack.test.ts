@@ -313,8 +313,8 @@ describe("share pages (FIT-105)", () => {
     });
     const behaviors = Object.values(t.findResources("AWS::CloudFront::Distribution"))
       .flatMap((d) => d.Properties.DistributionConfig.CacheBehaviors ?? [])
-      .filter((b: any) => ["/mcp", "/mcp/*", "/oauth/*", "/.well-known/oauth-*"].includes(b.PathPattern));
-    expect(behaviors).toHaveLength(4);
+      .filter((b: any) => ["/mcp", "/mcp/*", "/oauth/*", "/.well-known/oauth-*", "/docs"].includes(b.PathPattern));
+    expect(behaviors).toHaveLength(5);
     for (const b of behaviors) expect(b.AllowedMethods).toContain("POST");
     t.hasResourceProperties("AWS::Lambda::Function", {
       Environment: { Variables: Match.objectLike({ PUBLIC_ORIGIN: "https://example.com", PROVIDERS: "" }) },

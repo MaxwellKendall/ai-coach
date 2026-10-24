@@ -22,6 +22,7 @@ Your clients install Barbrabell from the App Store and join you from your invite
 
 ## Privacy and support
 
+- Documentation, with every tool: [barbrabell.com/docs](https://barbrabell.com/docs)
 - Privacy policy: [barbrabell.com/privacy](https://barbrabell.com/privacy)
 - Terms: [barbrabell.com/terms](https://barbrabell.com/terms)
 - Help: [barbrabell.com/support](https://barbrabell.com/support)

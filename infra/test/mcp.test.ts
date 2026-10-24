@@ -981,3 +981,19 @@ describe("FIT-208: agent-readable tools and errors", () => {
     await expect(callTool("nope", {}, me, store, now)).rejects.toThrow(/Unknown tool nope\. The tools: get_context, get_day/);
   });
 });
+
+describe("the connector's documentation (FIT-236)", () => {
+  it("lists every tool and prompt agents are given, grouped by what it does", async () => {
+    const { docs, tools } = await import("../lambda/mcp.ts");
+    const { prompts } = await import("../lambda/prompts.ts");
+    const origin = "https://dev.example.com";
+    const page: any = docs({ appName: "Barbrabell", origin, appId: "" }, origin);
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain(`${origin}/mcp`);
+    for (const t of tools) expect(page.body).toContain(`<code>${t.name}</code>`);
+    for (const p of prompts) expect(page.body).toContain(`<code>${p.name}</code>`);
+    expect(page.body).toMatch(/<code>delete_log<\/code> Delete from a day&#39;s log <span class="tag">Changes or deletes data<\/span>/);
+    expect(page.body).toMatch(/<code>propose_week<\/code> Propose a week <span class="tag">Proposes a change<\/span><span class="tag">Coaches: for a client<\/span>/);
+    expect(page.body).toContain('<a href="/privacy">privacy policy</a>');
+  });
+});

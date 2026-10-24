@@ -4,6 +4,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
 import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
+import { docsPage } from "./mcpDocs.ts";
 import { MAX_UNITS, push } from "./sync.ts";
 import {
   addDays, AREAS, isHardRun, isRun, checkLoads, runTime, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
@@ -1280,6 +1281,13 @@ export async function serve(event: LambdaFunctionURLEvent, store: Store, origin?
   return json(200, Array.isArray(parsed) ? answers : answers[0]);
 }
 
+/** FIT-236: the connector's documentation, from the tools and prompts agents are given. */
+export const docs = (site: Config["site"], origin: string): LambdaFunctionURLResult => ({
+  statusCode: 200,
+  headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" },
+  body: docsPage(site, `${origin}/mcp`, tools, listedPrompts()),
+});
+
 // ---- FIT-151: sign-in through Cognito's hosted UI ----
 
 const ORIGIN = process.env.PUBLIC_ORIGIN ?? "";
@@ -1323,5 +1331,6 @@ export const config: Config = {
 };
 
 export async function handler(event: LambdaFunctionURLEvent) {
+  if (event.rawPath === "/docs" && ORIGIN) return docs(config.site, ORIGIN);
   return (ORIGIN && (await oauth(event, authStore, config))) || serve(event, dynamoStore, ORIGIN || undefined);
 }

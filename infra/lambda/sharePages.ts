@@ -687,7 +687,7 @@ function claudePage(site: Site, mcpUrl: string) {
       <section class="block">
         <h2>Then just say it</h2>
         <ul class="says">${says.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
-        <p class="fine">Claude shows each change before it's saved, and can undo it. Training yourself? The same connector works for you, free: say “Set me up” and Claude writes your program. Other agents that speak MCP connect at the same address.</p>
+        <p class="fine">Claude shows each change before it's saved, and can undo it. Training yourself? The same connector works for you, free: say “Set me up” and Claude writes your program. Other agents that speak MCP connect at the same address. Every tool, and what happens to your data, is in the <a href="/docs">documentation</a>.</p>
       </section>`,
   });
 }
@@ -895,5 +895,16 @@ h3{font-size:17px}
 .hero.left .steps{max-width:none}
 .says{list-style:none;display:grid;gap:8px}
 .says li{background:var(--surface);border:1px solid var(--line);border-radius:18px 18px 18px 6px;padding:10px 14px;font-size:15px;width:fit-content;max-width:100%}
+/* FIT-236: the connector's documentation (mcpDocs.ts). */
+.doc{text-align:left}
+.doc p,.doc ul,.doc ol{margin-top:12px;font-size:16px}
+.doc ul,.doc ol{padding-left:20px;display:grid;gap:8px}
+.doc h3{margin-top:28px}
+.doc .code{grid-column:auto}
+.doc code{font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace}
+.tools,.says-list{margin-top:12px;display:grid;gap:4px}
+.tools dt,.says-list dt{font-weight:650;margin-top:12px}
+.tools dd,.says-list dd{color:var(--muted);font-size:15px}
+.tag{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--muted);vertical-align:2px}
 @media (min-width:700px){h1{font-size:38px}.days{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
 `;

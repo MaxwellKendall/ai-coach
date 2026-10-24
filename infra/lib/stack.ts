@@ -610,7 +610,8 @@ export class AICoachStack extends Stack {
           },
           // FIT-151: the MCP server and its sign-in. No origin access control, which would pass only GETs.
           "/mcp": { ...mcpBehavior, responseHeadersPolicy: signInHeader },
-          ...Object.fromEntries(["/mcp/*", "/oauth/*", "/.well-known/oauth-*"].map((p) => [p, mcpBehavior])),
+          // FIT-236: /docs, the connector's documentation, which the MCP server writes from its own tools.
+          ...Object.fromEntries(["/mcp/*", "/oauth/*", "/.well-known/oauth-*", "/docs"].map((p) => [p, mcpBehavior])),
           ...(appBehavior ? { "/app": appBehavior, "/app/*": appBehavior } : {}),
         },
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
