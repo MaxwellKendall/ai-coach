@@ -1304,6 +1304,22 @@ export const config: Config = {
     if (claims.aud !== CLIENT_ID || typeof claims.sub !== "string") throw new Error("Unexpected id token");
     return { uid: claims.sub };
   },
+  // FIT-236: Cognito checks the password itself (USER_PASSWORD_AUTH on this client), so no hosted page offers sign-up.
+  async passwordSignIn(email, password) {
+    const response = await fetch(`https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-amz-json-1.1", "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth" },
+      body: JSON.stringify({ AuthFlow: "USER_PASSWORD_AUTH", ClientId: CLIENT_ID, AuthParameters: { USERNAME: email, PASSWORD: password } }),
+    });
+    const out = (await response.json()) as { __type?: string; AuthenticationResult?: { IdToken: string } };
+    // Wrong password and no such user both say NotAuthorized (preventUserExistenceErrors); a challenge (a temporary
+    // password) can't be answered here.
+    if (out.__type?.endsWith("NotAuthorizedException") || out.__type?.endsWith("UserNotFoundException") || (response.ok && !out.AuthenticationResult)) return undefined;
+    if (!response.ok) throw new Error(`Cognito sign-in failed (${response.status}): ${out.__type}`);
+    const claims = JSON.parse(Buffer.from(out.AuthenticationResult!.IdToken.split(".")[1], "base64url").toString());
+    if (claims.aud !== CLIENT_ID || typeof claims.sub !== "string") throw new Error("Unexpected id token");
+    return { uid: claims.sub };
+  },
 };
 
 export async function handler(event: LambdaFunctionURLEvent) {

@@ -27,6 +27,9 @@ export interface Config {
   authorizeUrl(params: Record<string, string>): string;
   /** Trades Cognito's code for the Cognito user it signed in. */
   exchange(code: string, verifier: string, redirectUri: string): Promise<{ uid: string }>;
+  /** FIT-236: an email and password checked with Cognito, for accounts made with one (App Review's and the directory's
+   * reviewers); undefined when they don't match. Without it the page offers only Apple and Google. */
+  passwordSignIn?(email: string, password: string): Promise<{ uid: string } | undefined>;
 }
 
 export const ACCESS_SECONDS = 3600;
@@ -82,7 +85,7 @@ const PROVIDERS: Record<string, { label: string; cognito: string }> = {
   google: { label: "Continue with Google", cognito: "Google" },
 };
 
-function consentPage(config: Config, request: string, client: string, returnHost: string) {
+function consentPage(config: Config, request: string, client: string, returnHost: string, emailError?: string) {
   const buttons = config.providers.filter((p) => PROVIDERS[p]).map((p, i) =>
     `<a class="button${i === 0 ? " primary" : ""}" data-signin href="/oauth/start?request=${request}&amp;provider=${p}">${PROVIDERS[p].label}</a>`).join("");
   return layout(config.site, {
@@ -93,6 +96,7 @@ function consentPage(config: Config, request: string, client: string, returnHost
       <h1>Connect ${esc(client)} to your training</h1>
       <p class="lede">${esc(client)} will read your goals, plan and logged workouts, log sessions for you, and change your plan when you agree.</p>
       <div class="actions">${buttons || `<p class="fine">Sign-in isn't set up on this server yet.</p>`}</div>
+      ${config.passwordSignIn ? emailForm(request, emailError) : ""}
       <p class="fine">Then you're back at ${esc(returnHost)}. New here? Signing in makes your account; ask ${esc(client)} to set you up.</p>
       <p class="fine">By continuing you agree to the <a href="/terms">terms</a> and <a href="/privacy">privacy policy</a>.</p>
     </section>
@@ -100,8 +104,46 @@ function consentPage(config: Config, request: string, client: string, returnHost
       // The account's days follow this browser's time zone.
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       for (const a of document.querySelectorAll("[data-signin]")) a.href += "&tz=" + encodeURIComponent(tz);
+      for (const i of document.querySelectorAll("[data-tz]")) i.value = tz;
     </script>`,
   });
+}
+
+/** FIT-236: for an account made with an email and password; Apple and Google stay the way in for everyone else. */
+function emailForm(request: string, error?: string) {
+  return `<details class="email"${error ? " open" : ""}>
+        <summary>Sign in with email</summary>
+        <form method="post" action="/oauth/email">
+          <input type="hidden" name="request" value="${request}">
+          <input type="hidden" name="tz" value="UTC" data-tz>
+          <label>Email <input type="email" name="email" autocomplete="username" required></label>
+          <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+          ${error ? `<p class="error" role="alert">${esc(error)}</p>` : ""}
+          <button class="button" type="submit">Sign in</button>
+        </form>
+      </details>`;
+}
+
+const zone = (tz: string | null) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz ?? "UTC" });
+    return tz ?? "UTC";
+  } catch {
+    return "UTC";
+  }
+};
+
+/** The person signed in: a one-time code for the agent, sent back to its redirect URI. */
+async function signedIn(store: AuthStore, origin: string, request: Record<string, any>, uid: string) {
+  const back = new URL(request.redirect_uri);
+  if (request.state) back.searchParams.set("state", request.state);
+  back.searchParams.set("iss", origin);
+  const ours = random();
+  await store.put(`OAUTH#code#${hash(ours)}`, {
+    uid, tz: request.tz, agent: request.client_name, client_id: request.client_id, redirect_uri: request.redirect_uri, code_challenge: request.code_challenge,
+  }, 5 * 60);
+  back.searchParams.set("code", ours);
+  return redirect(back.toString());
 }
 
 async function issue(store: AuthStore, grant: { uid: string; tz: string; agent: string; client_id: string }) {
@@ -188,14 +230,8 @@ export async function oauth(event: LambdaFunctionURLEvent, store: AuthStore, con
     const request = /^[A-Za-z0-9_-]{43}$/.test(id) ? await store.get(`OAUTH#request#${id}`) : undefined;
     const provider = PROVIDERS[query.get("provider") ?? ""];
     if (!request || !provider) return page(400, messagePage(config, "This sign-in has expired", "Start again from your agent's connector settings."));
-    let tz = query.get("tz") ?? "UTC";
-    try {
-      new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    } catch {
-      tz = "UTC";
-    }
     const verifier = random();
-    await store.put(`OAUTH#request#${id}`, { ...request, tz, verifier }, 15 * 60);
+    await store.put(`OAUTH#request#${id}`, { ...request, tz: zone(query.get("tz")), verifier }, 15 * 60);
     return redirect(config.authorizeUrl({
       response_type: "code", redirect_uri: `${origin}/oauth/callback`, scope: "openid email profile", identity_provider: provider.cognito,
       code_challenge: s256(verifier), code_challenge_method: "S256", state: id,
@@ -206,21 +242,29 @@ export async function oauth(event: LambdaFunctionURLEvent, store: AuthStore, con
     const id = query.get("state") ?? "";
     const request = /^[A-Za-z0-9_-]{43}$/.test(id) ? await store.take(`OAUTH#request#${id}`) : undefined;
     if (!request?.verifier) return page(400, messagePage(config, "This sign-in has expired", "Start again from your agent's connector settings."));
-    const back = new URL(request.redirect_uri);
-    if (request.state) back.searchParams.set("state", request.state);
-    back.searchParams.set("iss", origin);
     const code = query.get("code");
     if (!code) {
+      const back = new URL(request.redirect_uri);
+      if (request.state) back.searchParams.set("state", request.state);
+      back.searchParams.set("iss", origin);
       back.searchParams.set("error", "access_denied");
       return redirect(back.toString());
     }
     const { uid } = await config.exchange(code, request.verifier, `${origin}/oauth/callback`);
-    const ours = random();
-    await store.put(`OAUTH#code#${hash(ours)}`, {
-      uid, tz: request.tz, agent: request.client_name, client_id: request.client_id, redirect_uri: request.redirect_uri, code_challenge: request.code_challenge,
-    }, 5 * 60);
-    back.searchParams.set("code", ours);
-    return redirect(back.toString());
+    return signedIn(store, origin, request, uid);
+  }
+
+  if (path === "/oauth/email" && method === "POST" && config.passwordSignIn) {
+    const form = new URLSearchParams(body(event));
+    const id = form.get("request") ?? "";
+    const request = /^[A-Za-z0-9_-]{43}$/.test(id) ? await store.get(`OAUTH#request#${id}`) : undefined;
+    if (!request) return page(400, messagePage(config, "This sign-in has expired", "Start again from your agent's connector settings."));
+    const account = await config.passwordSignIn((form.get("email") ?? "").trim().toLowerCase(), form.get("password") ?? "");
+    if (!account) {
+      return page(401, consentPage(config, id, request.client_name, new URL(request.redirect_uri).host, "That email and password don't match an account."));
+    }
+    await store.take(`OAUTH#request#${id}`);
+    return signedIn(store, origin, { ...request, tz: zone(form.get("tz")) }, account.uid);
   }
 
   if (path === "/oauth/token" && method === "POST") {

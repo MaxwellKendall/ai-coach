@@ -107,6 +107,36 @@ describe("OAuth for agents (FIT-151)", () => {
     expect(JSON.parse(reused.body).error).toBe("invalid_grant");
   });
 
+  it("signs in an account made with an email and password, for reviewers (FIT-236)", async () => {
+    const withEmail: Config = {
+      ...config,
+      passwordSignIn: async (email, password) => (email === "review@example.com" && password === "right" ? { uid: "reviewer" } : undefined),
+    };
+    const go = async (event: LambdaFunctionURLEvent, store: AuthStore) => (await oauth(event, store, withEmail)) as any;
+    // Without it, only Apple and Google.
+    const { store, items } = memoryAuth();
+    const { client_id } = JSON.parse((await run(request("POST", "/oauth/register", { body: JSON.stringify({ client_name: "Claude", redirect_uris: [claude] }) }), store))!.body!);
+    const authorize = { response_type: "code", client_id, redirect_uri: claude, code_challenge: s256("v".repeat(50)), code_challenge_method: "S256", state: "st" };
+    expect((await run(request("GET", "/oauth/authorize", { query: authorize }), store)).body).not.toContain("Sign in with email");
+
+    const consent = await go(request("GET", "/oauth/authorize", { query: authorize }), store);
+    expect(consent.body).toContain("Sign in with email");
+    const id = /name="request" value="([^"]+)"/.exec(consent.body)![1];
+
+    const wrong = await go(request("POST", "/oauth/email", { body: form({ request: id, tz: "America/Denver", email: "review@example.com", password: "wrong" }) }), store);
+    expect(wrong.statusCode).toBe(401);
+    expect(wrong.body).toContain("match an account");
+    expect(wrong.body).toContain("<details class=\"email\" open>");
+
+    const back = location(await go(request("POST", "/oauth/email", { body: form({ request: id, tz: "America/Denver", email: " Review@Example.com ", password: "right" }) }), store));
+    expect(`${back.origin}${back.pathname}`).toBe(claude);
+    expect(back.searchParams.get("state")).toBe("st");
+    const tokens = JSON.parse((await run(request("POST", "/oauth/token", { body: form({ grant_type: "authorization_code", code: back.searchParams.get("code")!, client_id, code_verifier: "v".repeat(50) }) }), store))!.body!);
+    expect(items.get(`MCPTOKEN#${hashToken(tokens.access_token)}`)).toMatchObject({ uid: "reviewer", tz: "America/Denver", agent: "Claude" });
+    // The sign-in works once.
+    expect((await go(request("POST", "/oauth/email", { body: form({ request: id, email: "review@example.com", password: "right" }) }), store)).statusCode).toBe(400);
+  });
+
   it("refuses redirects it can't trust and authorization without PKCE", async () => {
     const { store } = memoryAuth();
     const bad: any = await run(request("POST", "/oauth/register", { body: JSON.stringify({ redirect_uris: ["http://evil.example/cb"] }) }), store);

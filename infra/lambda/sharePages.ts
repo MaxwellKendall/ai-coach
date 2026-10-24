@@ -811,6 +811,13 @@ h3{font-size:17px}
   border:1px solid var(--line);background:var(--surface)}
 .button.primary{background:var(--button);color:var(--button-text);border-color:var(--button)}
 .button:active{transform:scale(.98)}
+.email{width:100%;max-width:360px;margin-top:18px}
+.email summary{cursor:pointer;color:var(--muted);font-size:15px}
+.email form{display:grid;gap:12px;margin-top:14px;text-align:left}
+.email label{display:grid;gap:6px;font-size:14px;color:var(--muted)}
+.email input{font:inherit;color:var(--text);min-height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+.email .error{color:var(--accent);font-size:14px}
+.email button{width:100%;font:inherit;font-weight:650;color:inherit;cursor:pointer}
 .block{padding:32px 0;border-top:1px solid var(--line)}
 .how ol,.steps,.phases{list-style:none;display:grid;gap:18px;counter-reset:n}
 .how li,.steps li{display:grid;grid-template-columns:32px 1fr;column-gap:12px;counter-increment:n;text-align:left}

@@ -308,6 +308,8 @@ describe("share pages (FIT-105)", () => {
     const t = synthWeb();
     t.hasResourceProperties("AWS::Cognito::UserPoolClient", {
       ClientName: "mcp", GenerateSecret: false, AllowedOAuthFlows: ["code"], CallbackURLs: ["https://example.com/oauth/callback"],
+      // FIT-236: the connector's Sign in with email.
+      ExplicitAuthFlows: ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"],
     });
     const behaviors = Object.values(t.findResources("AWS::CloudFront::Distribution"))
       .flatMap((d) => d.Properties.DistributionConfig.CacheBehaviors ?? [])

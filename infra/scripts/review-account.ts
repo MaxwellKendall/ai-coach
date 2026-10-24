@@ -10,6 +10,10 @@
 //
 // A new account, or --new-password, gets a new password, printed once for the review notes. --name names the client
 // (default "App Review"), so a second account, such as one for recording onboarding, isn't confused with it.
+//
+// FIT-236: --coach also makes it a coach, for Claude's directory reviewers, who sign in to the connector with it: an
+// active coach plan with no Stripe behind it, and FIT-221's three demo clients (no sign-in of their own) with three
+// weeks logged and this week and next planned. Run it again to bring their weeks up to today.
 import { randomBytes } from "node:crypto";
 import {
   AdminCreateUserCommand,
@@ -18,7 +22,10 @@ import {
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { item } from "../lambda/sync.ts";
+import { addDays } from "../lambda/training.ts";
+import { at, jen, mike, sara, sunday, units, WEEKS } from "./demoClients.ts";
 import { stackOutputs } from "./stack.ts";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
@@ -84,3 +91,26 @@ await db.send(new PutCommand({ TableName: TABLE, Item: { PK: `USER#${coachUid}`,
 console.log(`${NAME} on ${stage}: ${username} (uid ${uid}), coached by ${coachName ?? coachUid}.`);
 console.log(printed ? `Password: ${printed}` : "Password unchanged (pass --new-password for a new one).");
 console.log(`Next: write its week as the coach (propose_week for "${NAME}", then apply).`);
+
+if (process.argv.includes("--coach")) {
+  const plan = { PK: `USER#${uid}`, SK: "COACHPLAN" };
+  const { Item: current } = await db.send(new GetCommand({ TableName: TABLE, Key: plan }));
+  if (!["active", "trialing", "past_due"].includes(current?.status)) {
+    await db.send(new PutCommand({ TableName: TABLE, Item: { ...plan, status: "active", interval: "month", renews: new Date(Date.now() + 90 * 86_400_000).toISOString(), cancelsAtEnd: false, demo: true } }));
+  }
+  const since = new Date(at(addDays(sunday, -7 * (WEEKS + 1)), 9) * 1000).toISOString();
+  for (const [client, first] of [[mike, -WEEKS - 1], [sara, -WEEKS], [jen, -WEEKS]] as const) {
+    const clientUid = `${client.testUser}-for-${uid}`;
+    const bodies = units(client, first);
+    await db.send(new PutCommand({ TableName: TABLE, Item: { PK: `USER#${clientUid}`, SK: "PROFILE", uid: clientUid, displayName: client.name, units: "lb", createdAt: since, updatedAt: now } }));
+    // Days from an earlier run outside this one's weeks go, so the weeks always end at next week.
+    const { Items = [] } = await db.send(new QueryCommand({
+      TableName: TABLE, KeyConditionExpression: "PK = :pk AND begins_with(SK, :s)", ExpressionAttributeValues: { ":pk": `USER#${clientUid}`, ":s": "SYNC#" },
+    }));
+    for (const old of Items) if (!bodies.has(old.key)) await db.send(new DeleteCommand({ TableName: TABLE, Key: { PK: old.PK, SK: old.SK } }));
+    for (const [key, body] of bodies) await db.send(new PutCommand({ TableName: TABLE, Item: item(clientUid, { key, updatedAt: now, deleted: false, body }, now) }));
+    await db.send(new PutCommand({ TableName: TABLE, Item: { PK: `USER#${clientUid}`, SK: `COACH#${uid}`, coachUid: uid, coachName: NAME, since } }));
+    await db.send(new PutCommand({ TableName: TABLE, Item: { PK: `USER#${uid}`, SK: `CLIENT#${clientUid}`, clientUid, clientName: client.name, since } }));
+  }
+  console.log(`${NAME} coaches ${[mike, sara, jen].map((c) => c.name).join(", ")}, on an active coach plan.`);
+}

@@ -212,7 +212,9 @@ export class AICoachStack extends Stack {
           callbackUrls: [`https://${mcpHost}/oauth/callback`],
         },
       });
-      (mcpClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_REFRESH_TOKEN_AUTH"];
+      // FIT-236: USER_PASSWORD_AUTH for the connector's Sign in with email, used by accounts made with a password
+      // (review-account.ts); the user pool's own hosted sign-in isn't offered, so this opens no sign-up.
+      (mcpClient.node.defaultChild as cognito.CfnUserPoolClient).explicitAuthFlows = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"];
       providers.forEach((p) => mcpClient.node.addDependency(p));
       mcp.addEnvironment("PUBLIC_ORIGIN", `https://${mcpHost}`);
       mcp.addEnvironment("COGNITO_DOMAIN", `${domainPrefix}.auth.${this.region}.amazoncognito.com`);
