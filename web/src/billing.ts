@@ -1,4 +1,4 @@
-import type { Config } from "./auth";
+import type { Config, User } from "./auth";
 import { gql } from "./sync";
 
 // FIT-144: the coach plan (FIT-133: $19.99/month or $199/year), bought and managed through Stripe.
@@ -53,4 +53,14 @@ export function planView(plan: CoachPlan): { title: string; detail: string; acti
         ? { title: "Coach plan", detail: `${PRICES.month} or ${PRICES.year}. Invite clients, write their programs and see their training.`, action: "start" }
         : { title: "Coach plan", detail: "The coach plan goes on sale soon.", action: "none" };
   }
+}
+
+/**
+ * FIT-241: the plan belongs to the account signed in here, and Claude must be connected with the same sign-in (or one
+ * linked to it on Account); a different one is a second account without the plan.
+ */
+export function signedInAs(me: User) {
+  const via = me.provider === "google" ? "Google" : me.provider === "apple" ? "Apple" : "email";
+  const who = me.email ? `${me.email}, with ${via}` : `your ${via} sign-in`;
+  return `This plan is for the account you're signed in to as ${who}. Connect Claude with the same sign-in, or link the two on Account.`;
 }

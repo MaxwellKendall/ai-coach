@@ -2,7 +2,7 @@ import type { LambdaFunctionURLEvent } from "aws-lambda";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../../shared/triage.ts";
-import { answer, callTool, CLIENT_TOOLS, hashToken, serve, type Account, type Store } from "../lambda/mcp.ts";
+import { answer, callTool, CLIENT_TOOLS, hashToken, serve, who, type Account, type Store } from "../lambda/mcp.ts";
 import { readProgram, readRecap, readSession, readWin } from "../lambda/sharePages.ts";
 import { addDays, checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
 
@@ -1059,5 +1059,32 @@ describe("FIT-240: a sample client to coach before paying", () => {
     const listed = await callTool("list_clients", {}, coach, store, now);
     expect(listed).toMatch(/^1 client/);
     expect(listed).not.toMatch(/sample/);
+  });
+});
+
+describe("FIT-241: the plan's message says which account the agent is signed in as", () => {
+  const setup = () => {
+    const store = memory({}, data());
+    store.links.push({ coach: "paid-elsewhere", client: "me", name: "Sarah" });
+    return store;
+  };
+
+  it("names the sign-in, and the way out when they paid with another", async () => {
+    const account: Account = { uid: "paid-elsewhere", tz, agent: "Claude", who: "max@example.com, with Apple" };
+    const error = callTool("invite_client", {}, account, setup(), now);
+    await expect(error).rejects.toThrow(/Claude is signed in to Barbrabell as max@example\.com, with Apple\. If they started the plan with another sign-in, reconnect with that one, or link the two on the dashboard's Account page \(.*\/app\/account\)\./);
+    await expect(callTool("get_day", { client: "Sarah" }, account, setup(), now)).rejects.toThrow(/as max@example\.com, with Apple/);
+  });
+
+  it("still gives the way out for a connection made before it knew the sign-in", async () => {
+    const account: Account = { uid: "paid-elsewhere", tz, agent: "claude" };
+    await expect(callTool("invite_client", {}, account, setup(), now)).rejects.toThrow(/This is the account Claude signed in to Barbrabell with\. If they started the plan with another sign-in/);
+  });
+
+  it("reads who from Cognito's id token", () => {
+    expect(who({ email: "max@example.com", identities: [{ providerName: "Google" }] })).toBe("max@example.com, with Google");
+    expect(who({ email: "a@privaterelay.appleid.com", identities: JSON.stringify([{ providerName: "SignInWithApple" }]) })).toBe("a@privaterelay.appleid.com, with Apple");
+    expect(who({ email: "review@barbrabell.com" })).toBe("review@barbrabell.com, with email");
+    expect(who({ identities: [{ providerName: "Google" }] })).toBe("their Google sign-in");
   });
 });

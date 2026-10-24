@@ -114,7 +114,7 @@ function Dashboard({ config, me, notice }: { config: Config; me: User; notice?: 
       </aside>
       <main className="content">
         {path.startsWith("/billing") ? (
-          <BillingPage config={config} />
+          <BillingPage config={config} me={me} />
         ) : path.startsWith("/account") ? (
           <AccountPage config={config} me={me} notice={notice} />
         ) : path.startsWith("/history") ? (

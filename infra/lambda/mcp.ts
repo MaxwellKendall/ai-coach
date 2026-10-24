@@ -30,7 +30,8 @@ import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sunday
  * one account and its time zone; only its hash is stored (MCPTOKEN#sha256).
  */
 
-export type Account = { uid: string; tz: string; agent: string };
+/** who (FIT-241): the sign-in the agent connected with, e.g. "max@gmail.com, with Google"; unknown for older links. */
+export type Account = { uid: string; tz: string; agent: string; who?: string };
 export interface Store {
   account(tokenHash: string): Promise<Account | undefined>;
   units(uid: string): Promise<Units>;
@@ -67,7 +68,7 @@ export const dynamoStore: Store = {
   async account(hash) {
     const out = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `MCPTOKEN#${hash}`, SK: "MCPTOKEN" } }));
     const item = live(out.Item);
-    return item && !item.revoked ? { uid: item.uid, tz: item.tz, agent: item.agent ?? "agent" } : undefined;
+    return item && !item.revoked ? { uid: item.uid, tz: item.tz, agent: item.agent ?? "agent", who: item.who } : undefined;
   },
   async units(uid) {
     const units: Units = new Map();
@@ -857,11 +858,12 @@ export function pickClient(clients: Person[], said: string): Person {
 }
 
 /** Checked on every call: the account named is the caller's own, or a client linked to them now. */
-async function clientOf(caller: string, said: unknown, store: Store): Promise<Person | undefined> {
+async function clientOf(account: Account, said: unknown, store: Store): Promise<Person | undefined> {
   if (said === undefined || said === null || said === "") return undefined;
+  const caller = account.uid;
   const client = pickClient(await store.clients(caller), String(said));
   if (!(await store.coachOf(caller, client.uid))) throw new Error(`They don't coach ${shownName(client)} any more: one of them ended the link. invite_client makes a new invite if they both want it.`);
-  if (!isSample(client.uid)) await needsPlan(caller, store);
+  if (!isSample(client.uid)) await needsPlan(account, store);
   return client;
 }
 
@@ -869,9 +871,13 @@ async function clientOf(caller: string, said: unknown, store: Store): Promise<Pe
  * The coach tools need the coach plan (FIT-148). The athlete tools stay free. FIT-237: the tools say so and point to the
  * coach page, with no price or Checkout link: ChatGPT's directory lets a tool explain a plan gate but not sell one.
  */
-async function needsPlan(coach: string, store: Store) {
-  if (await store.coachPlan(coach)) return;
+async function needsPlan(account: Account, store: Store) {
+  if (await store.coachPlan(account.uid)) return;
+  // FIT-241: a coach who paid with another sign-in has a second, unpaid account here; name this one and the way out.
+  const agent = account.agent.charAt(0).toUpperCase() + account.agent.slice(1);
+  const signedIn = account.who ? `${agent} is signed in to Barbrabell as ${account.who}` : `This is the account ${agent} signed in to Barbrabell with`;
   throw new Error(`Coaching needs the coach plan, which this account doesn't have; their clients stay free and keep logging meanwhile. `
+    + `${signedIn}. If they started the plan with another sign-in, reconnect with that one, or link the two on the dashboard's Account page (${ORIGIN}/app/account). `
     + `How it works: ${ORIGIN}/coaches. Once it's on, coaching works on their next request; there's nothing to reconnect.`);
 }
 
@@ -879,12 +885,13 @@ async function needsPlan(coach: string, store: Store) {
  * FIT-240: the clients a coach sees now. One with no clients gets the sample client first; without the coach plan only
  * sample clients show, and with none of those it's the plan's message.
  */
-async function roster(coach: string, store: Store, today: string) {
+async function roster(account: Account, store: Store, today: string) {
+  const coach = account.uid;
   let clients = await store.clients(coach);
   if (!clients.length && (await store.sample(coach, today))) clients = await store.clients(coach);
   if (await store.coachPlan(coach)) return { clients, paid: true };
   const samples = clients.filter((c) => isSample(c.uid));
-  if (!samples.length) await needsPlan(coach, store);
+  if (!samples.length) await needsPlan(account, store);
   return { clients: samples, paid: false };
 }
 
@@ -900,8 +907,8 @@ function sampleNote(clients: Person[], paid: boolean) {
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
   const { tz } = account;
   if (args.client !== undefined && !CLIENT_TOOLS.has(name)) throw new Error(`${name} is the client's own to do, so it takes no client.`);
-  const client = await clientOf(account.uid, args.client, store);
-  if (name === "invite_client") await needsPlan(account.uid, store);
+  const client = await clientOf(account, args.client, store);
+  if (name === "invite_client") await needsPlan(account, store);
   // Whose data this call is about. A coach's changes reach the client's phone at its next sync, as the dashboard's do.
   const uid = client?.uid ?? account.uid;
   useAccountExercises(await store.units(uid)); // FIT-173: their own exercises, beside the catalog
@@ -936,7 +943,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "list_clients":
     case "roster_review": {
-      const { clients, paid } = await roster(uid, store, today);
+      const { clients, paid } = await roster(account, store, today);
       if (!clients.length) return "They have no clients yet. invite_client makes an invite link to send one.";
       const rows = await Promise.all(clients.map(async (c) => {
         if (!(await store.coachOf(uid, c.uid))) return undefined;
@@ -1332,6 +1339,15 @@ export const docs = (site: Config["site"], origin: string): LambdaFunctionURLRes
 
 // ---- FIT-151: sign-in through Cognito's hosted UI ----
 
+/** FIT-241: who an id token signed in, as the plan's message names them: "max@gmail.com, with Google". */
+export function who(claims: { email?: unknown; identities?: unknown }) {
+  const email = typeof claims.email === "string" ? claims.email : undefined;
+  const ids = Array.isArray(claims.identities) ? claims.identities : typeof claims.identities === "string" ? JSON.parse(claims.identities) : [];
+  const provider = ids[0]?.providerName;
+  const via = provider === "Google" ? "Google" : provider === "SignInWithApple" ? "Apple" : "email";
+  return email ? `${email}, with ${via}` : `their ${via} sign-in`;
+}
+
 const ORIGIN = process.env.PUBLIC_ORIGIN ?? "";
 const COGNITO = `https://${process.env.COGNITO_DOMAIN}`;
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID ?? "";
@@ -1352,7 +1368,7 @@ export const config: Config = {
     // Straight from Cognito's token endpoint over TLS, so its signature needn't be checked (OIDC Core 3.1.3.7).
     const claims = JSON.parse(Buffer.from(id_token.split(".")[1], "base64url").toString());
     if (claims.aud !== CLIENT_ID || typeof claims.sub !== "string") throw new Error("Unexpected id token");
-    return { uid: claims.sub };
+    return { uid: claims.sub, who: who(claims) };
   },
   // FIT-236: Cognito checks the password itself (USER_PASSWORD_AUTH on this client), so no hosted page offers sign-up.
   async passwordSignIn(email, password) {
@@ -1368,7 +1384,7 @@ export const config: Config = {
     if (!response.ok) throw new Error(`Cognito sign-in failed (${response.status}): ${out.__type}`);
     const claims = JSON.parse(Buffer.from(out.AuthenticationResult!.IdToken.split(".")[1], "base64url").toString());
     if (claims.aud !== CLIENT_ID || typeof claims.sub !== "string") throw new Error("Unexpected id token");
-    return { uid: claims.sub };
+    return { uid: claims.sub, who: who(claims) };
   },
 };
 

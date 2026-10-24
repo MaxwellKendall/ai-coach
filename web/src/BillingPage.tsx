@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import type { Config } from "./auth";
-import { coachBillingPortal, coachPlan, COACHING, hasPlan, planView, PRICES, startCoachPlan, type CoachPlan } from "./billing";
+import type { Config, User } from "./auth";
+import { coachBillingPortal, coachPlan, COACHING, hasPlan, planView, PRICES, signedInAs, startCoachPlan, type CoachPlan } from "./billing";
 
 /** FIT-144: the coach plan: start it through Stripe Checkout, or manage it in Stripe's customer portal. */
-export function BillingPage({ config }: { config: Config }) {
+export function BillingPage({ config, me }: { config: Config; me: User }) {
   const [plan, setPlan] = useState<CoachPlan>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -36,6 +36,7 @@ export function BillingPage({ config }: { config: Config }) {
         <h1>Billing</h1>
         {started && plan?.status === "none" && <p className="status" role="status">Thanks. Your plan shows here once Stripe confirms it.</p>}
         {coaching && plan && !hasPlan(plan) && <p className="lede">{COACHING}</p>}
+        <p className="muted">{signedInAs(me)}</p>
       </header>
       {error && <p className="error" role="alert">{error}</p>}
       {!plan && !error && <p className="muted">Loading…</p>}

@@ -25,11 +25,11 @@ export interface Config {
   providers: string[];
   /** Cognito's hosted UI, for the person's sign-in. */
   authorizeUrl(params: Record<string, string>): string;
-  /** Trades Cognito's code for the Cognito user it signed in. */
-  exchange(code: string, verifier: string, redirectUri: string): Promise<{ uid: string }>;
+  /** Trades Cognito's code for the Cognito user it signed in, and who that is (FIT-241: "max@gmail.com, with Google"). */
+  exchange(code: string, verifier: string, redirectUri: string): Promise<{ uid: string; who?: string }>;
   /** FIT-236: an email and password checked with Cognito, for accounts made with one (App Review's and the directory's
    * reviewers); undefined when they don't match. Without it the page offers only Apple and Google. */
-  passwordSignIn?(email: string, password: string): Promise<{ uid: string } | undefined>;
+  passwordSignIn?(email: string, password: string): Promise<{ uid: string; who?: string } | undefined>;
 }
 
 export const ACCESS_SECONDS = 3600;
@@ -134,19 +134,19 @@ const zone = (tz: string | null) => {
 };
 
 /** The person signed in: a one-time code for the agent, sent back to its redirect URI. */
-async function signedIn(store: AuthStore, origin: string, request: Record<string, any>, uid: string) {
+async function signedIn(store: AuthStore, origin: string, request: Record<string, any>, uid: string, who?: string) {
   const back = new URL(request.redirect_uri);
   if (request.state) back.searchParams.set("state", request.state);
   back.searchParams.set("iss", origin);
   const ours = random();
   await store.put(`OAUTH#code#${hash(ours)}`, {
-    uid, tz: request.tz, agent: request.client_name, client_id: request.client_id, redirect_uri: request.redirect_uri, code_challenge: request.code_challenge,
+    uid, who, tz: request.tz, agent: request.client_name, client_id: request.client_id, redirect_uri: request.redirect_uri, code_challenge: request.code_challenge,
   }, 5 * 60);
   back.searchParams.set("code", ours);
   return redirect(back.toString());
 }
 
-async function issue(store: AuthStore, grant: { uid: string; tz: string; agent: string; client_id: string }) {
+async function issue(store: AuthStore, grant: { uid: string; who?: string; tz: string; agent: string; client_id: string }) {
   const access = random();
   const refresh = random();
   await store.put(`MCPTOKEN#${hash(access)}`, { ...grant, kind: "oauth" }, ACCESS_SECONDS);
@@ -250,8 +250,8 @@ export async function oauth(event: LambdaFunctionURLEvent, store: AuthStore, con
       back.searchParams.set("error", "access_denied");
       return redirect(back.toString());
     }
-    const { uid } = await config.exchange(code, request.verifier, `${origin}/oauth/callback`);
-    return signedIn(store, origin, request, uid);
+    const { uid, who } = await config.exchange(code, request.verifier, `${origin}/oauth/callback`);
+    return signedIn(store, origin, request, uid, who);
   }
 
   if (path === "/oauth/email" && method === "POST" && config.passwordSignIn) {
@@ -264,7 +264,7 @@ export async function oauth(event: LambdaFunctionURLEvent, store: AuthStore, con
       return page(401, consentPage(config, id, request.client_name, new URL(request.redirect_uri).host, "That email and password don't match an account."));
     }
     await store.take(`OAUTH#request#${id}`);
-    return signedIn(store, origin, { ...request, tz: zone(form.get("tz")) }, account.uid);
+    return signedIn(store, origin, { ...request, tz: zone(form.get("tz")) }, account.uid, account.who);
   }
 
   if (path === "/oauth/token" && method === "POST") {
@@ -276,12 +276,12 @@ export async function oauth(event: LambdaFunctionURLEvent, store: AuthStore, con
       if (!code || (clientId && clientId !== code.client_id)) return fail("invalid_grant", "Unknown or used code.");
       if (form.get("redirect_uri") && form.get("redirect_uri") !== code.redirect_uri) return fail("invalid_grant", "redirect_uri doesn't match.");
       if (s256(form.get("code_verifier") ?? "") !== code.code_challenge) return fail("invalid_grant", "code_verifier doesn't match.");
-      return issue(store, { uid: code.uid, tz: code.tz, agent: code.agent, client_id: code.client_id });
+      return issue(store, { uid: code.uid, who: code.who, tz: code.tz, agent: code.agent, client_id: code.client_id });
     }
     if (grantType === "refresh_token") {
       const grant = await store.take(`OAUTH#refresh#${hash(form.get("refresh_token") ?? "")}`);
       if (!grant || (clientId && clientId !== grant.client_id)) return fail("invalid_grant", "Unknown or used refresh token; sign in again.");
-      return issue(store, { uid: grant.uid, tz: grant.tz, agent: grant.agent, client_id: grant.client_id });
+      return issue(store, { uid: grant.uid, who: grant.who, tz: grant.tz, agent: grant.agent, client_id: grant.client_id });
     }
     return fail("unsupported_grant_type", "authorization_code or refresh_token.");
   }

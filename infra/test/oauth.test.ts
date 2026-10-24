@@ -22,7 +22,7 @@ const config: Config = {
   site: { appName: "Barbrabell", origin, appId: "" },
   providers: ["apple", "google"],
   authorizeUrl: (params) => `https://cognito.example/oauth2/authorize?${new URLSearchParams(params)}`,
-  async exchange(code, verifier) { exchanged.push({ code, verifier }); return { uid: "new-user" }; },
+  async exchange(code, verifier) { exchanged.push({ code, verifier }); return { uid: "new-user", who: "new@example.com, with Google" }; },
 };
 
 const request = (method: string, path: string, opts: { query?: Record<string, string>; body?: string; headers?: Record<string, string> } = {}) => ({
@@ -95,7 +95,7 @@ describe("OAuth for agents (FIT-151)", () => {
 
     // The access token is the account's MCP connection, in the browser's time zone, named for the client.
     const grant = items.get(`MCPTOKEN#${hashToken(tokens.access_token)}`);
-    expect(grant).toMatchObject({ uid: "new-user", tz: "Europe/Berlin", agent: "Claude" });
+    expect(grant).toMatchObject({ uid: "new-user", tz: "Europe/Berlin", agent: "Claude", who: "new@example.com, with Google" }); // FIT-241
     const mcpStore = { account: async (h: string) => (h === hashToken(tokens.access_token) ? (grant as Account) : undefined) } as unknown as Store;
     const ping: any = await serve(request("POST", "/mcp", { body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }), headers: { authorization: `Bearer ${tokens.access_token}` } }), mcpStore, origin);
     expect(ping.statusCode).toBe(200);
@@ -103,6 +103,7 @@ describe("OAuth for agents (FIT-151)", () => {
     // Refresh tokens rotate: each works once.
     const refreshed = JSON.parse((await run(request("POST", "/oauth/token", { body: form({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id }) }), store))!.body!);
     expect(refreshed.access_token).not.toBe(tokens.access_token);
+    expect(items.get(`MCPTOKEN#${hashToken(refreshed.access_token)}`)).toMatchObject({ who: "new@example.com, with Google" });
     const reused: any = await run(request("POST", "/oauth/token", { body: form({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id }) }), store);
     expect(JSON.parse(reused.body).error).toBe("invalid_grant");
   });

@@ -233,7 +233,7 @@ describe("coaching needs the coach plan (FIT-148)", () => {
   // FIT-240
   it("gives a coach with no clients a sample client, theirs to coach without the plan, and only once", async () => {
     plan(undefined);
-    const [sample] = await as("sam", "myClients");
+    const [sample] = (await as("sam", "myClients")) as { uid: string; name: string }[];
     expect(sample).toMatchObject({ uid: "sample-mike-sam", name: "Mike Torres (sample)" });
     expect(table.get("USER#sample-mike-sam|PROFILE")).toMatchObject({ displayName: "Mike Torres", sample: true });
     expect([...table.keys()].filter((k) => k.startsWith("USER#sample-mike-sam|SYNC#plan#")).length).toBeGreaterThan(10);
@@ -251,7 +251,7 @@ describe("coaching needs the coach plan (FIT-148)", () => {
     plan("active");
     await linked();
     plan(undefined);
-    expect((await as("sam", "myClients")).map((c: { uid: string }) => c.uid)).toEqual(["sample-mike-sam"]);
+    expect(((await as("sam", "myClients")) as { uid: string }[]).map((c) => c.uid)).toEqual(["sample-mike-sam"]);
     plan("active");
     expect(await as("sam", "myClients")).toHaveLength(2);
   });

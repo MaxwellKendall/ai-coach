@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasPlan, needsPlan, planView, type CoachPlan } from "./billing";
+import { hasPlan, needsPlan, planView, signedInAs, type CoachPlan } from "./billing";
 
 // FIT-144: what the Billing page says about the coach plan.
 const plan = (over: Partial<CoachPlan>): CoachPlan => ({ onSale: true, status: "none", interval: null, renews: null, cancelsAtEnd: false, ...over });
@@ -40,5 +40,13 @@ describe("FIT-148: coaching needs the plan", () => {
     for (const status of ["none", "canceled"]) {
       for (const onSale of [true, false]) expect(planView(plan({ status, onSale })).detail).not.toMatch(/free/);
     }
+  });
+});
+
+describe("FIT-241: Billing says which account the plan is for", () => {
+  it("names the sign-in, so Claude is connected with the same one", () => {
+    expect(signedInAs({ uid: "u", email: "max@example.com", provider: "google", linked: ["google"] }))
+      .toBe("This plan is for the account you're signed in to as max@example.com, with Google. Connect Claude with the same sign-in, or link the two on Account.");
+    expect(signedInAs({ uid: "u", provider: "apple", linked: ["apple"] })).toMatch(/as your Apple sign-in\./);
   });
 });
