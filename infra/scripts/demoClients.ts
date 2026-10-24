@@ -122,7 +122,7 @@ export const at = (day: string, hour: number) => new Date(`${day}T${String(hour)
 
 /**
  * The client's sync units: profile, every planned day from their first week through next week, and what they logged.
- * With `program` (FIT-236), also their program and goals, as set_program and set_goal write them.
+ * With `program` (FIT-236), also their program and goals, as set_program and add_goal write them.
  */
 export function units(client: Client, first: number, program = false) {
   const out = new Map<string, string>();

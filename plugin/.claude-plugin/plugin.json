@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "barbrabell",
   "displayName": "Barbrabell",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Coach strength clients from Claude: write their program, review your roster each week, and bring in programs you already have. Changes land in your clients' Barbrabell app.",
   "author": {
     "name": "Barbrabell",

@@ -133,7 +133,7 @@ describe("mcp", () => {
     const list: any = await answer({ jsonrpc: "2.0", id: 1, method: "tools/list" }, me, memory({}, data()));
     const by = Object.fromEntries(list.result.tools.map((t: any) => [t.name, t]));
     const reads = ["list_clients", "roster_review", "get_context", "get_day", "find_exercises", "swap_options", "propose_session", "propose_week", "get_program", "get_progress", "get_week_review", "clear_day"];
-    const writes = ["invite_client", "log_session", "add_note", "set_profile", "set_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise", "log_run"];
+    const writes = ["invite_client", "log_session", "add_note", "set_profile", "add_goal", "change_goal", "drop_goal", "apply", "undo", "set_program", "log_daily", "delete_log", "share", "stop_sharing", "create_exercise", "edit_exercise", "log_run"];
     expect(Object.keys(by).sort()).toEqual([...reads, ...writes].sort());
     for (const t of list.result.tools) {
       expect(t.title).toBeTruthy();
@@ -145,7 +145,7 @@ describe("mcp", () => {
     // FIT-237: every hint said outright; destructive is whatever overwrites or removes.
     for (const t of list.result.tools) for (const h of ["readOnlyHint", "destructiveHint", "openWorldHint"]) expect(typeof t.annotations[h], `${t.name} ${h}`).toBe("boolean");
     expect(reads.filter((n) => by[n].annotations.destructiveHint)).toEqual([]);
-    expect(writes.filter((n) => !by[n].annotations.destructiveHint).sort()).toEqual(["add_note", "create_exercise", "invite_client", "log_run", "share"]);
+    expect(writes.filter((n) => !by[n].annotations.destructiveHint).sort()).toEqual(["add_goal", "add_note", "create_exercise", "invite_client", "log_run", "share"]);
   });
 
   it("offers the coaching routines as prompts (FIT-175)", async () => {
@@ -254,11 +254,11 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(profile.starts).toEqual([{ exercise: "back-squat", measurements: [{ metric: "reps", value: 5, unit: "reps" }, { metric: "load_lb", value: 185, unit: "lb" }] }]);
     await expect(callTool("set_profile", { equipment: ["spaceship"] }, fresh, store, now)).rejects.toThrow(/Unknown equipment/);
 
-    const added = await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, fresh, store, now);
+    const added = await callTool("add_goal", { type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, fresh, store, now);
     const id = added.match(/goal_id (\S+)\]/)![1];
     expect(JSON.parse(units.new[`goal#${id}`])).toMatchObject({ kind: "training", metric: "back-squat.1rm_lb", target: 225, unit: "lb", status: "active" });
-    await callTool("set_goal", { action: "change", goal_id: id, target: 235 }, fresh, store, now);
-    await callTool("set_goal", { action: "add", type: "body_weight", target: 185 }, fresh, store, now);
+    await callTool("change_goal", { goal_id: id, target: 235 }, fresh, store, now);
+    await callTool("add_goal", { type: "body_weight", target: 185 }, fresh, store, now);
     const ctx = await callTool("get_context", {}, fresh, store, now);
     expect(ctx).not.toMatch(/NOT SET UP YET/);
     expect(ctx).toMatch(/Back Squat 235 lb by 2027-03-01/);
@@ -277,7 +277,7 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(JSON.parse(units.new["plan#2026-10-19"])[0]).toMatchObject({ template: "back-squat", slot: "Lower A", at: epoch("2026-10-19", 390, tz) });
     expect(units.new["plan#2026-10-21"]).toBeDefined();
     expect(units.new["plan#2026-10-20"]).toBeUndefined();
-    await callTool("set_goal", { action: "drop", goal_id: id }, fresh, store, now);
+    await callTool("drop_goal", { goal_id: id }, fresh, store, now);
     expect(JSON.parse(units.new[`goal#${id}`]).status).toBe("abandoned");
   });
 
@@ -359,7 +359,7 @@ describe("agent-first onboarding (FIT-150)", () => {
     expect(review).toMatch(/^Week of Sunday 2026-10-04 to Saturday 2026-10-10, program week 4 of 16\.\n4 of 4 workouts\. 10K faster by 2:23\. 3 goals to check in on\. 3 things worth a look\./);
     expect(review).toMatch(/Numbers: 4 of 4 workouts, 18 working sets \(6 push, 6 pull\)\. Protein 143 g a day\. 2,400 kcal a day\. Sleep 6\.8 h a night\./);
     expect(review).toMatch(/- Back squat max: 225 → 242 of 250 lb, ahead of pace\./);
-    expect(review).toMatch(/Check-in: well ahead; offer to raise the target to 355 lb \(12 weeks left\)\. Only if they agree: set_goal change/);
+    expect(review).toMatch(/Check-in: well ahead; offer to raise the target to 355 lb \(12 weeks left\)\. Only if they agree: change_goal/);
     expect(review).toMatch(/- Knee came up in 3 notes\. Sep 21, Sep 30 and Oct 7\..*set_profile can add knee to injured_areas/);
     expect(review).toMatch(/- Went well: All 4 workouts done\./);
     expect(review).not.toMatch(/Romanian/);
@@ -378,7 +378,7 @@ describe("agent-first onboarding (FIT-150)", () => {
     const units: Record<string, Record<string, string>> = { new: { profile: encode({ ...profile, weightLb: 196, starts: [{ exercise: "back-squat", measurements: [{ metric: "reps", value: 5, unit: "reps" }, { metric: "load_lb", value: 185, unit: "lb" }] }] }) } };
     const store = memory({}, units);
     for (const goal of [{ type: "lift_max", exercise: "Back Squat", target: 250 }, { type: "body_weight", target: 185 }, { type: "reps", exercise: "Pull-up", target: 10 }]) {
-      await callTool("set_goal", { action: "add", ...goal }, fresh, store, now);
+      await callTool("add_goal", { ...goal }, fresh, store, now);
     }
     const goals = Object.entries(units.new).filter(([k]) => k.startsWith("goal#")).map(([, v]) => JSON.parse(v));
     expect(Object.fromEntries(goals.map((g) => [g.metric, g.baseline ?? null]))).toEqual({ "back-squat.1rm_lb": 208, weight_lb: 196, "pull-up.reps": null });
@@ -492,8 +492,8 @@ describe("agent-first onboarding (FIT-150)", () => {
     const units: Record<string, Record<string, string>> = {};
     const store = memory({}, units);
     await callTool("set_profile", { age: 41, weight_lb: 196, training_days: ["Mon", "Wed", "Sat"] }, fresh, store, now);
-    await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 275, by: "2027-03-01" }, fresh, store, now);
-    await callTool("set_goal", { action: "add", type: "reps", exercise: "Pull-up", target: 12 }, fresh, store, now);
+    await callTool("add_goal", { type: "lift_max", exercise: "Back Squat", target: 275, by: "2027-03-01" }, fresh, store, now);
+    await callTool("add_goal", { type: "reps", exercise: "Pull-up", target: 12 }, fresh, store, now);
     expect(await callTool("get_context", {}, fresh, store, now)).toMatch(/NOT SET UP YET[\s\S]*Back Squat: a 1RM \(tested or estimated\) or a recent heavy set, weight × reps; Pull-up: most reps in a row now/);
     await expect(callTool("set_program", { weeks: 16 }, fresh, store, now)).rejects.toThrow(/Back Squat: a 1RM[\s\S]*Pull-up: most reps/);
     const blind = await callTool("propose_session", { date: "2026-10-19", title: "Lower", reason: "x", exercises: [
@@ -516,7 +516,7 @@ describe("agent-first onboarding (FIT-150)", () => {
     const store = memory({}, units);
     await callTool("set_profile", { age: 41, weight_lb: 196, training_days: ["Mon", "Wed", "Sat"] }, fresh, store, now);
     // "10K in 55:00 by April 2; last one was about 60 minutes."
-    const added = await callTool("set_goal", { action: "add", type: "timed_distance", distance: "10K", time: "55:00", by: "2027-04-02" }, fresh, store, now);
+    const added = await callTool("add_goal", { type: "timed_distance", distance: "10K", time: "55:00", by: "2027-04-02" }, fresh, store, now);
     expect(added).toMatch(/Added: 10K in 55:00 by 2027-04-02 .*Ask for their last race/);
     const id = added.match(/goal_id (\S+)\]/)![1];
     expect(JSON.parse(units.new[`goal#${id}`])).toMatchObject({ metric: "run_10000m.time_s", target: 3300, unit: "s", kind: "training" });
@@ -524,8 +524,8 @@ describe("agent-first onboarding (FIT-150)", () => {
     await expect(callTool("set_program", { weeks: 24 }, fresh, store, now)).rejects.toThrow(/10K: a recent race/);
     await callTool("set_profile", { starting_sets: [{ distance: "10K", time: "60:00" }] }, fresh, store, now);
     expect(JSON.parse(units.new.profile).starts).toEqual([{ exercise: "trail-running-walking", measurements: [{ metric: "distance_m", value: 10000, unit: "m" }, { metric: "duration_s", value: 3600, unit: "s" }] }]);
-    await callTool("set_goal", { action: "drop", goal_id: id }, fresh, store, now);
-    const again = await callTool("set_goal", { action: "add", type: "timed_distance", distance: "10k", time: "55:00", by: "2027-04-02" }, fresh, store, now);
+    await callTool("drop_goal", { goal_id: id }, fresh, store, now);
+    const again = await callTool("add_goal", { type: "timed_distance", distance: "10k", time: "55:00", by: "2027-04-02" }, fresh, store, now);
     expect(again).toMatch(/Their runs put them at 1:00:00 now/);
     const goal = again.match(/goal_id (\S+)\]/)![1];
     expect(JSON.parse(units.new[`goal#${goal}`]).baseline).toBe(3600);
@@ -604,8 +604,8 @@ describe("what the app reads (FIT-150)", () => {
     const a: Account = { uid: "a", tz, agent: "claude" };
     await callTool("set_profile", { age: 41, weight_lb: 196, training_days: ["Mon", "Wed", "Sat"], workout_time: "06:30", equipment: ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"],
       injured_areas: ["knees"], never: ["Bench Press"], starting_sets: [{ exercise: "Back Squat", weight_lb: 185, reps: 5 }, { exercise: "Pull-up", reps: 6 }] }, a, store, now);
-    await callTool("set_goal", { action: "add", type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, a, store, now);
-    await callTool("set_goal", { action: "add", type: "reps", exercise: "Pull-up", target: 10 }, a, store, now);
+    await callTool("add_goal", { type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, a, store, now);
+    await callTool("add_goal", { type: "reps", exercise: "Pull-up", target: 10 }, a, store, now);
     await callTool("set_program", { weeks: 16, trip: { from: "2026-11-02", to: "2026-11-07" } }, a, store, now);
     await callTool("create_exercise", { name: "Landmine Press", pattern: "push", equipment: ["barbell"], muscles: ["anterior_deltoids"] }, a, store, now);
     const week = await callTool("propose_week", { reason: "First week.", days: [
@@ -668,7 +668,9 @@ describe("FIT-194: a coach acts on a linked client", () => {
     clear_day: { date: "2026-10-17", reason: "rest" }, propose_session: { date: "2026-10-19", title: "Lower", reason: "r", exercises },
     propose_week: { reason: "r", days: [{ date: "2026-10-19", exercises }] }, apply: { proposal_id: "none" }, undo: { date: "2026-10-19" },
     get_program: {}, set_program: { weeks: 8 }, get_progress: {}, get_week_review: {}, set_profile: { session_minutes: 60 },
-    set_goal: { action: "add", type: "body_weight", target: 180 },
+    add_goal: { type: "body_weight", target: 180 },
+    change_goal: { goal_id: "X", target: 175 },
+    drop_goal: { goal_id: "X" },
   };
 
   it("takes a client on exactly the planning and reading tools", async () => {
@@ -706,7 +708,7 @@ describe("FIT-194: a coach acts on a linked client", () => {
     expect(units.coach["plan#2026-10-19"]).toBeUndefined();
     expect(await callTool("undo", { client: "Sarah", date: "2026-10-19" }, coach, store, now)).toMatch(/Put back/);
     expect(units.me["plan#2026-10-19"]).toBeUndefined();
-    await callTool("set_goal", { client: "Sarah", action: "add", type: "body_weight", target: 180 }, coach, store, now);
+    await callTool("add_goal", { client: "Sarah", type: "body_weight", target: 180 }, coach, store, now);
     expect(Object.keys(units.me).filter((k) => k.startsWith("goal#"))).toHaveLength(3);
     await expect(callTool("set_profile", { client: "Sarah", name: "Sal" }, coach, store, now)).rejects.toThrow(/theirs to set/);
   });

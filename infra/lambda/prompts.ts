@@ -16,8 +16,8 @@ export const prompts: Prompt[] = [
 
 Set them up from scratch:
 1. get_context. If it isn't NOT SET UP YET, say what's there and ask what they'd like to change instead.
-2. Ask, one topic at a time, saving each answer as it comes (set_profile, set_goal): their goal and the date for it; age and body weight; the days they train, minutes a session and usual time; equipment; injuries and anything they won't do; and their name for what they share.
-3. For each goal lift, get where they are now: a 1RM (tested, or their honest estimate) or a recent heavy set, weight × reps; for a reps goal, the most in a row now; for a race-time goal (set_goal timed_distance), their last race or a recent hard run, distance and time. Save them as set_profile starting_sets (a 1RM is reps 1). No program or weights without these.
+2. Ask, one topic at a time, saving each answer as it comes (set_profile, add_goal): their goal and the date for it; age and body weight; the days they train, minutes a session and usual time; equipment; injuries and anything they won't do; and their name for what they share.
+3. For each goal lift, get where they are now: a 1RM (tested, or their honest estimate) or a recent heavy set, weight × reps; for a reps goal, the most in a row now; for a race-time goal (add_goal timed_distance), their last race or a recent hard run, distance and time. Save them as set_profile starting_sets (a 1RM is reps 1). No program or weights without these.
 4. set_program to their goal date, with phases: a focus, 2–4 main lifts (the goal lifts among them) and reps for each phase. Show them the weeks from get_program in a few lines.
 5. propose_week for the days from today to the end of next week, held to each week's kind. Fix any plan-rule problems, show the sessions, and apply when they agree.`,
   },
@@ -40,7 +40,7 @@ Review the week${a.date ? ` holding ${a.date}` : ""}:
 1. get_week_review${a.date ? ` with date ${a.date}` : ""} and get_progress.
 2. Write them a short take from the review's facts: what went well first, then what needs work, then one thing to do next week. Use its numbers; don't invent any.
 3. Celebrate any new wins by name (personal bests, milestones, the streak).
-4. If there's a check-in, offer the proposed target and why; change the goal (set_goal change) only if they say yes.
+4. If there's a check-in, offer the proposed target and why; change the goal (change_goal) only if they say yes.
 5. If an alert names an area their notes keep mentioning, ask whether it's an injury (set_profile injured_areas) or fine.
 6. Offer to share the week's recap (share, kind recap), and ask whether to show weights.`,
   },

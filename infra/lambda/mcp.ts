@@ -176,7 +176,7 @@ export const tools = [
     name: "get_context",
     title: "Get training context",
     annotations: { title: "Get training context", ...READ },
-    description: "Start here in every conversation, and again with client before working on a coach's client. Their goals (with goal ids, deadlines and where each stands), profile (age, weight, schedule, equipment, injuries, never list), the plan from today on, recent logged sessions with RPE and notes, and estimated maxes. It says NOT SET UP YET for someone new, and lists a coach's clients. In every tool, \"they\" is the person whose training it is: the caller, or the client named with client.",
+    description: "Call it first when working on their training, and again with client before working on a coach's client. Their goals (with goal ids, deadlines and where each stands), profile (age, weight, schedule, equipment, injuries, never list), the plan from today on, recent logged sessions with RPE and notes, and estimated maxes. It says NOT SET UP YET for someone new, and lists a coach's clients. In every tool, \"they\" is the person whose training it is: the caller, or the client named with client.",
     inputSchema: { type: "object", properties: {
       days_back: { type: "integer", minimum: 1, maximum: 120, description: "How many past days of logs to include (default 21)." },
       days_ahead: { type: "integer", minimum: 0, maximum: 28, description: "How many days of plan to include from today (default 7)." },
@@ -414,20 +414,37 @@ export const tools = [
     } },
   },
   {
-    name: "set_goal",
-    title: "Set a goal",
-    annotations: { title: "Set a goal", ...write(true, false) },
-    description: "Add, change or drop a goal. Goals have a target and ideally a date: a lift max (\"squat 225\"), reps in a row (\"10 pull-ups\"), body weight (\"190 lb\") or a race time (\"10K in 55:00\", type timed_distance with distance and time; save their last race or a hard run as a starting set too). get_context lists goals with their ids.",
+    name: "add_goal",
+    title: "Add a goal",
+    annotations: { title: "Add a goal", ...write(false, false) },
+    description: "Add a goal with a target and ideally a date: a lift max (\"squat 225\"), reps in a row (\"10 pull-ups\"), body weight (\"190 lb\") or a race time (\"10K in 55:00\", type timed_distance with distance and time; save their last race or a hard run as a starting set too). Returns its goal_id.",
     inputSchema: { type: "object", properties: {
-      action: { type: "string", enum: ["add", "change", "drop"] },
-      goal_id: { type: "string", description: "For change and drop." },
       type: { type: "string", enum: ["lift_max", "reps", "body_weight", "timed_distance"] },
       exercise: EXERCISE,
       target: { type: "number", description: "lb for a lift max or body weight; reps for reps." },
       distance: { type: "string", description: "For a race time: \"5K\", \"10K\", \"half\", \"marathon\", \"5 mi\" or \"8 km\"." },
       time: { type: "string", description: "For a race time: the target, \"55:00\" or \"1:45:30\"." },
       by: { type: "string", description: "Deadline, YYYY-MM-DD." },
-    }, required: ["action"] },
+    }, required: ["type"] },
+  },
+  {
+    name: "change_goal",
+    title: "Change a goal",
+    annotations: { title: "Change a goal", ...write(true, true) },
+    description: "Change a goal's target or date, replacing the old ones; goals are theirs, so only once they agree. get_context lists goals with their ids.",
+    inputSchema: { type: "object", properties: {
+      goal_id: { type: "string" },
+      target: { type: "number", description: "The new target: lb for a lift max or body weight; reps for reps." },
+      time: { type: "string", description: "For a race-time goal: the new target time, \"55:00\"." },
+      by: { type: "string", description: "The new deadline, YYYY-MM-DD." },
+    }, required: ["goal_id"] },
+  },
+  {
+    name: "drop_goal",
+    title: "Drop a goal",
+    annotations: { title: "Drop a goal", ...write(true, true) },
+    description: "Drop a goal they no longer want: it stops counting toward progress and the program. Only once they agree. get_context lists goals with their ids.",
+    inputSchema: { type: "object", properties: { goal_id: { type: "string" } }, required: ["goal_id"] },
   },
   {
     name: "apply",
@@ -487,7 +504,7 @@ function context(units: Units, today: string, back: number, ahead: number, tz: s
   const goals = goalsOf(units);
   const needs = missing(profile, goals, units);
   if (needs.length) {
-    out.push("", "NOT SET UP YET. Before planning, ask them, one topic at a time, and save each answer (set_profile, set_goal):", ...needs.map((n) => `- ${n}`),
+    out.push("", "NOT SET UP YET. Before planning, ask them, one topic at a time, and save each answer (set_profile, add_goal):", ...needs.map((n) => `- ${n}`),
       "Then set_program to their goal date, propose_week for the days from today to the end of next week, and apply when they agree.");
   }
   if (goals.length) {
@@ -579,7 +596,7 @@ function describeProgress(units: Units, today: string, nowSec: number, tz: strin
   const end = profile?.targetDate;
   if (program) out.push(`Program week ${week + 1} of ${program.weeks.length}, ending ${program.target}. Counted from the program's start, ${program.start}.`);
   else out.push("No program yet, so this counts all their logs and there's no pace to compare with (set_program).");
-  out.push("", goals.length ? "Goals:" : "No goals yet (set_goal).");
+  out.push("", goals.length ? "Goals:" : "No goals yet (add_goal).");
   for (const g of goals) {
     const option = progress.optionFor(g.metric);
     const name = option?.name ?? (g.metric.endsWith(".1rm_lb") ? `${nameOf(g.metric.split(".")[0])} max` : g.metric.endsWith(".reps") ? `${nameOf(g.metric.split(".")[0])} in a row` : g.metric);
@@ -633,7 +650,7 @@ function describeReview(units: Units, day: string, nowSec: number, tz: string) {
     for (const g of r.goals) {
       const f = (x: number) => (g.option.measure === "time" ? clock(x) : n(Math.round(x * 10) / 10)), u = g.option.measure === "time" ? "" : ` ${g.goal.unit}`;
       out.push(`- ${g.option.name}: ${f(g.from)} → ${f(g.to)} of ${f(g.goal.target)}${u}, ${PACE[g.pace]}.${g.forecast !== undefined ? ` At this rate ${f(g.forecast)} by the end.` : ""}`);
-      if (g.checkIn) out.push(`  Check-in: ${g.checkIn.ahead ? `well ahead; offer to ${g.option.measure === "time" ? "lower" : "raise"}` : "behind; offer to keep it, or move"} the target to ${f(g.checkIn.proposed)}${u} (${g.checkIn.weeksLeft} weeks left). Only if they agree: set_goal change, goal_id ${g.id}.`);
+      if (g.checkIn) out.push(`  Check-in: ${g.checkIn.ahead ? `well ahead; offer to ${g.option.measure === "time" ? "lower" : "raise"}` : "behind; offer to keep it, or move"} the target to ${f(g.checkIn.proposed)}${u} (${g.checkIn.weeksLeft} weeks left). Only if they agree: change_goal, goal_id ${g.id}.`);
     }
   }
   out.push("", r.alerts.length ? `Alerts:\n${r.alerts.map((a) => `- ${a.title}. ${a.detail}${a.area ? ` (If it's an injury, set_profile can add ${a.area} to injured_areas.)` : ""}`).join("\n")}` : "No alerts.");
@@ -816,7 +833,7 @@ function weekLines(units: Units, day: string, nowSec: number, tz: string) {
 
 /** The tools a coach can point at a client. Logging and sharing stay the client's own. */
 export const CLIENT_TOOLS = new Set(["get_context", "get_day", "add_note", "find_exercises", "swap_options", "create_exercise", "edit_exercise", "clear_day",
-  "propose_session", "propose_week", "apply", "undo", "get_program", "set_program", "get_progress", "get_week_review", "set_profile", "set_goal"]);
+  "propose_session", "propose_week", "apply", "undo", "get_program", "set_program", "get_progress", "get_week_review", "set_profile", "add_goal", "change_goal", "drop_goal"]);
 const CLIENT = { type: "string", description: "Coaches only: the client to act on, by name or id as get_context and list_clients show them. Leave it out for the caller's own training." };
 for (const t of tools) if (CLIENT_TOOLS.has(t.name)) (t.inputSchema.properties as Record<string, unknown>).client = CLIENT;
 
@@ -1161,12 +1178,15 @@ export async function callTool(name: string, args: Args, account: Account, store
         + `equipment ${((merged.equipment ?? []) as string[]).join(", ") || "none"}; injured ${((merged.injuredAreas ?? []) as string[]).join(", ") || "none"}; never ${((merged.avoidExercises ?? []) as string[]).map(nameOf).join(", ") || "none"}; `
         + `${merged.style}; ${(merged.starts ?? []).length} starting set(s).`;
     }
-    case "set_goal": {
+    // FIT-237: one tool each, as ChatGPT's review asks of every operation an agent can call.
+    case "add_goal":
+    case "change_goal":
+    case "drop_goal": {
       const units = await store.units(uid);
       const by = args.by as string | undefined;
       if (by !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(by)) throw new Error("by is YYYY-MM-DD.");
       const deadline = by ? epoch(by, 12 * 60, tz) : undefined;
-      if (args.action === "add") {
+      if (name === "add_goal") {
         if (!args.type || (args.type !== "timed_distance" && args.target === undefined)) throw new Error("A new goal needs its type and target.");
         const body = goalBody(args as GoalInput, deadline);
         body.baseline = baselineOf(units, body.metric);
@@ -1182,14 +1202,14 @@ export async function callTool(name: string, args: Args, account: Account, store
       const current = units.get(`goal#${args.goal_id}`);
       if (!current) throw new Error("No goal with that goal_id; get_context lists them.");
       const goal = JSON.parse(current);
-      if (args.action === "drop") goal.status = "abandoned";
+      if (name === "drop_goal") goal.status = "abandoned";
       else {
         if (args.target !== undefined) goal.target = args.target;
         if (args.time !== undefined && goalMeters(goal.metric) !== undefined) goal.target = seconds(args.time);
         if (deadline !== undefined) goal.deadline = deadline;
       }
       await store.write(uid, [{ key: `goal#${args.goal_id}`, body: encode(goal) }], account.agent);
-      return args.action === "drop" ? "Dropped." : `Changed: ${goal.metric} ${goal.target} ${goal.unit}${by ? ` by ${by}` : ""}.`;
+      return name === "drop_goal" ? "Dropped." : `Changed: ${goal.metric} ${goal.target} ${goal.unit}${by ? ` by ${by}` : ""}.`;
     }
     default:
       throw new Error(`Unknown tool ${name}. The tools: ${tools.map((t) => t.name).join(", ")}.`);
@@ -1201,7 +1221,7 @@ export async function callTool(name: string, args: Args, account: Account, store
 /** FIT-208: what an agent reads first, in short paragraphs it can follow step by step. */
 const INSTRUCTIONS = [
   "Barbrabell holds a person's strength training: goals, a multi-week program, planned sessions and what they logged, shared with their phone app. In every tool, \"they\" is the person whose training it is: the caller, or the client a coach names with client.",
-  "Start with get_context. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal; then lay out the program to their goal date with set_program, propose_week for the first days, and apply when they agree.",
+  "When the conversation is about their training, call get_context first. If it says NOT SET UP YET, get to know them before planning: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and add_goal; then lay out the program to their goal date with set_program, propose_week for the first days, and apply when they agree.",
   "Day to day: log what they did with log_session, log_run and log_daily, with RPE and their notes. Change days with propose_session, propose_week or clear_day: nothing changes until apply, so show the change and apply only once they agree; undo reverses an apply. Near the end of each week, review it (get_week_review) and plan the next from get_program and their logs. Ask before delete_log, and before share (it makes a public link).",
   "Coaches: if get_context lists clients, the caller coaches them. list_clients and roster_review show who needs them; pass client to read or plan one client's training, and to add_note a reply on their session. Logging and sharing stay the client's. Changes reach the client's phone at its next sync. Coaching needs the coach plan; when it has lapsed, the tools say so and where to start it.",
   "To give one client's block to another: get_day with to on the first, then propose_week for the second with loads from the second's own maxes (ask for a starting set if there's none).",
