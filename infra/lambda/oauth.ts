@@ -30,6 +30,8 @@ export interface Config {
   /** FIT-236: an email and password checked with Cognito, for accounts made with one (App Review's and the directory's
    * reviewers); undefined when they don't match. Without it the page offers only Apple and Google. */
   passwordSignIn?(email: string, password: string): Promise<{ uid: string; who?: string } | undefined>;
+  /** FIT-243: fetches a Client ID Metadata Document; fetch by default, a stub in tests. */
+  clientMetadata?(url: string): Promise<unknown>;
 }
 
 export const ACCESS_SECONDS = 3600;
@@ -146,6 +148,39 @@ async function signedIn(store: AuthStore, origin: string, request: Record<string
   return redirect(back.toString());
 }
 
+/**
+ * FIT-243: a client named by a Client ID Metadata Document (the MCP spec's other way to register, which Smithery uses):
+ * client_id is an https URL serving its metadata, whose client_id is that URL and whose redirect_uris we check as we
+ * check a registered client's. Undefined when it isn't one, or doesn't check out.
+ */
+async function metadataClient(clientId: string, config: Config) {
+  let url: URL;
+  try {
+    url = new URL(clientId);
+  } catch {
+    return undefined;
+  }
+  // https with a path, on a name rather than an address, so it can't point the server at itself or a private network.
+  if (url.protocol !== "https:" || url.pathname === "/" || url.hash || url.username || /^[\d.]+$|^\[|^localhost$/i.test(url.hostname)) return undefined;
+  try {
+    const doc = (await (config.clientMetadata ?? fetchMetadata)(clientId)) as { client_id?: unknown; client_name?: unknown; redirect_uris?: unknown };
+    const uris = doc?.redirect_uris;
+    if (doc?.client_id !== clientId || !Array.isArray(uris) || !uris.length || uris.length > 10 || !uris.every(allowedRedirect)) return undefined;
+    const name = typeof doc.client_name === "string" && doc.client_name.trim() ? doc.client_name.trim().slice(0, 60) : url.hostname;
+    return { client_name: name, redirect_uris: uris as string[] };
+  } catch {
+    return undefined;
+  }
+}
+
+async function fetchMetadata(url: string) {
+  const response = await fetch(url, { headers: { Accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(5000) });
+  if (!response.ok) throw new Error(`${response.status}`);
+  const text = await response.text();
+  if (text.length > 64 * 1024) throw new Error("too big");
+  return JSON.parse(text);
+}
+
 async function issue(store: AuthStore, grant: { uid: string; who?: string; tz: string; agent: string; client_id: string }) {
   const access = random();
   const refresh = random();
@@ -175,6 +210,7 @@ export async function oauth(event: LambdaFunctionURLEvent, store: AuthStore, con
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
       code_challenge_methods_supported: ["S256"],
+      client_id_metadata_document_supported: true,
       token_endpoint_auth_methods_supported: ["none"],
       scopes_supported: ["training"],
     });
@@ -203,7 +239,7 @@ export async function oauth(event: LambdaFunctionURLEvent, store: AuthStore, con
   if (path === "/oauth/authorize" && method === "GET") {
     const clientId = query.get("client_id") ?? "";
     const redirectUri = query.get("redirect_uri") ?? "";
-    const client = clientId ? await store.get(`OAUTHCLIENT#${clientId}`) : undefined;
+    const client = clientId.startsWith("https://") ? await metadataClient(clientId, config) : clientId ? await store.get(`OAUTHCLIENT#${clientId}`) : undefined;
     // Without a known client and one of its redirect URIs, there's nowhere safe to send an error back to.
     if (!client || !(client.redirect_uris as string[]).includes(redirectUri)) {
       return page(400, messagePage(config, "This link can't connect", "Start again from your agent's connector settings."));

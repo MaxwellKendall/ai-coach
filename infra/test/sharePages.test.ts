@@ -59,6 +59,12 @@ describe("share pages (FIT-105)", () => {
     const page = await route("/.well-known/openai-apps-challenge", store, { ...site, openaiAppsChallenge: "abc123" });
     expect(page).toMatchObject({ status: 200, type: "text/plain; charset=utf-8", body: "abc123" });
   });
+
+  it("the MCP Registry's domain record, only once one is set (FIT-243)", async () => {
+    expect((await route("/.well-known/mcp-registry-auth", store, site)).status).toBe(404);
+    const record = "v=MCPv1; k=ed25519; p=abc=";
+    expect(await route("/.well-known/mcp-registry-auth", store, { ...site, mcpRegistryAuth: record })).toMatchObject({ status: 200, type: "text/plain; charset=utf-8", body: record });
+  });
 });
 
 describe("reading what users saved (FIT-105)", () => {

@@ -37,7 +37,7 @@ export interface AICoachStackProps extends StackProps {
    * FIT-105: the share pages' domain, a Route 53 hosted zone in this account, and the hosts on it. A host
    * starting with "join." takes invite codes at its root (join.{domain}/CODE); the others serve every page.
    */
-  web?: { zone: string; hosts: string[]; openaiAppsChallenge?: string };
+  web?: { zone: string; hosts: string[]; openaiAppsChallenge?: string; mcpRegistryAuth?: string };
   /** FIT-127: the web dashboard's host on a Route 53 zone, and its built files (web/dist). */
   /** The web dashboard, served at /app on the site's first host. Needs web. */
   app?: { assets: string };
@@ -543,6 +543,8 @@ export class AICoachStack extends Stack {
         MCP_URL: `https://${mcpHost}/mcp`,
         // FIT-237: the token ChatGPT's plugin portal shows when connecting the MCP server, served as plain text.
         OPENAI_APPS_CHALLENGE: props.web.openaiAppsChallenge ?? "",
+        // FIT-243: the official MCP Registry's proof that barbrabell.com is ours (its public key; the private one isn't in the repo).
+        MCP_REGISTRY_AUTH: props.web.mcpRegistryAuth ?? "",
         ...giftEnv,
       });
       // PutItem: the thanks page saves a paid gift if Stripe's webhook hasn't yet.

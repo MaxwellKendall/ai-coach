@@ -1,0 +1,10 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.barbrabell/barbrabell",
+  "title": "Barbrabell",
+  "description": "Plan, log and track strength training: athletes and their coaches, synced with the Barbrabell app.",
+  "repository": { "url": "https://github.com/MaxwellKendall/barbrabell-claude-plugin", "source": "github" },
+  "websiteUrl": "https://barbrabell.com/docs",
+  "version": "1.0.0",
+  "remotes": [{ "type": "streamable-http", "url": "https://barbrabell.com/mcp" }]
+}

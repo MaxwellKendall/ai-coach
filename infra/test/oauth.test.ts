@@ -138,6 +138,32 @@ describe("OAuth for agents (FIT-151)", () => {
     expect((await go(request("POST", "/oauth/email", { body: form({ request: id, email: "review@example.com", password: "right" }) }), store)).statusCode).toBe(400);
   });
 
+  it("takes a client named by its metadata document, as Smithery registers (FIT-243)", async () => {
+    const id = "https://smithery.example/oauth/client.json";
+    const cb = "https://smithery.example/oauth/callback";
+    const docs: Record<string, unknown> = { [id]: { client_id: id, client_name: "Smithery", redirect_uris: [cb] } };
+    const fetched: string[] = [];
+    const cimd: Config = { ...config, clientMetadata: async (url) => { fetched.push(url); if (!docs[url]) throw new Error("404"); return docs[url]; } };
+    const go = async (event: LambdaFunctionURLEvent, store: AuthStore) => (await oauth(event, store, cimd)) as any;
+    const { store } = memoryAuth();
+    const meta = JSON.parse((await go(request("GET", "/.well-known/oauth-authorization-server"), store)).body);
+    expect(meta.client_id_metadata_document_supported).toBe(true);
+    const verifier = "v".repeat(50);
+    const authorize = (client_id: string, redirect_uri: string) => go(request("GET", "/oauth/authorize", { query: {
+      response_type: "code", client_id, redirect_uri, code_challenge: s256(verifier), code_challenge_method: "S256", state: "sm",
+    } }), store);
+    const consent = await authorize(id, cb);
+    expect(consent.statusCode).toBe(200);
+    expect(consent.body).toContain("Connect Smithery to your training");
+    expect(fetched).toEqual([id]);
+    // A redirect its document doesn't list, a document naming another client, or an address in place of a name: no.
+    expect((await authorize(id, "https://elsewhere.example/cb")).statusCode).toBe(400);
+    docs["https://smithery.example/other.json"] = { client_id: id, redirect_uris: [cb] };
+    expect((await authorize("https://smithery.example/other.json", cb)).statusCode).toBe(400);
+    expect((await authorize("https://169.254.169.254/latest.json", cb)).statusCode).toBe(400);
+    expect(fetched).not.toContain("https://169.254.169.254/latest.json");
+  });
+
   it("refuses redirects it can't trust and authorization without PKCE", async () => {
     const { store } = memoryAuth();
     const bad: any = await run(request("POST", "/oauth/register", { body: JSON.stringify({ redirect_uris: ["http://evil.example/cb"] }) }), store);

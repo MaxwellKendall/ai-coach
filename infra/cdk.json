@@ -30,7 +30,8 @@
             "share.barbrabell.com",
             "join.barbrabell.com"
           ],
-          "openaiAppsChallenge": "uKK4VmrlmBftRQaULsC-dJ6XAdKoATtMAP6dj3BjQkQ"
+          "openaiAppsChallenge": "uKK4VmrlmBftRQaULsC-dJ6XAdKoATtMAP6dj3BjQkQ",
+          "mcpRegistryAuth": "v=MCPv1; k=ed25519; p=hJ1DIdipnXMGHYi5x3MWcJdjlqX8aFjocf3HLYua2nM="
         },
         "app": true
       }
