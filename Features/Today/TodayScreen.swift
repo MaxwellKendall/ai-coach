@@ -526,10 +526,13 @@ struct TodayScreen: View {
 
     /// FIT-120: free, a workout of your own: pick the exercises, then the same workout mode.
     /// FIT-184: a planned run is logged as a run, free, race goal or not. FIT-185: anyone can start a run.
+    /// Stacked full width, as the session card's Start and Start a run are: side by side, "Log a workout" ran into its
+    /// capsule's edges.
     private func logOwnButton(run: PlannedActivity?) -> some View {
-        HStack(spacing: 10) {
+        VStack(spacing: 10) {
             Button { sheet = .own } label: {
-                Label("Log a workout", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                Label("Log a workout", systemImage: "plus").font(.headline).padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity, minHeight: 50)
                     .background(Color(.systemBackground), in: .capsule)
             }
             if let run { runButton("Start the run", run) } else { runButton("Start a run", nil) }
@@ -540,7 +543,8 @@ struct TodayScreen: View {
     /// FIT-179: a run, planned or not, logged with its distance and time.
     private func runButton(_ title: String, _ planned: PlannedActivity?) -> some View {
         Button { tracking = RunTarget(planned: planned) } label: {
-            Label(title, systemImage: "figure.run").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+            Label(title, systemImage: "figure.run").font(.headline).padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, minHeight: 50)
                 .background(Color(.systemBackground), in: .capsule)
         }
         .buttonStyle(.plain)
