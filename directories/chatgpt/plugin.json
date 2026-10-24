@@ -1,0 +1,88 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "barbrabell",
+  "version": "1.0.0",
+  "description": "Coach strength clients from ChatGPT: write their program, review your roster each week, and bring in programs you already have. Changes land in your clients' free Barbrabell iPhone app.",
+  "author": { "name": "Barbrabell", "url": "https://barbrabell.com" },
+  "homepage": "https://barbrabell.com/docs",
+  "license": "MIT",
+  "keywords": ["fitness", "strength training", "coaching", "personal trainer", "programming"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Barbrabell",
+        "shortDescription": "Your assistant strength coach",
+        "longDescription": "Barbrabell is an assistant coach for personal trainers and online strength coaches. Connect it, and ChatGPT reads each client's goals, program, planned sessions and every logged set, then helps you write and change their training. Your clients follow it in the free Barbrabell iPhone app, where they check off sets and log how it went, with no AI account needed.\n\nAsk \"Who needs me this week?\" and it goes through your roster: pain in a client's notes, missed sessions, sets at RPE 9, lifts that have stalled, and whose next week isn't written. Ask it to rebuild a week around a sore knee, program a block to a meet, or bring in a program you already have in a spreadsheet or PDF. It works from each client's own maxes and logs, shows you every change first, and saves it only when you say yes, with undo. Changes reach the client's phone at its next sync.\n\nTraining yourself? Say \"Set me up\" and it writes your program, or tell it what you did and it logs the workout.\n\nWho it's for: strength coaches with clients, and people training themselves. Coaching clients needs a Barbrabell coach plan, set up on barbrabell.com. It plans strength training; it doesn't give medical advice, and it isn't for nutrition prescriptions.",
+        "developerName": "Barbrabell",
+        "category": "Health & Fitness",
+        "websiteURL": "https://barbrabell.com",
+        "supportURL": "https://barbrabell.com/support",
+        "privacyPolicyURL": "https://barbrabell.com/privacy",
+        "termsOfServiceURL": "https://barbrabell.com/terms",
+        "defaultPrompt": [
+          "Who needs me this week?",
+          "Rebuild Mike's next week around his sore knee.",
+          "Invite a new client."
+        ],
+        "brandColor": "#E2475A",
+        "brandColorDark": "#E2475A",
+        "logo": "./assets/logo.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "A coach's weekly roster check.",
+              "prompt": "Who needs me this week?",
+              "tools_triggered": ["roster_review"],
+              "expected_behavior": "Lists the three clients, those who need the coach first: Mike Torres first, flagged for knee pain in his notes, RPE 9+ on back squat and a stalled squat; then Jen Alvarez and Sara Kim with sessions done of planned and each goal's pace."
+            },
+            {
+              "description": "Reading one client's training.",
+              "prompt": "Show me Mike Torres's training: his goals, program and last few sessions.",
+              "tools_triggered": ["get_context"],
+              "expected_behavior": "Calls get_context with client Mike Torres and summarizes his profile, his goals (back squat 315 lb and deadlift 405 lb), the program week he's in, his recent logged sessions with RPE and his note about a sore left knee."
+            },
+            {
+              "description": "Changing a client's week around a problem, with the coach's approval before saving.",
+              "prompt": "Mike Torres's knee is sore and his squat has stalled. Plan his next week around it.",
+              "tools_triggered": ["get_context", "get_program", "propose_week"],
+              "expected_behavior": "Reads Mike's logs and program, proposes next week's Monday, Wednesday and Friday sessions with knee-friendly swaps and adjusted squat loads, shows the week and asks for approval. Nothing is saved until the coach agrees; then apply saves it."
+            },
+            {
+              "description": "Checking a client's progress toward her goals.",
+              "prompt": "How is Sara Kim doing on her goals?",
+              "tools_triggered": ["get_progress"],
+              "expected_behavior": "Calls get_progress with client Sara Kim and reports each goal (back squat, bench press and deadlift maxes for her meet): where it started, where it is now, and whether she's on pace."
+            },
+            {
+              "description": "Inviting a new client.",
+              "prompt": "Invite a new client.",
+              "tools_triggered": ["invite_client"],
+              "expected_behavior": "Returns a one-time invite link and a 6-character code, valid for 14 days, for the coach to send; the client opens it in the free Barbrabell iPhone app to accept."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Unrelated request.",
+              "prompt": "What's the weather in Denver this weekend?"
+            },
+            {
+              "description": "Medical diagnosis, which the app doesn't give.",
+              "prompt": "My knee clicks when I bend it. Is it a torn meniscus?"
+            },
+            {
+              "description": "General writing request with no training data involved.",
+              "prompt": "Write a short poem about the ocean."
+            }
+          ]
+        },
+        "demo_recording_url": "",
+        "commerce": false
+      },
+      "publication": {
+        "release_notes": "First release: coach your strength clients from ChatGPT. Roster review, programs and weekly plans from each client's own logs, bringing in existing programs, and client invites, with every change shown before it's saved."
+      }
+    }
+  }
+}

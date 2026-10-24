@@ -15,8 +15,7 @@ import * as progress from "./progress.ts";
 import { clock, distanceName, goalMeters, meters, MILE, miles, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
-import { COACH_PRICE, comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
-import { PlanError, start as checkout } from "./coachPlan.ts";
+import { comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
 import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
@@ -50,9 +49,8 @@ export interface Store {
   /** FIT-196: a client's session threads (FIT-132), and a coach's reply on one, shown in the app as the coach's. */
   comments(coach: string, client: string): Promise<Comment[]>;
   comment(coach: string, client: string, day: string, text: string): Promise<void>;
-  /** FIT-148: whether they have the coach plan, and its monthly Checkout (undefined when Checkout can't start one). */
+  /** FIT-148: whether they have the coach plan. */
   coachPlan(uid: string): Promise<boolean>;
-  coachCheckout(uid: string): Promise<string | undefined>;
 }
 
 export type ShareKind = "win" | "recap" | "program" | "session";
@@ -121,13 +119,6 @@ export const dynamoStore: Store = {
   comments: (coach, client) => comments(coach, client),
   async comment(coach, client, day, text) { await postComment(coach, undefined, client, day, text); },
   coachPlan: hasCoachPlan,
-  async coachCheckout(uid) {
-    // Billing handles what Checkout won't (a plan unpaid or incomplete, or one Stripe already has).
-    return checkout(uid, "month", undefined, process.env.APP_ORIGIN, "coach").catch((error) => {
-      if (error instanceof PlanError) return undefined;
-      throw error;
-    });
-  },
   async unshare(uid, id) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
     if (!Item || Item.uid !== uid) return false;
@@ -173,9 +164,10 @@ const SESSION = {
   }, required: ["exercise"] },
 };
 
-// MCP tool annotations (FIT-156). Clients take a missing destructiveHint as true, so writes say it.
-// The propose tools only store a proposal, so they count as reads. Nothing reaches outside the account.
-const READ = { readOnlyHint: true, openWorldHint: false };
+// MCP tool annotations (FIT-156), every hint said outright, as ChatGPT's review asks (FIT-237). Destructive is any
+// write that overwrites or removes what's there (a day's session, a profile field, a weigh-in); only additive writes
+// aren't. The propose tools only store a proposal, so they count as reads. Nothing but share reaches outside the account.
+const READ = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const write = (destructive: boolean, idempotent: boolean) =>
   ({ readOnlyHint: false, destructiveHint: destructive, idempotentHint: idempotent, openWorldHint: false });
 
@@ -227,7 +219,7 @@ export const tools = [
   {
     name: "edit_exercise",
     title: "Edit their exercise",
-    annotations: { title: "Edit their exercise", ...write(false, true) },
+    annotations: { title: "Edit their exercise", ...write(true, true) },
     description: "Change one of their own exercises (made with create_exercise): its name, pattern, equipment, muscles or cues. Catalog exercises can't be changed; create one instead.",
     inputSchema: { type: "object", properties: {
       exercise: EXERCISE,
@@ -278,7 +270,7 @@ export const tools = [
   {
     name: "log_daily",
     title: "Log weight, sleep or meals",
-    annotations: { title: "Log weight, sleep or meals", ...write(false, false) },
+    annotations: { title: "Log weight, sleep or meals", ...write(true, false) },
     description: "Log what they tell you about the rest of the day: a weigh-in, last night's sleep (hours, and quality 1–5 if they say), a check-in note for their coach, or meals with kcal and protein (estimate from what they ate when they don't know, and say it's an estimate). Several in one call. A weigh-in or sleep replaces that day's own; meals add up. Body-weight goals follow the weigh-ins.",
     inputSchema: { type: "object", properties: {
       date: DATE,
@@ -346,7 +338,7 @@ export const tools = [
   {
     name: "set_program",
     title: "Set the program",
-    annotations: { title: "Set the program", ...write(false, true) },
+    annotations: { title: "Set the program", ...write(true, true) },
     description: "Start or change the multi-week program: its length (weeks, or a target date with by), when it starts, how often to deload, trips, and its brief (phases). Weeks run Sunday to Saturday; a new program starts this week unless start says otherwise. Code lays out the phases (base, build, peak), a deload every deload_every weeks, and a light test week as the last. Each goal lift needs a max or starting set first (set_profile). It plans no sessions: then propose_week, the first one or two weeks now and each next week from their logs.",
     inputSchema: { type: "object", properties: {
       weeks: { type: "integer", minimum: 1, maximum: 52, description: "Length in weeks, ending on that week's Saturday." },
@@ -400,7 +392,7 @@ export const tools = [
   {
     name: "set_profile",
     title: "Set profile",
-    annotations: { title: "Set profile", ...write(false, true) },
+    annotations: { title: "Set profile", ...write(true, true) },
     description: "Save what they tell you about themselves; only the fields given change. Call it as each answer comes in during setup and whenever something changes: schedule, equipment, injuries, the never list, and starting_sets (their maxes or recent heavy sets), which programs and weights need. A new profile needs age and weight_lb first. A coach can set everything for a client but their name.",
     inputSchema: { type: "object", properties: {
       name: { type: "string", description: "What to call them, as their shared pages show it (their first name, say)." },
@@ -440,14 +432,14 @@ export const tools = [
   {
     name: "apply",
     title: "Apply a proposal",
-    annotations: { title: "Apply a proposal", ...write(false, false) },
+    annotations: { title: "Apply a proposal", ...write(true, false) },
     description: "Make a proposal real once they agree: each day in it (from propose_session, propose_week or clear_day) gets its new session, on their phone at its next sync. Give the proposal_id it returned; one with plan-rule problems is refused. A coach passes the same client the proposal was for.",
     inputSchema: { type: "object", properties: { proposal_id: { type: "string" } }, required: ["proposal_id"] },
   },
   {
     name: "undo",
     title: "Undo an apply",
-    annotations: { title: "Undo an apply", ...write(false, false) },
+    annotations: { title: "Undo an apply", ...write(true, false) },
     description: "Put back the session one day had before the last apply changed it (within 14 days, once). A day logged since can't be put back.",
     inputSchema: { type: "object", properties: { date: DATE }, required: ["date"] },
   },
@@ -852,14 +844,14 @@ async function clientOf(caller: string, said: unknown, store: Store): Promise<Pe
   return client;
 }
 
-/** The coach tools need the coach plan; without it, its Checkout (FIT-148). The athlete tools stay free. */
+/**
+ * The coach tools need the coach plan (FIT-148). The athlete tools stay free. FIT-237: the tools say so and point to the
+ * coach page, with no price or Checkout link: ChatGPT's directory lets a tool explain a plan gate but not sell one.
+ */
 async function needsPlan(coach: string, store: Store) {
   if (await store.coachPlan(coach)) return;
-  const url = await store.coachCheckout(coach);
-  const billing = `${process.env.APP_ORIGIN ?? ""}/billing`;
-  throw new Error(`Coaching needs the coach plan, ${COACH_PRICE}; their clients stay free and keep logging meanwhile. `
-    + (url ? `Monthly Checkout: ${url}\nYearly, or anything else about billing: ${billing}` : `Start it on the Billing page: ${billing}`)
-    + "\nGive them the link. Once they've paid, coaching works on their next request; there's nothing to reconnect.");
+  throw new Error(`Coaching needs the coach plan, which this account doesn't have; their clients stay free and keep logging meanwhile. `
+    + `How it works: ${ORIGIN}/coaches. Once it's on, coaching works on their next request; there's nothing to reconnect.`);
 }
 const COACH_ONLY = new Set(["list_clients", "roster_review", "invite_client"]);
 
@@ -1211,7 +1203,7 @@ const INSTRUCTIONS = [
   "Barbrabell holds a person's strength training: goals, a multi-week program, planned sessions and what they logged, shared with their phone app. In every tool, \"they\" is the person whose training it is: the caller, or the client a coach names with client.",
   "Start with get_context. If it says NOT SET UP YET, be their coach getting to know them: ask one topic at a time (goals with dates, schedule, equipment, injuries, age and weight, and a 1RM or recent heavy set for each goal lift: no program or weights without it), saving each answer with set_profile and set_goal; then lay out the program to their goal date with set_program, propose_week for the first days, and apply when they agree.",
   "Day to day: log what they did with log_session, log_run and log_daily, with RPE and their notes. Change days with propose_session, propose_week or clear_day: nothing changes until apply, so show the change and apply only once they agree; undo reverses an apply. Near the end of each week, review it (get_week_review) and plan the next from get_program and their logs. Ask before delete_log, and before share (it makes a public link).",
-  "Coaches: if get_context lists clients, the caller coaches them. list_clients and roster_review show who needs them; pass client to read or plan one client's training, and to add_note a reply on their session. Logging and sharing stay the client's. Changes reach the client's phone at its next sync. Coaching needs the coach plan; when it has lapsed, the tools say so with the link to pay.",
+  "Coaches: if get_context lists clients, the caller coaches them. list_clients and roster_review show who needs them; pass client to read or plan one client's training, and to add_note a reply on their session. Logging and sharing stay the client's. Changes reach the client's phone at its next sync. Coaching needs the coach plan; when it has lapsed, the tools say so and where to start it.",
   "To give one client's block to another: get_day with to on the first, then propose_week for the second with loads from the second's own maxes (ask for a starting set if there's none).",
   "To bring in a client's existing program (a pasted sheet, CSV, PDF or screenshot): get_context with client; save the maxes it's based on with set_profile starting_sets, and the equipment it needs; set_program with start on its first week, weeks its length plus one (the last week is a light test week), and deload_every its deload spacing (12 when it has none); then propose_week its days, up to 6 weeks a call, in the coach's numbers: percent_1rm for percentages, rpe for RPE (10 minus RIR), the same superset number for A1/A2, reps the low end of a range, and note for tempo, rest, the range or AMRAP. Check the names it matched loosely, show the coach, and apply.",
 ].join("\n\n");

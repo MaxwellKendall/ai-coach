@@ -20,6 +20,7 @@ const site: Site = {
   appStoreUrl: process.env.APP_STORE_URL || undefined,
   appId: process.env.APP_ID!,
   mcpUrl: process.env.MCP_URL || undefined,
+  openaiAppsChallenge: process.env.OPENAI_APPS_CHALLENGE || undefined,
 };
 
 const first = (name: unknown) => (typeof name === "string" && name.trim() ? name.trim().split(/\s+/)[0] : undefined);

@@ -101,6 +101,8 @@ export interface Site {
   appId: string;
   /** FIT-152: the MCP server's address, for /claude. */
   mcpUrl?: string;
+  /** FIT-237: ChatGPT's domain-verification token for the MCP server's host. */
+  openaiAppsChallenge?: string;
 }
 
 export interface Page {
@@ -239,6 +241,9 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
     if (!viewKinds.includes(view)) return { status: 404, type: "text/plain", body: "" };
     await store.count?.(view);
     return { status: 204, type: "text/plain", body: "" };
+  }
+  if (path === "/.well-known/openai-apps-challenge" && site.openaiAppsChallenge) {
+    return { status: 200, type: "text/plain; charset=utf-8", body: site.openaiAppsChallenge };
   }
   if (path === "/.well-known/apple-app-site-association") {
     return { status: 200, type: "application/json", body: JSON.stringify(associationFile(site)) };

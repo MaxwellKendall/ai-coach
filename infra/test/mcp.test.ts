@@ -31,7 +31,6 @@ function memory(accounts: Record<string, Account>, units: Record<string, Record<
     threads,
     paying,
     async coachPlan(uid) { return paying.has(uid); },
-    async coachCheckout(uid) { return `https://checkout.stripe.com/c/${uid}-coach`; },
     async comments(_, client) { return threads.filter((c) => c.owner === client); },
     async comment(coach, client, day, text) { threads.push({ owner: client, day, at: now.toISOString(), by: coach, byName: "Coach", text }); },
     async clients(coach) { return links.filter((l) => l.coach === coach).map((l) => ({ uid: l.client, name: l.name, since: "2026-10-01T00:00:00.000Z" })); },
@@ -143,7 +142,10 @@ describe("mcp", () => {
     }
     for (const n of reads) expect(by[n].annotations.readOnlyHint).toBe(true);
     for (const n of writes) expect(by[n].annotations.readOnlyHint).toBe(false);
-    expect(writes.filter((n) => by[n].annotations.destructiveHint)).toEqual(["log_session", "set_goal", "delete_log", "stop_sharing"]);
+    // FIT-237: every hint said outright; destructive is whatever overwrites or removes.
+    for (const t of list.result.tools) for (const h of ["readOnlyHint", "destructiveHint", "openWorldHint"]) expect(typeof t.annotations[h], `${t.name} ${h}`).toBe("boolean");
+    expect(reads.filter((n) => by[n].annotations.destructiveHint)).toEqual([]);
+    expect(writes.filter((n) => !by[n].annotations.destructiveHint).sort()).toEqual(["add_note", "create_exercise", "invite_client", "log_run", "share"]);
   });
 
   it("offers the coaching routines as prompts (FIT-175)", async () => {
@@ -834,12 +836,12 @@ describe("FIT-148: coaching needs the coach plan", () => {
     return store;
   };
 
-  it("answers every coach tool with the coach plan's Checkout until it's paid, then coaches as before", async () => {
+  it("answers every coach tool with where to start the coach plan until it's on, then coaches as before", async () => {
     const store = setup();
     const calls: [string, Record<string, unknown>][] = [["list_clients", {}], ["roster_review", {}], ["invite_client", {}],
       ...[...CLIENT_TOOLS].map((t) => [t, { client: "Sarah", date: "2026-10-15" }] as [string, Record<string, unknown>])];
     for (const [tool, args] of calls) {
-      await expect(callTool(tool, args, coach, store, now), tool).rejects.toThrow(/coach plan, \$19\.99 a month or \$199 a year[\s\S]*https:\/\/checkout\.stripe\.com\/c\/coach-coach[\s\S]*\/billing/);
+      await expect(callTool(tool, args, coach, store, now), tool).rejects.toThrow(/coach plan, which this account doesn't have[\s\S]*\/coaches\./);
     }
     expect(store.invites).toEqual([]);
     store.paying.add("coach");

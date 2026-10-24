@@ -53,6 +53,12 @@ describe("share pages (FIT-105)", () => {
     expect(JSON.parse(page.body)).toEqual(associationFile(site));
     expect(associationFile(site).applinks.details[0].components.map((c) => c["/"])).toEqual(["/join/*", "/????????", "/s/*", "/p/*", "/g/*", "/c/*"]);
   });
+
+  it("ChatGPT's domain token is the plain token, only once one is set (FIT-237)", async () => {
+    expect((await route("/.well-known/openai-apps-challenge", store, site)).status).toBe(404);
+    const page = await route("/.well-known/openai-apps-challenge", store, { ...site, openaiAppsChallenge: "abc123" });
+    expect(page).toMatchObject({ status: 200, type: "text/plain; charset=utf-8", body: "abc123" });
+  });
 });
 
 describe("reading what users saved (FIT-105)", () => {
