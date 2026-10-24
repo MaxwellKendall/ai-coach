@@ -13,3 +13,4 @@ build-sim/
 
 # FIT-237: the ChatGPT plugin ZIP, built by directories/chatgpt/build.sh
 directories/chatgpt/dist/
+directories/claude/dist/
