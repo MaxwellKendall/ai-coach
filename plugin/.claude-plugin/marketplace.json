@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "barbrabell",
+  "description": "Barbrabell's Claude plugin for strength coaches.",
+  "owner": {
+    "name": "Barbrabell",
+    "url": "https://barbrabell.com"
+  },
+  "plugins": [
+    {
+      "name": "barbrabell",
+      "source": "./",
+      "description": "Coach strength clients from Claude: write their program, review your roster each week, and bring in programs you already have."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "barbrabell",
+  "displayName": "Barbrabell",
+  "version": "0.1.0",
+  "description": "Coach strength clients from Claude: write their program, review your roster each week, and bring in programs you already have. Changes land in your clients' Barbrabell app.",
+  "author": { "name": "Barbrabell", "url": "https://barbrabell.com" },
+  "homepage": "https://barbrabell.com/claude",
+  "license": "MIT",
+  "keywords": ["fitness", "strength training", "coaching", "personal trainer", "programming"]
+}

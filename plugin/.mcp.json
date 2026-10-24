@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "barbrabell": { "type": "http", "url": "https://barbrabell.com/mcp" }
+  }
+}
