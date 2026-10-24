@@ -34,31 +34,31 @@
             {
               "description": "A coach's weekly roster check.",
               "prompt": "Who needs me this week?",
-              "tools_triggered": ["roster_review"],
+              "tools_triggered": "roster_review",
               "expected_behavior": "Lists the three clients, those who need the coach first: Mike Torres first, flagged for knee pain in his notes, RPE 9+ on back squat and a stalled squat; then Jen Alvarez and Sara Kim with sessions done of planned and each goal's pace."
             },
             {
               "description": "Reading one client's training.",
               "prompt": "Show me Mike Torres's training: his goals, program and last few sessions.",
-              "tools_triggered": ["get_context"],
+              "tools_triggered": "get_context",
               "expected_behavior": "Calls get_context with client Mike Torres and summarizes his profile, his goals (back squat 315 lb and deadlift 405 lb), the program week he's in, his recent logged sessions with RPE and his note about a sore left knee."
             },
             {
               "description": "Changing a client's week around a problem, with the coach's approval before saving.",
               "prompt": "Mike Torres's knee is sore and his squat has stalled. Plan his next week around it.",
-              "tools_triggered": ["get_context", "get_program", "propose_week"],
+              "tools_triggered": "get_context, get_program, propose_week",
               "expected_behavior": "Reads Mike's logs and program, proposes next week's Monday, Wednesday and Friday sessions with knee-friendly swaps and adjusted squat loads, shows the week and asks for approval. Nothing is saved until the coach agrees; then apply saves it."
             },
             {
               "description": "Checking a client's progress toward her goals.",
               "prompt": "How is Sara Kim doing on her goals?",
-              "tools_triggered": ["get_progress"],
+              "tools_triggered": "get_progress",
               "expected_behavior": "Calls get_progress with client Sara Kim and reports each goal (back squat, bench press and deadlift maxes for her meet): where it started, where it is now, and whether she's on pace."
             },
             {
               "description": "Inviting a new client.",
               "prompt": "Invite a new client.",
-              "tools_triggered": ["invite_client"],
+              "tools_triggered": "invite_client",
               "expected_behavior": "Returns a one-time invite link and a 6-character code, valid for 14 days, for the coach to send; the client opens it in the free Barbrabell iPhone app to accept."
             }
           ],
