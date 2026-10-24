@@ -10,6 +10,8 @@ struct WorkoutDetailView: View {
     @Query(sort: \Template.name) private var templates: [Template]
     let items: [PlannedActivity]
     var startTitle: String?
+    /// FIT-235: logging a past day isn't starting a workout, so it doesn't show Play.
+    var startIcon = "play.fill"
     /// Called with the saved rows when the user starts the session from here.
     var onStart: ([PlannedActivity]) -> Void = { _ in }
     /// Called with the saved rows after Save.
@@ -43,12 +45,13 @@ struct WorkoutDetailView: View {
         var metric: String
     }
 
-    init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil, pushed: Bool = false,
-         onStart: @escaping ([PlannedActivity]) -> Void = { _ in }, onSave: @escaping ([PlannedActivity]) -> Void = { _ in },
-         onStartOwn: ((SessionPlan) -> Void)? = nil) {
+    init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil, startIcon: String = "play.fill",
+         pushed: Bool = false, onStart: @escaping ([PlannedActivity]) -> Void = { _ in },
+         onSave: @escaping ([PlannedActivity]) -> Void = { _ in }, onStartOwn: ((SessionPlan) -> Void)? = nil) {
         self.items = items
         self.onStartOwn = onStartOwn
         self.startTitle = startTitle
+        self.startIcon = startIcon
         self.onStart = onStart
         self.onSave = onSave
         self.pushed = pushed
@@ -361,7 +364,7 @@ struct WorkoutDetailView: View {
                 dismiss()
                 onStart(saved)
             } label: {
-                Label(startTitle, systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+                Label(startTitle, systemImage: startIcon).font(.headline).frame(maxWidth: .infinity, minHeight: 56)
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: 18))

@@ -43,9 +43,13 @@ struct TodayScreen: View {
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
         case propose(Proposal), spoken(Spoken), own, run(PlannedActivity?), ran(LogEntry)
+        /// FIT-235: a workout of their own on a past day: pick the exercises, then log the sets on that day.
+        case ownOn(Date), logOwn(WorkoutDraft, Date)
         var id: String {
             switch self {
             case .own: "own"
+            case .ownOn(let day): "own \(day)"
+            case .logOwn(let draft, let day): "log own \(day) \(draft.id)"
             case .ran(let entry): "ran \(entry.id)"
             case .run(let item): "run \(item?.id.uuidString ?? "")"
             case .details(let items): "details \(items.map(\.id))"
@@ -87,12 +91,14 @@ struct TodayScreen: View {
         let week = week
         let cards = cards(week)
         let selected = day ?? todayIndex
+        // FIT-235: a later session can be done today only when today has no session of its own waiting.
+        let todayFree: Bool = if case .plan = cards[todayIndex] { false } else { true }
         VStack(alignment: .leading, spacing: 0) {
             header(week[selected], index: selected)
             strip(week, cards: cards, selected: selected)
                 .padding(.horizontal, 14).padding(.top, 18)
             SwipeDeck(index: Binding(get: { day ?? todayIndex }, set: { day = $0 }), count: week.count) { index in
-                card(cards[index], isToday: index == todayIndex, isPast: index < todayIndex)
+                card(cards[index], day: week[index], isToday: index == todayIndex, isPast: index < todayIndex, todayFree: todayFree)
             }
             .padding(.horizontal, 22)
             .padding(.top, 22)
@@ -361,21 +367,21 @@ struct TodayScreen: View {
         WeekReport.make(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
     }
 
-    @ViewBuilder private func card(_ card: DayCard, isToday: Bool, isPast: Bool) -> some View {
+    @ViewBuilder private func card(_ card: DayCard, day: Date, isToday: Bool, isPast: Bool, todayFree: Bool) -> some View {
         VStack(spacing: 18) {
             // FIT-8: the week's review is the first thing on its last day.
             if isToday && WeekReport.isDue() {
                 let report = weekReport()
                 WeekReviewCard(report: report) { review = report }
             }
-            dayContent(card, isToday: isToday, isPast: isPast)
+            dayContent(card, day: day, isToday: isToday, isPast: isPast, todayFree: todayFree)
         }
         .padding(EdgeInsets(top: 26, leading: 24, bottom: 24, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
     }
 
-    @ViewBuilder private func dayContent(_ card: DayCard, isToday: Bool, isPast: Bool) -> some View {
+    @ViewBuilder private func dayContent(_ card: DayCard, day: Date, isToday: Bool, isPast: Bool, todayFree: Bool) -> some View {
         Group {
             switch card {
             // FIT-74: the week standing in until the coach's arrives isn't shown as if it were the plan.
@@ -387,7 +393,7 @@ struct TodayScreen: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.opacity)
-            case .plan(let plan): planCard(plan, isToday: isToday, isPast: isPast)
+            case .plan(let plan): planCard(plan, isToday: isToday, isPast: isPast, todayFree: todayFree)
             case .done(let done): doneCard(done)
             // FIT-201: a coach's client with nothing planned from this week on is waiting on the coach, not resting.
             case .rest where awaitingCoach:
@@ -406,13 +412,15 @@ struct TodayScreen: View {
                         .frame(maxWidth: 240)
                     // FIT-215: in the pilot anyone can log a workout of their own on a rest day.
                     if isToday && (!pro.active || Pilot.simple) { logOwnButton(run: nil).padding(.top, 18) } else if isToday { runButton("Start a run", nil).padding(.top, 18) }
+                    // FIT-235: a workout done that day and not logged then.
+                    else if isPast { pill("Log a workout", "plus") { sheet = .ownOn(day) }.padding(.top, 18) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
 
-    private func planCard(_ plan: DayCard.Planned, isToday: Bool, isPast: Bool) -> some View {
+    private func planCard(_ plan: DayCard.Planned, isToday: Bool, isPast: Bool, todayFree: Bool) -> some View {
         let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
         // FIT-120: the program's sessions show without Pro, but run with it; a friend's (pinned, FIT-113) stays open.
         let locked = !pro.active && !plan.items.allSatisfy(\.pinned)
@@ -491,6 +499,9 @@ struct TodayScreen: View {
                         .background(Color(.systemBackground), in: .capsule)
                 }
                 .buttonStyle(.plain)
+            } else if todayFree {
+                // FIT-235: a later session done early, when today has none waiting.
+                pill("Do it today", "arrow.uturn.backward") { doToday(plan) }
             }
         }
     }
@@ -542,8 +553,13 @@ struct TodayScreen: View {
 
     /// FIT-179: a run, planned or not, logged with its distance and time.
     private func runButton(_ title: String, _ planned: PlannedActivity?) -> some View {
-        Button { tracking = RunTarget(planned: planned) } label: {
-            Label(title, systemImage: "figure.run").font(.headline).padding(.horizontal, 20)
+        pill(title, "figure.run") { tracking = RunTarget(planned: planned) }
+    }
+
+    /// The card's secondary action: a full-width capsule on the card's grey.
+    private func pill(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon).font(.headline).padding(.horizontal, 20)
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .background(Color(.systemBackground), in: .capsule)
         }
@@ -660,6 +676,37 @@ struct TodayScreen: View {
     private var racing: Bool { goals.contains { $0.status == .active && Running.meters($0.metric) != nil } }
 
     /// A workout of your own, started once its sheet has gone (two can't be presented at once).
+    /// FIT-235: a later session moves to today, each row at its own time of day, and Today shows it ready to start.
+    /// The coach sees it on today, and Undo puts it back.
+    private func doToday(_ plan: DayCard.Planned) {
+        let calendar = Calendar.current
+        let was = plan.items.map { ($0, $0.date) }
+        let today = calendar.startOfDay(for: .now)
+        for item in plan.items {
+            item.date = today + item.date.timeIntervalSince(calendar.startOfDay(for: item.date))
+            item.updatedAt = .now
+        }
+        try? context.save()
+        let from = plan.start.formatted(.dateTime.weekday(.wide))
+        withAnimation(.snappy) {
+            day = todayIndex
+            toast = Toast(text: "\(from)’s session is today") { [context] in
+                for (item, date) in was { item.date = date; item.updatedAt = .now }
+                try? context.save()
+            }
+        }
+    }
+
+    /// FIT-235: the picked exercises, logged on a past day.
+    private func logOwn(_ session: SessionPlan, on day: Date) {
+        let draft = WorkoutDraft(session: "Workout", plan: session)
+        let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: day) ?? day
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            sheet = .logOwn(draft, noon)
+        }
+    }
+
     private func startOwn(_ session: SessionPlan) {
         let draft = WorkoutDraft(session: "Workout", plan: session)
         Task {
@@ -910,6 +957,12 @@ struct TodayScreen: View {
             NavigationStack {
                 WorkoutDetailView(items: [], session: SessionPlan(blocks: []), startTitle: "Start", onStartOwn: startOwn)
             }
+        case .ownOn(let day):
+            NavigationStack {
+                WorkoutDetailView(items: [], session: SessionPlan(blocks: []), startTitle: "Log the sets", startIcon: "square.and.pencil",
+                                  onStartOwn: { logOwn($0, on: day) })
+            }
+        case .logOwn(let draft, let day): NavigationStack { WorkoutLogView(draft: draft, date: day) }
         case .log(let items):
             // A day's runs are logged with their own sheet, which has the time (FIT-179).
             let lifts = lifting(items)
