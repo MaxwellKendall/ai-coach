@@ -644,6 +644,11 @@ function homePage(site: Site) {
         <div class="actions"><a class="button primary" href="${START}">Start coaching</a></div>
       </section>
       <section class="block">
+        <h2>Weighing it against another tool?</h2>
+        <p class="lede">Side by side with Trainera, TrueCoach, Trainerize, Everfit, TrainHeroic, spreadsheets and more, including where they're better.</p>
+        <div class="actions"><a class="button" href="/compare">See the comparisons</a></div>
+      </section>
+      <section class="block">
         <h2>Training yourself?</h2>
         <p class="lede">${app} is free for you too. Connect Claude and say “Set me up”: it asks about your goals, writes your program, and logs your sessions. Sign in with Google or Apple and your account is made for you.</p>
         <div class="actions"><a class="button" href="/claude">Connect Claude</a></div>

@@ -3,6 +3,7 @@ import { DynamoDBDocumentClient, GetCommand, QueryCommand, UpdateCommand } from 
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from "aws-lambda";
 import { giftRoute, type GiftStore } from "./giftPages.ts";
 import { gift, thanks } from "./gifts.ts";
+import { compareRoute } from "./comparePages.ts";
 import { legalRoute } from "./legalPages.ts";
 import { readProgram, readRecap, readSession, readWin, route, type Site, type Store } from "./sharePages.ts";
 
@@ -87,7 +88,7 @@ const gifts: GiftStore = { gift, thanks };
 
 export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunctionURLResult> {
   try {
-    const page = legalRoute(event.rawPath, site) ?? (await giftRoute(event.rawPath, gifts, site)) ?? (await route(event.rawPath, store, site));
+    const page = legalRoute(event.rawPath, site) ?? compareRoute(event.rawPath, site) ?? (await giftRoute(event.rawPath, gifts, site)) ?? (await route(event.rawPath, store, site));
     return {
       statusCode: page.status,
       headers: {
