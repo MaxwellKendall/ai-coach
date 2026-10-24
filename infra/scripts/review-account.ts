@@ -6,8 +6,10 @@
 //
 //   AWS_PROFILE=aicoach-dev npm run review-account -- prod COACH_UID [EMAIL]
 //   AWS_PROFILE=aicoach-dev npm run review-account -- prod COACH_UID [EMAIL] --new-password
+//   AWS_PROFILE=aicoach-dev npm run review-account -- prod COACH_UID demo@barbrabell.com --name=Alex
 //
-// A new account, or --new-password, gets a new password, printed once for the review notes.
+// A new account, or --new-password, gets a new password, printed once for the review notes. --name names the client
+// (default "App Review"), so a second account, such as one for recording onboarding, isn't confused with it.
 import { randomBytes } from "node:crypto";
 import {
   AdminCreateUserCommand,
@@ -24,7 +26,7 @@ const [stage, coachUid, email = "review@barbrabell.com"] = args;
 if (!stage || !coachUid) throw new Error("Usage: npm run review-account -- STAGE COACH_UID [EMAIL] [--new-password]");
 const newPassword = process.argv.includes("--new-password");
 
-const NAME = "App Review";
+const NAME = process.argv.find((a) => a.startsWith("--name="))?.slice("--name=".length) || "App Review";
 const out = await stackOutputs(stage);
 const cognito = new CognitoIdentityProviderClient({ region: out.Region });
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: out.Region }));
