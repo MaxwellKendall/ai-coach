@@ -1088,3 +1088,16 @@ describe("FIT-241: the plan's message says which account the agent is signed in 
     expect(who({ identities: [{ providerName: "Google" }] })).toBe("their Google sign-in");
   });
 });
+
+describe("FIT-209: apply keeps what the agent wrote, for the kept-or-edited stats", () => {
+  it("saves each applied day's session, by whom and for whom, and marks it on undo", async () => {
+    const store = memory({}, data());
+    const proposed = await callTool("propose_session", { date: "2026-10-19", title: "Lower", reason: "r", exercises: [{ exercise: "Plank", sets: 3, seconds: 45 }] }, me, store, now);
+    await callTool("apply", { proposal_id: proposed.match(/Proposal (\S+)/)![1] }, me, store, now);
+    const written = await store.get("me", "written#2026-10-19");
+    expect(written).toMatchObject({ day: "2026-10-19", by: "me", owner: "me", at: now.toISOString() });
+    expect(written!.fp).toContain("plank");
+    await callTool("undo", { date: "2026-10-19" }, me, store, now);
+    expect(await store.get("me", "written#2026-10-19")).toMatchObject({ undone: true });
+  });
+});

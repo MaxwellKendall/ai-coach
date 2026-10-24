@@ -17,7 +17,8 @@
     "dashboard-config": "tsx scripts/dashboardConfig.ts",
     "sync-status": "tsx scripts/syncStatus.ts",
     "mcp-token": "tsx scripts/mcpToken.ts",
-    "review-account": "tsx scripts/review-account.ts"
+    "review-account": "tsx scripts/review-account.ts",
+    "program-stats": "tsx scripts/programStats.ts"
   },
   "devDependencies": {
     "@aws-appsync/utils": "^2.1.1",

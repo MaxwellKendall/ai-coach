@@ -17,6 +17,7 @@ import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
 import { comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
 import { ensureSample, isSample } from "./sample.ts";
+import { fingerprint } from "./programStats.ts";
 import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
@@ -1096,6 +1097,9 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (logged.length) throw new Error(`${logged.join(", ")} has been logged since; propose again without it.`);
       for (const d of days) await store.put(uid, `undo#${d.day}`, { body: units.get(`plan#${d.day}`) ?? null }, 14);
       await store.write(uid, days.map((d) => ({ key: `plan#${d.day}`, body: JSON.parse(d.rows).length ? d.rows : null })), account.agent, account.uid);
+      // FIT-209: what the agent wrote, to tell later whether it was kept as written.
+      const at = now.toISOString();
+      for (const d of days) await store.put(uid, `written#${d.day}`, { day: d.day, at, by: account.uid, owner: uid, fp: fingerprint(JSON.parse(d.rows) as PlanRow[]) }, 180);
       const lines = days.map((d) => `${weekday(d.day)} ${d.day}: ${describeSession(JSON.parse(d.rows) as PlanRow[]).title ?? "rest"}`);
       return `Applied:\n${lines.join("\n")}\nIt shows on their phone at its next sync. undo (per day) puts the old session back.`;
     }
@@ -1105,6 +1109,8 @@ export async function callTool(name: string, args: Args, account: Account, store
       if (logOf(await store.units(uid), day).some((r) => r.kind === "workout")) throw new Error(`${day} has been logged since; it can't be put back.`);
       await store.write(uid, [{ key: `plan#${day}`, body: saved.body }], account.agent, account.uid);
       await store.put(uid, `undo#${day}`, { used: true }, 1);
+      const written = await store.get(uid, `written#${day}`);
+      if (written) await store.put(uid, `written#${day}`, { ...written, undone: true }, 180); // FIT-209
       return `Put back ${day}'s session as it was.`;
     }
     case "get_progress":
