@@ -196,7 +196,7 @@ struct WelcomeView: View {
 
     private func submit() {
         guard let code = InviteLink.coach(typed: typed) else {
-            failure = "That isn’t an invite code. It’s the 10 letters and numbers at the end of your coach’s link."
+            failure = "That isn’t an invite code. It’s the 6 letters and numbers your coach sent, also at the end of their link."
             return
         }
         failure = nil

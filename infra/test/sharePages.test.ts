@@ -13,7 +13,7 @@ const store: Store = {
   session: async (id) => (id === "leg" ? { name: "Max Kendall", title: "Lower body", date: "2026-10-15", minutes: 50,
     exercises: [{ name: "Back Squat", sets: 4, reps: 5 }, { name: "Plank", sets: 3, seconds: 45 }], invite: "X7K2PQ" } : undefined),
   invite: async (code) => (code === "X7K2PQ" ? { group: "Dawn Patrol", by: "Max", members: ["Max", "Jo"], recent: [] } : undefined),
-  coachInvite: async (code) => ({ SAMCOACH22: { coach: "Sam Coach" }, NONAME2222: { coach: null } })[code],
+  coachInvite: async (code) => ({ SAMCOACH22: { coach: "Sam Coach" }, NONAME2222: { coach: null }, K7M4QX: { coach: "Sam Coach" } })[code],
 };
 
 describe("share pages (FIT-105)", () => {
@@ -165,6 +165,10 @@ describe("a coach's invite page (FIT-130)", () => {
     expect(page.body).toContain("Train with a coach on Barbrabell");
     expect(page.body).toContain("Your coach writes your program");
     expect(page.body).not.toMatch(/\bYour invited\b|with Your as/);
+  });
+
+  it("takes the 6-letter codes of FIT-234", async () => {
+    expect((await route("/c/k7m4qx", store, site)).body).toContain("Train with Sam as your coach");
   });
 
   it("is a 404 once it's used up or expired", async () => {

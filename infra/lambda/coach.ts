@@ -12,17 +12,18 @@ import { HAS_PLAN, planRecord } from "./coachPlan.ts";
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = () => process.env.TABLE!;
 
-/** Codes like gifts' (no 0, 1, I or O), 10 long. */
+/** Codes like gifts' (no 0, 1, I or O). FIT-234: 6 long, easy to say or type; single use and 14 days keep that safe. */
 export const ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const INVITE_DAYS = 14;
 
-export function newCode(bytes = randomBytes(10)) {
+export function newCode(bytes = randomBytes(6)) {
   return [...bytes].map((b) => ALPHABET[b % 32]).join("");
 }
 
+/** 6 long, or 10 for invites made before FIT-234, until they expire. */
 export function readCode(input: string): string | undefined {
   const code = input.trim().toUpperCase().replace(/[-\s]/g, "");
-  return code.length === 10 && [...code].every((c) => ALPHABET.includes(c)) ? code : undefined;
+  return (code.length === 6 || code.length === 10) && [...code].every((c) => ALPHABET.includes(c)) ? code : undefined;
 }
 
 export class CoachError extends Error {}

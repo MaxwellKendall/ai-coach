@@ -72,15 +72,20 @@ enum InviteLink {
 
     static func gift(from url: URL) -> String? { url.scheme == "https" ? gift(url.absoluteString) : nil }
 
-    /// FIT-130: a coach's invite, barbrabell.com/c/LT7JWBW6S2: 10 letters and digits without 0, 1, I or O.
+    /// FIT-130: a coach's invite, barbrabell.com/c/K7M4QX: letters and digits without 0, 1, I or O, 6 long
+    /// (FIT-234), or 10 for invites made before that, until they expire.
     static func coach(from url: URL) -> String? {
         guard url.scheme == "https", let host = url.host()?.lowercased(),
               host == "barbrabell.com" || host.hasSuffix(".barbrabell.com") else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
         guard parts.count == 2, parts[0] == "c" else { return nil }
-        let code = parts[1].uppercased()
+        return coachCode(parts[1])
+    }
+
+    private static func coachCode(_ text: String) -> String? {
+        let code = text.uppercased()
         let alphabet = Set("23456789ABCDEFGHJKLMNPQRSTUVWXYZ")
-        return code.count == 10 && code.allSatisfy(alphabet.contains) ? code : nil
+        return [6, 10].contains(code.count) && code.allSatisfy(alphabet.contains) ? code : nil
     }
 
     /// FIT-201: a coach's code typed or pasted: the link (or the message it came in), or the code with any spaces or
@@ -90,8 +95,6 @@ enum InviteLink {
             let word = word.trimmingCharacters(in: .punctuationCharacters.subtracting(["/", ":"]))
             if let url = URL(string: word), url.scheme != nil, let code = coach(from: url) { return code }
         }
-        let code = text.uppercased().filter { $0 != "-" && !$0.isWhitespace }
-        let alphabet = Set("23456789ABCDEFGHJKLMNPQRSTUVWXYZ")
-        return code.count == 10 && code.allSatisfy(alphabet.contains) ? code : nil
+        return coachCode(text.filter { $0 != "-" && !$0.isWhitespace })
     }
 }

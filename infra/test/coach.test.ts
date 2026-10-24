@@ -54,11 +54,19 @@ beforeEach(() => {
 });
 
 describe("coach invites (FIT-130)", () => {
-  it("make a link with a 10-letter code and the coach's name", async () => {
+  it("make a link with a 6-letter code (FIT-234) and the coach's name", async () => {
     const { code, url } = await coach.createInvite("sam", undefined, now);
-    expect(code).toMatch(/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{10}$/);
+    expect(code).toMatch(/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/);
     expect(url).toBe(`https://dev.example.com/c/${code}`);
     expect(await coach.inviteName(code.toLowerCase(), now)).toBe("Sam Coach");
+  });
+
+  it("read 6-letter codes, and 10-letter ones made before FIT-234, typed any way", () => {
+    expect(coach.readCode(" k7m-4qx ")).toBe("K7M4QX");
+    expect(coach.readCode("R9UCZN897P")).toBe("R9UCZN897P");
+    expect(coach.readCode("K7M4Q")).toBeUndefined();
+    expect(coach.readCode("K7M4QXZ")).toBeUndefined();
+    expect(coach.readCode("K7M4Q0")).toBeUndefined();
   });
 
   it("prefer the name on the coach's sign-in", async () => {

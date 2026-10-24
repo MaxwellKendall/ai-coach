@@ -884,7 +884,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "invite_client": {
       const made = await store.invite(uid);
-      return `Invite link: ${made.url}\nSend it to one client. They open it on their phone, install the free Barbrabell app and accept; then they're your client here. It works once, for ${INVITE_DAYS} days.`;
+      return `Invite link: ${made.url}\nOr the code: ${made.code}, typed on "Join your coach" in the app.\nSend it to one client. They open it on their phone, install the free Barbrabell app and accept; then they're your client here. It works once, for ${INVITE_DAYS} days.`;
     }
     case "get_day": {
       const units = await store.units(uid);

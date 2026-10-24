@@ -69,6 +69,11 @@ struct SessionLinkTests {
         #expect(InviteLink.coach(typed: "https://example.com/c/LT7JWBW6S2") == nil)
         #expect(InviteLink.coach(typed: "LT7JWBW6S0") == nil)
         #expect(InviteLink.coach(typed: "tomorrow") == nil)
+        // FIT-234: 6 long now.
+        #expect(InviteLink.coach(typed: " k7m-4qx ") == "K7M4QX")
+        #expect(InviteLink.coach(typed: "K7M4Q") == nil)
+        #expect(InviteLink.coach(typed: "Join me: https://barbrabell.com/c/K7M4QX") == "K7M4QX")
+        #expect(InviteLink.coach(from: URL(string: "https://barbrabell.com/c/k7m4qx")!) == "K7M4QX")
     }
 
     /// FIT-227: a coach with no name is "your coach" in a sentence, never "Your" of a fallback.

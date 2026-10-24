@@ -102,7 +102,7 @@ export function ClientsPage({ config, me, go }: { config: Config; me: User; go: 
 }
 
 function InviteBox({ config }: { config: Config }) {
-  const [invite, setInvite] = useState<{ url: string }>();
+  const [invite, setInvite] = useState<{ url: string; code: string }>();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string>();
   const make = async () => {
@@ -132,6 +132,8 @@ function InviteBox({ config }: { config: Config }) {
             <input readOnly value={invite.url} aria-label="Invite link" onFocus={(e) => e.target.select()} />
             <button className="button primary" onClick={copy}>{copied ? "Copied" : "Copy link"}</button>
           </div>
+          {/* FIT-234: a code short enough to say, for a client who already has the app. */}
+          <p className="muted">Or they open Barbrabell and enter the code <strong className="code">{invite.code}</strong>.</p>
           <button className="link" onClick={make}>Make another link</button>
         </>
       ) : (

@@ -271,7 +271,7 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
     const invite = await store.invite(id.toUpperCase());
     if (invite) return html(invitePage(invite, id.toUpperCase(), path, site, `${site.origin}/cards/invite.png`));
   }
-  if (kind === "c" && /^[A-Za-z0-9]{10}$/.test(id)) {
+  if (kind === "c" && /^([A-Za-z0-9]{6}|[A-Za-z0-9]{10})$/.test(id)) {
     const invite = await store.coachInvite?.(id.toUpperCase());
     if (invite) return html(coachInvitePage(invite.coach, path, site));
   }

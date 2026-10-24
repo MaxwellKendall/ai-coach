@@ -231,3 +231,6 @@ h3 .copy:hover { color: var(--text); }
 .thread .tools-inline { margin-left: 8px; display: inline-flex; gap: 10px; font-size: 13px; }
 .thread .tools-inline .link { color: var(--muted); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .danger-link { color: #f0a46b; } }
+
+/* FIT-234: the invite code, read aloud or typed. */
+.invite .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; }
