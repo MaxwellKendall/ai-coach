@@ -16,40 +16,32 @@ struct PaywallView: View {
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
 
     var body: some View {
-        SubscriptionStoreView(productIDs: Pro.products) {
-            VStack(alignment: .leading, spacing: 18) {
-                header
-                VStack(alignment: .leading, spacing: 14) {
-                    if Edition.consumer {
-                        benefit("calendar", "A real program, not a random workout",
-                                "Built for what you have and the days you train, with a lighter week when it's due.")
-                        benefit("chart.line.uptrend.xyaxis", "Heavier as you get stronger",
-                                "Every session's weights come from what you logged the time before.")
-                        benefit("list.number", "Every exercise, step by step",
-                                "How to do each lift, and what to feel for.")
-                    } else {
-                        benefit("figure.strengthtraining.traditional", "Your coach runs the program",
-                                "Every week designed from what you lifted the week before, with the weights to use.")
-                        benefit("bubble.left.and.text.bubble.right", "Talk with your coach, any time",
-                                "Short on time, sore, traveling: say so, and the week changes.")
-                        benefit("text.quote", "Your coach's take on every week",
-                                "How it went and what's next, written from your numbers.")
-                    }
-                }
-                timeline
-                if Edition.consumer {
-                    if account.user == nil, account.isAvailable {
-                        Button("Started your trial on the web? Sign In") { signingIn = true }
-                            .font(.footnote.weight(.semibold))
-                    }
-                } else {
-                    Text("Without Pro you can still log workouts, see your progress and train with your groups.")
+        // The consumer app's paywall has no way past: when the store has nothing to sell, the plan and sign-in stay,
+        // with a retry, where Apple's view would be a blank "Subscription Unavailable".
+        if Edition.consumer && !pro.storeAnswered {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    offer
+                    Text("The App Store isn’t answering. Check your connection and try again.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    Button("Try Again") { Task { await pro.refresh() } }
+                        .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
                 }
+                .padding(24)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 24)
-            .padding(.top, 24)
+            .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in with the account you started your trial with.") }
+            .tint(.primary)
+        } else {
+            store
+        }
+    }
+
+    private var store: some View {
+        SubscriptionStoreView(productIDs: Pro.products) {
+            offer
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
         }
         .subscriptionStoreControlStyle(.prominentPicker)
         .storeButton(.visible, for: .restorePurchases, .policies)
@@ -62,6 +54,39 @@ struct PaywallView: View {
             }
         }
         .tint(.primary)
+    }
+
+    private var offer: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            header
+            VStack(alignment: .leading, spacing: 14) {
+                if Edition.consumer {
+                    benefit("calendar", "A real program, not a random workout",
+                            "Built for what you have and the days you train, with a lighter week when it's due.")
+                    benefit("chart.line.uptrend.xyaxis", "Heavier as you get stronger",
+                            "Every session's weights come from what you logged the time before.")
+                    benefit("list.number", "Every exercise, step by step",
+                            "How to do each lift, and what to feel for.")
+                } else {
+                    benefit("figure.strengthtraining.traditional", "Your coach runs the program",
+                            "Every week designed from what you lifted the week before, with the weights to use.")
+                    benefit("bubble.left.and.text.bubble.right", "Talk with your coach, any time",
+                            "Short on time, sore, traveling: say so, and the week changes.")
+                    benefit("text.quote", "Your coach's take on every week",
+                            "How it went and what's next, written from your numbers.")
+                }
+            }
+            timeline
+            if Edition.consumer {
+                if account.user == nil, account.isAvailable {
+                    Button("Started your trial on the web? Sign In") { signingIn = true }
+                        .font(.footnote.weight(.semibold))
+                }
+            } else {
+                Text("Without Pro you can still log workouts, see your progress and train with your groups.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
     }
 
     /// The program, when there is one: "Squat 245 by Feb 1", and its shape.

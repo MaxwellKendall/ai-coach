@@ -32,6 +32,8 @@ final class Pro {
     private(set) var trialEnds: Date?
     /// Whether this Apple Account can still have the free trial; someone whose Pro lapsed can't.
     private(set) var trialEligible = true
+    /// The App Store gave the annual plan: offline, or before App Store Connect has it, the store's sheet has nothing.
+    private(set) var storeAnswered = true
     /// When the app is showing the paywall; any screen can ask for it.
     var paywall = false
     private var updates: Task<Void, Never>?
@@ -71,7 +73,9 @@ final class Pro {
         subscribed = active
         checked = true
         self.trialEnds = trialEnds
-        if let annual = try? await Product.products(for: [Self.annual]).first, let subscription = annual.subscription {
+        let annual = try? await Product.products(for: [Self.annual]).first
+        storeAnswered = annual != nil
+        if let subscription = annual?.subscription {
             trialEligible = await subscription.isEligibleForIntroOffer
         }
         await remind()
