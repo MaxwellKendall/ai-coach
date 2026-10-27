@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
-import { KIT } from "../../shared/readyPrograms";
+import { KIT, type Goal } from "../../shared/readyPrograms";
 import { idToken, signIn, type Config, type Provider } from "./auth";
 import catalog from "./catalog.json";
-import { dose, exerciseName, headline, plan, PRICE, PRODUCT, savePending, startTrial, takePending, TRIAL_DAYS, type Answers, type Plan } from "./start";
+import {
+  dose, exerciseName, headline, liftOf, pick, plan, PRICE, PRODUCT, savePending, startTrial, takePending, TRIAL_DAYS,
+  type Answers, type Plan,
+} from "./start";
 
-type Step = "have" | "days" | "plan";
+type Step = "goal" | "lifted" | "have" | "days" | "recent" | "plan";
+
+/** "What's your goal?", in the app's words (Features/Goals/ProgramPicker.swift). */
+const GOALS: { goal: Goal; title: string; detail: string; plan: string }[] = [
+  { goal: "strength", title: "Get stronger", detail: "Lift heavier on the big lifts.", plan: "to get stronger" },
+  { goal: "muscle", title: "Build muscle", detail: "Add size and shape.", plan: "to build muscle" },
+  { goal: "start", title: "Start lifting", detail: "New to it: learn the lifts, then build.", plan: "to start lifting" },
+];
 
 /** FIT-281: the quiz an ad opens, then the plan and its free trial. Signed out, the trial asks to sign in first and
  * picks up where it left off; /start/thanks is where Checkout comes back to. */
@@ -19,9 +29,14 @@ export function StartPage({ config, path }: { config: Config; path: string }) {
 }
 
 function Quiz({ config }: { config: Config }) {
-  const [step, setStep] = useState<Step>("have");
+  const [step, setStep] = useState<Step>("goal");
+  const [goal, setGoal] = useState<Goal>();
+  const [lifted, setLifted] = useState<boolean>();
   const [have, setHave] = useState<Set<string>>(new Set());
   const [days, setDays] = useState(3);
+  const [weight, setWeight] = useState("");
+  const [reps, setReps] = useState("");
+  const [recent, setRecent] = useState<{ weight: number; reps: number }>();
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string>();
   const [signingIn, setSigningIn] = useState(false);
@@ -51,6 +66,56 @@ function Quiz({ config }: { config: Config }) {
     }
   }
 
+  // The steps this person sees: someone starting out isn't asked if they've lifted, and only someone who has, with a
+  // lift to load, is asked a recent set. Until the answers say, the count assumes the longest.
+  const lift = liftOf(pick({ goal, lifted, have, days }));
+  const early = step === "goal" || step === "lifted" || step === "have" || step === "days";
+  const steps: Step[] = [
+    "goal", ...(goal === "start" ? [] : ["lifted" as const]), "have", "days",
+    ...(lifted !== false && (early || lift) ? ["recent" as const] : []),
+  ];
+  const count = (s: Step) => <p className="eyebrow">{steps.indexOf(s) + 1} of {steps.length}</p>;
+  const back = (s: Step) => <button className="link" onClick={() => setStep(steps[steps.indexOf(s) - 1])}>Back</button>;
+
+  if (step === "goal") {
+    return (
+      <section>
+        {count("goal")}
+        <h1>What's your goal?</h1>
+        <p className="lede">Your plan is built around it.</p>
+        <div className="choices">
+          {GOALS.map((g) => (
+            <button key={g.goal} className="choice" onClick={() => {
+              setGoal(g.goal);
+              if (g.goal === "start") setLifted(false);
+              setStep(g.goal === "start" ? "have" : "lifted");
+            }}>
+              <span className="stack"><strong>{g.title}</strong><span className="muted small">{g.detail}</span></span><span aria-hidden="true">›</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (step === "lifted") {
+    return (
+      <section>
+        {count("lifted")}
+        <h1>Have you lifted weights before?</h1>
+        <p className="lede">Your plan starts where you are.</p>
+        <div className="choices">
+          {([[true, "Yes"], [false, "Not really"]] as const).map(([yes, label]) => (
+            <button key={label} className="choice" onClick={() => { setLifted(yes); setStep("have"); }}>
+              {label}<span aria-hidden="true">›</span>
+            </button>
+          ))}
+        </div>
+        {back("lifted")}
+      </section>
+    );
+  }
+
   const all = new Set(KIT.flatMap((k) => k.equipment));
   const gym = [...all].every((e) => have.has(e));
   const toggle = (equipment: string[], on: boolean) =>
@@ -59,7 +124,7 @@ function Quiz({ config }: { config: Config }) {
   if (step === "have") {
     return (
       <section>
-        <p className="eyebrow">1 of 2</p>
+        {count("have")}
         <h1>What do you have?</h1>
         <p className="lede">Tick what you can use. Your plan only uses these.</p>
         <div className="choices">
@@ -68,6 +133,7 @@ function Quiz({ config }: { config: Config }) {
         </div>
         <p className="muted small">{have.size ? " " : "Nothing ticked: a body-weight plan."}</p>
         <button className="button primary" onClick={() => setStep("days")}>Continue</button>
+        {back("have")}
       </section>
     );
   }
@@ -75,28 +141,58 @@ function Quiz({ config }: { config: Config }) {
   if (step === "days") {
     return (
       <section>
-        <p className="eyebrow">2 of 2</p>
+        {count("days")}
         <h1>How many days a week?</h1>
         <p className="lede">Pick what you can keep up. You'll choose the days in the app.</p>
         <div className="choices">
           {[2, 3, 4, 5, 6].map((n) => (
-            <button key={n} className="choice" onClick={() => { setDays(n); setStep("plan"); }}>
+            <button key={n} className="choice" onClick={() => {
+              setDays(n);
+              setStep(lifted && liftOf(pick({ goal, lifted, have, days: n })) ? "recent" : "plan");
+            }}>
               {n} days<span aria-hidden="true">›</span>
             </button>
           ))}
         </div>
-        <button className="link" onClick={() => setStep("have")}>Back</button>
+        {back("days")}
       </section>
     );
   }
 
-  const made = plan(have, days);
+  if (step === "recent" && lift) {
+    const perHand = pick({ goal, lifted, have, days })?.place === "dumbbells";
+    const set = { weight: Number(weight), reps: Number(reps) };
+    const valid = set.weight > 0 && set.weight <= 1000 && Number.isInteger(set.reps) && set.reps >= 1 && set.reps <= 12;
+    return (
+      <section>
+        {count("recent")}
+        <h1>Your best recent {exerciseName(lift)}</h1>
+        <p className="lede">A hard set from the last few months, 1 to 12 reps. Your plan starts a little under it.</p>
+        <div className="recent">
+          <label><input inputMode="decimal" autoFocus placeholder="0" aria-label={perHand ? "Weight, lb a hand" : "Weight, lb"} value={weight} onChange={(e) => setWeight(e.target.value)} />
+            <span className="muted">{perHand ? "lb a hand" : "lb"}</span></label>
+          <span className="muted" aria-hidden="true">×</span>
+          <label><input inputMode="numeric" placeholder="0" aria-label="Reps" value={reps} onChange={(e) => setReps(e.target.value)} />
+            <span className="muted">reps</span></label>
+        </div>
+        <button className="button primary" disabled={!valid} onClick={() => { setRecent(set); setStep("plan"); }}>Continue</button>
+        <button className="link" onClick={() => { setRecent(undefined); setStep("plan"); }}>I'm not sure</button>
+        {back("recent")}
+      </section>
+    );
+  }
+
+  const made = plan({ goal, lifted, have, days, recent });
   if (!made) return null;
   return (
     <section>
-      <p className="eyebrow">Your {made.program.weeks}-week plan</p>
+      <p className="eyebrow">Your {made.program.weeks}-week plan {GOALS.find((g) => g.goal === goal)?.plan}</p>
       <h1>{headline(made)}</h1>
-      <p className="lede">If every session goes to plan: a little heavier each time, by the program's rule, with a lighter week in the middle.</p>
+      <p className="lede">
+        {made.answers.recent
+          ? `From your ${made.answers.recent.weight} × ${made.answers.recent.reps}: a little under it to start, back to it fast, then heavier a step a week, with a lighter week in the middle.`
+          : "If every session goes to plan: a little heavier each time, by the program's rule, with a lighter week in the middle."}
+      </p>
       {made.reveal && <Chart plan={made} />}
       <div className="program">
         <h2>{made.program.name}</h2>
@@ -124,7 +220,7 @@ function Quiz({ config }: { config: Config }) {
         <p className="muted small">Free for {TRIAL_DAYS} days, then {PRICE}. Cancel any time before the trial ends and you won't be charged.</p>
         {error && <p className="error" role="alert">{error}</p>}
       </div>
-      <button className="link" onClick={() => setStep("days")}>Change my answers</button>
+      <button className="link" onClick={() => setStep("goal")}>Change my answers</button>
     </section>
   );
 }

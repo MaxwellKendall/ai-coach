@@ -13,6 +13,11 @@ struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
         }
     }
 
+    /// FIT-281: the consumer quiz's "What's your goal?".
+    enum Goal: String, Codable, CaseIterable, Sendable {
+        case strength, muscle, start
+    }
+
     /// Onboarding's "What do you have?": each line and the catalog equipment it stands for.
     static let kit: [(name: String, equipment: [String])] = [
         ("Barbell and rack", ["barbell", "rack"]), ("Bench", ["bench"]), ("Dumbbells", ["dumbbells"]),
@@ -56,6 +61,8 @@ struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
     var summary: String
     /// "new" or "some" (some experience).
     var level: String
+    /// The goals it serves, for the quiz's pick.
+    var goals: [Goal]?
     var place: Place
     /// The days a week it can run on.
     var days: [Int]
@@ -75,14 +82,20 @@ struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
     static func named(_ slug: String?) -> ReadyProgram? { all.first { $0.slug == slug } }
 
     /// The programs the equipment allows, best first: nearest in days a week, then the ones built around what the
-    /// equipment is mostly for, then the file's order (which lists beginner programs first).
-    static func matches(have: Set<String>, days: Int, in programs: [ReadyProgram] = all) -> [ReadyProgram] {
+    /// equipment is mostly for, then (FIT-281) the ones for their goal and experience, then the file's order (which lists
+    /// beginner programs first).
+    static func matches(have: Set<String>, days: Int, goal: Goal? = nil, lifted: Bool? = nil,
+                        in programs: [ReadyProgram] = all) -> [ReadyProgram] {
         let place = Place(have)
+        let level = lifted == true ? "some" : "new"
         return programs.enumerated()
             .filter { Set($0.element.equipment).isSubset(of: have) }
             .sorted { a, b in
                 func key(_ item: (offset: Int, element: ReadyProgram)) -> [Int] {
-                    [abs(item.element.days(nearest: days) - days), item.element.place == place ? 0 : 1, item.offset]
+                    let program = item.element
+                    return [abs(program.days(nearest: days) - days), program.place == place ? 0 : 1,
+                            goal.map { program.goals?.contains($0) == true ? 0 : 1 } ?? 0,
+                            goal == nil && lifted == nil ? 0 : program.level == level ? 0 : 1, item.offset]
                 }
                 return key(a).lexicographicallyPrecedes(key(b))
             }

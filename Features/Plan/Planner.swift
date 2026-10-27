@@ -326,9 +326,10 @@ enum Planner {
     }
 
     /// FIT-230: start a ready-made program today, on these days and with this equipment. This week is planned from
-    /// today on; days already past keep what they had.
-    static func start(_ ready: ReadyProgram, days: [Int], equipment: [String], profile: Profile, in context: ModelContext,
-                      now: Date = .now, calendar: Calendar = .current) throws {
+    /// today on; days already past keep what they had. FIT-281: `starts`, the consumer quiz's recent set, replaces the
+    /// starting points its first sessions are dosed from.
+    static func start(_ ready: ReadyProgram, days: [Int], equipment: [String], starts: [StartingSet]? = nil, profile: Profile,
+                      in context: ModelContext, now: Date = .now, calendar: Calendar = .current) throws {
         profile.programSlug = ready.slug
         profile.trainingDays = Week.ordered(days)
         profile.daysPerWeek = days.count
@@ -337,6 +338,7 @@ enum Planner {
         profile.programStart = now
         profile.targetDate = calendar.date(byAdding: .day, value: 7 * ready.weeks - 1, to: Week.start(of: now, calendar: calendar))
         profile.travelWeeks = []
+        if let starts { profile.starts = starts }
         profile.brief = nil
         profile.updatedAt = now
         try context.save()

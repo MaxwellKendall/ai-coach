@@ -181,9 +181,23 @@ enum Cloud {
     /// The consumer app's plan bought from the web quiz (Stripe's status), and the quiz's answers it was bought with.
     struct TrainerPlan: Decodable, Sendable {
         struct Answers: Decodable, Equatable, Sendable {
+            struct Recent: Decodable, Equatable, Sendable {
+                var exercise: String
+                var weight: Double
+                var reps: Double
+            }
             var slug: String
             var have: [String]
             var days: [Int]
+            var goal: ReadyProgram.Goal?
+            var lifted: Bool?
+            /// Their recent set of the program's main lift, which its first sessions start from.
+            var recent: Recent?
+
+            var starts: [StartingSet] {
+                guard let recent, let program = ReadyProgram.named(slug) else { return [] }
+                return [StartingSet.recent(recent.exercise, weight: recent.weight, reps: recent.reps, perHand: program.place == .dumbbells)]
+            }
         }
         var status: String
         /// AWSJSON: the answers as a JSON string.

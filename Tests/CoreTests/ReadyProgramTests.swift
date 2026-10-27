@@ -103,6 +103,21 @@ struct ReadyProgramTests {
         #expect(first.workouts.filter { $0.exercise == "bench-press" }.count == 2)
     }
 
+    /// FIT-281: a recent set from the quiz starts that lift a little under it, the others where the program does.
+    @Test func firstWeekFromARecentSet() {
+        var settings = settings(Profile.allEquipment)
+        settings.starts = [StartingSet.recent("back-squat", weight: 225, reps: 5, perHand: false)]
+        let first = program("full-body-3").week(startingOn: date(10, 25), start: date(10, 25), settings: settings, catalog: catalog,
+                                                history: [], program: twelve, calendar: calendar)
+        #expect(working(first, "back-squat").map { $0.target("load_lb") } == [205, 205])
+        #expect(working(first, "bench-press")[0].target("load_lb") == 45)
+        // As light as the program's own start: from the bar, as someone new.
+        settings.starts = [StartingSet.recent("back-squat", weight: 40, reps: 5, perHand: false)]
+        let light = program("full-body-3").week(startingOn: date(10, 25), start: date(10, 25), settings: settings, catalog: catalog,
+                                                history: [], program: twelve, calendar: calendar)
+        #expect(working(light, "back-squat")[0].target("load_lb") == 45)
+    }
+
     /// The sessions carry on across weeks: A B A, then B A B.
     @Test func rotationCarriesOn() {
         let second = week("full-body-3", date(11, 1))

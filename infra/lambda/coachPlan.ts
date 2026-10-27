@@ -2,7 +2,7 @@ import { ConditionalCheckFailedException, DynamoDBClient } from "@aws-sdk/client
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import programs from "../../Resources/Seed/programs.json" with { type: "json" };
-import { KIT, type ReadyProgram } from "../../shared/readyPrograms.ts";
+import { KIT, mainLift, type Goal, type ReadyProgram } from "../../shared/readyPrograms.ts";
 import { stripeConfig } from "./gifts.ts";
 import { stripe } from "./stripe.ts";
 
@@ -315,11 +315,15 @@ export async function portal(uid: string, origin = process.env.APP_ORIGIN!, kind
   return session.url;
 }
 
-/** FIT-281: the quiz's answers the plan was bought with: the program, the equipment ticked and the training days. */
+/** FIT-281: the quiz's answers the plan was bought with: the program, the equipment ticked, the training days, the goal,
+ * whether they've lifted, and a recent set of the program's main lift (which the app starts it from). */
 export interface QuizAnswers {
   slug: string;
   have: string[];
   days: number[];
+  goal?: Goal;
+  lifted?: boolean;
+  recent?: { exercise: string; weight: number; reps: number };
 }
 
 /** The answers as the web sent them, checked against the program: its days a week and the equipment it needs. */
@@ -338,8 +342,16 @@ export function quizAnswers(value: unknown): QuizAnswers {
     .sort((a, b) => a - b);
   if (!program.days.includes(days.length)) throw new PlanError(`${program.name} is ${program.days.join(" or ")} days a week.`);
   if (!program.equipment.every((e) => have.includes(e))) throw new PlanError(`${program.name} needs equipment you didn't tick.`);
-  return { slug: program.slug, have, days };
+  const goal = GOALS.find((g) => g === given?.goal);
+  const lifted = typeof given?.lifted === "boolean" ? given.lifted : undefined;
+  // A recent set only of the program's main lift, in the quiz's bounds; anything else is left out, not refused.
+  const r = given?.recent;
+  const recent = lifted && r && r.exercise === mainLift(program)?.exercise && Number.isFinite(r.weight) && r.weight > 0 && r.weight <= 1000
+    && Number.isInteger(r.reps) && r.reps >= 1 && r.reps <= 12 ? { exercise: r.exercise, weight: r.weight, reps: r.reps } : undefined;
+  return { slug: program.slug, have, days, ...(goal && { goal }), ...(lifted !== undefined && { lifted }), ...(recent && { recent }) };
 }
+
+const GOALS: Goal[] = ["strength", "muscle", "start"];
 
 const quizKey = (uid: string) => ({ PK: `USER#${uid}`, SK: "QUIZ" });
 

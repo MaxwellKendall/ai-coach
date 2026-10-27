@@ -68,7 +68,7 @@ struct PaywallView: View {
     @ViewBuilder private var header: some View {
         let lines = Planner.goalLines(goals)
         if Edition.consumer, let profile = profiles.first, let program = ReadyProgram.named(profile.programSlug), let ends = profile.targetDate {
-            PlanReveal(program: program, days: profile.trainingDays.count, ends: ends)
+            PlanReveal(program: program, days: profile.trainingDays.count, recent: program.recent(in: profile.starts), ends: ends)
         } else if let profile = profiles.first, let weeks = profile.program, !lines.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("YOUR PROGRAM IS READY").font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)

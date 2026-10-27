@@ -3,6 +3,8 @@ import SwiftData
 
 /// FIT-230: no coach: what you have to train with, then how many days (one tap), then the ready-made program that fits,
 /// to start on Today. Opened again from You, it starts on the program being followed, with the questions a step back.
+/// FIT-281: the consumer app asks the goal and whether they've lifted first, and a recent set of the main lift last, as
+/// the web's quiz does (web/src/StartPage.tsx).
 struct ProgramPicker: View {
     @Query private var profiles: [Profile]
     var onDone: () -> Void
@@ -13,23 +15,33 @@ struct ProgramPicker: View {
     /// Catalog equipment ticked on "What do you have?".
     @State private var have: Set<String> = []
     @State private var days = 3
+    @State private var goal: ReadyProgram.Goal?
+    @State private var lifted: Bool?
+    @State private var recent: StartingSet?
     @State private var started = false
 
-    enum Step: Hashable { case days, program }
+    enum Step: Hashable { case lifted, kit, days, recent, program }
+
+    /// The main lift of the program the answers so far pick, which the recent set is of.
+    private var lift: String? {
+        ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted).first?.mainLift?.exercise
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
-            question("What do you have?", "Tick what you can use. The program only uses these.") {
-                KitList(have: $have)
-                Text(have.isEmpty ? "Nothing ticked: a body-weight program." : " ")
-                    .font(.footnote).foregroundStyle(.secondary).padding(.top, 4)
-            }
-            .safeAreaBar(edge: .bottom) {
-                Button { path.append(.days) } label: {
-                    Text("Continue").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+            Group {
+                if Edition.consumer {
+                    question("What’s your goal?", "Your plan is built around it.") {
+                        ForEach(Self.goals, id: \.goal) { line in
+                            option(line.title, detail: line.detail, next: line.goal == .start ? .kit : .lifted) {
+                                goal = line.goal
+                                if line.goal == .start { lifted = false }
+                            }
+                        }
+                    }
+                } else {
+                    kit
                 }
-                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
-                .padding(.horizontal, 24).padding(.bottom, 8)
             }
             .toolbar {
                 if let signIn {
@@ -40,14 +52,33 @@ struct ProgramPicker: View {
             }
             .navigationDestination(for: Step.self) { step in
                 switch step {
+                case .lifted:
+                    question("Have you lifted weights before?", "Your plan starts where you are.") {
+                        option("Yes", next: .kit) { lifted = true }
+                        option("Not really", next: .kit) { lifted = false }
+                    }
+                case .kit:
+                    kit
                 case .days:
                     question("How many days a week?", "The days themselves come next.") {
                         ForEach(2...6, id: \.self) { count in
-                            option("\(count) days") { days = count }
+                            option("\(count) days", next: .program) {
+                                days = count
+                                // Someone who's lifted gives a recent set first, when the program has a lift to load.
+                                if Edition.consumer, lifted == true, lift != nil { path.append(.recent) } else { path.append(.program) }
+                            }
+                        }
+                    }
+                case .recent:
+                    if let lift {
+                        RecentSetStep(exercise: lift, perHand: ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted)
+                            .first?.place == .dumbbells) { set in
+                            recent = set
+                            path.append(.program)
                         }
                     }
                 case .program:
-                    ProgramChoice(have: $have, days: days, onStart: onDone)
+                    ProgramChoice(have: $have, days: days, goal: goal, lifted: lifted, recent: recent, onStart: onDone)
                 }
             }
         }
@@ -60,8 +91,30 @@ struct ProgramPicker: View {
         started = true
         have = Set(profile.equipment)
         days = profile.trainingDays.count
-        path = [.days, .program]
+        path = Edition.consumer ? [.kit, .days, .program] : [.days, .program]
     }
+
+    private var kit: some View {
+        question("What do you have?", "Tick what you can use. The program only uses these.") {
+            KitList(have: $have)
+            Text(have.isEmpty ? "Nothing ticked: a body-weight program." : " ")
+                .font(.footnote).foregroundStyle(.secondary).padding(.top, 4)
+        }
+        .safeAreaBar(edge: .bottom) {
+            Button { path.append(.days) } label: {
+                Text("Continue").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+            }
+            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+            .padding(.horizontal, 24).padding(.bottom, 8)
+        }
+    }
+
+    /// The web's goals (web/src/StartPage.tsx), in its words.
+    static let goals: [(goal: ReadyProgram.Goal, title: String, detail: String)] = [
+        (.strength, "Get stronger", "Lift heavier on the big lifts."),
+        (.muscle, "Build muscle", "Add size and shape."),
+        (.start, "Start lifting", "New to it: learn the lifts, then build."),
+    ]
 
     private func question(_ text: String, _ detail: String, @ViewBuilder options: () -> some View) -> some View {
         ScrollView {
@@ -76,14 +129,18 @@ struct ProgramPicker: View {
         .toolbarTitleDisplayMode(.inline)
     }
 
-    /// A one-tap answer: it's set and the program opens.
-    private func option(_ title: String, set: @escaping () -> Void) -> some View {
+    /// A one-tap answer: it's set and the next question opens (`set` may open another itself).
+    private func option(_ title: String, detail: String? = nil, next: Step, set: @escaping () -> Void) -> some View {
         Button {
+            let count = path.count
             set()
-            path.append(.program)
+            if path.count == count { path.append(next) }
         } label: {
             HStack {
-                Text(title).font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline)
+                    if let detail { Text(detail).font(.subheadline).foregroundStyle(.secondary) }
+                }
                 Spacer()
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
             }
@@ -147,6 +204,9 @@ private struct ProgramChoice: View {
     @Query private var templates: [Template]
     @Binding var have: Set<String>
     var days: Int
+    var goal: ReadyProgram.Goal?
+    var lifted: Bool?
+    var recent: StartingSet?
     var onStart: () -> Void
 
     @State private var selected: ReadyProgram?
@@ -156,7 +216,7 @@ private struct ProgramChoice: View {
     /// Following a program already: starting one begins again at week 1, so it's asked first.
     @State private var confirming = false
 
-    private var matches: [ReadyProgram] { ReadyProgram.matches(have: have, days: days) }
+    private var matches: [ReadyProgram] { ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted) }
     private var program: ReadyProgram? { selected ?? matches.first }
     private var equipment: [String] { ReadyProgram.equipment(have) }
 
@@ -305,7 +365,9 @@ private struct ProgramChoice: View {
     private func start(_ program: ReadyProgram) {
         guard let profile = profiles.first else { return }
         do {
-            try Planner.start(program, days: trainingDays, equipment: equipment, profile: profile, in: context)
+            // FIT-281: the recent set, while it's of this program's main lift.
+            let starts = Edition.consumer ? [recent].compactMap { $0 }.filter { $0.exercise == program.mainLift?.exercise } : nil
+            try Planner.start(program, days: trainingDays, equipment: equipment, starts: starts, profile: profile, in: context)
             onStart()
         } catch {
             failure = "Couldn’t start the program. Try again."
@@ -333,4 +395,69 @@ private struct ProgramChoice: View {
     static func level(_ program: ReadyProgram) -> String { program.level == "new" ? "New to lifting" : "Some experience" }
 
     static let places: [ReadyProgram.Place: String] = [.gym: "Barbell", .dumbbells: "Dumbbells", .bodyweight: "No equipment"]
+}
+
+/// FIT-281: "Your best recent Back Squat": a hard set from the last few months, which the plan starts a little under.
+private struct RecentSetStep: View {
+    @Query private var templates: [Template]
+    let exercise: String
+    let perHand: Bool
+    var onDone: (StartingSet?) -> Void
+
+    @State private var weight = ""
+    @State private var reps = ""
+    @FocusState private var focus: Field?
+
+    enum Field { case weight, reps }
+
+    private var set: StartingSet? {
+        guard let load = Double(weight), (1...1000).contains(load), let count = Int(reps), (1...12).contains(count) else { return nil }
+        return StartingSet.recent(exercise, weight: load, reps: Double(count), perHand: perHand)
+    }
+
+    var body: some View {
+        let name = templates.first { $0.slug == exercise }?.name ?? exercise
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Your best recent \(name)").font(.system(size: 32, weight: .bold)).tracking(-0.4)
+                Text("A hard set from the last few months, 1 to 12 reps. Your plan starts a little under it.")
+                    .font(.body).foregroundStyle(.secondary).padding(.top, 8).padding(.bottom, 28)
+                HStack(spacing: 12) {
+                    field($weight, perHand ? "lb a hand" : "lb", .weight, keyboard: .decimalPad)
+                    Text("×").font(.title2).foregroundStyle(.secondary)
+                    field($reps, "reps", .reps, keyboard: .numberPad)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+        }
+        .toolbarTitleDisplayMode(.inline)
+        .onAppear { focus = .weight }
+        .safeAreaBar(edge: .bottom) {
+            VStack(spacing: 4) {
+                Button { onDone(set) } label: {
+                    Text("Continue").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+                .disabled(set == nil)
+                Button("I’m Not Sure") { onDone(nil) }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .padding(.horizontal, 24).padding(.bottom, 8)
+        }
+    }
+
+    private func field(_ text: Binding<String>, _ unit: String, _ which: Field, keyboard: UIKeyboardType) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            TextField("0", text: text)
+                .font(.system(size: 28, weight: .semibold)).monospacedDigit()
+                .keyboardType(keyboard)
+                .focused($focus, equals: which)
+            Text(unit).font(.subheadline).foregroundStyle(.secondary).fixedSize()
+        }
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, minHeight: 64)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+        .onTapGesture { focus = which }
+    }
 }

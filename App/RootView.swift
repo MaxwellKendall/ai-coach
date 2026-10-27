@@ -103,7 +103,8 @@ struct RootView: View {
         .task(id: account.user?.uid) {
             guard let plan = await pro.refreshWebPlan(signedIn: account.user != nil), plan.active, let quiz = plan.quiz,
                   let profile = profiles.first, profile.programStart == nil, let program = ReadyProgram.named(quiz.slug) else { return }
-            try? Planner.start(program, days: quiz.days, equipment: ReadyProgram.equipment(Set(quiz.have)), profile: profile, in: context)
+            try? Planner.start(program, days: quiz.days, equipment: ReadyProgram.equipment(Set(quiz.have)), starts: quiz.starts,
+                               profile: profile, in: context)
             signingInFromQuiz = false
             picking = false
         }

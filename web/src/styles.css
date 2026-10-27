@@ -249,6 +249,19 @@ h3 .copy:hover { color: var(--text); }
   border: 1px solid var(--line); background: var(--surface); font-weight: 650; text-align: left;
 }
 .choice[aria-pressed="true"] { border-color: var(--text); }
+.choice .stack { display: grid; gap: 2px; padding: 12px 0; font-weight: 400; }
+.choice .stack strong { font-weight: 650; }
+.recent { display: flex; align-items: center; gap: 12px; }
+.recent label {
+  flex: 1; display: flex; align-items: baseline; gap: 6px; min-height: 64px; padding: 0 18px; border-radius: 18px;
+  border: 1px solid var(--line); background: var(--surface);
+}
+.recent input {
+  width: 100%; min-width: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 28px; font-weight: 650;
+  padding: 14px 0; outline: none; font-variant-numeric: tabular-nums;
+}
+.recent label:focus-within { border-color: var(--text); }
+.recent label span { white-space: nowrap; }
 .tick { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 14px; }
 .tick.on { background: var(--text); border-color: var(--text); color: var(--bg); }
 .chart { margin: 4px 0 0; padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }

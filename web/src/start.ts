@@ -1,7 +1,10 @@
-// FIT-281: the consumer app's web quiz (/start), the page its ads open: what you have, how many days, then the plan
-// revealed and its free trial. The program and the reveal come from shared/readyPrograms.ts, the app's rules.
+// FIT-281: the consumer app's web quiz (/start), the page its ads open: the goal, whether they've lifted, what they
+// have, how many days and a recent set, then the plan revealed and its free trial. The program and the reveal come from shared/readyPrograms.ts, the app's rules.
 import programs from "../../Resources/Seed/programs.json";
-import { daysFor, daysNearest, endDate, matches, projection, type Projection, type ReadyProgram } from "../../shared/readyPrograms";
+import {
+  daysFor, daysNearest, deloads, endDate, mainLift, matches, projection,
+  type Goal, type Projection, type ReadyProgram, type RecentSet,
+} from "../../shared/readyPrograms";
 import catalog from "./catalog.json";
 import type { Config } from "./auth";
 import { gql } from "./sync";
@@ -17,19 +20,35 @@ const names = new Map((catalog as { slug: string; name: string }[]).map((e) => [
 export const exerciseName = (slug: string) => names.get(slug) ?? slug;
 
 /** What the plan was bought with, kept on the account for the app (coachPlan.ts quizAnswers). */
-export type Answers = { slug: string; have: string[]; days: number[] };
+export type Answers = {
+  slug: string;
+  have: string[];
+  days: number[];
+  goal?: Goal;
+  lifted?: boolean;
+  /** Their recent set of the program's main lift, which its first sessions start from. */
+  recent?: RecentSet & { exercise: string };
+};
+
+export type Quiz = { goal?: Goal; lifted?: boolean; have: Set<string>; days: number; recent?: RecentSet };
 
 export type Plan = { program: ReadyProgram; answers: Answers; reveal?: Projection; ends: Date };
 
+/** The program the answers so far pick: what the recent-set question asks about. */
+export const pick = ({ goal, lifted, have, days }: Quiz) => matches(have, days, all, { goal, lifted })[0];
+export const liftOf = (program: ReadyProgram | undefined) => (program ? mainLift(program)?.exercise : undefined);
+
 /** The plan for the quiz's answers: the best fit, its days spread out, and what it promises. */
-export function plan(have: Set<string>, days: number, today = new Date()): Plan | undefined {
-  const program = matches(have, days, all)[0];
+export function plan(quiz: Quiz, today = new Date()): Plan | undefined {
+  const program = pick(quiz);
   if (!program) return undefined;
-  const trainingDays = daysFor(daysNearest(program, days));
+  const trainingDays = daysFor(daysNearest(program, quiz.days));
+  const lift = liftOf(program);
+  const recent = quiz.lifted && lift && quiz.recent ? { exercise: lift, ...quiz.recent } : undefined;
   return {
     program,
-    answers: { slug: program.slug, have: [...have], days: trainingDays },
-    reveal: projection(program, trainingDays.length),
+    answers: { slug: program.slug, have: [...quiz.have], days: trainingDays, goal: quiz.goal, lifted: quiz.lifted, ...(recent && { recent }) },
+    reveal: projection(program, trainingDays.length, deloads(program.weeks), recent),
     ends: endDate(today, program.weeks),
   };
 }
@@ -40,7 +59,7 @@ const month = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: 
 export function headline({ program, reveal, ends }: Plan): string {
   if (!reveal) return `${program.name}: ${program.weeks} weeks, done by ${month(ends)}`;
   const unit = reveal.perHand ? " lb a hand" : " lb";
-  return `${exerciseName(reveal.exercise)} ${reveal.loads[0]} → ${reveal.loads.at(-1)}${unit} by ${month(ends)}`;
+  return `${exerciseName(reveal.exercise)} ${reveal.from} → ${reveal.loads.at(-1)}${unit} by ${month(ends)}`;
 }
 
 /** "3 × 5", "3 × 8–12", "3 × 20–60 s", as the app shows a dose. */

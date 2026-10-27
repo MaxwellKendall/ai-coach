@@ -172,6 +172,17 @@ describe("FIT-281: the quiz's answers", () => {
     expect(quizAnswers(JSON.stringify({ slug: "full-body-3", have: [...gym, "laser"], days: [4, 0, 2, 2] })))
       .toEqual({ slug: "full-body-3", have: gym, days: [0, 2, 4] });
   });
+  it("keep the goal, whether they've lifted, and a recent set of the program's main lift", () => {
+    const recent = { exercise: "back-squat", weight: 225, reps: 5 };
+    expect(quizAnswers({ slug: "full-body-3", have: gym, days: [0, 2, 4], goal: "strength", lifted: true, recent }))
+      .toEqual({ slug: "full-body-3", have: gym, days: [0, 2, 4], goal: "strength", lifted: true, recent });
+    // Another lift, reps past the quiz's 12, someone new, or an unknown goal: left out.
+    for (const odd of [{ ...recent, exercise: "curl" }, { ...recent, reps: 20 }, { ...recent, weight: -5 }]) {
+      expect(quizAnswers({ slug: "full-body-3", have: gym, days: [0, 2, 4], lifted: true, recent: odd }).recent).toBeUndefined();
+    }
+    expect(quizAnswers({ slug: "full-body-3", have: gym, days: [0, 2, 4], lifted: false, recent }).recent).toBeUndefined();
+    expect(quizAnswers({ slug: "full-body-3", have: gym, days: [0, 2, 4], goal: "fame" }).goal).toBeUndefined();
+  });
   it("must fit the program", () => {
     expect(() => quizAnswers({ slug: "nope", have: gym, days: [0, 2, 4] })).toThrow("quiz");
     expect(() => quizAnswers({ slug: "full-body-3", have: gym, days: [0, 2] })).toThrow("3 days");

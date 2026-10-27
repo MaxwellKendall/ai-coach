@@ -6,7 +6,8 @@ import Foundation
 /// - a rep range (3 × 8–12): one more rep a session, and at the top on every set, the step with the reps back down;
 /// - a ladder: at the top of the range on every set, the next exercise, from the bottom of the range;
 /// - a hold: 5 s more a session, up to the range's top.
-/// The first time, the program's starting load and the bottom of the range. Deload weeks (`ProgramPlan.weeks`) cut the
+/// The first time, the program's starting load and the bottom of the range, or (FIT-281) a little under a recent set
+/// they gave (`fromRecent`). Deload weeks (`ProgramPlan.weeks`) cut the
 /// sets and loads as `TrainingGenerator` does, and their sessions don't count when the next week progresses.
 extension ReadyProgram {
     static let firstTimeNote = "First time: pick a weight you could lift 2–3 more times."
@@ -39,7 +40,7 @@ extension ReadyProgram {
             let session = sessions[(before + offset) % sessions.count]
             let date = calendar.date(byAdding: .minute, value: settings.workoutTime, to: calendar.startOfDay(for: day))!
             for item in session.exercises {
-                guard let row = dose(item, on: date, session: session.name, allowed: allowed, catalog: byslug,
+                guard let row = dose(item, on: date, session: session.name, allowed: allowed, catalog: byslug, starts: settings.starts,
                                      history: past, light: light, calendar: calendar) else { continue }
                 if row.main, let load = row.target("load_lb"), load >= 95,
                    let warmup = TrainingGenerator.warmup(for: row, settings: settings, tier: AgeTier.of(age: settings.age)) {
@@ -62,7 +63,7 @@ extension ReadyProgram {
     }
 
     private func dose(_ item: Item, on date: Date, session: String, allowed: Set<String>, catalog: [String: Exercise],
-                      history: [LoggedSet], light: Bool, calendar: Calendar) -> PlannedWorkout? {
+                      starts: [StartingSet], history: [LoggedSet], light: Bool, calendar: Calendar) -> PlannedWorkout? {
         let choices = item.choices.filter { allowed.contains($0) && catalog[$0] != nil }
         guard var slug = choices.first else { return nil }
         let range = (item.seconds ?? item.reps ?? [10]).sorted()
@@ -93,7 +94,7 @@ extension ReadyProgram {
             let step = item.step ?? 5
             let lastLoad = last.compactMap { $0.value("load_lb") ?? $0.value("load_lb_hand") }.max()
             var reps = low
-            var load = lastLoad ?? item.start
+            var load = lastLoad ?? starts.first { $0.exercise == slug }.flatMap { Self.fromRecent(item, $0)?.start } ?? item.start
             if !last.isEmpty {
                 let fewest = last.compactMap { $0.value("reps") }.min() ?? 0
                 if low == high {
