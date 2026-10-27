@@ -15,6 +15,9 @@ export const app = {
   bundleId: "com.maxwellkendall.aicoach",
   products: ["com.maxwellkendall.aicoach.pro.yearly", "com.maxwellkendall.aicoach.pro.monthly"],
 };
+/** FIT-267: the consumer app (codename Liftplan) and its one plan, checked the same way. */
+export const consumerApp = { bundleId: "com.maxwellkendall.liftplan", products: ["com.maxwellkendall.liftplan.yearly"] };
+const apps = [app, consumerApp];
 
 /** The DER of the extension OIDs Apple marks its certificates with (Apple's WWDR intermediate; App Store signing leaf). */
 const oid = (hex: string) => Buffer.from(hex, "hex");
@@ -51,7 +54,7 @@ export function checkEntitlement(jws: string | null | undefined, now: Date, root
   const signed = verify("sha256", Buffer.from(`${head}.${body}`), { key: leaf.publicKey, dsaEncoding: "ieee-p1363" },
                         Buffer.from(signature, "base64url"));
   if (!signed) return { pro: false, why: "signature" };
-  if (payload.bundleId !== app.bundleId || !app.products.includes(payload.productId as string)) return { pro: false, why: "not this app's Pro" };
+  if (!apps.some((a) => payload.bundleId === a.bundleId && a.products.includes(payload.productId as string))) return { pro: false, why: "not this app's Pro" };
   if (payload.revocationDate) return { pro: false, why: "revoked" };
   const expires = new Date(Number(payload.expiresDate));
   if (!(expires > now)) return { pro: false, why: "expired" };

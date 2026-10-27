@@ -37,6 +37,10 @@ describe("entitlement: Apple's signed proof of Pro", () => {
   it("refuses a refunded one, another app's, or another product", () => {
     expect(checkEntitlement(jws({ ...transaction, revocationDate: now.getTime() }), now, testRoot)).toEqual({ pro: false, why: "revoked" });
     expect(checkEntitlement(jws({ ...transaction, bundleId: "com.other.app" }), now, testRoot)).toMatchObject({ pro: false });
+    // FIT-267: the consumer app's plan counts, but only in the consumer app.
+    expect(checkEntitlement(jws({ ...transaction, bundleId: "com.maxwellkendall.liftplan", productId: "com.maxwellkendall.liftplan.yearly" }), now, testRoot))
+      .toMatchObject({ pro: true });
+    expect(checkEntitlement(jws({ ...transaction, bundleId: "com.maxwellkendall.liftplan" }), now, testRoot)).toMatchObject({ pro: false });
     expect(checkEntitlement(jws({ ...transaction, productId: "coins" }), now, testRoot)).toMatchObject({ pro: false });
   });
 

@@ -9,6 +9,9 @@ struct RootView: View {
     /// FIT-201: the pilot's first launch, sign in and join your coach, in place of onboarding.
     @State private var welcoming = false
     @AppStorage("welcomed") private var welcomed = false
+    /// FIT-267: the consumer app's first launch: the quiz and its program, then the paywall.
+    @State private var picking = false
+    @State private var signingInFromQuiz = false
     @Bindable private var navigator = Navigator.shared
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
@@ -75,7 +78,9 @@ struct RootView: View {
                 context.insert(profile)
                 return profile
             }()
-            if Pilot.simple {
+            if Edition.consumer {
+                if profile.programStart == nil { picking = true }
+            } else if Pilot.simple {
                 if profile.programStart == nil, !welcomed { welcoming = true }
             } else if !profile.isComplete || profile.programStart == nil {
                 onboarding = profile
@@ -93,6 +98,14 @@ struct RootView: View {
         .sheet(item: Binding(get: { onboarding == nil ? navigator.gift.map(GiftRef.init) : nil },
                              set: { if $0 == nil { navigator.gift = nil } })) { ref in
             NavigationStack { RedeemGiftView(code: ref.id) }.tint(Self.accent)
+        }
+        // FIT-281: a plan bought on the web opens the program its quiz picked, with no quiz or paywall in the app.
+        .task(id: account.user?.uid) {
+            guard let plan = await pro.refreshWebPlan(signedIn: account.user != nil), plan.active, let quiz = plan.quiz,
+                  let profile = profiles.first, profile.programStart == nil, let program = ReadyProgram.named(quiz.slug) else { return }
+            try? Planner.start(program, days: quiz.days, equipment: ReadyProgram.equipment(Set(quiz.have)), profile: profile, in: context)
+            signingInFromQuiz = false
+            picking = false
         }
         // FIT-122: Pro from a gift is the account's.
         .task(id: account.user?.uid) {
@@ -127,12 +140,12 @@ struct RootView: View {
         .onOpenURL { url in
             guard account.isAvailable else { return }
             // FIT-122: a gift's link opens Redeem with its code; Redeem asks to sign in.
-            if Pilot.sellsPro, let gift = InviteLink.gift(from: url) {
+            if Pilot.gifts, let gift = InviteLink.gift(from: url) {
                 navigator.gift = gift
                 return
             }
             // FIT-130: a coach's invite asks to allow them; it needs an account.
-            if let code = InviteLink.coach(from: url) {
+            if Pilot.coaches, let code = InviteLink.coach(from: url) {
                 // FIT-201: first launch answers it in place, signing in first.
                 if welcoming {
                     navigator.coachInvite = code
@@ -218,6 +231,17 @@ struct RootView: View {
             }
             .tint(Self.accent)
         }
+        .fullScreenCover(isPresented: $picking) {
+            ProgramPicker(onDone: { picking = false }, signIn: account.user == nil && account.isAvailable ? { signingInFromQuiz = true } : nil)
+                .sheet(isPresented: $signingInFromQuiz) { SignInSheet(reason: "Sign in with the account you started your trial with.") }
+                .interactiveDismissDisabled()
+                .tint(Self.accent)
+        }
+        // FIT-267: the consumer app has nothing without the plan: the paywall stays until the trial starts.
+        .fullScreenCover(isPresented: Binding(get: { Edition.consumer && pro.checked && !pro.active && !picking && profiles.first?.programStart != nil },
+                                              set: { _ in })) {
+            PaywallView().interactiveDismissDisabled().tint(Self.accent)
+        }
         .fullScreenCover(isPresented: $welcoming) {
             WelcomeView {
                 welcomed = true
@@ -239,7 +263,7 @@ struct RootView: View {
 
     /// FIT-131: the oldest program a coach sent that hasn't been answered, if any.
     private func checkOffers() async {
-        guard account.user != nil, navigator.offer == nil,
+        guard Pilot.coaches, account.user != nil, navigator.offer == nil,
               let offers = try? await Cloud.programOffers() else { return }
         navigator.offer = offers.filter { $0.status == "sent" }.last
     }

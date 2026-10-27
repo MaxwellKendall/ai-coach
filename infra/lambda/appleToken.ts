@@ -9,6 +9,8 @@ import { createHash, createPublicKey, verify, type JsonWebKey } from "node:crypt
 
 export const APPLE_ISSUER = "https://appleid.apple.com";
 export const BUNDLE_ID = "com.maxwellkendall.aicoach";
+/** FIT-266: the consumer app (codename Liftplan), built from the same code, signs in to the same accounts. */
+export const CONSUMER_BUNDLE_ID = "com.maxwellkendall.liftplan";
 /** A token older than this is refused even if Apple's own expiry is later: sign-in takes seconds. */
 const MAX_AGE_SECONDS = 10 * 60;
 
@@ -18,7 +20,8 @@ export type Result = { ok: true; claims: AppleClaims } | { ok: false; why: strin
 
 export const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-export function checkAppleToken(token: string, nonce: string, keys: AppleKey[], now: Date, audience = BUNDLE_ID): Result {
+export function checkAppleToken(token: string, nonce: string, keys: AppleKey[], now: Date,
+                                audience: string[] = [BUNDLE_ID, CONSUMER_BUNDLE_ID]): Result {
   const parts = token.split(".");
   if (parts.length !== 3) return { ok: false, why: "not a JWT" };
   const [head, body, signature] = parts;
@@ -37,7 +40,7 @@ export function checkAppleToken(token: string, nonce: string, keys: AppleKey[], 
                         Buffer.from(signature, "base64url"));
   if (!signed) return { ok: false, why: "signature" };
   if (claims.iss !== APPLE_ISSUER) return { ok: false, why: "issuer" };
-  if (claims.aud !== audience) return { ok: false, why: "audience" };
+  if (typeof claims.aud !== "string" || !audience.includes(claims.aud)) return { ok: false, why: "audience" };
   const seconds = now.getTime() / 1000;
   if (!(typeof claims.exp === "number" && claims.exp > seconds)) return { ok: false, why: "expired" };
   if (!(typeof claims.iat === "number" && seconds - claims.iat <= MAX_AGE_SECONDS)) return { ok: false, why: "too old" };

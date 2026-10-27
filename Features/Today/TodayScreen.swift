@@ -263,7 +263,7 @@ struct TodayScreen: View {
                         .foregroundStyle(streak.atRisk ? .primary : .secondary)
                         .padding(.top, 2)
                 }
-                if index == todayIndex { checkInButton.padding(.top, 2) }
+                if index == todayIndex, Pilot.checkIns { checkInButton.padding(.top, 2) }
             }
             Spacer()
             Button { you = true } label: {
@@ -411,7 +411,7 @@ struct TodayScreen: View {
                     Text(coach).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         .frame(maxWidth: 240)
                     // FIT-215: in the pilot anyone can log a workout of their own on a rest day.
-                    if isToday && (!pro.active || Pilot.simple) { logOwnButton(run: nil).padding(.top, 18) } else if isToday { runButton("Start a run", nil).padding(.top, 18) }
+                    if isToday && (!pro.active || Pilot.simple) { logOwnButton(run: nil).padding(.top, 18) } else if isToday, Pilot.runs { runButton("Start a run", nil).padding(.top, 18) }
                     // FIT-235: a workout done that day and not logged then.
                     else if isPast { pill("Log a workout", "plus") { sheet = .ownOn(day) }.padding(.top, 18) }
                 }
@@ -546,7 +546,7 @@ struct TodayScreen: View {
                     .frame(maxWidth: .infinity, minHeight: 50)
                     .background(Color(.systemBackground), in: .capsule)
             }
-            if let run { runButton("Start the run", run) } else { runButton("Start a run", nil) }
+            if Pilot.runs { if let run { runButton("Start the run", run) } else { runButton("Start a run", nil) } }
         }
         .buttonStyle(.plain)
     }

@@ -176,6 +176,28 @@ enum Cloud {
         return until.flatMap(date)
     }
 
+    // MARK: The consumer plan (FIT-281)
+
+    /// The consumer app's plan bought from the web quiz (Stripe's status), and the quiz's answers it was bought with.
+    struct TrainerPlan: Decodable, Sendable {
+        struct Answers: Decodable, Equatable, Sendable {
+            var slug: String
+            var have: [String]
+            var days: [Int]
+        }
+        var status: String
+        /// AWSJSON: the answers as a JSON string.
+        var answers: String?
+
+        /// Stripe's statuses that still have the plan (coachPlan.ts HAS_PLAN).
+        var active: Bool { ["active", "trialing", "past_due"].contains(status) }
+        var quiz: Answers? { answers.flatMap { try? JSONDecoder().decode(Answers.self, from: Data($0.utf8)) } }
+    }
+
+    @MainActor static func trainerPlan() async throws -> TrainerPlan {
+        try await run("query { trainerPlan { status answers } }", at: "trainerPlan", as: TrainerPlan.self, query: true)
+    }
+
     // MARK: Coaches (FIT-130)
 
     struct Person: Codable, Identifiable, Hashable, Sendable {

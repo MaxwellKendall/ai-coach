@@ -36,6 +36,8 @@ describe("Apple's identity token (FIT-138)", () => {
     expect(checkAppleToken(token(), nonce, keys, now)).toEqual({ ok: true, claims: { sub: "001877.abc.1234", email: "x@privaterelay.appleid.com" } });
   });
   it("refuses another app's", () => expect(why(token({ aud: "com.someone.else" }))).toBe("audience"));
+  it("FIT-266: accepts the consumer app's, which signs in to the same accounts", () =>
+    expect(why(token({ aud: "com.maxwellkendall.liftplan" }))).toBe("ok"));
   it("refuses one not from Apple", () => expect(why(token({ iss: "https://evil.example" }))).toBe("issuer"));
   it("refuses an expired one", () => expect(why(token({ exp: seconds - 1 }))).toBe("expired"));
   it("refuses one issued too long ago", () => expect(why(token({ iat: seconds - 11 * 60 }))).toBe("too old"));

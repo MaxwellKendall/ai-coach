@@ -18,27 +18,12 @@ settings:
     # Signing team for device builds and App Store archives.
     DEVELOPMENT_TEAM: 7GZKY29XJH
     CODE_SIGN_STYLE: Automatic
-targets:
-  AICoach:
+# FIT-266: Barbrabell and the consumer app (codename Liftplan) are one app's code, built twice.
+targetTemplates:
+  App:
     type: application
     platform: iOS
     sources: [App, Core, Features, Resources]
-    # FIT-53: push. Archives for TestFlight and the App Store are re-signed with the production APNs environment.
-    entitlements:
-      path: App/AICoach.entitlements
-      properties:
-        aps-environment: development
-        # FIT-138: Apple's own Sign in with Apple sheet.
-        com.apple.developer.applesignin: [Default]
-        # FIT-58: invite links open the app (Apple's file is served by the share pages, infra/lambda/sharePages.ts).
-        com.apple.developer.associated-domains:
-          - applinks:join.barbrabell.com
-          - applinks:barbrabell.com
-          - applinks:share.barbrabell.com
-          - applinks:dev.barbrabell.com
-        # FIT-185: run mode records each run as an Apple Health workout with its route.
-        com.apple.developer.healthkit: true
-        com.apple.developer.healthkit.access: []
     # FIT-185: GPS keeps recording a run with the phone locked. The other keys are generated (GENERATE_INFOPLIST_FILE).
     info:
       path: App/Info.plist
@@ -55,9 +40,7 @@ targets:
         product: AWSAPIPlugin
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Barbrabell
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
@@ -74,6 +57,42 @@ targets:
         # The author's personal history is a dogfooding aid, never shipped.
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: history.json goals.json amplify_outputs.dev.json
+targets:
+  AICoach:
+    templates: [App]
+    # FIT-53: push. Archives for TestFlight and the App Store are re-signed with the production APNs environment.
+    entitlements:
+      path: App/AICoach.entitlements
+      properties:
+        aps-environment: development
+        # FIT-138: Apple's own Sign in with Apple sheet.
+        com.apple.developer.applesignin: [Default]
+        # FIT-58: invite links open the app (Apple's file is served by the share pages, infra/lambda/sharePages.ts).
+        com.apple.developer.associated-domains:
+          - applinks:join.barbrabell.com
+          - applinks:barbrabell.com
+          - applinks:share.barbrabell.com
+          - applinks:dev.barbrabell.com
+        # FIT-185: run mode records each run as an Apple Health workout with its route.
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach
+        INFOPLIST_KEY_CFBundleDisplayName: Barbrabell
+  # FIT-266: the consumer app. CONSUMER switches it to the launch set and its paywall (Core/Edition.swift).
+  Liftplan:
+    templates: [App]
+    entitlements:
+      path: App/Liftplan.entitlements
+      properties:
+        aps-environment: development
+        com.apple.developer.applesignin: [Default]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.liftplan
+        INFOPLIST_KEY_CFBundleDisplayName: Liftplan
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) CONSUMER
   AICoachTests:
     type: bundle.unit-test
     platform: iOS
@@ -104,6 +123,13 @@ schemes:
       storeKitConfiguration: AICoach.storekit
     test:
       targets: [AICoachTests]
+  Liftplan:
+    build:
+      targets:
+        Liftplan: all
+    # FIT-267: the consumer plan in the simulator and debug runs, before App Store Connect has it.
+    run:
+      storeKitConfiguration: Liftplan.storekit
   AICoachEvals:
     build:
       targets:

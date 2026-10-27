@@ -6,6 +6,8 @@ import SwiftData
 struct ProgramPicker: View {
     @Query private var profiles: [Profile]
     var onDone: () -> Void
+    /// FIT-267: the consumer app's first launch has no Skip; someone who started on the web signs in instead.
+    var signIn: (() -> Void)?
 
     @State private var path: [Step] = []
     /// Catalog equipment ticked on "What do you have?".
@@ -30,7 +32,11 @@ struct ProgramPicker: View {
                 .padding(.horizontal, 24).padding(.bottom, 8)
             }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(profiles.first?.programSlug == nil ? "Skip" : "Cancel", action: onDone) }
+                if let signIn {
+                    ToolbarItem(placement: .cancellationAction) { Button("Sign In", action: signIn) }
+                } else if !Edition.consumer || profiles.first?.programSlug != nil {
+                    ToolbarItem(placement: .cancellationAction) { Button(profiles.first?.programSlug == nil ? "Skip" : "Cancel", action: onDone) }
+                }
             }
             .navigationDestination(for: Step.self) { step in
                 switch step {

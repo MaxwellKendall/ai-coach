@@ -34,7 +34,7 @@ struct YouScreen: View {
                     BackendPicker()
                     #endif
                     // FIT-122: a year of Pro bought as a gift on the web.
-                    if Pilot.sellsPro, account.isAvailable {
+                    if Pilot.gifts, account.isAvailable {
                         NavigationLink { RedeemGiftView() } label: { Label("Redeem a gift", systemImage: "gift") }
                     }
                 }
@@ -82,7 +82,7 @@ struct YouScreen: View {
                     }
                 }
                 // FIT-201: someone who started without a coach joins one later, by link or code.
-                if pro.coaches.isEmpty, account.isAvailable {
+                if Pilot.coaches, pro.coaches.isEmpty, account.isAvailable {
                     Section {
                         Button { joining = true } label: { Label("Join Your Coach", systemImage: "person.2") }
                     }

@@ -118,7 +118,10 @@ Convert importers' output to **bundled seed JSON** in `Resources/Seed/` where po
 xcodegen generate
 xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+xcodebuild -scheme Liftplan -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 ```
+
+- **Liftplan** (FIT-266, project P-FIT-14) is the consumer app, a second target from the same code: `CONSUMER` (Core/Edition.swift) switches it to the launch set and its hard paywall. Build both before every commit; a change for one app must not leak into the other.
 
 - The iPhone 17 Pro simulator is usually already booted. Foundation Models works in the simulator only if the host Mac has Apple Intelligence enabled; if `availability` says unavailable, test the fallback path and keep going.
 - **Run the app and look at it** (simulator screenshot) after any UI change before calling an issue done.
