@@ -192,6 +192,13 @@ type CoachPlan {
   cancelsAtEnd: Boolean!
 }
 
+"FIT-281: the consumer app's annual plan, bought from the web quiz: Stripe's status (none without one), and the quiz's answers (slug, have, days) as JSON."
+type TrainerPlan {
+  status: String!
+  renews: AWSDateTime
+  answers: AWSJSON
+}
+
 type Query {
   "FIT-126: my units stored since the cursor (all of them without one), oldest first. FIT-130: or a client's (uid), for their linked coach."
   syncPull(since: String, uid: ID): SyncPage!
@@ -210,6 +217,7 @@ type Query {
   "FIT-122: until when the account has Pro from a redeemed gift, or null."
   giftedPro: AWSDateTime
   coachPlan: CoachPlan!
+  trainerPlan: TrainerPlan!
   myGroups: [GroupSummary!]!
   group(groupId: ID!): Group
 }
@@ -223,6 +231,8 @@ type Mutation {
   startCoachPlan(interval: String!): String
   "FIT-144: a Stripe customer portal URL for the coach's billing, or null without a plan."
   coachBillingPortal: String
+  "FIT-281: keep the quiz's answers (JSON: slug, have, days) and return a Stripe Checkout URL for the consumer plan's free trial, or null while it isn't on sale."
+  startTrainerPlan(answers: AWSJSON!): String
   "FIT-130: a single-use link for someone to make me their coach (14 days)."
   createClientInvite: ClientInvite
   "FIT-130: make the invite's coach mine; returns the coach."

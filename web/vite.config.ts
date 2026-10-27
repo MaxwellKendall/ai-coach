@@ -6,6 +6,6 @@ import { defineConfig, searchForWorkspaceRoot } from "vite";
 export default defineConfig({
   base: "/app/",
   plugins: [react()],
-  // shared/ holds what the dashboard and the lambdas both use (FIT-196's triage).
-  server: { port: 5173, strictPort: true, fs: { allow: [searchForWorkspaceRoot(process.cwd()), "../shared"] } },
+  // shared/ holds what the dashboard and the lambdas both use (FIT-196's triage); FIT-281's quiz reads the app's programs.
+  server: { port: 5173, strictPort: true, fs: { allow: [searchForWorkspaceRoot(process.cwd()), "../shared", "../Resources/Seed"] } },
 });

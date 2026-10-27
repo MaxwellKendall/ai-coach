@@ -140,7 +140,7 @@ describe("resolvers", () => {
         "Mutation.createClientInvite", "Query.coachInvite", "Mutation.acceptCoach", "Query.myCoaches", "Query.myClients",
         "Mutation.unlinkCoach", "Mutation.removeClient", "Mutation.postComment", "Query.comments", "Mutation.editComment", "Mutation.deleteComment",
         "Mutation.sendProgram", "Query.programOffers", "Mutation.answerProgram", "Mutation.linkAccount",
-        "Query.coachPlan", "Mutation.startCoachPlan", "Mutation.coachBillingPortal",
+        "Query.coachPlan", "Mutation.startCoachPlan", "Mutation.coachBillingPortal", "Query.trainerPlan", "Mutation.startTrainerPlan",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );

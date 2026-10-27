@@ -235,3 +235,31 @@ h3 .copy:hover { color: var(--text); }
 /* FIT-234: the invite code, read aloud or typed. */
 .invite .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; }
 .signin > .muted:last-child { margin-top: 28px; font-size: 15px; }
+
+/* FIT-281: the consumer app's quiz (/start), one column on a phone */
+.start { max-width: 480px; margin: 0 auto; padding: 24px 16px 64px; }
+.start .brand { font-size: 17px; }
+.start section { margin-top: 36px; display: grid; gap: 16px; }
+.start h1 { margin-top: 4px; }
+.start .lede { margin-top: 0; }
+.start .small { font-size: 14px; }
+.choices { display: grid; gap: 10px; }
+.choice {
+  display: flex; align-items: center; justify-content: space-between; min-height: 60px; padding: 0 18px; border-radius: 18px;
+  border: 1px solid var(--line); background: var(--surface); font-weight: 650; text-align: left;
+}
+.choice[aria-pressed="true"] { border-color: var(--text); }
+.tick { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 14px; }
+.tick.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+.chart { margin: 4px 0 0; padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
+.chart svg { width: 100%; height: auto; display: block; color: var(--text); }
+.chart .end { fill: var(--accent); }
+.chart figcaption { display: flex; justify-content: space-between; margin-top: 8px; }
+.program { display: grid; gap: 8px; margin-top: 8px; }
+.week { display: grid; gap: 16px; margin-top: 8px; }
+.week ul { list-style: none; display: grid; gap: 4px; margin-top: 6px; }
+.week li { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; }
+.trial { display: grid; gap: 12px; margin-top: 8px; position: sticky; bottom: 0; padding: 16px 0; background: var(--bg); }
+.trial .buttons { display: grid; gap: 10px; }
+.button:disabled { opacity: 0.6; }
+.start .link { justify-self: start; }

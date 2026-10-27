@@ -7,6 +7,8 @@ import { corrections, HistoryView } from "./HistoryView";
 import { homePath } from "./home";
 import { here, href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
+import { hasPending } from "./start";
+import { StartPage } from "./StartPage";
 import { comments, postComment, pullAll, type Comment, type Unit } from "./sync";
 
 const APP = "Barbrabell";
@@ -40,11 +42,15 @@ export default function App() {
         return setState(token ? { phase: "in", me: user(token), notice: (error as Error).message } : { phase: "out", error: (error as Error).message });
       }
       const token = await idToken(loaded);
+      // FIT-281: back from signing in on the quiz, which picks up at Checkout.
+      if (token && hasPending()) history.replaceState(null, "", href("/start"));
       setState(token ? { phase: "in", me: user(token), notice } : { phase: "out" });
     })().catch(() => setState({ phase: "out", error: "Couldn't reach the server. Check your connection and reload." }));
   }, []);
 
   if (!config || state.phase === "loading") return null;
+  // FIT-281: the consumer app's quiz, open to anyone an ad sends.
+  if (here().startsWith("/start")) return <StartPage config={config} path={here()} />;
   if (state.phase === "out") return <SignIn config={config} error={state.error} />;
   return <Dashboard config={config} me={state.me} notice={state.notice} />;
 }

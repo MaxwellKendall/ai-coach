@@ -9,7 +9,7 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
 const keys = vi.fn();
 vi.mock("../lambda/gifts.ts", () => ({ stripeConfig: () => keys() }));
 
-const { checkoutParams, onSale, planPrices, portal, portalConfiguration, recordFrom, replaces, saveSubscription, shownPlan, start } = await import("../lambda/coachPlan.ts");
+const { checkoutParams, kindOf, onSale, planPrices, portal, portalConfiguration, quizAnswers, recordFrom, replaces, saveSubscription, shownPlan, start, trainerPlan } = await import("../lambda/coachPlan.ts");
 const { ConditionalCheckFailedException } = await import("@aws-sdk/client-dynamodb");
 const { form } = await import("../lambda/stripe.ts");
 
@@ -136,6 +136,57 @@ describe("FIT-190: Pro's checkout", () => {
   });
 });
 
+describe("FIT-281: the consumer plan's checkout", () => {
+  it("has the 7-day free trial and comes back to the quiz's pages", () => {
+    const params = checkoutParams("sam", "cus_1", "price_t", "https://site.example.com/app", "trainer");
+    expect(decodeURIComponent(form(params))).toContain("subscription_data[trial_period_days]=7");
+    expect(params.success_url).toBe("https://site.example.com/app/start/thanks");
+    expect(params.cancel_url).toBe("https://site.example.com/app/start");
+    expect(decodeURIComponent(form(checkoutParams("sam", "cus_1", "price_1", "https://x")))).not.toContain("trial_period_days");
+  });
+
+  it("is yearly only, on sale with its one price, and kept on TRAINERPLAN", async () => {
+    keys.mockResolvedValue({ secretKey: "sk_test_1" });
+    const fetch = vi.fn(async (url: string) => {
+      if (url.includes("/prices")) return Response.json({ data: [{ id: "price_t", lookup_key: "trainer_yearly" }] });
+      if (url.includes("/customers")) return Response.json({ id: "cus_t" });
+      if (url.includes("/subscriptions")) return Response.json({ data: [] });
+      return Response.json({ url: "https://checkout.stripe.com/t" });
+    });
+    vi.stubGlobal("fetch", fetch);
+    send.mockResolvedValue({});
+    expect(await onSale("trainer")).toBe(true);
+    await expect(start("sam", "month", undefined, "https://x", "trainer")).rejects.toThrow("yearly");
+    expect(await start("sam", "year", undefined, "https://x", "trainer")).toBe("https://checkout.stripe.com/t");
+    expect(send.mock.calls.some(([c]) => c.input.Key?.SK === "TRAINERPLAN")).toBe(true);
+  });
+
+  it("knows the plan's subscriptions by the lookup key", () => {
+    expect(kindOf({ ...sub, items: { data: [{ price: { lookup_key: "trainer_yearly" } }] } })).toBe("trainer");
+  });
+});
+
+describe("FIT-281: the quiz's answers", () => {
+  const gym = ["barbell", "rack", "bench", "dumbbells"];
+  it("are kept as the program, the known equipment and the days in order", () => {
+    expect(quizAnswers(JSON.stringify({ slug: "full-body-3", have: [...gym, "laser"], days: [4, 0, 2, 2] })))
+      .toEqual({ slug: "full-body-3", have: gym, days: [0, 2, 4] });
+  });
+  it("must fit the program", () => {
+    expect(() => quizAnswers({ slug: "nope", have: gym, days: [0, 2, 4] })).toThrow("quiz");
+    expect(() => quizAnswers({ slug: "full-body-3", have: gym, days: [0, 2] })).toThrow("3 days");
+    expect(() => quizAnswers({ slug: "full-body-3", have: ["dumbbells"], days: [0, 2, 4] })).toThrow("equipment");
+    expect(() => quizAnswers("{not json")).toThrow("quiz");
+  });
+  it("come back with the plan for the app", async () => {
+    send.mockImplementation(async (c: { input: { Key: { SK: string } } }) =>
+      c.input.Key.SK === "QUIZ" ? { Item: { answers: { slug: "full-body-3", have: gym, days: [0, 2, 4] } } } : { Item: { status: "trialing" } });
+    const plan = await trainerPlan("sam");
+    expect(plan.status).toBe("trialing");
+    expect(JSON.parse(plan.answers!)).toEqual({ slug: "full-body-3", have: gym, days: [0, 2, 4] });
+  });
+});
+
 describe("on sale", () => {
   it("needs the Stripe secret and both prices, looked up at most every 5 minutes", async () => {
     keys.mockResolvedValue(undefined);
@@ -196,7 +247,8 @@ describe("subscription events", () => {
     expect(input.ExpressionAttributeValues[":status"]).toBe("past_due");
     expect(input.ExpressionAttributeValues[":eventAt"]).toBe(200);
     send.mockReset();
-    send.mockResolvedValueOnce({}).mockResolvedValueOnce({ Item: { subscription: "sub_1", status: "active", eventAt: 100 } }).mockResolvedValueOnce({});
+    // The other two plans' records first (FIT-212), then this plan's.
+    send.mockResolvedValueOnce({}).mockResolvedValueOnce({}).mockResolvedValueOnce({ Item: { subscription: "sub_1", status: "active", eventAt: 100 } }).mockResolvedValueOnce({});
     await saveSubscription({ ...sub, status: "past_due" }, 200);
     input = send.mock.calls.at(-1)![0].input;
     expect(input.ConditionExpression).toBe("eventAt = :seen");
@@ -204,20 +256,20 @@ describe("subscription events", () => {
   });
 
   it("FIT-189: read again when another event saved first", async () => {
-    send.mockResolvedValueOnce({})
+    send.mockResolvedValueOnce({}).mockResolvedValueOnce({})
       .mockResolvedValueOnce({ Item: { subscription: "sub_1", status: "active", eventAt: 100 } })
       .mockRejectedValueOnce(new ConditionalCheckFailedException({ message: "changed", $metadata: {} }))
       .mockResolvedValueOnce({ Item: { subscription: "sub_1", status: "active", eventAt: 300 } });
     await saveSubscription({ ...sub, status: "past_due" }, 200);
     // The newer event saved in between wins: no second write.
-    expect(send).toHaveBeenCalledTimes(4);
+    expect(send).toHaveBeenCalledTimes(5);
   });
 
   it("FIT-189: an ended duplicate's event leaves the active plan alone", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    send.mockResolvedValueOnce({}).mockResolvedValueOnce({ Item: { subscription: "sub_2", status: "active", eventAt: 100 } });
+    send.mockResolvedValueOnce({}).mockResolvedValueOnce({}).mockResolvedValueOnce({ Item: { subscription: "sub_2", status: "active", eventAt: 100 } });
     await saveSubscription({ ...sub, id: "sub_1", status: "canceled" }, 300);
-    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(3);
     expect(error).toHaveBeenCalledWith("Kept the plan's subscription", "sub_2", "over", "sub_1", "canceled");
     error.mockRestore();
   });
