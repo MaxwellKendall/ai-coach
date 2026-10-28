@@ -317,6 +317,14 @@ if (plan.onSale ? !String(checkout).startsWith("https://checkout.stripe.com/") :
 if (!(await gql(a, `mutation { startCoachPlan(interval: "week") }`)).errors?.length) throw new Error("a weekly plan was accepted");
 pass(plan.onSale ? "the coach plan opens a test-mode Checkout" : "the coach plan isn't on sale yet (no Stripe secret or no coach prices), and says so");
 
+// FIT-281: the consumer plan, from the web quiz's answers, opens a test-mode Checkout (trainer_yearly in the sandbox).
+const trainer = must(await gql(a, `query { trainerPlan { status } }`), "trainerPlan").trainerPlan;
+if (trainer.status !== "none") throw new Error(`A's consumer plan ${JSON.stringify(trainer)}`);
+const answers = JSON.stringify({ slug: "bodyweight-basics", have: [], days: [0, 2, 4], goal: "start", lifted: false });
+const trial = must(await gql(a, `mutation($a: AWSJSON!) { startTrainerPlan(answers: $a) }`, { a: answers }), "startTrainerPlan").startTrainerPlan;
+if (!String(trial).startsWith("https://checkout.stripe.com/")) throw new Error(`consumer checkout ${trial}`);
+pass("the consumer plan opens a test-mode Checkout from the quiz's answers");
+
 for (const [name, token] of [["smoke-a", a], ["smoke-b", b], ["smoke-c", c]] as const) {
   must(await gql(token, `mutation { deleteAccount }`), `deleteAccount ${name}`);
   try {
