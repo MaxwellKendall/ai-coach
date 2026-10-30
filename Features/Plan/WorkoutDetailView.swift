@@ -48,8 +48,11 @@ struct WorkoutDetailView: View {
         var metric: String
     }
 
+    /// FIT-300: the picker to open on arrival (Today's "Add a warm-up").
+    private var opening: Picking?
+
     init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil, startIcon: String = "play.fill",
-         pushed: Bool = false, onStart: @escaping ([PlannedActivity]) -> Void = { _ in },
+         pushed: Bool = false, opening: Picking? = nil, onStart: @escaping ([PlannedActivity]) -> Void = { _ in },
          onSave: @escaping ([PlannedActivity]) -> Void = { _ in }, onStartOwn: ((SessionPlan) -> Void)? = nil) {
         self.items = items
         self.onStartOwn = onStartOwn
@@ -58,6 +61,7 @@ struct WorkoutDetailView: View {
         self.onStart = onStart
         self.onSave = onSave
         self.pushed = pushed
+        self.opening = opening
         _session = State(initialValue: session)
         _original = State(initialValue: session)
     }
@@ -95,6 +99,7 @@ struct WorkoutDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { bottom(names) }
+        .onAppear { if let opening, picking == nil { picking = opening } }
         .sheet(item: Binding(get: { howTo.map(HowToID.init) }, set: { howTo = $0?.id })) { item in
             let template = templates.first { $0.slug == item.id }
             HowToSheet(name: template?.name ?? item.id, steps: template?.values("instructions") ?? [])

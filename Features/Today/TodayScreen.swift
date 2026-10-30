@@ -47,6 +47,8 @@ struct TodayScreen: View {
         case propose(Proposal), spoken(Spoken), own, run(PlannedActivity?), ran(LogEntry)
         /// FIT-297: Change and Log on Today.
         case change([PlannedActivity]), logChoice([PlannedActivity])
+        /// FIT-300: the session editor, opening on the warm-up picker.
+        case warmup([PlannedActivity])
         /// FIT-235: a workout of their own on a past day: pick the exercises, then log the sets on that day.
         case ownOn(Date), logOwn(WorkoutDraft, Date)
         var id: String {
@@ -64,6 +66,7 @@ struct TodayScreen: View {
             case .propose(let proposal): "propose \(proposal.id)"
             case .spoken(let spoken): "spoken \(spoken.id)"
             case .change(let items): "change \(items.map(\.id))"
+            case .warmup(let items): "warm-up \(items.map(\.id))"
             case .logChoice(let items): "log choice \(items.map(\.id))"
             }
         }
@@ -459,7 +462,8 @@ struct TodayScreen: View {
             // A later day is read-only: its week may be replanned before it starts, which would undo a change made now.
             SessionList(session: plan.session, names: names, previous: previousLoads,
                         checked: lifts.isEmpty || !isToday ? nil : $checked,
-                        onLoad: isToday ? { exercise, step in changeLoad(exercise, by: step, in: plan.items) } : nil)
+                        onLoad: isToday ? { exercise, step in changeLoad(exercise, by: step, in: plan.items) } : nil,
+                        onAddWarmup: isToday ? { sheet = .warmup(plan.items) } : nil)
             ForEach(plan.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
         }
     }
@@ -1014,6 +1018,10 @@ struct TodayScreen: View {
             NavigationStack {
                 WorkoutDetailView(items: items, session: Planner.session(items, templates: templates))
             }
+        case .warmup(let items):
+            NavigationStack {
+                WorkoutDetailView(items: items, session: Planner.session(items, templates: templates), opening: .addWarmup)
+            }
         case .record(let items): NavigationStack { SessionRecordView(planned: items) }
         case .ran(let entry): NavigationStack { RunDetailView(run: entry) }
         case .own:
@@ -1043,6 +1051,7 @@ struct TodayScreen: View {
                     switch choice {
                     case .change(let change): propose(change, said: "")
                     case .exercises: self.sheet = .details(items)
+                    case .warmup: self.sheet = .warmup(items)
                     case .week: if let plan = thisWeeksPlan { self.sheet = .adjust(plan) }
                     }
                 }

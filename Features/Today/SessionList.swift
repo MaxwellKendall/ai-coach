@@ -13,13 +13,25 @@ struct SessionList: View {
     var checked: Binding<Set<Int>>?
     /// A load changed in place: the exercise and the step (±5 lb).
     var onLoad: ((String, Double) -> Void)?
+    /// FIT-300: today's "Add a warm-up"; nil on another day.
+    var onAddWarmup: (() -> Void)?
     @State private var warm = false
     /// The exercise whose load is being changed.
     @State private var editing: String?
 
     var body: some View {
         VStack(spacing: 0) {
-            if !session.warmup.isEmpty || firstLoad != nil { warmup(firstLoad) }
+            if !session.warmup.isEmpty || firstLoad != nil {
+                warmup(firstLoad)
+            } else if let onAddWarmup {
+                // A session with nothing to warm up to (bodyweight, say) has no warm-up row: offer one.
+                Button(action: onAddWarmup) {
+                    Label("Add a warm-up", systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .overlay(alignment: .bottom) { Divider() }
+            }
             // FIT-300: the written warm-up's blocks are in the warm-up row, not among the lifts; indices stay the session's.
             ForEach(session.blocks.indices.filter { session.blocks[$0].rounds > 0 }, id: \.self) { index in
                 let block = session.blocks[index]
@@ -68,6 +80,10 @@ struct SessionList: View {
                         ForEach(session.warmup) { movement in
                             HStack { Text(names[movement.exercise] ?? movement.exercise).foregroundStyle(Color.inkMuted); Spacer(); Text(movement.warmupDose).bold() }
                         }
+                    }
+                    if let onAddWarmup {
+                        Button(session.warmup.isEmpty ? "Change the warm-up" : "Add to the warm-up", systemImage: "plus", action: onAddWarmup)
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark).buttonStyle(.plain)
                     }
                     if let first {
                         VStack(alignment: .leading, spacing: 6) {

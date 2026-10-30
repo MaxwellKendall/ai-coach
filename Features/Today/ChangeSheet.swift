@@ -3,7 +3,7 @@ import SwiftUI
 /// FIT-297: Change on Today. The quick fixes the plan's rules already make (shorter, around something that hurts,
 /// easier, another day), each opening the proposal to apply, then the exercises themselves. Replaces the ••• menu.
 struct ChangeSheet: View {
-    enum Choice { case change(SpokenRequest.Change), exercises, week }
+    enum Choice { case change(SpokenRequest.Change), exercises, warmup, week }
 
     var canChangeWeek: Bool
     var onChoose: (Choice) -> Void
@@ -13,6 +13,9 @@ struct ChangeSheet: View {
     private static let areas = ["Shoulder", "Elbow", "Wrist", "Lower back", "Hip", "Knee"]
 
     var body: some View {
+        // Scrolls: in the half-height sheet the options run past the bottom, and unscrolled they pushed the title off
+        // the top too.
+        ScrollView {
         VStack(alignment: .leading, spacing: 0) {
             Text(step == .hurts ? "Where does it hurt?" : step == .move ? "Which day?" : "Change today")
                 .font(.display(24, relativeTo: .title))
@@ -26,6 +29,7 @@ struct ChangeSheet: View {
                 option("Low on energy", "Fewer sets and an easier effort cap.") { onChoose(.change(.energy)) }
                 option("Move to another day", "The rest of the week shifts so nothing doubles up.") { withAnimation(.snappy) { step = .move } }
                 option("Swap or remove an exercise", "Same muscles, a different lift, or one fewer.") { onChoose(.exercises) }
+                option("Add a warm-up", "Cardio, mobility or bands before the first set.") { onChoose(.warmup) }
                 if canChangeWeek { option("Change this week", "Days, length and what to avoid.") { onChoose(.week) } }
             case .hurts?:
                 ForEach(Self.areas, id: \.self) { area in option(area, nil) { onChoose(.change(.injury(area: area))) } }
@@ -34,7 +38,8 @@ struct ChangeSheet: View {
             }
         }
         .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 12)
-        .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .scrollBounceBehavior(.basedOnSize)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
