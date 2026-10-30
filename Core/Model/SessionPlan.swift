@@ -19,6 +19,17 @@ struct SessionPlan: Equatable, Sendable {
         var exercise: String
         var sets: [PlannedSet]
         var working: [PlannedSet] { sets.filter { !$0.isWarmup } }
+
+        /// A warm-up item's dose (FIT-300): "5 min", "2 × 15", "2 × 30 s", "1 × 10 @ 45".
+        var warmupDose: String {
+            let count = sets.count, set = sets.first
+            if let seconds = set?.value("duration_s") {
+                let time = seconds >= 60 && seconds.truncatingRemainder(dividingBy: 60) == 0 ? "\(Int(seconds / 60)) min" : "\(Int(seconds)) s"
+                return count > 1 ? "\(count) × \(time)" : time
+            }
+            guard let reps = set?.value("reps") else { return "\(count) \(count == 1 ? "set" : "sets")" }
+            return "\(count) × \(Coach.number(reps))" + ((set?.value("load_lb")).map { " @ \(Coach.number($0))" } ?? "")
+        }
     }
 
     /// One set's targets (no "sets" count; that's how many of these there are).
@@ -65,6 +76,13 @@ struct SessionPlan: Equatable, Sendable {
     /// FIT-300: the session's written warm-up: the movements of blocks with no working sets (a row, band pull-aparts),
     /// in order. A lift's own ramp sets are in its block, which has working sets, so they aren't part of it.
     var warmup: [Movement] { blocks.filter { $0.rounds == 0 }.flatMap(\.movements) }
+
+    /// The first lift with a working load over the empty bar: what the warm-up ramps to.
+    var firstLoad: (exercise: String, load: Double)? {
+        guard let movement = blocks.first(where: { $0.rounds > 0 })?.movements.first,
+              let load = movement.working.first.flatMap({ $0.value("load_lb") ?? $0.value("load_lb_hand") }), load > WarmupRamp.bar else { return nil }
+        return (movement.exercise, load)
+    }
 
     init(_ items: [Item]) {
         func key(_ item: Item) -> String { item.group.map { "group \($0)" } ?? "exercise \(item.exercise)" }

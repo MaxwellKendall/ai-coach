@@ -37,6 +37,24 @@ struct SessionPlanTests {
         #expect(SessionPlan(generated).warmup.isEmpty)
     }
 
+    /// FIT-301: the live workout's warm-up: the written items, else easy cardio, then the ramp to the first lift.
+    @Test func workoutWarmupSteps() {
+        let warm = TrainingGenerator.warmupNote
+        let written = SessionPlan([SessionPlan.Item(id: UUID(), exercise: "rowing-machine",
+                                                    targets: [Measurement(metric: "sets", value: 1, unit: "sets"), Measurement(metric: "duration_s", value: 300, unit: "s")],
+                                                    note: warm),
+                                   item("band-pull-apart", sets: 2, reps: 15, note: warm)] + generated)
+        let steps = WorkoutDraft.warmups(written)
+        #expect(steps.prefix(2).map(\.dose) == ["5 min", "2 × 15"])
+        #expect(steps.dropFirst(2).allSatisfy { $0.ramp && $0.exercise == "bench" })
+        #expect(steps.dropFirst(2).map(\.dose) == ["Bar × 10", "75 × 5", "105 × 3", "125 × 2"])
+        let plain = WorkoutDraft.warmups(SessionPlan(generated))
+        #expect(plain.first == WorkoutDraft.Warmup(exercise: nil, dose: "5 min"))
+        #expect(WorkoutDraft.warmups(SessionPlan([item("db-row", sets: 3, reps: 10)])).isEmpty)
+        // Warm-ups aren't logged.
+        #expect(WorkoutDraft(session: "A", plan: written).rows.count == 9)
+    }
+
     /// FIT-300: a lifter adds a warm-up item; it goes before the lifts, after any others, and its sets come and go.
     @Test func addingAWarmupItem() {
         var plan = SessionPlan(generated)

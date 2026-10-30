@@ -49,12 +49,34 @@ struct WorkoutDraft: Equatable {
     var note = ""
     /// Set by workout mode when the session ends.
     var duration: TimeInterval?
+    /// FIT-301: what's done before the first set, one step each, not logged.
+    var warmups: [Warmup] = []
+
+    /// A warm-up step: a written item (FIT-300), easy cardio when none is written, or a ramp set to the first lift.
+    struct Warmup: Equatable {
+        /// Nil for the easy cardio of a session with no written warm-up.
+        var exercise: String?
+        var dose: String
+        var ramp = false
+    }
+
+    /// The session's written warm-up (or 5 minutes of easy cardio when there's none and a lift to ramp to), then the
+    /// ramp to the first lift's working weight, as Today shows it (WarmupRamp).
+    static func warmups(_ plan: SessionPlan) -> [Warmup] {
+        var steps = plan.warmup.map { Warmup(exercise: $0.exercise, dose: $0.warmupDose) }
+        guard let first = plan.firstLoad else { return steps }
+        if steps.isEmpty { steps.append(Warmup(exercise: nil, dose: "\(WarmupRamp.cardioMinutes) min")) }
+        return steps + WarmupRamp.steps(to: first.load).map { step in
+            Warmup(exercise: first.exercise, dose: "\(step.load == WarmupRamp.bar ? "Bar" : Coach.number(step.load)) × \(step.reps)", ramp: true)
+        }
+    }
 
     /// One row per planned working set, block by block. A superset's movements alternate round by round
     /// (C1, C2, C1, C2…). Warm-ups aren't logged (fitness-planner's logs skip them too), and RPE is left
     /// for the user since it's what they felt, not the cap.
     init(session: String, plan: SessionPlan) {
         self.session = session
+        warmups = Self.warmups(plan)
         rows = plan.blocks.enumerated().flatMap { index, block in
             (0..<block.rounds).flatMap { round in
                 block.movements.compactMap { movement -> SetRow? in

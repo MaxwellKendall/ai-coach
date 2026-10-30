@@ -32,9 +32,7 @@ struct SessionList: View {
 
     /// The first lift's working weight, the warm-up's target; none for a session without a loaded lift first.
     private var firstLoad: (name: String, load: Double)? {
-        guard let movement = session.blocks.first(where: { $0.rounds > 0 })?.movements.first, let load = Self.load(movement),
-              load > WarmupRamp.bar else { return nil }
-        return (names[movement.exercise] ?? movement.exercise, load)
+        session.firstLoad.map { (names[$0.exercise] ?? $0.exercise, $0.load) }
     }
 
     /// "Rowing Machine, Band Pull-Apart, then ramp to 170", the coach's warm-up (FIT-300), or the computed one:
@@ -44,17 +42,6 @@ struct SessionList: View {
         guard !session.warmup.isEmpty else { return "\(WarmupRamp.minutes(to: first?.load ?? 0)) min · easy cardio, then \(ramp ?? "")" }
         return ([session.warmup.map { names[$0.exercise] ?? $0.exercise }.joined(separator: ", ")] + [ramp.map { "then \($0)" }].compactMap { $0 })
             .joined(separator: ", ")
-    }
-
-    /// A written warm-up item's dose: "5 min", "2 × 15", "2 × 30 s", "1 × 10 @ 45".
-    private static func warmupDose(_ movement: SessionPlan.Movement) -> String {
-        let count = movement.sets.count, set = movement.sets.first
-        if let seconds = set?.value("duration_s") {
-            let time = seconds >= 60 && seconds.truncatingRemainder(dividingBy: 60) == 0 ? "\(Int(seconds / 60)) min" : "\(Int(seconds)) s"
-            return count > 1 ? "\(count) × \(time)" : time
-        }
-        guard let reps = set?.value("reps") else { return "\(count) \(count == 1 ? "set" : "sets")" }
-        return "\(count) × \(Coach.number(reps))" + ((set?.value("load_lb")).map { " @ \(Coach.number($0))" } ?? "")
     }
 
     private func warmup(_ first: (name: String, load: Double)?) -> some View {
@@ -79,7 +66,7 @@ struct SessionList: View {
                         HStack { Text("Row, bike or walk, easy").foregroundStyle(Color.inkMuted); Spacer(); Text("\(WarmupRamp.cardioMinutes) min").bold() }
                     } else {
                         ForEach(session.warmup) { movement in
-                            HStack { Text(names[movement.exercise] ?? movement.exercise).foregroundStyle(Color.inkMuted); Spacer(); Text(Self.warmupDose(movement)).bold() }
+                            HStack { Text(names[movement.exercise] ?? movement.exercise).foregroundStyle(Color.inkMuted); Spacer(); Text(movement.warmupDose).bold() }
                         }
                     }
                     if let first {

@@ -1,10 +1,10 @@
 import SwiftUI
 import SwiftData
 
-/// The workout (FIT-32, FIT-35): a deck of cards, one per set, each followed by its rest. Throwing a set to the
-/// left logs it as shown and starts its rest; up skips a set or a rest; down unlogs a logged set; right brings
-/// the last card back. Tap a number to change it. The list button shows the whole session. The last card is
-/// the log: Save writes it.
+/// The workout (FIT-301, design A, https://claude.ai/artifact/UV27EdoNaNCytWRRxd38Sa): one card at a time. The
+/// warm-up first, a step each; then each set with its weight and reps big and − and + under them, and one Done that
+/// logs it and starts its rest; the rest as a countdown with +30 s and Skip. The list button shows the whole session
+/// and goes to any set. The last card is the log: Save writes it.
 struct WorkoutModeView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -18,7 +18,8 @@ struct WorkoutModeView: View {
     @State private var startedAt = Date.now
     @State private var page = 0
     @State private var peeking = false
-    @State private var editing: Field?
+    /// The warm-up step on screen; past the last, the sets.
+    @State private var warmStep = 0
     @State private var rest: Rest?
     @State private var restsFinished = 0
     @State private var quitting = false
@@ -37,12 +38,6 @@ struct WorkoutModeView: View {
         var page: Int
     }
 
-    /// The number being changed: a card's reps (or time) or its load.
-    struct Field: Equatable {
-        var page: Int
-        var load: Bool
-    }
-
     private var names: [String: String] {
         Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
     }
@@ -50,27 +45,34 @@ struct WorkoutModeView: View {
     var body: some View {
         let cards = draft.cards
         let names = names
+        let warming = warmStep < draft.warmups.count
         VStack(spacing: 0) {
             topBar
             segments.padding(.horizontal, 22).padding(.top, 8)
-            SwipeDeck(index: $page, count: cards.count + 1, vertical: { vertical($0, $1, cards: cards) },
-                      hint: { hint($0, $1, cards: cards) }, swiped: { swiped(from: $0, $1, cards: cards) }) { index in
-                if index == cards.count {
+            Group {
+                if warming {
+                    warmupCard(draft.warmups[warmStep], names: names)
+                } else if page >= cards.count {
                     finishCard(names: names)
                 } else {
-                    switch cards[index] {
-                    case .set(let line): setCard(line, index: index, cards: cards, names: names)
-                    case .rest(let seconds): restCard(index: index, seconds: seconds, cards: cards, names: names)
+                    switch cards[page] {
+                    case .set(let line): setCard(line, index: page, cards: cards, names: names)
+                    case .rest(let seconds): restCard(index: page, seconds: seconds, cards: cards, names: names)
                     }
                 }
             }
+            .id("\(warming ? warmStep : -1) \(page)")
+            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             .padding(.horizontal, 22)
             .padding(.top, 16)
-            micArea(onFinish: page == cards.count).frame(height: 104)
+            footer(cards: cards, names: names, warming: warming)
+                .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 8)
+            if Pilot.inAppAI { micArea(onFinish: page == cards.count).frame(height: 104) }
         }
+        .animation(.snappy, value: page)
+        .animation(.snappy, value: warmStep)
         .screenBackground()
         .onChange(of: page) {
-            editing = nil
             live?.update(draft.live(at: page, names: names))
         }
         .onChange(of: draft.rows.filter(\.done).count) { live?.update(draft.live(at: page, names: names)) }
@@ -136,7 +138,9 @@ struct WorkoutModeView: View {
                             let done = rows.allSatisfy(\.done)
                             Button {
                                 peeking = false
-                                if let index = cards.firstIndex(of: .set(line)) { withAnimation(.snappy) { page = index } }
+                                if let index = cards.firstIndex(of: .set(line)) {
+                                    withAnimation(.snappy) { warmStep = draft.warmups.count; page = index }
+                                }
                             } label: {
                                 HStack {
                                     Image(systemName: done ? "checkmark.circle.fill" : "circle")
@@ -226,72 +230,112 @@ struct WorkoutModeView: View {
         let exercises = rows.map(\.exercise).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         let rounds = draft.lines(block: first.block).count
         let done = rows.allSatisfy(\.done)
-        let field = editing?.page == index ? editing : nil
-        let next = nextSet(after: index, in: cards).map { draft.rows[$0[0]] }
-        let hint = done ? "Swipe down to unlog" : next == nil ? "Swipe to finish" : next!.block != first.block ? "Swipe · \(names[next!.exercise] ?? next!.exercise)" : "Swipe when done"
         let values = rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+")
         let loads = rows.compactMap(\.load).reduce(into: [Double]()) { if !$0.contains($1) { $0.append($1) } }
         let load = first.loadMetric == nil ? nil : loads.map(Coach.number).joined(separator: "/")
-        let size: CGFloat = values.count + (load?.count ?? 0) > 6 ? 68 : 96
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Set \(first.round + 1) of \(rounds)\(exercises.count > 1 ? " · superset" : "")")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
                 Spacer()
                 if done {
-                    Label("Logged", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    Label("Logged", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkMuted)
                 }
             }
             Text(exercises.map { names[$0] ?? $0 }.joined(separator: " + "))
-                .font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
+                .font(.display(30)).padding(.top, 4)
                 .lineLimit(2).minimumScaleFactor(0.7)
             if let cue = cue(rows) {
-                Text(cue).font(.subheadline).foregroundStyle(.secondary).padding(.top, 6).lineLimit(3)
+                Text(cue).font(.subheadline).foregroundStyle(Color.inkMuted).padding(.top, 6).lineLimit(3)
             }
             Spacer(minLength: 12)
-            VStack(spacing: 16) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    number(values, size: size, on: field?.load == false, heard: rows.contains(where: \.heard),
-                           label: "\(values) \(unit(first, plain: true)). Change") {
-                        editing = field?.load == false ? nil : Field(page: index, load: false)
-                    }
-                    if let load {
-                        Text("×").font(.system(size: size * 0.3)).foregroundStyle(.tertiary)
-                        number(load, size: size, on: field?.load == true, heard: false, label: "\(load) pounds. Change") {
-                            editing = field?.load == true ? nil : Field(page: index, load: true)
-                        }
+            // Weight and reps big, each with − and + under it: a change is a tap, right where it's read.
+            HStack(alignment: .top, spacing: 12) {
+                if let load {
+                    stepper(load, unit: SetRow.units[first.loadMetric ?? "load_lb"] ?? "lb", less: "5 lb lighter", more: "5 lb heavier") {
+                        draft.adjust(line, load: true, by: $0)
                     }
                 }
-                .lineLimit(1).minimumScaleFactor(0.5)
-                Text(unit(first, pair: exercises.count > 1)).font(.subheadline).foregroundStyle(.secondary)
-                if let field {
-                    HStack(spacing: 14) {
-                        round("minus", field.load ? "5 lb less" : "Less") { draft.adjust(line, load: field.load, by: -1) }
-                        Text(field.load ? "5 lb" : first.metric == "reps" ? "reps" : "5 \(SetRow.units[first.metric] ?? "")")
-                            .font(.subheadline).foregroundStyle(.secondary).frame(minWidth: 72)
-                        round("plus", field.load ? "5 lb more" : "More") { draft.adjust(line, load: field.load, by: 1) }
-                    }
-                    .padding(.top, 8)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                stepper(values, unit: unit(first, pair: exercises.count > 1, plain: true), less: "Fewer", more: "More") {
+                    draft.adjust(line, load: false, by: $0)
                 }
             }
             .frame(maxWidth: .infinity)
-            .animation(.snappy, value: field)
             Spacer(minLength: 12)
-            HStack(alignment: .firstTextBaseline) {
-                if first.round == 0, exercises.count == 1, let last = lastTime(exercises[0]) {
-                    Text(last).foregroundStyle(.tertiary)
-                }
-                Spacer()
-                Text(hint).foregroundStyle(.tertiary).lineLimit(1)
+            if first.round == 0, exercises.count == 1, let last = lastTime(exercises[0]) {
+                Text(last).font(.subheadline).foregroundStyle(Color.inkMuted).frame(maxWidth: .infinity)
             }
-            .font(.subheadline)
         }
-        .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
+        .padding(EdgeInsets(top: 24, leading: 22, bottom: 22, trailing: 22))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .clipShape(.rect(cornerRadius: 24))
         .cardBackground()
         .accessibilityAction(named: "Unlog") { if done { unlog(line) } }
+    }
+
+    /// A big number with its unit, and − and + under it.
+    private func stepper(_ value: String, unit: String, less: String, more: String, by step: @escaping (Double) -> Void) -> some View {
+        VStack(spacing: 10) {
+            Text(value).font(.display(value.count > 4 ? 52 : 76, weight: .semibold)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.5).contentTransition(.numericText())
+            Text(unit).font(.subheadline).foregroundStyle(Color.inkMuted)
+            HStack(spacing: 10) {
+                round("minus", less) { step(-1) }
+                round("plus", more) { step(1) }
+            }
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// A warm-up step (FIT-301): what to do and how much, big. Done moves on; nothing is logged.
+    private func warmupCard(_ step: WorkoutDraft.Warmup, names: [String: String]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(step.ramp ? "Warm-up · ramp" : "Warm-up").font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+            Text(step.exercise.map { names[$0] ?? $0 } ?? "Row, bike or walk, easy")
+                .font(.display(30)).padding(.top, 4).lineLimit(2).minimumScaleFactor(0.7)
+            Spacer(minLength: 12)
+            Text(step.dose).font(.display(76, weight: .semibold)).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.5).frame(maxWidth: .infinity)
+            Spacer(minLength: 12)
+        }
+        .padding(EdgeInsets(top: 24, leading: 22, bottom: 22, trailing: 22))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .cardBackground()
+    }
+
+    /// Under the card: what's next, then the one action. A set's Done logs it and starts its rest; a rest has its own
+    /// buttons on the card, and the finish card its Save.
+    @ViewBuilder private func footer(cards: [WorkoutDraft.Card], names: [String: String], warming: Bool) -> some View {
+        let nextLine = nextText(cards: cards, names: names, warming: warming)
+        VStack(alignment: .leading, spacing: 12) {
+            if let nextLine { Text(nextLine).font(.subheadline).foregroundStyle(Color.inkMuted).lineLimit(1) }
+            if warming {
+                Button("Done") { withAnimation(.snappy) { warmStep += 1 } }.buttonStyle(.primary)
+            } else if cards.indices.contains(page), case .set(let line) = cards[page] {
+                let done = line.allSatisfy { draft.rows[$0].done }
+                let restAfter: TimeInterval? = if cards.indices.contains(page + 1), case .rest(let seconds) = cards[page + 1] { seconds } else { nil }
+                Button(done ? "Next" : restAfter.map { "Done · rest \(Duration.seconds($0).formatted(.time(pattern: .minuteSecond)))" } ?? "Done") {
+                    _ = swiped(from: page, .next, cards: cards)
+                    withAnimation(.snappy) { page += 1 }
+                }
+                .buttonStyle(.primary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// "Next: Back Squat · 170 × 5", from the step on screen.
+    private func nextText(cards: [WorkoutDraft.Card], names: [String: String], warming: Bool) -> String? {
+        if warming, warmStep + 1 < draft.warmups.count {
+            let next = draft.warmups[warmStep + 1]
+            return "Next: \(next.exercise.map { names[$0] ?? $0 } ?? "Easy cardio") · \(next.dose)"
+        }
+        let line = warming ? cards.lazy.compactMap { if case .set(let line) = $0 { line } else { nil } }.first
+            : cards.indices.contains(page) ? nextSet(after: page, in: cards) : nil
+        guard let line else { return page < cards.count && !warming ? "Last one" : nil }
+        let rows = line.map { draft.rows[$0] }
+        return "Next: \(Self.names(rows, names)) · \(Self.dose(rows))"
     }
 
     /// FIT-202: what the coach wrote on these sets' exercises (tempo, rest, AMRAP…), where the set is logged.
@@ -303,33 +347,7 @@ struct WorkoutModeView: View {
         return unique.isEmpty ? nil : unique.joined(separator: " · ")
     }
 
-    /// Up skips a set or a rest; down unlogs a logged set.
-    private func vertical(_ index: Int, _ edge: VerticalEdge, cards: [WorkoutDraft.Card]) -> CardThrow? {
-        guard cards.indices.contains(index) else { return nil }
-        if edge == .top { return .off }
-        if case .set(let line) = cards[index], line.allSatisfy({ draft.rows[$0].done }) { return .back }
-        return nil
-    }
-
-    /// What a swipe will do: green logs, blue skips, orange unlogs, gray just moves.
-    private func hint(_ index: Int, _ swipe: CardSwipe, cards: [WorkoutDraft.Card]) -> SwipeHint? {
-        guard cards.indices.contains(index) else { return swipe == .back ? SwipeHint("Back") : nil }
-        switch (cards[index], swipe) {
-        case (.set(let line), .next):
-            return line.allSatisfy({ draft.rows[$0].done }) ? SwipeHint("Next") : SwipeHint("Log set", symbol: "checkmark", tint: .green)
-        case (.set, .up):
-            let restAfter = if cards.indices.contains(index + 1), case .rest = cards[index + 1] { true } else { false }
-            return SwipeHint("Skip set", symbol: "forward.end", tint: .blue, to: restAfter ? index + 2 : nil)
-        case (.set, .down): return SwipeHint("Unlog", symbol: "arrow.uturn.backward", tint: .orange)
-        case (.rest, .next): return SwipeHint("Next set")
-        case (.rest, .up): return SwipeHint("Skip rest", symbol: "forward.end", tint: .blue)
-        case (_, .back): return SwipeHint("Back")
-        default: return nil
-        }
-    }
-
-    /// Swiping a set on logs it as shown and starts its rest. Swiping it up skips it, and its rest with it.
-    /// Leaving a rest forward ends it; going back to look at the set keeps it running.
+    /// Done on a set logs it as shown and starts its rest; Skip on a rest ends it.
     private func swiped(from index: Int, _ swipe: CardSwipe, cards: [WorkoutDraft.Card]) -> Int? {
         guard cards.indices.contains(index) else { return nil }
         let restAfter: TimeInterval? = if cards.indices.contains(index + 1), case .rest(let seconds) = cards[index + 1] { seconds } else { nil }
@@ -357,25 +375,6 @@ struct WorkoutModeView: View {
         withAnimation { toast = Toast(text: "Set \(draft.rows[line[0]].round + 1) unlogged") { draft = before } }
     }
 
-    private func number(_ text: String, size: CGFloat, on: Bool, heard: Bool, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text)
-                .font(.system(size: size, weight: .semibold, design: .rounded)).tracking(-2).monospacedDigit()
-                .contentTransition(.numericText())
-                .overlay(alignment: .bottom) {
-                    if on {
-                        Capsule().frame(height: 3).offset(y: 8)
-                    } else if heard {
-                        Line().stroke(style: StrokeStyle(lineWidth: 3, dash: [6, 5])).frame(height: 3)
-                            .foregroundStyle(.tertiary).offset(y: 8)
-                    }
-                }
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
     /// "reps × lb", "reps each × lb/hand", "seconds".
     private func unit(_ row: SetRow, pair: Bool = false, plain: Bool = false) -> String {
         let value = row.metric == "reps" ? (pair ? "reps each" : "reps") : row.metric == "duration_s" ? "seconds" : SetRow.units[row.metric] ?? ""
@@ -385,100 +384,64 @@ struct WorkoutModeView: View {
 
     private func round(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button { withAnimation(.snappy, action) } label: {
-            Image(systemName: symbol).font(.title3.weight(.medium)).frame(width: 56, height: 56)
-                .background(Color.surface, in: .circle)
+            Image(systemName: symbol).font(.title3.weight(.semibold)).frame(width: 52, height: 52)
+                .background(Color.fill, in: .circle)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 
-    /// "Last time 5 × 155": the top set of the last session before today.
+    /// "Last time 155 × 5": the top set of the last session before today.
     private func lastTime(_ exercise: String) -> String? {
         let today = Calendar.current.startOfDay(for: startedAt)
         let sets = Planner.loggedSets(entries.filter { $0.timestamp < today }, templates: templates).filter { $0.exercise == exercise }
         guard let day = sets.last.map({ Calendar.current.startOfDay(for: $0.date) }) else { return nil }
         let top = sets.filter { Calendar.current.startOfDay(for: $0.date) == day }.max { ($0.value("load_lb") ?? 0) < ($1.value("load_lb") ?? 0) }
         guard let top, let reps = top.value("reps") else { return nil }
-        return "Last time \(Coach.number(reps))" + (top.value("load_lb").map { " × \(Coach.number($0))" } ?? "")
+        return "Last time " + (top.value("load_lb").map { "\(Coach.number($0)) × " } ?? "") + Coach.number(reps)
     }
 
-    /// The rest after a set: a countdown with −10s, +10s and Skip. It runs when you arrive by logging the set;
-    /// swiping on, or up, skips it.
+    /// The rest after a set (FIT-301): a big countdown and its bar, then +30 s and Skip; what's next is under the card.
+    /// It runs when the set is done; a rest arrived at from the list is shown, not started, until +30 s.
     private func restCard(index: Int, seconds: TimeInterval, cards: [WorkoutDraft.Card], names: [String: String]) -> some View {
         let active = rest?.page == index ? rest : nil
-        let next = nextSet(after: index, in: cards).map { $0.map { draft.rows[$0] } }
         let skip = { withAnimation(.snappy) { rest = nil; page = index + 1 } }
-        let before = set(at: index - 1, in: cards) ?? []
-        let done = before.map { draft.rows[$0] }
-        return VStack(alignment: .leading, spacing: 0) {
-            // The rest belongs to the set before it: talk now and it's that set you're changing.
-            if let first = done.first {
-                HStack {
-                    Text("Rest after set \(first.round + 1)").font(.subheadline).foregroundStyle(.secondary)
-                    Spacer()
-                    if done.allSatisfy(\.done) {
-                        Label("Logged", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                }
-                Text(Self.names(done, names)).font(.title3.weight(.semibold)).lineLimit(1).padding(.top, 4)
-                Text(Self.dose(done)).font(.title3).foregroundStyle(.secondary).monospacedDigit()
-                    .overlay(alignment: .bottom) {
-                        if done.contains(where: \.heard) {
-                            Line().stroke(style: StrokeStyle(lineWidth: 1.5, dash: [3, 3])).foregroundStyle(.tertiary)
-                                .frame(height: 1.5).offset(y: 3)
-                        }
-                    }
-                    .contentTransition(.numericText())
-            }
-            Spacer(minLength: 12)
+        return VStack(spacing: 0) {
+            Text("Rest").font(.headline).foregroundStyle(Color.inkMuted)
             TimelineView(.periodic(from: .now, by: 0.25)) { context in
                 let left = active.map { max(0, $0.ends.timeIntervalSince(context.date)) } ?? seconds
                 VStack(spacing: 0) {
                     Text(Duration.seconds(left.rounded(.up)).formatted(.time(pattern: .minuteSecond)))
-                        .font(.system(size: 96, weight: .semibold, design: .rounded)).tracking(-2).monospacedDigit()
-                        .foregroundStyle(active == nil ? .tertiary : .primary)
+                        .font(.display(96, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(active == nil ? Color.inkFaint : Color.ink)
                     GeometryReader { proxy in
                         ZStack(alignment: .leading) {
-                            Capsule().fill(Color(.separator))
-                            Capsule().fill(.primary).frame(width: proxy.size.width * left / max(active?.total ?? seconds, 1))
+                            Capsule().fill(Color.fillStrong)
+                            Capsule().fill(Plate.current.mark).frame(width: proxy.size.width * left / max(active?.total ?? seconds, 1))
                         }
                     }
-                    .frame(width: 200, height: 4).padding(.top, 8)
-                    HStack(spacing: 8) {
-                        Button("−10s") {
-                            if left > 10 { rest?.ends -= 10 } else { skip() }
-                        }
-                        .accessibilityLabel("10 seconds less")
-                        Button("+10s") {
-                            if let active { rest?.ends += 10; rest?.total = max(active.total, left + 10) }
-                            else { rest = Rest(ends: .now + seconds + 10, total: seconds + 10, page: index) }
-                        }
-                        .accessibilityLabel("10 seconds more")
-                        Button("Skip", action: skip)
-                    }
-                    .buttonStyle(RestButton())
-                    .padding(.top, 22)
-                    .opacity(active == nil ? 0 : 1)
-                    .disabled(active == nil)
+                    .frame(width: 220, height: 6).padding(.top, 10)
                 }
-                .frame(maxWidth: .infinity)
             }
-            Spacer(minLength: 12)
-            if let next {
-                Text("Next · set \(next[0].round + 1)").font(.subheadline).foregroundStyle(.secondary)
-                Text(Self.names(next, names)).font(.title3.weight(.semibold)).lineLimit(1).padding(.top, 2)
-                Text(Self.dose(next)).font(.title3).foregroundStyle(.secondary).monospacedDigit()
+            HStack(spacing: 10) {
+                Button("+30 s") {
+                    if let active {
+                        let left = max(0, active.ends.timeIntervalSinceNow)
+                        rest?.ends += 30
+                        rest?.total = max(active.total, left + 30)
+                    } else {
+                        rest = Rest(ends: .now + seconds + 30, total: seconds + 30, page: index)
+                    }
+                }
+                .accessibilityLabel("30 seconds more")
+                Button("Skip", action: skip)
             }
-            HStack {
-                Spacer()
-                Text("Swipe up to skip").font(.subheadline).foregroundStyle(.tertiary)
-            }
-            .padding(.top, 8)
+            .buttonStyle(RestButton())
+            .padding(.top, 28)
         }
-        .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .cardBackground()
-        .contentShape(.rect(cornerRadius: 30))
     }
 
     /// "Back Squat", or "Row + Bench" for a superset round.
@@ -487,21 +450,20 @@ struct WorkoutModeView: View {
             .map { names[$0] ?? $0 }.joined(separator: " + ")
     }
 
-    /// "5 × 150", "30 s", "10+10 × 50/40".
+    /// "150 × 5", "30 s", "50/40 × 10+10": weight first, as on a ramp step.
     static func dose(_ rows: [SetRow]) -> String {
         guard let first = rows.first else { return "" }
         let values = rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+")
             + (first.metric == "reps" ? "" : " " + (SetRow.units[first.metric] ?? ""))
         let loads = rows.compactMap(\.load).reduce(into: [Double]()) { if !$0.contains($1) { $0.append($1) } }
-        return loads.isEmpty ? values : values + " × " + loads.map(Coach.number).joined(separator: "/")
+        return loads.isEmpty ? values : loads.map(Coach.number).joined(separator: "/") + " × " + values
     }
 
     private struct RestButton: ButtonStyle {
         func makeBody(configuration: Configuration) -> some View {
-            configuration.label.font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 14).frame(height: 36)
-                .background(Color.surface, in: .capsule)
-                .opacity(configuration.isPressed ? 0.6 : 1)
+            configuration.label.font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .background(configuration.isPressed ? Color.fillStrong : Color.fill, in: .rect(cornerRadius: 14))
         }
     }
 
@@ -607,14 +569,7 @@ struct WorkoutModeView: View {
                 .font(.subheadline).padding(.top, 16)
             }
             Spacer(minLength: 16)
-            Button(action: save) {
-                Text("Save workout").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
-                    .foregroundStyle(Color(.systemBackground))
-                    .background(Color.primary, in: .capsule)
-            }
-            .buttonStyle(.plain)
-            .disabled(done == 0)
-            .opacity(done == 0 ? 0.4 : 1)
+            Button("Save workout", action: save).buttonStyle(.primary).disabled(done == 0)
         }
         .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
