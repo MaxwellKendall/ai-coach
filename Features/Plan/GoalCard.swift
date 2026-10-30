@@ -22,8 +22,8 @@ struct GoalCard: View {
         ScrollView { content }
             .scrollIndicators(.hidden)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .clipShape(.rect(cornerRadius: 24))
             .cardBackground()
-            .clipShape(.rect(cornerRadius: 30))
             .accessibilityElement(children: .contain)
     }
 

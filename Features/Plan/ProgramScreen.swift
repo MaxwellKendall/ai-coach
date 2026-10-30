@@ -49,6 +49,8 @@ struct ProgramScreen: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            header
             Group {
                 if let profile = profiles.first, let weeks = profile.program, let start = profile.programStart {
                     let current = max(0, min(weeks.count - 1, ProgramPlan.week(of: .now, start: start)))
@@ -70,6 +72,7 @@ struct ProgramScreen: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
             .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 14) }
             // FIT-64: program changes said to the coach land here.
             .onChange(of: coach.request) { takeFromCoach() }
@@ -89,36 +92,7 @@ struct ProgramScreen: View {
             .sheet(item: $amend) { amend in AmendSheet(amend: amend) { applyTravel(amend.travel) } }
             .sheet(item: $programLink) { ActivityView(link: $0).presentationDetents([.medium, .large]) }
             .screenBackground()
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    if tabs.count > 1 {
-                        Picker("Show", selection: $tab.animation(.snappy)) {
-                            ForEach(tabs, id: \.self) { Text($0.rawValue) }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 200)
-                    } else {
-                        Text(tab.rawValue).font(.headline)
-                    }
-                }
-                // FIT-111: share the program, signed in and once it has a brief.
-                if tab == .program, Pilot.groups, account.user != nil, let profile = profiles.first, profile.brief != nil {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("Share Program", systemImage: "square.and.arrow.up") { pro.gate { shareProgram(profile) } }
-                    }
-                }
-                if tab == .program, let profile = profiles.first, profile.programStart != nil, !coached {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("Whole program", systemImage: "list.bullet") {
-                            pro.gate {
-                                before = ProgramSettings(profile)
-                                peeking = true
-                            }
-                        }
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(item: $regenerating) { request in
             if let profile = profiles.first {
@@ -144,6 +118,43 @@ struct ProgramScreen: View {
             }
         }
         .task(refreshNextWeek)
+    }
+
+    /// Today's header for these tabs: a large title with the screen's actions beside it, and Goals and Wins under it.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(tabs.count > 1 ? "Progress" : tab.rawValue).font(.display(34))
+                Spacer()
+                // FIT-111: share the program, signed in and once it has a brief.
+                if tab == .program, Pilot.groups, account.user != nil, let profile = profiles.first, profile.brief != nil {
+                    headerButton("Share Program", "square.and.arrow.up") { pro.gate { shareProgram(profile) } }
+                }
+                if tab == .program, let profile = profiles.first, profile.programStart != nil, !coached {
+                    headerButton("Whole program", "list.bullet") {
+                        pro.gate {
+                            before = ProgramSettings(profile)
+                            peeking = true
+                        }
+                    }
+                }
+            }
+            if tabs.count > 1 {
+                Picker("Show", selection: $tab.animation(.snappy)) {
+                    ForEach(tabs, id: \.self) { Text($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+            }
+        }
+        .padding(.horizontal, 22).padding(.top, 4).padding(.bottom, 4)
+    }
+
+    private func headerButton(_ label: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 44, height: 44)
+        }
+        .accessibilityLabel(label)
     }
 
     private func refreshNextWeek() {
@@ -209,88 +220,62 @@ struct ProgramScreen: View {
         default: "Week of \(monday.formatted(.dateTime.month(.abbreviated).day()))"
         }
         return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(eyebrow.uppercased()).font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
-                Spacer()
-                Text("\(monday.formatted(.dateTime.month(.abbreviated).day())) – \(sunday.formatted(.dateTime.month(.abbreviated).day()))")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 18)
+            weekLine(eyebrow, monday: monday, sunday: sunday)
+            sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
             Spacer(minLength: 12)
-            if coached { Text("Your coach plans each week.").font(.footnote).foregroundStyle(.tertiary) }
         }
-        .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
+        .padding(22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .cardBackground()
-        .clipShape(.rect(cornerRadius: 24))
+    }
+
+    /// "This week · Oct 25 – 31": which week, quietly, in sentence case.
+    private func weekLine(_ name: String, monday: Date, sunday: Date) -> some View {
+        Text("\(name) · \(monday.formatted(.dateTime.month(.abbreviated).day())) – \(sunday.formatted(.dateTime.month(.abbreviated).day()))")
+            .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
     }
 
     private func weekCard(_ index: Int, weeks: [ProgramWeek], start: Date, current: Int, profile: Profile) -> some View {
         let week = weeks[index]
         let monday = ProgramPlan.monday(index, start: start)
         let sunday = Calendar.current.date(byAdding: .day, value: 6, to: monday)!
-        let programGoals = self.programGoals
-        let eyebrow = (index == current ? "This week · " : index == current + 1 ? "Next week · " : "") + "Week \(index + 1) of \(weeks.count)"
-        let tests = programGoals.map { item in
-            let option = GoalOption.with(id: item.option)
-            return "\(option?.name.lowercased() ?? "") \(option?.format(item.goal.target) ?? Coach.number(item.goal.target))"
-        }
+        let name = index == current ? "This week" : index == current + 1 ? "Next week" : "Week \(index + 1)"
+        // The week's kind (build, deload, test) is the title; the sessions, by their lifts, say the rest.
         return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(eyebrow.uppercased()).font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
-                Spacer()
-                Text("\(monday.formatted(.dateTime.month(.abbreviated).day())) – \(sunday.formatted(.dateTime.month(.abbreviated).day()))")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
+            weekLine(name, monday: monday, sunday: sunday)
             let ready = ReadyProgram.named(profile.programSlug)
-            Text(ready?.title(week) ?? ProgramPlan.title(week)).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 6)
-            Text(ready?.why(week) ?? ProgramPlan.why(week, tests: tests)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+            Text(ready?.title(week) ?? ProgramPlan.title(week)).font(.display(28)).padding(.top, 6)
             if index == current || index == current + 1 {
                 let saved = index == current || !dayItems(in: monday).isEmpty
                 // FIT-202: a coach's client follows the coach's weeks; pinning is for weeks the app plans.
                 sessions(saved ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped(),
                          pinnable: saved && !coached, monday: monday)
-                    .padding(.top, 18)
+                    .padding(.top, 14)
                 Spacer(minLength: 12)
                 // FIT-215: planning the week again is the in-app AI's.
                 if index == current, Pilot.inAppAI {
                     let days = regenerateDays(monday)
-                    HStack(alignment: .center) {
-                        Text("Pinned sessions stay when you regenerate.").font(.footnote).foregroundStyle(.tertiary)
-                        Spacer(minLength: 8)
-                        if days.contains(where: { $0.kept == nil }) {
-                            Button("Regenerate", systemImage: "arrow.triangle.2.circlepath") {
-                                pro.gate { regenerating = Regenerate(week: index + 1, days: days) }
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .buttonStyle(.bordered)
-                            .buttonBorderShape(.capsule)
+                    if days.contains(where: { $0.kept == nil }) {
+                        Button("Regenerate", systemImage: "arrow.triangle.2.circlepath") {
+                            pro.gate { regenerating = Regenerate(week: index + 1, days: days) }
                         }
+                        .buttonStyle(.secondary)
                     }
-                } else if coached {
-                    Text("Your coach plans each week.").font(.footnote).foregroundStyle(.tertiary)
-                } else {
-                    Text(saved ? "Pinned sessions stay. The rest is planned again when this week ends."
-                         : "Planned from this week. Changes after this week ends.").font(.footnote).foregroundStyle(.tertiary)
                 }
-            } else if index < current {
-                Spacer()
-                Text("Done.").font(.footnote).foregroundStyle(.tertiary)
-            } else {
+            } else if index > current {
                 VStack(spacing: 0) {
                     ForEach(sketch(index, weeks: weeks), id: \.name) { goal in row(goal.name, goal.value + " " + goal.unit) }
                     row("Weekly sets", "\(ProgramPlan.weeklySets(week, daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes, maxWeeklySets: profile.maxWeeklySets))")
                 }
-                .padding(.top, 18)
+                .padding(.top, 14)
                 Spacer(minLength: 12)
-                Text("A sketch. Sessions get planned when the week before ends, from how it went.")
-                    .font(.footnote).foregroundStyle(.tertiary)
+            } else {
+                Spacer(minLength: 12)
             }
         }
-        .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
+        .padding(22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .cardBackground()
-        .clipShape(.rect(cornerRadius: 24))
     }
 
     /// Where each goal should be by a later week: "~190", "185".
@@ -343,16 +328,13 @@ struct ProgramScreen: View {
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
                     Button { open(day.date, monday: monday) } label: {
                         HStack(alignment: .firstTextBaseline, spacing: 14) {
-                            Text(day.date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                                .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                            Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
                                 .lineLimit(1).fixedSize()
                                 .frame(minWidth: 36, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(day.session).font(.body.weight(.semibold))
-                                Text(day.lifts + (day.more > 0 ? " + \(day.more) more" : "")).font(.footnote).foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer(minLength: 0)
+                            // The lifts name the session, as on Today; the sets are one tap away.
+                            Text(day.title).font(.body.weight(.semibold)).lineLimit(2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .contentShape(.rect)
                     }
@@ -589,13 +571,11 @@ struct ProgramScreen: View {
         let items = programGoals
         let index = Binding(get: { min(goalIndex, max(0, items.count - 1)) }, set: { goalIndex = $0 })
         return VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Week \(current + 1) of \(weeks.count) · ends \(end.formatted(.dateTime.month(.abbreviated).day()))".uppercased())
-                    .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
-                if let summary = Self.summary(paces) { Text(summary).foregroundStyle(.secondary) }
-            }
-            .padding(.horizontal, 30)
-            .padding(.top, 8)
+            // One quiet line: where the program is and how the goals stand.
+            Text((["Week \(current + 1) of \(weeks.count)"] + [Self.summary(paces)].compactMap { $0 }).joined(separator: " · "))
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                .padding(.horizontal, 22)
+                .padding(.top, 10)
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {
                     HStack(spacing: 6) {
@@ -666,12 +646,19 @@ extension Planner {
         var lifts: String
         /// Exercises past the first two, which are only counted.
         var more = 0
+        /// The day's exercises by name, warm-ups left out, for its title.
+        var exercises: [String] = []
         var id: Date { date }
+
+        /// "Squat, bench press, row", as Today names a session (FIT-297), or the session's own name with no lifts.
+        var title: String { exercises.isEmpty ? session : TodayScreen.title(lifts: exercises) }
 
         init(_ workout: PlannedWorkout, names: [String: String]) {
             date = Calendar.current.startOfDay(for: workout.date)
             session = workout.session
-            lifts = workout.note == TrainingGenerator.warmupNote ? "" : "\(names[workout.exercise] ?? workout.exercise) \(Self.dose(workout))"
+            let warmup = workout.note == TrainingGenerator.warmupNote
+            lifts = warmup ? "" : "\(names[workout.exercise] ?? workout.exercise) \(Self.dose(workout))"
+            exercises = warmup ? [] : [names[workout.exercise] ?? workout.exercise]
         }
 
         /// "3×5 · 135", "3 × 45 s", "3 × 30 m".
@@ -695,6 +682,7 @@ extension [Planner.SketchDay] {
         for item in self {
             if let last = days.indices.last, days[last].date == item.date {
                 guard !item.lifts.isEmpty else { continue }
+                days[last].exercises += item.exercises
                 if days[last].lifts.isEmpty || !days[last].lifts.contains(",") {
                     days[last].lifts += (days[last].lifts.isEmpty ? "" : ", ") + item.lifts
                 } else {

@@ -344,8 +344,13 @@ struct TodayScreen: View {
 
     /// FIT-297: "Squat, bench press, row": a session named by its lifts, not "Day A".
     static func title(_ session: SessionPlan, names: [String: String], fallback: String) -> String {
-        let lifts = session.blocks.flatMap(\.movements).map { short(names[$0.exercise] ?? $0.exercise) }
-        guard !lifts.isEmpty else { return fallback }
+        let lifts = session.blocks.flatMap(\.movements).map { names[$0.exercise] ?? $0.exercise }
+        return lifts.isEmpty ? fallback : title(lifts: lifts)
+    }
+
+    /// Exercise names as a session's title: "Squat, bench press, row + 1 more".
+    static func title(lifts names: [String]) -> String {
+        let lifts = names.map(short)
         let shown = lifts.prefix(3).enumerated().map { $0.offset == 0 ? $0.element.prefix(1).uppercased() + $0.element.dropFirst() : $0.element }
         return shown.joined(separator: ", ") + (lifts.count > 3 ? " + \(lifts.count - 3) more" : "")
     }

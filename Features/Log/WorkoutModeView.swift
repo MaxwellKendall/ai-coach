@@ -289,8 +289,8 @@ struct WorkoutModeView: View {
         }
         .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .clipShape(.rect(cornerRadius: 24))
         .cardBackground()
-        .clipShape(.rect(cornerRadius: 30))
         .accessibilityAction(named: "Unlog") { if done { unlog(line) } }
     }
 
