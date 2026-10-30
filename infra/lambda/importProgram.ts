@@ -13,6 +13,8 @@ import { addDays, catalog, dayOf, encode, exerciseBody, maxOf, PATTERNS, profile
 
 export const MODEL = "claude-haiku-5-5";
 export const MAX_CHARS = 40_000;
+/** FIT-291: a PDF's size, as AppSync carries it base64 in one request (about 1 MB). */
+export const MAX_PDF_BYTES = 700_000;
 /** Imports a coach gets a month (UTC). */
 export const MONTHLY_IMPORTS = 30;
 
@@ -98,18 +100,55 @@ export function keepPercents(days: DayInput[], maxFor: (exercise: string) => num
   }));
 }
 
+/**
+ * FIT-291: a Google Sheets link as its CSV export, the tab it points at (gid) or the first. Only docs.google.com
+ * sheets, so the server never fetches anywhere else.
+ */
+export function sheetCsvUrl(link: string): string | undefined {
+  let url: URL;
+  try { url = new URL(link.trim()); } catch { return undefined; }
+  const id = url.pathname.match(/^\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/)?.[1];
+  if (url.protocol !== "https:" || url.hostname !== "docs.google.com" || !id) return undefined;
+  const gid = (url.hash.match(/gid=(\d+)/) ?? url.search.match(/gid=(\d+)/))?.[1] ?? "0";
+  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+}
+
+const PRIVATE_SHEET = "Couldn't open that sheet. Share it with \"Anyone with the link\" (Share › General access), or copy the cells and paste them.";
+
+/** A shared sheet's tab as CSV. A private one answers with Google's sign-in page, not CSV. */
+export async function fetchSheet(link: string, get: typeof fetch = fetch): Promise<string> {
+  const url = sheetCsvUrl(link);
+  if (!url) throw new Error("That isn't a Google Sheets link. It looks like https://docs.google.com/spreadsheets/d/…");
+  const response = await get(url, { redirect: "follow" });
+  const type = response.headers.get("content-type") ?? "";
+  if (!response.ok || !type.includes("text/csv")) throw new Error(PRIVATE_SHEET);
+  return response.text();
+}
+
+/** FIT-291: an uploaded PDF, base64, checked before it costs anything. */
+export function checkPdf(base64: string) {
+  const bytes = Buffer.from(base64, "base64");
+  if (bytes.length > MAX_PDF_BYTES) throw new Error(`That PDF is too big to import here (${Math.round(MAX_PDF_BYTES / 1000)} KB at most). Import a few weeks at a time, or paste the cells.`);
+  if (bytes.subarray(0, 4).toString("latin1") !== "%PDF") throw new Error("That file isn't a PDF.");
+}
+
+/** What the coach gave: pasted cells or a CSV's text, a PDF (base64), or a Google Sheets link. */
+export type Source = { text?: string | null; pdf?: string | null; sheet?: string | null };
+
 /** The Monday of the week holding day (YYYY-MM-DD). */
 export function mondayOf(day: string) {
   const weekday = (new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7;
   return addDays(day, -weekday);
 }
 
-async function read(text: string): Promise<{ parsed: Parsed; usage?: { input_tokens: number; output_tokens: number } }> {
+type Content = string | Record<string, unknown>[];
+
+async function read(content: Content): Promise<{ parsed: Parsed; usage?: { input_tokens: number; output_tokens: number } }> {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": await apiKey(), "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model: MODEL, max_tokens: 8_000, system: SYSTEM, tools: [TOOL], tool_choice: { type: "tool", name: TOOL.name },
-      messages: [{ role: "user", content: text }] }),
+      messages: [{ role: "user", content }] }),
   });
   const body = await response.json();
   if (!response.ok) throw new Error(`Couldn't read the program just now (${body?.error?.message ?? response.status}). Try again.`);
@@ -118,16 +157,25 @@ async function read(text: string): Promise<{ parsed: Parsed; usage?: { input_tok
   return { parsed: used.input as Parsed, usage: body.usage };
 }
 
-export async function importProgram(caller: string, uid: string, text: string, start: string, tz: string, store: Store, now = new Date(),
-                                    reader = read, count = (coach: string) => allowance(coach, `AIIMPORT#${now.toISOString().slice(0, 7)}`, MONTHLY_IMPORTS)) {
+export async function importProgram(caller: string, uid: string, source: Source | string, start: string, tz: string, store: Store, now = new Date(),
+                                    reader = read, count = (coach: string) => allowance(coach, `AIIMPORT#${now.toISOString().slice(0, 7)}`, MONTHLY_IMPORTS),
+                                    get: typeof fetch = fetch) {
   if (uid !== caller && !(await store.coachOf(caller, uid))) throw new Error("You don't coach this person.");
-  const pasted = text.trim();
-  if (!pasted) throw new Error("Paste the program first.");
-  if (pasted.length > MAX_CHARS) throw new Error(`That's too long to import at once (${MAX_CHARS.toLocaleString("en-US")} characters). Import a few weeks at a time.`);
+  const given: Source = typeof source === "string" ? { text: source } : source;
+  if (given.pdf) checkPdf(given.pdf);
   const today = dayOf(now, tz);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || start < today) throw new Error("Pick a start day from today on.");
+  // A sheet's fetched before the allowance counts, so a private one costs nothing.
+  const pasted = (given.sheet?.trim() ? await fetchSheet(given.sheet, get) : given.text ?? "").trim();
+  if (!given.pdf) {
+    if (!pasted) throw new Error(given.sheet ? "That sheet's tab is empty." : "Paste the program first.");
+    if (pasted.length > MAX_CHARS) throw new Error(`That's too long to import at once (${MAX_CHARS.toLocaleString("en-US")} characters). Import a few weeks at a time.`);
+  }
   if (!(await count(caller))) throw new Error(`That's this month's ${MONTHLY_IMPORTS} imports. More next month.`);
-  const { parsed, usage } = await reader(pasted);
+  const content: Content = given.pdf
+    ? [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: given.pdf } }, { type: "text", text: "The program is in this PDF." }]
+    : pasted;
+  const { parsed, usage } = await reader(content);
   let units = await store.units(uid);
   useAccountExercises(units);
   const monday = mondayOf(start);
@@ -151,7 +199,7 @@ export async function importProgram(caller: string, uid: string, text: string, s
   const preview = await propose(uid, caller, tz, today, days, "Imported from a spreadsheet", store);
   const id = preview.match(/^Proposal (\S+)/)?.[1];
   if (!id) throw new Error("Couldn't lay that program out. Try again.");
-  if (usage) console.log(JSON.stringify({ import: { coach: caller, days: days.length, ...usage } })); // FIT-290: the cost per import
+  if (usage) console.log(JSON.stringify({ import: { coach: caller, from: given.pdf ? "pdf" : given.sheet ? "sheet" : "paste", days: days.length, ...usage } })); // FIT-290: the cost per import
   return { id, preview, days: days.length, added: [...missing.keys()] };
 }
 
@@ -160,7 +208,7 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
   if (!caller) throw new Error("Sign in first.");
   const args = event.arguments;
   const tz = args.tz || "UTC";
-  if (event.info.fieldName === "importProgram") return importProgram(caller, args.uid, args.text, args.start, tz, dynamoStore);
+  if (event.info.fieldName === "importProgram") return importProgram(caller, args.uid, { text: args.text, pdf: args.pdf, sheet: args.sheet }, args.start, tz, dynamoStore);
   if (event.info.fieldName === "applyImport") {
     if (args.uid !== caller && !(await dynamoStore.coachOf(caller, args.uid))) throw new Error("You don't coach this person.");
     const account: Account = { uid: caller, tz, agent: "dashboard" };

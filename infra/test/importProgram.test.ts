@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { importProgram, keepPercents, mondayOf, toDays, unmatched } from "../lambda/importProgram.ts";
+import { checkPdf, fetchSheet, importProgram, keepPercents, MAX_PDF_BYTES, mondayOf, sheetCsvUrl, toDays, unmatched } from "../lambda/importProgram.ts";
 import { applyProposal, type Store } from "../lambda/mcp.ts";
 import { encode, type PlanRow } from "../lambda/training.ts";
 
@@ -87,5 +87,47 @@ describe("importing for a client (FIT-290)", () => {
     await expect(importProgram("coach", "coach", "x", "2026-10-28", tz, store(units, []), now, async () => ({ parsed: { days: [{ week: 1, weekday: 1, exercises: [{ exercise: "Plank", sets: 3, seconds: 45 }] }] } }), allowed))
       .rejects.toThrow(/Couldn't find any training days/);
     await expect(importProgram("coach", "coach", "x", "2026-11-02", tz, store(units, []), now, reader, allowed)).rejects.toThrow(/2026-11-05 is already logged/);
+  });
+});
+
+describe("a PDF or a Google Sheets link (FIT-291)", () => {
+  const id = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789";
+  const reader = async () => ({ parsed: sheet });
+  const allowed = async () => true;
+  const csv = (body: string, type = "text/csv; charset=utf-8", ok = true) =>
+    (async () => ({ ok, headers: new Headers({ "content-type": type }), text: async () => body })) as unknown as typeof fetch;
+
+  it("turns a sheet's link into its tab's CSV export, and nothing else", () => {
+    expect(sheetCsvUrl(`https://docs.google.com/spreadsheets/d/${id}/edit#gid=123`)).toBe(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=123`);
+    expect(sheetCsvUrl(`https://docs.google.com/spreadsheets/d/${id}/edit?usp=sharing`)).toBe(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`);
+    for (const bad of ["http://docs.google.com/spreadsheets/d/" + id, `https://evil.example/spreadsheets/d/${id}`, "https://docs.google.com/document/d/" + id, "not a link"]) {
+      expect(sheetCsvUrl(bad), bad).toBeUndefined();
+    }
+  });
+
+  it("reads a shared sheet, and says how to share a private one", async () => {
+    expect(await fetchSheet(`https://docs.google.com/spreadsheets/d/${id}/edit`, csv("Back Squat,4,5,225"))).toBe("Back Squat,4,5,225");
+    await expect(fetchSheet(`https://docs.google.com/spreadsheets/d/${id}/edit`, csv("<html>Sign in</html>", "text/html"))).rejects.toThrow(/Anyone with the link/);
+    await expect(fetchSheet("https://example.com/x.csv", csv(""))).rejects.toThrow(/isn't a Google Sheets link/);
+  });
+
+  it("imports from a sheet, and doesn't count a private one against the allowance", async () => {
+    let counted = 0;
+    const count = async () => { counted++; return true; };
+    const made = await importProgram("coach", "ann", { sheet: `https://docs.google.com/spreadsheets/d/${id}/edit` }, "2026-11-02", tz, store({ ann: {} }), now, reader, count, csv("Back Squat,4,5,225"));
+    expect(made.days).toBe(3);
+    await expect(importProgram("coach", "ann", { sheet: `https://docs.google.com/spreadsheets/d/${id}/edit` }, "2026-11-02", tz, store({ ann: {} }), now, reader, count, csv("<html>", "text/html")))
+      .rejects.toThrow(/Anyone with the link/);
+    expect(counted).toBe(1);
+  });
+
+  it("sends a PDF to Claude as a document, within its size, and refuses what isn't one", async () => {
+    const pdf = Buffer.from("%PDF-1.7\n…program…").toString("base64");
+    let sent: unknown;
+    const made = await importProgram("coach", "ann", { pdf }, "2026-11-02", tz, store({ ann: {} }), now, async (c) => { sent = c; return { parsed: sheet }; }, allowed);
+    expect(made.days).toBe(3);
+    expect(sent).toEqual([{ type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf } }, { type: "text", text: "The program is in this PDF." }]);
+    expect(() => checkPdf(Buffer.from("not a pdf").toString("base64"))).toThrow(/isn't a PDF/);
+    expect(() => checkPdf(Buffer.alloc(MAX_PDF_BYTES + 1).toString("base64"))).toThrow(/too big/);
   });
 });
