@@ -3,7 +3,8 @@ import SwiftData
 
 /// The workout (FIT-301, design A, https://claude.ai/artifact/UV27EdoNaNCytWRRxd38Sa): one card at a time. The
 /// warm-up first, a step each; then each set with its weight and reps big and − and + under them, and one Done that
-/// logs it and starts its rest; the rest as a countdown with +30 s and Skip. The list button shows the whole session
+/// logs it and starts its rest; the rest as a countdown with +30 s and Skip. A swipe to the left does what the card's
+/// button does, and one to the right goes back a card (the author, 2026-10-30). The list button shows the whole session
 /// and goes to any set. The last card is the log: Save writes it.
 struct WorkoutModeView: View {
     @Environment(\.modelContext) private var context
@@ -20,6 +21,9 @@ struct WorkoutModeView: View {
     @State private var peeking = false
     /// The warm-up step on screen; past the last, the sets.
     @State private var warmStep = 0
+    /// A card being dragged sideways, and whether the last move was back (the next card comes in from the left).
+    @State private var dragX: CGFloat = 0
+    @State private var backward = false
     @State private var rest: Rest?
     @State private var restsFinished = 0
     @State private var quitting = false
@@ -62,7 +66,10 @@ struct WorkoutModeView: View {
                 }
             }
             .id("\(warming ? warmStep : -1) \(page)")
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            .transition(.asymmetric(insertion: .move(edge: backward ? .leading : .trailing).combined(with: .opacity), removal: .opacity))
+            .offset(x: dragX)
+            .rotationEffect(.degrees(Double(dragX) / 40))
+            .gesture(swipe(cards: cards))
             .padding(.horizontal, 22)
             .padding(.top, 16)
             footer(cards: cards, names: names, warming: warming)
@@ -311,18 +318,53 @@ struct WorkoutModeView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let nextLine { Text(nextLine).font(.subheadline).foregroundStyle(Color.inkMuted).lineLimit(1) }
             if warming {
-                Button("Done") { withAnimation(.snappy) { warmStep += 1 } }.buttonStyle(.primary)
+                Button("Done") { forward(cards: cards) }.buttonStyle(.primary)
             } else if cards.indices.contains(page), case .set(let line) = cards[page] {
                 let done = line.allSatisfy { draft.rows[$0].done }
                 let restAfter: TimeInterval? = if cards.indices.contains(page + 1), case .rest(let seconds) = cards[page + 1] { seconds } else { nil }
                 Button(done ? "Next" : restAfter.map { "Done · rest \(Duration.seconds($0).formatted(.time(pattern: .minuteSecond)))" } ?? "Done") {
-                    _ = swiped(from: page, .next, cards: cards)
-                    withAnimation(.snappy) { page += 1 }
+                    forward(cards: cards)
                 }
                 .buttonStyle(.primary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The card's main action, from its button or a swipe to the left: a warm-up step is done, a set is logged and its
+    /// rest starts, a rest is skipped. The finish card stays (Save is its own button).
+    private func forward(cards: [WorkoutDraft.Card]) {
+        backward = false
+        if warmStep < draft.warmups.count { withAnimation(.snappy) { warmStep += 1 }; return }
+        guard cards.indices.contains(page) else { return }
+        _ = swiped(from: page, .next, cards: cards)
+        withAnimation(.snappy) { page += 1 }
+    }
+
+    /// A swipe to the right: the card before, the last warm-up step before the first set. A rest still running keeps
+    /// running, and nothing is unlogged.
+    private func back() {
+        backward = true
+        withAnimation(.snappy) {
+            if warmStep < draft.warmups.count { warmStep = max(0, warmStep - 1) }
+            else if page > 0 { page -= 1 }
+            else if !draft.warmups.isEmpty { warmStep = draft.warmups.count - 1 }
+        }
+    }
+
+    /// The card follows a sideways drag; far enough (or flicked) and it goes forward or back, else it springs home.
+    private func swipe(cards: [WorkoutDraft.Card]) -> some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                dragX = value.translation.width
+            }
+            .onEnded { value in
+                let distance = value.predictedEndTranslation.width
+                withAnimation(.snappy) { dragX = 0 }
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                if distance < -120 { forward(cards: cards) } else if distance > 120 { back() }
+            }
     }
 
     /// "Next: Back Squat · 170 × 5", from the step on screen.
