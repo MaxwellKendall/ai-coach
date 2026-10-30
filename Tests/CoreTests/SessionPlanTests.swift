@@ -27,6 +27,16 @@ struct SessionPlanTests {
         #expect(SessionPlan.letter(2) == "C")
     }
 
+    /// FIT-300: a coach's warm-up is its own exercises marked warm-up; a lift's ramp sets stay the lift's.
+    @Test func writtenWarmupIsTheBlocksWithNoWorkingSets() {
+        let warm = TrainingGenerator.warmupNote
+        let plan = SessionPlan([item("rowing-machine", sets: 1, note: warm), item("band-pull-apart", sets: 2, reps: 15, note: warm)] + generated)
+        #expect(plan.warmup.map(\.exercise) == ["rowing-machine", "band-pull-apart"])
+        #expect(plan.warmup[1].sets.count == 2)
+        #expect(plan.blocks.filter { $0.rounds > 0 }.map { $0.movements[0].exercise } == ["bench", "deadlift", "db-row"])
+        #expect(SessionPlan(generated).warmup.isEmpty)
+    }
+
     @Test func rowsSharingAGroupAreASuperset() {
         let plan = SessionPlan([item("bench", sets: 3), item("db-row", sets: 3, group: 4), item("db-bench", sets: 2, group: 4),
                                 item("plank", sets: 2, group: 5), item("dead-bug", sets: 2, group: 5)])

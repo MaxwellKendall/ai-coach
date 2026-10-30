@@ -19,8 +19,10 @@ struct SessionList: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let first = firstLoad { warmup(first) }
-            ForEach(Array(session.blocks.enumerated()), id: \.offset) { index, block in
+            if !session.warmup.isEmpty || firstLoad != nil { warmup(firstLoad) }
+            // FIT-300: the written warm-up's blocks are in the warm-up row, not among the lifts; indices stay the session's.
+            ForEach(session.blocks.indices.filter { session.blocks[$0].rounds > 0 }, id: \.self) { index in
+                let block = session.blocks[index]
                 if block.isGroup { superset(block, index: index) } else if let movement = block.movements.first { row(movement, block: index) }
             }
         }
@@ -30,18 +32,38 @@ struct SessionList: View {
 
     /// The first lift's working weight, the warm-up's target; none for a session without a loaded lift first.
     private var firstLoad: (name: String, load: Double)? {
-        guard let movement = session.blocks.first?.movements.first, let load = Self.load(movement), load > WarmupRamp.bar else { return nil }
+        guard let movement = session.blocks.first(where: { $0.rounds > 0 })?.movements.first, let load = Self.load(movement),
+              load > WarmupRamp.bar else { return nil }
         return (names[movement.exercise] ?? movement.exercise, load)
     }
 
-    private func warmup(_ first: (name: String, load: Double)) -> some View {
+    /// "Rowing Machine, Band Pull-Apart, then ramp to 170", the coach's warm-up (FIT-300), or the computed one:
+    /// "9 min · easy cardio, then ramp to 170".
+    private func warmupLine(_ first: (name: String, load: Double)?) -> String {
+        let ramp = first.map { "ramp to \(Coach.number($0.load))" }
+        guard !session.warmup.isEmpty else { return "\(WarmupRamp.minutes(to: first?.load ?? 0)) min · easy cardio, then \(ramp ?? "")" }
+        return ([session.warmup.map { names[$0.exercise] ?? $0.exercise }.joined(separator: ", ")] + [ramp.map { "then \($0)" }].compactMap { $0 })
+            .joined(separator: ", ")
+    }
+
+    /// A written warm-up item's dose: "5 min", "2 × 15", "2 × 30 s", "1 × 10 @ 45".
+    private static func warmupDose(_ movement: SessionPlan.Movement) -> String {
+        let count = movement.sets.count, set = movement.sets.first
+        if let seconds = set?.value("duration_s") {
+            let time = seconds >= 60 && seconds.truncatingRemainder(dividingBy: 60) == 0 ? "\(Int(seconds / 60)) min" : "\(Int(seconds)) s"
+            return count > 1 ? "\(count) × \(time)" : time
+        }
+        guard let reps = set?.value("reps") else { return "\(count) \(count == 1 ? "set" : "sets")" }
+        return "\(count) × \(Coach.number(reps))" + ((set?.value("load_lb")).map { " @ \(Coach.number($0))" } ?? "")
+    }
+
+    private func warmup(_ first: (name: String, load: Double)?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { warm.toggle() } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("WARM-UP").font(.caption.weight(.bold)).tracking(0.6).foregroundStyle(Color.inkMuted)
-                        Text("\(WarmupRamp.minutes(to: first.load)) min · easy cardio, then ramp to \(Coach.number(first.load))")
-                            .font(.body.weight(.semibold))
+                        Text(warmupLine(first)).font(.body.weight(.semibold))
                     }
                     Spacer()
                     Image(systemName: "chevron.down").font(.footnote.weight(.bold)).frame(width: 28, height: 28)
@@ -53,16 +75,24 @@ struct SessionList: View {
             .accessibilityHint(warm ? "Hides the warm-up" : "Shows the warm-up")
             if warm {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack { Text("Row, bike or walk, easy").foregroundStyle(Color.inkMuted); Spacer(); Text("\(WarmupRamp.cardioMinutes) min").bold() }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("\(first.name) ramp").foregroundStyle(Color.inkMuted)
-                        HStack(spacing: 6) {
-                            ForEach(WarmupRamp.steps(to: first.load), id: \.load) { step in
-                                Text("\(step.load == WarmupRamp.bar ? "Bar" : Coach.number(step.load)) × \(step.reps)")
-                                    .font(.display(15, weight: .semibold, relativeTo: .subheadline)).monospacedDigit()
-                                    .padding(.horizontal, 7).padding(.vertical, 2)
-                                    .background(Color.fill, in: .rect(cornerRadius: 8))
-                                    .lineLimit(1).fixedSize()
+                    if session.warmup.isEmpty {
+                        HStack { Text("Row, bike or walk, easy").foregroundStyle(Color.inkMuted); Spacer(); Text("\(WarmupRamp.cardioMinutes) min").bold() }
+                    } else {
+                        ForEach(session.warmup) { movement in
+                            HStack { Text(names[movement.exercise] ?? movement.exercise).foregroundStyle(Color.inkMuted); Spacer(); Text(Self.warmupDose(movement)).bold() }
+                        }
+                    }
+                    if let first {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("\(first.name) ramp").foregroundStyle(Color.inkMuted)
+                            HStack(spacing: 6) {
+                                ForEach(WarmupRamp.steps(to: first.load), id: \.load) { step in
+                                    Text("\(step.load == WarmupRamp.bar ? "Bar" : Coach.number(step.load)) × \(step.reps)")
+                                        .font(.display(15, weight: .semibold, relativeTo: .subheadline)).monospacedDigit()
+                                        .padding(.horizontal, 7).padding(.vertical, 2)
+                                        .background(Color.fill, in: .rect(cornerRadius: 8))
+                                        .lineLimit(1).fixedSize()
+                                }
                             }
                         }
                     }

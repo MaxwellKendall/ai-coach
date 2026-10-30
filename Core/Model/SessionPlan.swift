@@ -62,6 +62,10 @@ struct SessionPlan: Equatable, Sendable {
 
     init(blocks: [Block]) { self.blocks = blocks }
 
+    /// FIT-300: the session's written warm-up: the movements of blocks with no working sets (a row, band pull-aparts),
+    /// in order. A lift's own ramp sets are in its block, which has working sets, so they aren't part of it.
+    var warmup: [Movement] { blocks.filter { $0.rounds == 0 }.flatMap(\.movements) }
+
     init(_ items: [Item]) {
         func key(_ item: Item) -> String { item.group.map { "group \($0)" } ?? "exercise \(item.exercise)" }
         var blocks: [Block] = []
