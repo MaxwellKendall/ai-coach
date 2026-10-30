@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { Config, User } from "./auth";
-import { coachPlan, hasPlan, needsPlan } from "./billing";
 import { corrections, HistoryView } from "./HistoryView";
 import { href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
@@ -23,27 +22,10 @@ const since = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric"
 export const personName = (p: Person) => p.name ?? "Your client";
 
 type Go = (path: string, replace?: boolean) => (e?: React.MouseEvent) => void;
-const toBilling = (go: Go) => go("/billing?coaching=1", true)();
-
-/**
- * FIT-148: coaching needs the coach plan. FIT-240: without it a coach still sees and coaches their sample client; the
- * server answers only with that (coach.ts myClients), and sends the coach to Billing when there's none.
- */
-function usePaid(config: Config) {
-  const [paid, setPaid] = useState<boolean>();
-  useEffect(() => {
-    coachPlan(config).then((plan) => setPaid(hasPlan(plan)), () => setPaid(true));
-  }, [config]);
-  return paid;
-}
-
 export function ClientsPage({ config, me, go }: { config: Config; me: User; go: Go }) {
-  const paid = usePaid(config);
-  const ready = paid !== undefined;
   const [clients, setClients] = useState<(Person & { triage?: Triage })[]>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (!ready) return;
     myClients(config).then((list) => {
       setClients(list);
       // FIT-132: each client's week and what needs the coach, from their synced units and the session threads.
@@ -55,10 +37,8 @@ export function ClientsPage({ config, me, go }: { config: Config; me: User; go: 
           return c;
         }
       })).then((withTriage) => setClients(byNeed(withTriage)));
-    }, (e: Error) => (needsPlan(e) ? toBilling(go) : setError(e.message)));
-  }, [config, me.uid, ready]);
-
-  if (!ready) return <p className="muted">Loading…</p>;
+    }, (e: Error) => setError(e.message));
+  }, [config, me.uid]);
 
   return (
     <>
@@ -66,15 +46,7 @@ export function ClientsPage({ config, me, go }: { config: Config; me: User; go: 
         <h1>Clients</h1>
         <p className="lede">Write their program, see how their sessions go, and change it as they train.</p>
       </header>
-      {paid ? <InviteBox config={config} /> : (
-        <div className="invite">
-          <p>
-            <strong>Try coaching on your sample client.</strong> Plan their week in Claude and apply it, or open them here.
-            Inviting your own clients needs the coach plan.
-          </p>
-          <a className="button primary" href={href("/billing?coaching=1")} onClick={go("/billing?coaching=1")}>Start the coach plan</a>
-        </div>
-      )}
+      <InviteBox config={config} />
       {error && <p className="error" role="alert">Couldn't load your clients: {error}</p>}
       {clients && clients.length > 0 && (
         <ul className="clients">
@@ -156,7 +128,6 @@ function InviteBox({ config }: { config: Config }) {
 export function ClientPage({ config, me, uid, go }: {
   config: Config; me: User; uid: string; go: Go;
 }) {
-  const ready = true; // FIT-240: the server says when this client needs the plan (needsPlan below)
   const [client, setClient] = useState<Person | null>();
   const [units, setUnits] = useState<Map<string, Unit>>();
   const [thread, setThread] = useState<Comment[]>([]);
@@ -166,9 +137,8 @@ export function ClientPage({ config, me, uid, go }: {
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (!ready) return;
-    myClients(config).then((list) => setClient(list.find((c) => c.uid === uid) ?? null), (e: Error) => (needsPlan(e) ? toBilling(go) : setError(e.message)));
-  }, [config, uid, ready]);
+    myClients(config).then((list) => setClient(list.find((c) => c.uid === uid) ?? null), (e: Error) => setError(e.message));
+  }, [config, uid]);
   // FIT-131: the programs sent to this client, and what they said.
   useEffect(() => {
     if (client) programOffers(config, uid).then(setSent, () => setSent([]));
@@ -187,7 +157,7 @@ export function ClientPage({ config, me, uid, go }: {
   };
 
   if (error) return <p className="error" role="alert">{error}</p>;
-  if (!ready || client === undefined) return <p className="muted">Loading…</p>;
+  if (client === undefined) return <p className="muted">Loading…</p>;
   if (client === null) {
     return (
       <div className="empty">

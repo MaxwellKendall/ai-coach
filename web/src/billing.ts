@@ -1,7 +1,8 @@
 import type { Config, User } from "./auth";
 import { gql } from "./sync";
 
-// FIT-144: the coach plan (FIT-133: $19.99/month or $199/year), bought and managed through Stripe.
+// FIT-144: the coach plan (FIT-133: $19.99/month or $199/year), bought and managed through Stripe. FIT-284: it's Pro,
+// the exhaustive coach MCP; coaching itself is free.
 
 export type CoachPlan = { onSale: boolean; status: string; interval: string | null; renews: string | null; cancelsAtEnd: boolean };
 
@@ -19,12 +20,6 @@ export const PRICES = { month: "$19.99/month", year: "$199/year" };
 /** FIT-148: Stripe's statuses that still have the plan, as the server's check (coachPlan.ts HAS_PLAN). */
 export const hasPlan = (plan: CoachPlan) => ["active", "trialing", "past_due"].includes(plan.status);
 
-/** What Billing says above the plan when a coaching page sent the coach there. */
-export const COACHING = "Coaching is $19.99 a month. Start the plan to coach your clients.";
-
-/** The server's refusal for a coach without the plan (coach.ts NO_PLAN). */
-export const needsPlan = (error: unknown) => (error as Error)?.message?.startsWith("Coaching needs the coach plan") ?? false;
-
 /** What Billing says about the plan, and which button it offers: start one, or manage the one there is. */
 export function planView(plan: CoachPlan): { title: string; detail: string; action: "start" | "manage" | "none" } {
   const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
@@ -33,25 +28,25 @@ export function planView(plan: CoachPlan): { title: string; detail: string; acti
     case "trialing":
     case "active":
       return {
-        title: `Coach plan, ${which}`,
+        title: `Pro, ${which}`,
         detail: plan.cancelsAtEnd ? `Ends ${date(plan.renews)}. You can renew it from Manage billing.` : `Renews ${date(plan.renews)}.`,
         action: "manage",
       };
     case "past_due":
     case "unpaid":
     case "incomplete":
-      return { title: "Your last payment didn't go through", detail: "Update your card in Manage billing to keep the coach plan.", action: "manage" };
+      return { title: "Your last payment didn't go through", detail: "Update your card in Manage billing to keep Pro.", action: "manage" };
     case "canceled":
     case "incomplete_expired":
       return {
-        title: "Your coach plan has ended",
-        detail: "Your clients keep logging, and everything is kept. Start the plan again to see and coach them.",
+        title: "Your Pro has ended",
+        detail: "Coaching here stays free, with all your clients. Start Pro again to coach them from Claude.",
         action: plan.onSale ? "start" : "none",
       };
     default:
       return plan.onSale
-        ? { title: "Coach plan", detail: `${PRICES.month} or ${PRICES.year}. Invite clients, write their programs and see their training.`, action: "start" }
-        : { title: "Coach plan", detail: "The coach plan goes on sale soon.", action: "none" };
+        ? { title: "Pro", detail: `${PRICES.month} or ${PRICES.year}. Coaching here is free, with any number of clients. Pro lets Claude program and review your whole roster.`, action: "start" }
+        : { title: "Pro", detail: "Pro goes on sale soon. Coaching here is free, with any number of clients.", action: "none" };
   }
 }
 

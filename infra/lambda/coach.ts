@@ -3,12 +3,12 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { HAS_PLAN, planRecord } from "./coachPlan.ts";
-import { ensureSample, isSample } from "./sample.ts";
+import { ensureSample } from "./sample.ts";
 
 // FIT-130: coaches and their clients. A coach (any account) makes an invite link; the client opens it in the app and
 // allows it. The link is two items, one in each partition (USER#client COACH#coach, USER#coach CLIENT#client), so
 // either side sees it and either can end it at once. A linked coach reads and edits the client's synced program
-// (sync.ts asks `canCoach`) while the coach has the coach plan (FIT-148).
+// (sync.ts asks `canCoach`). FIT-284: free, with any number of clients (business model v2).
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = () => process.env.TABLE!;
@@ -43,41 +43,22 @@ export async function isCoachOf(coach: string, client: string) {
   return !!Item;
 }
 
-// ---- FIT-148: coaching needs the coach plan (author, 2026-10-22: no free beta, no trial) ----
-
-export const COACH_PRICE = "$19.99 a month or $199 a year";
-export const NO_PLAN = `Coaching needs the coach plan, ${COACH_PRICE}. Start it on the Billing page.`;
-
-/** The one check: the coach plan's Stripe status still has the plan (active, trialing or past_due). */
+/**
+ * FIT-284: the coach plan is Pro (the same Stripe products, coach_monthly and coach_yearly): the exhaustive coach MCP
+ * (mcp.ts). Coaching itself never asks for it. Pro while Stripe's status still has the plan (active, trialing, past_due).
+ */
 export async function hasCoachPlan(uid: string) {
   return HAS_PLAN.includes((await planRecord(uid, "coach"))?.status ?? "");
 }
 
-export async function requireCoachPlan(uid: string) {
-  if (!(await hasCoachPlan(uid))) throw new CoachError(NO_PLAN);
-}
+/** Whether a coach may see and change this client: linked. */
+export const canCoach = isCoachOf;
 
-/**
- * Whether a coach may see and change this client now: linked, and paying. A lapsed plan keeps the link (the client
- * keeps logging, nothing is deleted); the coach is told to pay rather than that they don't coach them.
- */
-export async function canCoach(coach: string, client: string) {
-  if (!(await isCoachOf(coach, client))) return false;
-  if (!isSample(client)) await requireCoachPlan(coach); // FIT-240: the sample client is free to coach
-  return true;
-}
-
-/**
- * The dashboard's Clients. FIT-240: a coach with no clients gets the sample client first. Without the coach plan they
- * see only sample clients, and with none of those, Billing.
- */
+/** The dashboard's Clients. FIT-240: a coach with no clients gets the sample client first. */
 export async function myClients(coach: string, now = new Date()) {
-  let clients = await list(coach, "CLIENT#");
-  if (!clients.length && (await ensureSample(coach, now.toISOString().slice(0, 10)))) clients = await list(coach, "CLIENT#");
-  if (await hasCoachPlan(coach)) return clients;
-  const samples = clients.filter((c) => isSample(c.uid));
-  if (!samples.length) throw new CoachError(NO_PLAN);
-  return samples;
+  const clients = await list(coach, "CLIENT#");
+  if (!clients.length && (await ensureSample(coach, now.toISOString().slice(0, 10)))) return list(coach, "CLIENT#");
+  return clients;
 }
 
 /** Whether an account has a coach: the client's Pro while linked (FIT-130). */
@@ -219,7 +200,7 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
   const args = event.arguments;
   try {
     switch (event.info.fieldName) {
-      case "createClientInvite": await requireCoachPlan(me); return await createInvite(me, identity.claims);
+      case "createClientInvite": return await createInvite(me, identity.claims);
       case "coachInvite": return await inviteName(args.code);
       case "acceptCoach": return await accept(me, args.code, identity.claims);
       case "myCoaches": return await list(me, "COACH#");

@@ -52,7 +52,7 @@ export interface Store {
   /** FIT-196: a client's session threads (FIT-132), and a coach's reply on one, shown in the app as the coach's. */
   comments(coach: string, client: string): Promise<Comment[]>;
   comment(coach: string, client: string, day: string, text: string): Promise<void>;
-  /** FIT-148: whether they have the coach plan. */
+  /** FIT-284: whether they have Pro, the coach plan: the coach tools. */
   coachPlan(uid: string): Promise<boolean>;
   /** FIT-240: makes the coach's sample client the first time (sample.ts); whether it made one now. */
   sample(coach: string, today: string): Promise<boolean>;
@@ -869,22 +869,23 @@ async function clientOf(account: Account, said: unknown, store: Store): Promise<
 }
 
 /**
- * The coach tools need the coach plan (FIT-148). The athlete tools stay free. FIT-237: the tools say so and point to the
- * coach page, with no price or Checkout link: ChatGPT's directory lets a tool explain a plan gate but not sell one.
+ * The coach tools are Pro, the coach plan (FIT-284: coaching on the dashboard and in the app is free; the coach MCP is
+ * what Pro buys). The athlete tools stay free. FIT-237: the tools say so and point to the coach page, with no price or
+ * Checkout link: ChatGPT's directory lets a tool explain a plan gate but not sell one.
  */
 async function needsPlan(account: Account, store: Store) {
   if (await store.coachPlan(account.uid)) return;
   // FIT-241: a coach who paid with another sign-in has a second, unpaid account here; name this one and the way out.
   const agent = account.agent.charAt(0).toUpperCase() + account.agent.slice(1);
   const signedIn = account.who ? `${agent} is signed in to Barbrabell as ${account.who}` : `This is the account ${agent} signed in to Barbrabell with`;
-  throw new Error(`Coaching needs the coach plan, which this account doesn't have; their clients stay free and keep logging meanwhile. `
-    + `${signedIn}. If they started the plan with another sign-in, reconnect with that one, or link the two on the dashboard's Account page (${ORIGIN}/app/account). `
-    + `How it works: ${ORIGIN}/coaches. Once it's on, coaching works on their next request; there's nothing to reconnect.`);
+  throw new Error(`Coaching from ${agent} needs Barbrabell Pro, which this account doesn't have. Coaching on the dashboard is free, with any number of clients (${ORIGIN}/app), and their clients keep logging either way. `
+    + `${signedIn}. If they started Pro with another sign-in, reconnect with that one, or link the two on the dashboard's Account page (${ORIGIN}/app/account). `
+    + `How Pro works: ${ORIGIN}/coaches. Once it's on, coaching works here on their next request; there's nothing to reconnect.`);
 }
 
 /**
- * FIT-240: the clients a coach sees now. One with no clients gets the sample client first; without the coach plan only
- * sample clients show, and with none of those it's the plan's message.
+ * FIT-240: the clients a coach sees here. One with no clients gets the sample client first; without Pro only sample
+ * clients show, and with none of those it's Pro's message.
  */
 async function roster(account: Account, store: Store, today: string) {
   const coach = account.uid;
@@ -902,7 +903,7 @@ function sampleNote(clients: Person[], paid: boolean) {
   if (!samples.length) return "";
   const note = `\n\n${samples.map(shownName).join(" and ")} ${samples.length === 1 ? "is a sample client" : "are sample clients"}, there to try coaching on: `
     + "plan, apply and undo work as for a real client, but nothing reaches a phone.";
-  return paid ? note : `${note} Inviting and coaching real clients needs the coach plan; how it works: ${ORIGIN}/coaches.`;
+  return paid ? note : `${note} Inviting and coaching real clients from here needs Pro; on the dashboard it's free (${ORIGIN}/app). How Pro works: ${ORIGIN}/coaches.`;
 }
 
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
@@ -924,7 +925,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       const all = await store.clients(uid);
       const paid = all.length > 0 && (await store.coachPlan(uid));
       const clients = paid ? all : all.filter((p) => isSample(p.uid)), waiting = all.length - clients.length;
-      const ended = waiting ? `\n\nThey coach ${waiting} client${waiting === 1 ? "" : "s"}, but their coach plan has ended, so they can't see or change them until it's paid again (any coaching tool gives the link). Their own training above is free as ever.` : "";
+      const ended = waiting ? `\n\nThey coach ${waiting} client${waiting === 1 ? "" : "s"} on the dashboard, free (${ORIGIN}/app). Seeing or changing them from here needs Pro (any coaching tool gives the link). Their own training above is free as ever.` : "";
       const shown = clients.length ? `\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}${waiting ? " meanwhile" : ""}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.${sampleNote(clients, paid)}` : "";
       return `${text}${ended}${shown}`;
     }

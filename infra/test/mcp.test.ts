@@ -812,9 +812,9 @@ describe("FIT-223: the client's daily check-in", () => {
     const { store } = setup();
     expect(await callTool("get_day", { client: "Mike", date: "2026-10-16" }, coach, store, now)).toMatch(/No workout logged\.\nWeight 183\.5 lb\nSleep 6 h\nCheck-in note: Knee is a bit sore$/);
     expect(await callTool("get_context", { client: "Mike" }, coach, store, now)).toMatch(/Friday 2026-10-16: Weight 183\.5 lb\. Sleep 6 h\. Check-in note: Knee is a bit sore\./);
-    // Only for a coach on the coach plan.
+    // Only for a coach on Pro.
     store.paying.delete("coach");
-    await expect(callTool("get_day", { client: "Mike", date: "2026-10-16" }, coach, store, now)).rejects.toThrow(/Coaching needs the coach plan/);
+    await expect(callTool("get_day", { client: "Mike", date: "2026-10-16" }, coach, store, now)).rejects.toThrow(/Coaching from Claude needs Barbrabell Pro/);
   });
 
   it("flags the note in the roster until the coach replies on that day", async () => {
@@ -838,7 +838,7 @@ describe("FIT-223: the client's daily check-in", () => {
   });
 });
 
-describe("FIT-148: coaching needs the coach plan", () => {
+describe("FIT-284: coaching from Claude is Pro; the dashboard is free", () => {
   const coach: Account = { uid: "coach", tz, agent: "claude" };
   const setup = () => {
     const store = memory({}, { ...data(), coach: { profile: encode(profile) } });
@@ -847,12 +847,12 @@ describe("FIT-148: coaching needs the coach plan", () => {
     return store;
   };
 
-  it("answers every coach tool with where to start the coach plan until it's on, then coaches as before", async () => {
+  it("answers every coach tool with Pro and the free dashboard until Pro is on, then coaches as before", async () => {
     const store = setup();
     const calls: [string, Record<string, unknown>][] = [["list_clients", {}], ["roster_review", {}], ["invite_client", {}],
       ...[...CLIENT_TOOLS].map((t) => [t, { client: "Sarah", date: "2026-10-15" }] as [string, Record<string, unknown>])];
     for (const [tool, args] of calls) {
-      await expect(callTool(tool, args, coach, store, now), tool).rejects.toThrow(/coach plan, which this account doesn't have[\s\S]*\/coaches\./);
+      await expect(callTool(tool, args, coach, store, now), tool).rejects.toThrow(/needs Barbrabell Pro, which this account doesn't have\. Coaching on the dashboard is free[\s\S]*\/coaches\./);
     }
     expect(store.invites).toEqual([]);
     store.paying.add("coach");
@@ -860,14 +860,14 @@ describe("FIT-148: coaching needs the coach plan", () => {
     expect(await callTool("get_day", { client: "Sarah", date: "2026-10-15" }, coach, store, now)).toMatch(/Back Squat/);
   });
 
-  it("keeps their own training free, and says the clients are waiting on the plan", async () => {
+  it("keeps their own training free, and says the clients are coached free on the dashboard", async () => {
     const store = setup();
     const own = await callTool("get_context", {}, coach, store, now);
-    expect(own).toMatch(/They coach 1 client, but their coach plan has ended/);
+    expect(own).toMatch(/They coach 1 client on the dashboard, free \(.*\/app\)\. Seeing or changing them from here needs Pro/);
     expect(own).not.toMatch(/Sarah/);
     await expect(callTool("propose_session", { date: "2026-10-19", title: "Lower", reason: "r", exercises: [{ exercise: "Plank", sets: 3, seconds: 45 }] }, coach, store, now)).resolves.toMatch(/Proposal/);
     // A client's own tools never ask for anything.
-    await expect(callTool("get_context", {}, me, store, now)).resolves.not.toMatch(/coach plan/);
+    await expect(callTool("get_context", {}, me, store, now)).resolves.not.toMatch(/needs Barbrabell Pro|coach plan/);
   });
 
   it("says who isn't a client before it says anything about the plan", async () => {
@@ -1023,11 +1023,11 @@ describe("FIT-240: a sample client to coach before paying", () => {
     return store;
   };
 
-  it("gives a new coach one sample client to list, review, read, plan and apply, without the plan", async () => {
+  it("gives a new coach one sample client to list, review, read, plan and apply, without Pro", async () => {
     const store = setup();
     const listed = await callTool("list_clients", {}, coach, store, now);
     expect(listed).toMatch(/^1 client, those who need them first:\n- Mike Torres \(sample\) \[sample-mike-newcoach\]/);
-    expect(listed).toMatch(/is a sample client[\s\S]*nothing reaches a phone\. Inviting and coaching real clients needs the coach plan; how it works: .*\/coaches\./);
+    expect(listed).toMatch(/is a sample client[\s\S]*nothing reaches a phone\. Inviting and coaching real clients from here needs Pro; on the dashboard it's free \(.*\/app\)\. How Pro works: .*\/coaches\./);
     await expect(callTool("roster_review", {}, coach, store, now)).resolves.toMatch(/Mike Torres \(sample\)/);
     await expect(callTool("get_context", { client: "Mike" }, coach, store, now)).resolves.toMatch(/^Client: Mike Torres \(sample\)/);
     const proposed = await callTool("propose_session", { client: "Mike", date: "2026-10-19", title: "Lower", reason: "knee", exercises: [{ exercise: "Plank", sets: 3, seconds: 45 }] }, coach, store, now);
@@ -1038,23 +1038,23 @@ describe("FIT-240: a sample client to coach before paying", () => {
     expect(store.links.filter((l) => l.coach === "newcoach")).toHaveLength(1);
   });
 
-  it("keeps inviting and real clients behind the plan", async () => {
+  it("keeps inviting and real clients from Claude behind Pro", async () => {
     const store = setup();
     await callTool("list_clients", {}, coach, store, now);
-    await expect(callTool("invite_client", {}, coach, store, now)).rejects.toThrow(/coach plan, which this account doesn't have/);
+    await expect(callTool("invite_client", {}, coach, store, now)).rejects.toThrow(/needs Barbrabell Pro, which this account doesn't have/);
     expect(store.invites).toEqual([]);
     store.links.push({ coach: "newcoach", client: "me", name: "Sarah" });
-    await expect(callTool("get_day", { client: "Sarah", date: "2026-10-15" }, coach, store, now)).rejects.toThrow(/coach plan/);
+    await expect(callTool("get_day", { client: "Sarah", date: "2026-10-15" }, coach, store, now)).rejects.toThrow(/needs Barbrabell Pro/);
     const listed = await callTool("list_clients", {}, coach, store, now);
     expect(listed).not.toMatch(/Sarah/);
     const own = await callTool("get_context", {}, coach, store, now);
-    expect(own).toMatch(/They coach 1 client, but their coach plan has ended[\s\S]*They coach 1 client meanwhile: Mike Torres \(sample\)/);
+    expect(own).toMatch(/They coach 1 client on the dashboard, free[\s\S]*needs Pro[\s\S]*They coach 1 client meanwhile: Mike Torres \(sample\)/);
   });
 
-  it("doesn't give a coach with clients a sample, and a paying coach sees everyone", async () => {
+  it("doesn't give a coach with clients a sample, and a Pro coach sees everyone", async () => {
     const store = setup();
     store.links.push({ coach: "newcoach", client: "me", name: "Sarah" });
-    await expect(callTool("list_clients", {}, coach, store, now)).rejects.toThrow(/coach plan/);
+    await expect(callTool("list_clients", {}, coach, store, now)).rejects.toThrow(/needs Barbrabell Pro/);
     store.paying.add("newcoach");
     const listed = await callTool("list_clients", {}, coach, store, now);
     expect(listed).toMatch(/^1 client/);
@@ -1062,7 +1062,7 @@ describe("FIT-240: a sample client to coach before paying", () => {
   });
 });
 
-describe("FIT-241: the plan's message says which account the agent is signed in as", () => {
+describe("FIT-241: Pro's message says which account the agent is signed in as", () => {
   const setup = () => {
     const store = memory({}, data());
     store.links.push({ coach: "paid-elsewhere", client: "me", name: "Sarah" });
@@ -1072,13 +1072,13 @@ describe("FIT-241: the plan's message says which account the agent is signed in 
   it("names the sign-in, and the way out when they paid with another", async () => {
     const account: Account = { uid: "paid-elsewhere", tz, agent: "Claude", who: "max@example.com, with Apple" };
     const error = callTool("invite_client", {}, account, setup(), now);
-    await expect(error).rejects.toThrow(/Claude is signed in to Barbrabell as max@example\.com, with Apple\. If they started the plan with another sign-in, reconnect with that one, or link the two on the dashboard's Account page \(.*\/app\/account\)\./);
+    await expect(error).rejects.toThrow(/Claude is signed in to Barbrabell as max@example\.com, with Apple\. If they started Pro with another sign-in, reconnect with that one, or link the two on the dashboard's Account page \(.*\/app\/account\)\./);
     await expect(callTool("get_day", { client: "Sarah" }, account, setup(), now)).rejects.toThrow(/as max@example\.com, with Apple/);
   });
 
   it("still gives the way out for a connection made before it knew the sign-in", async () => {
     const account: Account = { uid: "paid-elsewhere", tz, agent: "claude" };
-    await expect(callTool("invite_client", {}, account, setup(), now)).rejects.toThrow(/This is the account Claude signed in to Barbrabell with\. If they started the plan with another sign-in/);
+    await expect(callTool("invite_client", {}, account, setup(), now)).rejects.toThrow(/This is the account Claude signed in to Barbrabell with\. If they started Pro with another sign-in/);
   });
 
   it("reads who from Cognito's id token", () => {
