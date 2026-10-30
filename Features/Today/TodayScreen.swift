@@ -84,11 +84,16 @@ struct TodayScreen: View {
 
     private var todayIndex: Int { week.firstIndex { Calendar.current.isDateInToday($0) } ?? 0 }
 
-    /// The swiped days: today and the six after it, so tomorrow is there on a Sunday too.
+    /// The swiped days: this week, fixed, Sunday first and Saturday last (author, 2026-10-30).
     private var days: [Date] {
-        let today = Calendar.current.startOfDay(for: .now)
-        return (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: today)! }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let sunday = calendar.date(byAdding: .day, value: -todayPos, to: today)!
+        return (0..<7).map { calendar.date(byAdding: .day, value: $0, to: sunday)! }
     }
+
+    /// Today's place in `days` (the Gregorian weekday runs 1 = Sunday to 7 = Saturday).
+    private var todayPos: Int { Calendar.current.component(.weekday, from: .now) - 1 }
 
     /// FIT-201: coached, with no session planned from this Monday on.
     private var awaitingCoach: Bool {
@@ -104,7 +109,7 @@ struct TodayScreen: View {
         let days = days
         let cards = cards(days)
         // FIT-235: a later session can be done today only when today has no session of its own waiting.
-        let todayFree: Bool = if case .plan = cards[0] { false } else { true }
+        let todayFree: Bool = if case .plan = cards[todayPos] { false } else { true }
         VStack(alignment: .leading, spacing: 0) {
             header(days, cards: cards)
             // Each day a full-width page swiped sideways; the strip above follows it.
@@ -149,7 +154,7 @@ struct TodayScreen: View {
         .animation(.snappy, value: voice.listening)
         .animation(.snappy, value: working)
         .animation(.snappy, value: toast)
-        .onAppear { if day == nil { day = 0 } }
+        .onAppear { if day == nil { day = todayPos } }
         // FIT-220: a tapped notification's day; a coach's reply opens that session and its thread.
         .onChange(of: Navigator.shared.day, initial: true) { _, target in open(target) }
         #if DEBUG
@@ -192,7 +197,7 @@ struct TodayScreen: View {
         .fullScreenCover(item: $tracking) { target in RunModeView(planned: target.planned) }
         .fullScreenCover(item: $live, onDismiss: celebrate) { draft in
             WorkoutModeView(draft: draft) {
-                day = 0
+                day = todayPos
                 saved = true
             }
             .onAppear {
@@ -208,8 +213,8 @@ struct TodayScreen: View {
         .task(id: "\(profiles.first?.plansItself == true) \(profiles.first?.programSlug ?? "") \(pro.active) \(pro.coaches.isEmpty)") {
             guard Pilot.plansWeeks(hasProgram: profiles.first?.programStart != nil, coached: !pro.coaches.isEmpty) else { return }
             try? Planner.ensureWeek(in: context)
-            // The swiped days reach into next week: plan it now, so its sessions don't show as rest days. A week planned
-            // early is replanned when it starts (ensureWeek), so its loads still come from the latest sets.
+            // On a Sunday the swiped week (Sunday to Saturday) runs into the next plan week (Monday first): plan it now, so
+            // its sessions don't show as rest days. A week planned early is replanned when it starts (ensureWeek).
             if let last = days.last, Week.start(of: last) != week[0] { try? Planner.ensureWeek(of: last, in: context) }
             guard pro.active else { return }
             await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
@@ -266,10 +271,10 @@ struct TodayScreen: View {
     /// The day shown as the title ("Today", "Tomorrow", "Monday"), the week strip to jump between days (FIT-27's strip,
     /// brought back), and the goal line. One header for every page.
     private func header(_ days: [Date], cards: [DayCard]) -> some View {
-        let shown = min(day ?? 0, days.count - 1)
+        let shown = min(day ?? todayPos, days.count - 1)
         return VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .firstTextBaseline) {
-                Text(Self.dayName(days[shown], index: shown)).font(.display(34)).contentTransition(.opacity)
+                Text(Self.dayName(days[shown])).font(.display(34)).contentTransition(.opacity)
                     .animation(.snappy, value: shown)
                 Spacer()
                 Button { you = true } label: {
@@ -303,8 +308,8 @@ struct TodayScreen: View {
                         Text(days[index].formatted(.dateTime.weekday(.narrow)))
                             .font(.caption.weight(.semibold)).foregroundStyle(Color.inkMuted)
                         Text(days[index].formatted(.dateTime.day()))
-                            .font(.body.weight(on || index == 0 ? .semibold : .regular)).monospacedDigit()
-                            .foregroundStyle(on ? Color(.systemBackground) : index == 0 ? Plate.current.mark : Color.ink)
+                            .font(.body.weight(on || index == todayPos ? .semibold : .regular)).monospacedDigit()
+                            .foregroundStyle(on ? Color(.systemBackground) : index == todayPos ? Plate.current.mark : Color.ink)
                             .frame(width: 36, height: 36)
                             .background(on ? Color.ink : .clear, in: .circle)
                         dot(cards[index])
@@ -313,7 +318,7 @@ struct TodayScreen: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Self.dayName(days[index], index: index))
+                .accessibilityLabel(Self.dayName(days[index]))
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
@@ -378,8 +383,12 @@ struct TodayScreen: View {
     }
 
     /// "Today", "Tomorrow", then the weekday.
-    static func dayName(_ day: Date, index: Int) -> String {
-        index == 0 ? "Today" : index == 1 ? "Tomorrow" : day.formatted(.dateTime.weekday(.wide))
+    static func dayName(_ day: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day) { return "Today" }
+        if calendar.isDateInTomorrow(day) { return "Tomorrow" }
+        if calendar.isDateInYesterday(day) { return "Yesterday" }
+        return day.formatted(.dateTime.weekday(.wide))
     }
 
     private func takeFromCoach() {
@@ -497,12 +506,12 @@ struct TodayScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     // FIT-8: the week's review is the first thing on its last day.
-                    if index == 0, WeekReport.isDue() {
+                    if index == todayPos, WeekReport.isDue() {
                         let report = weekReport()
                         WeekReviewCard(report: report) { review = report }
                     }
                     // The day on a raised card: white on the canvas, a soft shadow rather than a border.
-                    dayContent(card, day: day, isToday: index == 0, isPast: false, todayFree: todayFree)
+                    dayContent(card, day: day, isToday: index == todayPos, isPast: index < todayPos, todayFree: todayFree)
                         .padding(20)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background {
@@ -513,14 +522,15 @@ struct TodayScreen: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             Group {
-                if index == 0 { actions(card, week: weekCards) } else { laterActions(card, todayFree: todayFree) }
+                // Another day this week, earlier or later: its session can be moved to today when today has none.
+                if index == todayPos { actions(card, week: weekCards) } else { laterActions(card, todayFree: todayFree) }
             }
             .padding(.horizontal, 22).padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// A later day: pull its session to today (FIT-235) when today has none waiting, or open its sets.
+    /// Another day: pull its session to today (FIT-235) when today has none waiting, or open its sets.
     @ViewBuilder private func laterActions(_ card: DayCard, todayFree: Bool) -> some View {
         if case .plan(let plan) = card, !planning {
             if todayFree {
@@ -740,7 +750,7 @@ struct TodayScreen: View {
         try? context.save()
         let from = plan.start.formatted(.dateTime.weekday(.wide))
         withAnimation(.snappy) {
-            day = 0
+            day = todayPos
             toast = Toast(text: "\(from)’s session is today") { [context] in
                 for (item, date) in was { item.date = date; item.updatedAt = .now }
                 try? context.save()
