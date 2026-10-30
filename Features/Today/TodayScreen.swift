@@ -106,31 +106,24 @@ struct TodayScreen: View {
         // FIT-235: a later session can be done today only when today has no session of its own waiting.
         let todayFree: Bool = if case .plan = cards[0] { false } else { true }
         VStack(alignment: .leading, spacing: 0) {
-            header(days[0])
-            // Each day a card swiped sideways, the next one's edge showing (prototype A,
-            // https://claude.ai/artifact/M5FZ8bWiGeoJAG8QKdN7BT).
-            // Cards line up on the leading margin; the wider trailing one leaves the next card's edge in view.
-            GeometryReader { proxy in
-                ScrollView(.horizontal) {
-                    HStack(spacing: 10) {
-                        ForEach(days.indices, id: \.self) { index in
-                            page(cards[index], day: days[index], index: index, week: weekCards, todayFree: todayFree)
-                                .frame(width: max(0, proxy.size.width - 22 - 40))
-                        }
+            header(days)
+            // Each day a full-width page swiped sideways (prototype A, https://claude.ai/artifact/M5FZ8bWiGeoJAG8QKdN7BT);
+            // the header names the day shown and the next one.
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(days.indices, id: \.self) { index in
+                        page(cards[index], day: days[index], index: index, week: weekCards, todayFree: todayFree)
+                            .containerRelativeFrame(.horizontal)
                     }
-                    .scrollTargetLayout()
                 }
-                .scrollTargetBehavior(.viewAligned)
-                .scrollPosition(id: $day)
-                .contentMargins(.leading, 22, for: .scrollContent)
-                .contentMargins(.trailing, 40, for: .scrollContent)
-                .scrollIndicators(.hidden)
+                .scrollTargetLayout()
             }
-            .padding(.top, 14)
-            deckFooter(days.count)
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $day)
+            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.canvas)
+        .background(Color(.systemBackground))
         .overlay {
             if working != nil { EdgeGlow().transition(.opacity) }
         }
@@ -271,12 +264,15 @@ struct TodayScreen: View {
 
     // MARK: Header and strip
 
-    /// The date written out with the program's week, the account, and the goal line (FIT-297: no relative title).
-    private func header(_ date: Date) -> some View {
+    /// The day shown as the title ("Today", "Tomorrow", "Monday") with its date and the program's week above it, the next
+    /// day one tap away beside it, and the goal line under it. One header for every page.
+    private func header(_ days: [Date]) -> some View {
+        let shown = min(day ?? 0, days.count - 1)
         let deload = thisWeeksPlan?.warnings.contains { $0.hasPrefix("Deload") } == true
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + programWeek + (deload ? " · light week" : ""))
+                Text(days[shown].formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + programWeek(of: days[shown])
+                     + (deload && shown == 0 ? " · light week" : ""))
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
                 Spacer()
                 Button { you = true } label: {
@@ -285,6 +281,22 @@ struct TodayScreen: View {
                 }
                 .accessibilityLabel("Account and library")
             }
+            HStack(alignment: .firstTextBaseline) {
+                Text(Self.dayName(days[shown], index: shown)).font(.display(34)).contentTransition(.opacity)
+                Spacer()
+                if shown + 1 < days.count {
+                    Button { withAnimation(.snappy) { day = shown + 1 } } label: {
+                        HStack(spacing: 4) {
+                            Text(Self.dayName(days[shown + 1], index: shown + 1))
+                            Image(systemName: "chevron.right").font(.footnote.weight(.bold))
+                        }
+                        .font(.headline).foregroundStyle(Plate.current.mark)
+                        .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .animation(.snappy, value: shown)
             if let goal = goalLine {
                 HStack(spacing: 8) {
                     Text(goal.label).font(.subheadline.weight(.semibold))
@@ -349,10 +361,15 @@ struct TodayScreen: View {
     }
 
     /// FIT-39's "Week 3 of 16", in the date line since the program has its own tab (FIT-64).
-    private var programWeek: String {
+    private func programWeek(of date: Date) -> String {
         guard let profile = profiles.first, let weeks = profile.program, let start = profile.programStart else { return "" }
-        let index = ProgramPlan.week(of: .now, start: start)
+        let index = ProgramPlan.week(of: date, start: start)
         return weeks.indices.contains(index) ? " · Week \(index + 1) of \(weeks.count)" : ""
+    }
+
+    /// "Today", "Tomorrow", then the weekday.
+    static func dayName(_ day: Date, index: Int) -> String {
+        index == 0 ? "Today" : index == 1 ? "Tomorrow" : day.formatted(.dateTime.weekday(.wide))
     }
 
     private func takeFromCoach() {
@@ -462,14 +479,12 @@ struct TodayScreen: View {
                     pair(nil, nil, nil, "Log a workout", "plus", { sheet = .logChoice([]) })
                 }
             }
-            pips(cards)
         }
     }
 
-    /// One day's card: its name, the session (scrolling on its own when it's long), then that day's actions.
+    /// One day: the session (scrolling on its own when it's long), then that day's actions, the only footer.
     private func page(_ card: DayCard, day: Date, index: Int, week weekCards: [DayCard], todayFree: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            dayLabel(day, index: index).padding(.horizontal, 18).padding(.top, 16)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     // FIT-8: the week's review is the first thing on its last day.
@@ -479,29 +494,15 @@ struct TodayScreen: View {
                     }
                     dayContent(card, day: day, isToday: index == 0, isPast: false, todayFree: todayFree)
                 }
-                .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 16)
+                .padding(.horizontal, 22).padding(.top, 18).padding(.bottom, 16)
             }
             .scrollBounceBehavior(.basedOnSize)
             Group {
                 if index == 0 { actions(card, week: weekCards) } else { laterActions(card, todayFree: todayFree) }
             }
-            .padding(.horizontal, 18).padding(.bottom, 16)
+            .padding(.horizontal, 22).padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.surface, in: .rect(cornerRadius: 20))
-    }
-
-    /// "Today", "Tomorrow  Sat, Oct 31", "Sunday  Nov 1" (the header already says today's date).
-    private func dayLabel(_ day: Date, index: Int) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(index == 0 ? "Today" : index == 1 ? "Tomorrow" : day.formatted(.dateTime.weekday(.wide)))
-                .font(.headline).foregroundStyle(index == 0 ? Plate.current.mark : Color.ink)
-            if index > 0 {
-                Text(day.formatted(index == 1 ? .dateTime.weekday(.abbreviated).month(.abbreviated).day() : .dateTime.month(.abbreviated).day()))
-                    .font(.subheadline).foregroundStyle(Color.inkMuted)
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 
     /// A later day: pull its session to today (FIT-235) when today has none waiting, or open its sets.
@@ -513,21 +514,6 @@ struct TodayScreen: View {
                 pair(nil, nil, nil, "See the Sets", "list.bullet", { sheet = .details(plan.items) })
             }
         }
-    }
-
-    /// Where the deck is, and on today, that tomorrow is a swipe away.
-    private func deckFooter(_ count: Int) -> some View {
-        let shown = day ?? 0
-        return HStack(spacing: 6) {
-            ForEach(0..<count, id: \.self) { index in
-                Capsule().fill(index == shown ? Color.ink : Color.inkFaint).frame(width: index == shown ? 18 : 6, height: 6)
-            }
-            Spacer()
-            if shown == 0 { Text("Swipe for tomorrow").font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted) }
-        }
-        .padding(.horizontal, 22).padding(.top, 12).padding(.bottom, 8)
-        .animation(.snappy, value: shown)
-        .accessibilityHidden(true)
     }
 
     private func nextPlanned(_ cards: [DayCard]) -> DayCard.Planned? {
@@ -549,25 +535,6 @@ struct TodayScreen: View {
                 .background(Color.fill, in: .rect(cornerRadius: 14))
         }
         .buttonStyle(.plain)
-    }
-
-    /// This week's sessions as short bars: done, today's, still to come.
-    @ViewBuilder private func pips(_ cards: [DayCard]) -> some View {
-        let sessions = cards.indices.filter { index in if case .rest = cards[index] { false } else { true } }
-        if !sessions.isEmpty {
-            let done = sessions.filter { index in if case .done = cards[index] { true } else { false } }.count
-            HStack(spacing: 6) {
-                ForEach(sessions, id: \.self) { index in
-                    let isDone: Bool = if case .done = cards[index] { true } else { false }
-                    Capsule().fill(isDone ? Color.ink : index == todayIndex ? Plate.current.mark : Color.fillStrong).frame(width: 26, height: 6)
-                }
-                Text(done == sessions.count ? "\(done) of \(done) this week" : "\(done) of \(sessions.count) done this week")
-                    .font(.footnote.weight(.semibold)).foregroundStyle(Color.inkMuted).padding(.leading, 4)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 4)
-            .accessibilityElement(children: .combine)
-        }
     }
 
     /// FIT-297 (E1): a load changed in place on Today changes the plan's working sets for that exercise.

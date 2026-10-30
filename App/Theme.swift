@@ -46,9 +46,6 @@ enum Plate: String, CaseIterable, Identifiable {
 extension Color {
     /// Rows, cards and inputs on the page.
     static let fill = Color(light: 0xeef0f2, dark: 0x1b1d21)
-    /// The page behind cards (Today's days), and the cards on it.
-    static let canvas = Color(light: 0xf5f6f7, dark: 0x08090a)
-    static let surface = Color(light: 0xffffff, dark: 0x0f1012)
     static let fillStrong = Color(light: 0xe1e4e8, dark: 0x2a2d32)
     static let ink = Color(light: 0x0e1013, dark: 0xf1f2f4)
     /// Secondary text, 4.5:1 on the page and on fill in both modes.
