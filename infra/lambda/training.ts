@@ -255,8 +255,28 @@ const line = (l: ReturnType<typeof sessionLines>[number]) =>
 
 export function describeSession(plan: PlanRow[]) {
   const title = plan.find((r) => r.kind === "workout" && r.slot)?.slot;
-  const lines = sessionLines(plan).map((l) => `${l.main ? "★ " : ""}${nameOf(l.slug)} (${l.slug}): ${line(l)}${l.group ? ` [superset ${l.group}]` : ""}`);
+  const lines = [
+    ...warmupLines(plan).map((l) => `Warm-up · ${nameOf(l.slug)} (${l.slug}): ${describeTargets(l.sets, l.targets)}`),
+    ...sessionLines(plan).map((l) => `${l.main ? "★ " : ""}${nameOf(l.slug)} (${l.slug}): ${line(l)}${l.group ? ` [superset ${l.group}]` : ""}`),
+  ];
   return { title, lines };
+}
+
+/**
+ * FIT-300: the session's written warm-up, as the app shows it: rows marked warm-up for exercises with no working sets that
+ * day (a row, band pull-aparts). A lift's own ramp sets go with the lift, so they aren't listed.
+ */
+export function warmupLines(plan: PlanRow[]) {
+  const worked = new Set(plan.filter(working).map((r) => r.template));
+  const out: { slug?: string; sets: number; targets: Measurement[] }[] = [];
+  for (const row of [...plan].filter((r) => r.kind === "workout" && r.note === WARMUP && !worked.has(r.template)).sort((a, b) => a.at - b.at)) {
+    const targets = row.targets.filter((x) => x.metric !== "sets");
+    const sets = value(row.targets, "sets") ?? 1;
+    const last = out[out.length - 1];
+    if (last && last.slug === row.template && JSON.stringify(last.targets) === JSON.stringify(targets)) last.sets += sets;
+    else out.push({ slug: row.template, sets, targets });
+  }
+  return out;
 }
 
 /** "Back Squat 205×5 @7, 205×5 @8" per exercise, and the session's note. */
@@ -446,6 +466,8 @@ const uuid = () => randomUUID().toUpperCase();
 export type ExerciseInput = {
   exercise: string; sets?: number; distance_mi?: number; distance_km?: number; minutes?: number; run?: string; reps?: number; seconds?: number; weight_lb?: number; weight_lb_per_hand?: number; rpe?: number;
   percent_1rm?: number; main?: boolean; superset?: number; note?: string;
+  /** FIT-300: part of the session's warm-up, done before the lifts. */
+  warmup?: boolean;
 };
 
 /** A day's new session: one row per exercise, in order, pinned so the app's weekly planning keeps it. Other kinds stay. */
@@ -453,6 +475,17 @@ export function sessionRows(existing: PlanRow[], title: string, exercises: Exerc
   const kept = existing.filter((r) => r.kind !== "workout");
   const made = exercises.map((x, i): PlanRow => {
     const e = resolve(x.exercise);
+    if (x.warmup) {
+      // FIT-300: a warm-up item is a row marked warm-up, as the app's own ramp sets are: minutes or seconds of easy cardio,
+      // or sets of reps (a load for a ramp set). One set unless it says more; never a main lift or in a superset.
+      const targets = [m("sets", x.sets ?? 1)];
+      if (x.minutes !== undefined) targets.push(m("duration_s", Math.round(x.minutes * 60)));
+      else if (x.seconds !== undefined) targets.push(m("duration_s", x.seconds));
+      else if (x.reps !== undefined) targets.push(m("reps", x.reps));
+      else throw new Error(`${e.name} (warm-up): give minutes, seconds or reps.`);
+      if (x.weight_lb !== undefined) targets.push(m("load_lb", x.weight_lb));
+      return { id: uuid(), kind: "workout", at: start + i, slot: title, template: e.slug, targets, note: WARMUP, adjustedReason: reason, main: false, pinned: true };
+    }
     if (RUNS.includes(e.slug)) {
       // FIT-178: a run is one row: its distance and/or time, its kind as the note.
       // FIT-186: planned in miles, as the app shows runs; km still read.
@@ -479,8 +512,9 @@ export function sessionRows(existing: PlanRow[], title: string, exercises: Exerc
 /** What a new session changes, line by line, for the agent to show before it applies. */
 export function diff(before: PlanRow[], after: PlanRow[]) {
   const named = (l: ReturnType<typeof sessionLines>[number]) => `${nameOf(l.slug)}: ${line(l)}${l.group ? ` [superset ${l.group}]` : ""}`;
-  const a = sessionLines(before).map(named);
-  const b = sessionLines(after).map(named);
+  const warm = (l: ReturnType<typeof warmupLines>[number]) => `Warm-up · ${nameOf(l.slug)}: ${describeTargets(l.sets, l.targets)}`;
+  const a = [...warmupLines(before).map(warm), ...sessionLines(before).map(named)];
+  const b = [...warmupLines(after).map(warm), ...sessionLines(after).map(named)];
   return [...a.filter((x) => !b.includes(x)).map((x) => `− ${x}`), ...b.filter((x) => !a.includes(x)).map((x) => `+ ${x}`), ...b.filter((x) => a.includes(x)).map((x) => `= ${x}`)];
 }
 

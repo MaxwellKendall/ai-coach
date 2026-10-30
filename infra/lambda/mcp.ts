@@ -159,7 +159,7 @@ const EXERCISE = { type: "string", description: "An exercise by catalog name or 
 const SESSION = {
   type: "array", minItems: 1, description: "The session's exercises, in order. A run is \"Trail Running/Walking\" (or \"Running, Treadmill\") with distance_mi and/or minutes and its kind, no sets; it can be a day of its own or beside lifting.", items: { type: "object", properties: {
     exercise: EXERCISE, sets: { type: "integer", minimum: 1, maximum: 10 }, reps: { type: "integer" }, seconds: { type: "integer" },
-    distance_mi: { type: "number", description: "A run's distance in miles." }, minutes: { type: "number", description: "A run's time." },
+    distance_mi: { type: "number", description: "A run's distance in miles." }, minutes: { type: "number", description: "A run's time, or a warm-up's." },
     run: { type: "string", enum: ["easy", "long", "tempo", "intervals", "race"], description: "A run's kind (default easy). Keep tempo and intervals off the day before, or the day of, heavy legs." },
     weight_lb: { type: "number" }, weight_lb_per_hand: { type: "number" },
     percent_1rm: { type: "number", minimum: 30, maximum: 105, description: "A load as a percent of their max (\"75%\" is 75), in place of weight_lb: code works out the weight from their logs or starting set, to 5 lb." },
@@ -167,6 +167,7 @@ const SESSION = {
     main: { type: "boolean", description: "A main lift (defaults to the catalog's goal lifts)." },
     superset: { type: "integer", description: "Exercises sharing a number are done together in rounds (A1/A2 is one number)." },
     note: { type: "string", description: "The coach's cue for this exercise, shown above its sets on their phone: tempo, rest, a rep range, AMRAP on the last set." },
+    warmup: { type: "boolean", description: "Part of the session's warm-up, listed first: easy cardio with minutes (\"Rowing, Stationary\", 5), mobility or band work with sets and reps or seconds. Their phone shows these as the warm-up, then the ramp to the first lift, which the app works out; leave warm-up out to keep the app's own (5 min easy cardio and the ramp)." },
   }, required: ["exercise"] },
 };
 

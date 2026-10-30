@@ -223,6 +223,30 @@ describe("mcp", () => {
     await expect(callTool("undo", { date: "2026-10-17" }, me, store, now)).rejects.toThrow(/Nothing to undo/);
   });
 
+  it("FIT-300: writes a session's warm-up, shown first and kept out of the lifts", async () => {
+    const units = data();
+    const store = memory({}, units);
+    const proposed = await callTool("propose_session", {
+      title: "Lower", reason: "Warm the hips up first.",
+      exercises: [
+        { exercise: "Rowing, Stationary", minutes: 5, warmup: true },
+        { exercise: "Band Pull Apart", sets: 2, reps: 15, warmup: true },
+        { exercise: "Back Squat", sets: 3, reps: 5, weight_lb: 205 },
+      ],
+    }, me, store, now);
+    expect(proposed).toMatch(/\+ Warm-up · Rowing, Stationary: 1 × 300 s/);
+    expect(proposed).toMatch(/\+ Warm-up · Band Pull Apart: 2 × 15/);
+    expect(proposed).toMatch(/passes the plan rules/);
+    await callTool("apply", { proposal_id: proposed.match(/Proposal (\S+)/)![1] }, me, store, now);
+    const applied = JSON.parse(units.me["plan#2026-10-17"]) as PlanRow[];
+    expect(applied.map((r) => [r.template, r.note])).toEqual([["rowing-stationary", "warm-up"], ["band-pull-apart", "warm-up"], ["back-squat", ""]]);
+    expect(applied[0]).toMatchObject({ main: false, targets: [{ metric: "sets", value: 1 }, { metric: "duration_s", value: 300 }] });
+    const day = await callTool("get_day", { date: "2026-10-17" }, me, store, now);
+    expect(day).toMatch(/Warm-up · Band Pull Apart \(band-pull-apart\): 2 × 15/);
+    await expect(callTool("propose_session", { title: "x", reason: "x", exercises: [{ exercise: "Band Pull Apart", warmup: true }, { exercise: "back-squat", sets: 3, reps: 5 }] },
+      me, store, now)).rejects.toThrow(/minutes, seconds or reps/);
+  });
+
   it("won't apply a proposal that breaks the rules, or change a past or logged day", async () => {
     const store = memory({}, data());
     const bad = await callTool("propose_session", { title: "Too much", reason: "Test", exercises: [{ exercise: "back-squat", sets: 7, reps: 5 }] }, me, store, now);
