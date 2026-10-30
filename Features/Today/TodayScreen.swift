@@ -428,15 +428,14 @@ struct TodayScreen: View {
         let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
         let lifts = lifting(plan.items)
         return VStack(alignment: .leading, spacing: 0) {
-            Text(lifts.isEmpty ? plan.title : Self.title(plan.session, names: names, fallback: plan.title))
-                .font(.display(30)).fixedSize(horizontal: false, vertical: true)
-            Text("\(plan.minutes) min · \(plan.coach)").font(.subheadline).foregroundStyle(Color.inkMuted)
-                .padding(.top, 6).fixedSize(horizontal: false, vertical: true)
+            // The lifts are the session; only a run, with no list to show, gets a title (author, 2026-10-30).
+            if lifts.isEmpty {
+                Text(plan.title).font(.display(30)).fixedSize(horizontal: false, vertical: true).padding(.bottom, 10)
+            }
             // A later day is read-only: its week may be replanned before it starts, which would undo a change made now.
             SessionList(session: plan.session, names: names, previous: previousLoads,
                         checked: lifts.isEmpty || !isToday ? nil : $checked,
                         onLoad: isToday ? { exercise, step in changeLoad(exercise, by: step, in: plan.items) } : nil)
-                .padding(.top, 10)
             ForEach(plan.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
         }
     }
