@@ -15,9 +15,7 @@ export const app = {
   bundleId: "com.maxwellkendall.aicoach",
   products: ["com.maxwellkendall.aicoach.pro.yearly", "com.maxwellkendall.aicoach.pro.monthly"],
 };
-/** FIT-267: the consumer app (codename Liftplan) and its one plan, checked the same way. */
-export const consumerApp = { bundleId: "com.maxwellkendall.liftplan", products: ["com.maxwellkendall.liftplan.yearly"] };
-const apps = [app, consumerApp];
+const apps = [app];
 
 /** The DER of the extension OIDs Apple marks its certificates with (Apple's WWDR intermediate; App Store signing leaf). */
 const oid = (hex: string) => Buffer.from(hex, "hex");

@@ -9,8 +9,6 @@ import { createHash, createPublicKey, verify, type JsonWebKey } from "node:crypt
 
 export const APPLE_ISSUER = "https://appleid.apple.com";
 export const BUNDLE_ID = "com.maxwellkendall.aicoach";
-/** FIT-266: the consumer app (codename Liftplan), built from the same code, signs in to the same accounts. */
-export const CONSUMER_BUNDLE_ID = "com.maxwellkendall.liftplan";
 /** A token older than this is refused even if Apple's own expiry is later: sign-in takes seconds. */
 const MAX_AGE_SECONDS = 10 * 60;
 
@@ -21,7 +19,7 @@ export type Result = { ok: true; claims: AppleClaims } | { ok: false; why: strin
 export const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export function checkAppleToken(token: string, nonce: string, keys: AppleKey[], now: Date,
-                                audience: string[] = [BUNDLE_ID, CONSUMER_BUNDLE_ID]): Result {
+                                audience: string[] = [BUNDLE_ID]): Result {
   const parts = token.split(".");
   if (parts.length !== 3) return { ok: false, why: "not a JWT" };
   const [head, body, signature] = parts;

@@ -7,6 +7,8 @@ export type Config = {
   cognitoDomain: string;
   graphqlUrl: string;
   providers: string[];
+  /** FIT-295: the App Store listing, once there is one; the web quiz links to it. */
+  appStoreUrl?: string;
 };
 
 export type Provider = "google" | "apple";

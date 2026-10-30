@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { KIT, type Goal } from "../../shared/readyPrograms";
-import { idToken, signIn, type Config, type Provider } from "./auth";
+import type { Config } from "./auth";
 import catalog from "./catalog.json";
 import {
-  dose, exerciseName, headline, liftOf, pick, plan, PRICE, PRODUCT, savePending, startTrial, takePending, TRIAL_DAYS,
-  type Answers, type Plan,
+  dose, exerciseName, headline, liftOf, pick, plan, PRODUCT, type Plan,
 } from "./start";
 
 type Step = "goal" | "lifted" | "have" | "days" | "recent" | "plan";
@@ -16,14 +15,13 @@ const GOALS: { goal: Goal; title: string; detail: string; plan: string }[] = [
   { goal: "start", title: "Start lifting", detail: "New to it: learn the lifts, then build.", plan: "to start lifting" },
 ];
 
-/** FIT-281: the quiz an ad opens, then the plan and its free trial. Signed out, the trial asks to sign in first and
- * picks up where it left off; /start/thanks is where Checkout comes back to. */
-export function StartPage({ config, path }: { config: Config; path: string }) {
+/** FIT-281: the quiz, then the plan revealed. FIT-295: free; it ends in the app, where Train on your own asks the same. */
+export function StartPage({ config }: { config: Config; path: string }) {
   useEffect(() => { document.title = PRODUCT; }, []);
   return (
     <main className="start">
       <div className="brand">{PRODUCT}</div>
-      {path.startsWith("/start/thanks") ? <Thanks /> : <Quiz config={config} />}
+      <Quiz config={config} />
     </main>
   );
 }
@@ -37,34 +35,6 @@ function Quiz({ config }: { config: Config }) {
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
   const [recent, setRecent] = useState<{ weight: number; reps: number }>();
-  const [working, setWorking] = useState(false);
-  const [error, setError] = useState<string>();
-  const [signingIn, setSigningIn] = useState(false);
-
-  // Back from sign-in: straight on to Checkout with the answers from before.
-  useEffect(() => {
-    const pending = takePending();
-    if (pending) checkout(pending);
-  }, []);
-
-  async function checkout(answers: Answers) {
-    setWorking(true);
-    setError(undefined);
-    try {
-      if (!(await idToken(config))) {
-        savePending(answers);
-        setSigningIn(true);
-        return;
-      }
-      const url = await startTrial(config, answers);
-      if (url) location.assign(url);
-      else setError("The free trial isn't open yet. Try again soon.");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setWorking(false);
-    }
-  }
 
   // The steps this person sees: someone starting out isn't asked if they've lifted, and only someone who has, with a
   // lift to load, is asked a recent set. Until the answers say, the count assumes the longest.
@@ -201,24 +171,10 @@ function Quiz({ config }: { config: Config }) {
         <Week plan={made} />
       </div>
       <div className="trial">
-        {signingIn ? (
-          <>
-            <p><strong>Sign in to start your free trial.</strong> Use the same account you'll sign in to the app with.</p>
-            <div className="buttons">
-              {(["apple", "google"] as Provider[]).filter((p) => config.providers.includes(p)).map((p) => (
-                <button key={p} className="button primary" onClick={() => signIn(config, p)}>
-                  Continue with {p === "google" ? "Google" : "Apple"}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <button className="button primary" disabled={working} onClick={() => checkout(made.answers)}>
-            {working ? "Starting…" : `Start my ${TRIAL_DAYS}-day free trial`}
-          </button>
-        )}
-        <p className="muted small">Free for {TRIAL_DAYS} days, then {PRICE}. Cancel any time before the trial ends and you won't be charged.</p>
-        {error && <p className="error" role="alert">{error}</p>}
+        {config.appStoreUrl
+          ? <a className="button primary" href={config.appStoreUrl}>Get {PRODUCT} free</a>
+          : <p><strong>{PRODUCT} is free on iPhone,</strong> coming to the App Store soon.</p>}
+        <p className="muted small">In the app, choose “No coach? Train on your own” and answer the same way: this plan starts on Today, free.</p>
       </div>
       <button className="link" onClick={() => setStep("goal")}>Change my answers</button>
     </section>
@@ -279,14 +235,3 @@ function Week({ plan }: { plan: Plan }) {
 const equipmentOf = new Map((catalog as { slug: string; equipment: string[] }[]).map((e) => [e.slug, e.equipment]));
 /** The exercise needs only what they have, as the app's week picks among a program's choices. */
 const catalogAllows = (slug: string, have: Set<string>) => (equipmentOf.get(slug) ?? []).every((e) => have.has(e));
-
-function Thanks() {
-  return (
-    <section>
-      <p className="eyebrow">Your trial has started</p>
-      <h1>Your plan is waiting in the app.</h1>
-      <p className="lede">Open {PRODUCT} on your iPhone and sign in with the account you just used. Your program is on Today, ready for its first session.</p>
-      <p className="muted small">Nothing is charged until the {TRIAL_DAYS}-day trial ends. The receipt from Stripe says how to cancel.</p>
-    </section>
-  );
-}

@@ -1,8 +1,6 @@
 import { ConditionalCheckFailedException, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
-import programs from "../../Resources/Seed/programs.json" with { type: "json" };
-import { KIT, mainLift, type Goal, type ReadyProgram } from "../../shared/readyPrograms.ts";
 import { stripeConfig } from "./gifts.ts";
 import { stripe } from "./stripe.ts";
 
@@ -15,8 +13,7 @@ import { stripe } from "./stripe.ts";
  * FIT-190: Pro, sold to the connector's users the same way (author, 2026-10-21: $5.99/month or $39.99/year), kept in
  * USER#uid PROPLAN. Which plan a subscription is comes from its price's lookup key.
  *
- * FIT-281: the consumer app's plan, bought from the web quiz: annual only, with a free trial (author, 2026-10-27), kept
- * in USER#uid TRAINERPLAN. The quiz's answers are kept with it (USER#uid QUIZ), so the app opens the plan revealed.
+ * FIT-295: the consumer app's plan (FIT-281, trainer_yearly) is gone with the app; Barbrabell is free (business model v2).
  */
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -26,10 +23,7 @@ const TABLE = () => process.env.TABLE!;
 export const PLANS = {
   coach: { keys: { month: "coach_monthly", year: "coach_yearly" }, sk: "COACHPLAN" },
   pro: { keys: { month: "pro_monthly", year: "pro_yearly" }, sk: "PROPLAN" },
-  trainer: { keys: { year: "trainer_yearly" }, sk: "TRAINERPLAN" },
 } as const;
-/** FIT-281: the consumer plan's free trial, as the App Store's (Liftplan.storekit). */
-export const TRAINER_TRIAL_DAYS = 7;
 export type Kind = keyof typeof PLANS;
 export const LOOKUP_KEYS = PLANS.coach.keys;
 export type Interval = keyof typeof LOOKUP_KEYS;
@@ -40,8 +34,6 @@ export const HAS_PLAN = ["active", "trialing", "past_due"];
 /** Where Checkout and the portal come back to. Pro's buyers come from Claude, so they land on the site's pages. */
 const returns = (kind: Kind, origin: string) => kind === "coach"
   ? { success: `${origin}/billing?started=1`, cancel: `${origin}/billing`, portal: `${origin}/billing` }
-  : kind === "trainer"
-  ? { success: `${origin}/start/thanks`, cancel: `${origin}/start`, portal: `${origin}/start/thanks` }
   : { success: `${origin}/pro/thanks`, cancel: `${origin}/claude`, portal: `${origin}/claude` };
 
 export interface PlanRecord {
@@ -79,7 +71,7 @@ export function checkoutParams(uid: string, customer: string, price: string, ori
     customer,
     client_reference_id: uid,
     line_items: [{ price, quantity: 1 }],
-    subscription_data: { metadata: { uid }, ...(kind === "trainer" ? { trial_period_days: TRAINER_TRIAL_DAYS } : {}) },
+    subscription_data: { metadata: { uid } },
     success_url: returns(kind, origin).success,
     cancel_url: returns(kind, origin).cancel,
   };
@@ -231,7 +223,6 @@ async function customerFor(key: string, uid: string, email: string | undefined, 
 }
 
 const already = (kind: Kind) => kind === "coach" ? "You already have the coach plan. Use Manage billing to change it."
-  : kind === "trainer" ? "You already have the plan. Open the app and sign in with this account."
   : "They already have Pro: manage_subscription changes it.";
 
 /** The customer's subscription to the plan that still has it, if Stripe has one (the list leaves out canceled ones). */
@@ -242,7 +233,7 @@ export async function activeSubscription(key: string, customer: string, kind: Ki
 
 /** A Checkout URL for the plan, or undefined while it isn't on sale. */
 export async function start(uid: string, interval: string, email?: string, origin = process.env.APP_ORIGIN!, kind: Kind = "coach"): Promise<string | undefined> {
-  if (!(interval in PLANS[kind].keys)) throw new PlanError(kind === "trainer" ? "The plan is yearly." : "Choose monthly or yearly.");
+  if (!(interval in PLANS[kind].keys)) throw new PlanError("Choose monthly or yearly.");
   const keys = await stripeConfig();
   if (!keys) return undefined;
   const current = await planRecord(uid, kind);
@@ -315,65 +306,7 @@ export async function portal(uid: string, origin = process.env.APP_ORIGIN!, kind
   return session.url;
 }
 
-/** FIT-281: the quiz's answers the plan was bought with: the program, the equipment ticked, the training days, the goal,
- * whether they've lifted, and a recent set of the program's main lift (which the app starts it from). */
-export interface QuizAnswers {
-  slug: string;
-  have: string[];
-  days: number[];
-  goal?: Goal;
-  lifted?: boolean;
-  recent?: { exercise: string; weight: number; reps: number };
-}
-
-/** The answers as the web sent them, checked against the program: its days a week and the equipment it needs. */
-export function quizAnswers(value: unknown): QuizAnswers {
-  let given: Partial<QuizAnswers> | undefined;
-  try {
-    given = (typeof value === "string" ? JSON.parse(value) : value) as Partial<QuizAnswers> | undefined;
-  } catch {
-    throw new PlanError("Take the quiz first.");
-  }
-  const program = (programs as ReadyProgram[]).find((p) => p.slug === given?.slug);
-  if (!program) throw new PlanError("Take the quiz first.");
-  const known = new Set(KIT.flatMap((k) => k.equipment));
-  const have = [...new Set((Array.isArray(given?.have) ? given.have : []).filter((e) => typeof e === "string" && known.has(e)))];
-  const days = [...new Set((Array.isArray(given?.days) ? given.days : []).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))]
-    .sort((a, b) => a - b);
-  if (!program.days.includes(days.length)) throw new PlanError(`${program.name} is ${program.days.join(" or ")} days a week.`);
-  if (!program.equipment.every((e) => have.includes(e))) throw new PlanError(`${program.name} needs equipment you didn't tick.`);
-  const goal = GOALS.find((g) => g === given?.goal);
-  const lifted = typeof given?.lifted === "boolean" ? given.lifted : undefined;
-  // A recent set only of the program's main lift, in the quiz's bounds; anything else is left out, not refused.
-  const r = given?.recent;
-  const recent = lifted && r && r.exercise === mainLift(program)?.exercise && Number.isFinite(r.weight) && r.weight > 0 && r.weight <= 1000
-    && Number.isInteger(r.reps) && r.reps >= 1 && r.reps <= 12 ? { exercise: r.exercise, weight: r.weight, reps: r.reps } : undefined;
-  return { slug: program.slug, have, days, ...(goal && { goal }), ...(lifted !== undefined && { lifted }), ...(recent && { recent }) };
-}
-
-const GOALS: Goal[] = ["strength", "muscle", "start"];
-
-const quizKey = (uid: string) => ({ PK: `USER#${uid}`, SK: "QUIZ" });
-
-async function saveQuiz(uid: string, answers: QuizAnswers, now = new Date()) {
-  await db.send(new UpdateCommand({
-    TableName: TABLE(),
-    Key: quizKey(uid),
-    UpdateExpression: "SET answers = :a, updatedAt = :t",
-    ExpressionAttributeValues: { ":a": answers, ":t": now.toISOString() },
-  }));
-}
-
-/** FIT-281: the consumer plan as the app asks for it: Stripe's status, and the answers it was bought with. */
-export async function trainerPlan(uid: string) {
-  const [record, quiz] = await Promise.all([
-    planRecord(uid, "trainer"),
-    db.send(new GetCommand({ TableName: TABLE(), Key: quizKey(uid) })).then((r) => r.Item?.answers as QuizAnswers | undefined),
-  ]);
-  return { status: record?.status ?? "none", renews: record?.renews ?? null, answers: quiz ? JSON.stringify(quiz) : null };
-}
-
-export async function handler(event: AppSyncResolverEvent<{ interval?: string; answers?: string }>) {
+export async function handler(event: AppSyncResolverEvent<{ interval?: string }>) {
   const identity = event.identity as AppSyncIdentityCognito | null;
   if (!identity?.sub) throw new Error("Sign in first.");
   switch (event.info.fieldName) {
@@ -383,13 +316,6 @@ export async function handler(event: AppSyncResolverEvent<{ interval?: string; a
       return (await start(identity.sub, event.arguments.interval ?? "", identity.claims?.email as string | undefined)) ?? null;
     case "coachBillingPortal":
       return (await portal(identity.sub)) ?? null;
-    case "trainerPlan":
-      return trainerPlan(identity.sub);
-    case "startTrainerPlan": {
-      const answers = quizAnswers(event.arguments.answers);
-      await saveQuiz(identity.sub, answers);
-      return (await start(identity.sub, "year", identity.claims?.email as string | undefined, process.env.APP_ORIGIN, "trainer")) ?? null;
-    }
     default:
       throw new Error(`No field ${event.info.fieldName}`);
   }

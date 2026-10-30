@@ -1,19 +1,13 @@
-// FIT-281: the consumer app's web quiz (/start), the page its ads open: the goal, whether they've lifted, what they
-// have, how many days and a recent set, then the plan revealed and its free trial. The program and the reveal come from shared/readyPrograms.ts, the app's rules.
+// FIT-281: the web quiz (/start): the goal, whether they've lifted, what they have, how many days and a recent set, then
+// the plan revealed. FIT-295: it ends in the free app, the same quiz behind "Train on your own", with nothing sold. The program and the reveal come from shared/readyPrograms.ts, the app's rules.
 import programs from "../../Resources/Seed/programs.json";
 import {
   daysFor, daysNearest, deloads, endDate, mainLift, matches, projection,
   type Goal, type Projection, type ReadyProgram, type RecentSet,
 } from "../../shared/readyPrograms";
 import catalog from "./catalog.json";
-import type { Config } from "./auth";
-import { gql } from "./sync";
 
-/** The consumer app's working name until FIT-265 names it. */
-export const PRODUCT = "Liftplan";
-/** What Checkout charges after the trial (the ad test, FIT-264, sets the real price; Stripe's is what's billed). */
-export const PRICE = "$29.99 a year";
-export const TRIAL_DAYS = 7;
+export const PRODUCT = "Barbrabell";
 
 const all = programs as ReadyProgram[];
 const names = new Map((catalog as { slug: string; name: string }[]).map((e) => [e.slug, e.name]));
@@ -69,22 +63,3 @@ export function dose(item: { sets: number; reps?: number[]; seconds?: number[] }
   const [low, high] = [range[0], range.at(-1)];
   return `${item.sets} × ${low === high ? low : `${low}–${high}`}${item.seconds ? " s" : ""}`;
 }
-
-/** The quiz's answers wait here while sign-in leaves the page, then checkout picks up from them. */
-const PENDING = "liftplan.start";
-export const savePending = (answers: Answers) => sessionStorage.setItem(PENDING, JSON.stringify(answers));
-export function takePending(): Answers | undefined {
-  const saved = sessionStorage.getItem(PENDING);
-  sessionStorage.removeItem(PENDING);
-  try {
-    return saved ? (JSON.parse(saved) as Answers) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-export const hasPending = () => sessionStorage.getItem(PENDING) !== null;
-
-/** Checkout for the trial, or null while the plan isn't on sale. */
-export const startTrial = (config: Config, answers: Answers) =>
-  gql<{ startTrainerPlan: string | null }>(config, `mutation($a: AWSJSON!) { startTrainerPlan(answers: $a) }`, { a: JSON.stringify(answers) })
-    .then((d) => d.startTrainerPlan);
