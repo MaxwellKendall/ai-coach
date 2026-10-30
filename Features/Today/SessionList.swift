@@ -59,7 +59,7 @@ struct SessionList: View {
                         HStack(spacing: 6) {
                             ForEach(WarmupRamp.steps(to: first.load), id: \.load) { step in
                                 Text("\(step.load == WarmupRamp.bar ? "Bar" : Coach.number(step.load)) × \(step.reps)")
-                                    .font(.display(16, weight: .bold, relativeTo: .subheadline)).monospacedDigit()
+                                    .font(.display(15, weight: .semibold, relativeTo: .subheadline)).monospacedDigit()
                                     .padding(.horizontal, 7).padding(.vertical, 2)
                                     .background(Color.fill, in: .rect(cornerRadius: 8))
                                     .lineLimit(1).fixedSize()
@@ -134,13 +134,13 @@ struct SessionList: View {
         if let load, let onLoad, editing == movement.exercise {
             HStack(spacing: 6) {
                 stepButton("minus", "5 lb less") { onLoad(movement.exercise, -5) }
-                Text(Coach.number(load)).font(.display(24, weight: .heavy, relativeTo: .title2)).monospacedDigit().frame(minWidth: 48)
+                Text(Coach.number(load)).font(.display(22, weight: .semibold, relativeTo: .title2)).monospacedDigit().frame(minWidth: 48)
                 stepButton("plus", "5 lb more") { onLoad(movement.exercise, 5) }
             }
             .transition(.opacity)
         } else if let load {
             Button { editing = editing == movement.exercise ? nil : movement.exercise } label: {
-                (Text(Coach.number(load)).font(.display(26, weight: .heavy, relativeTo: .title2))
+                (Text(Coach.number(load)).font(.display(22, weight: .semibold, relativeTo: .title2))
                  + Text(" lb").font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted))
                     .monospacedDigit()
             }

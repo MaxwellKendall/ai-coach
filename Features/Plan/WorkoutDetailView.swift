@@ -126,7 +126,7 @@ struct WorkoutDetailView: View {
                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
             Text(items.first?.slot ?? "Workout")
-                .font(.system(size: 40, weight: .heavy)).fontWidth(.condensed)
+                .font(.system(size: 40, weight: .bold))
             HStack(spacing: 6) {
                 chip("\(sets) working sets")
                 if let rpe { chip("RPE ≤ \(Self.number(rpe))") }
@@ -209,7 +209,7 @@ struct WorkoutDetailView: View {
                 let isSelected = selected == cell(metric)
                 Button { withAnimation(.snappy) { selected = isSelected ? nil : cell(metric) } } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text(Self.number(set.value(metric) ?? 0)).font(.title3.weight(.bold).monospacedDigit()).fontWidth(.condensed)
+                        Text(Self.number(set.value(metric) ?? 0)).font(.title3.weight(.bold).monospacedDigit())
                         Text(SetRow.units[metric] ?? metric).font(.caption).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -331,7 +331,7 @@ struct WorkoutDetailView: View {
                     stepButton("minus", cell, -Self.step(cell.metric))
                     VStack(spacing: 0) {
                         Text(Self.number(set.value(cell.metric) ?? 0))
-                            .font(.system(size: 48, weight: .bold).monospacedDigit()).fontWidth(.condensed)
+                            .font(.system(size: 48, weight: .bold).monospacedDigit())
                             .contentTransition(.numericText())
                         Text(SetRow.units[cell.metric] ?? "").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     }
@@ -452,7 +452,7 @@ struct BlockBadge: View {
 
     var body: some View {
         Text(letter)
-            .font(.system(size: size * 0.55, weight: .bold)).fontWidth(.condensed)
+            .font(.system(size: size * 0.55, weight: .bold))
             .foregroundStyle(Color.primary)
             .frame(width: size, height: size)
             .background(Color(red: 0.08, green: 0.09, blue: 0.11), in: .rect(cornerRadius: size * 0.3))

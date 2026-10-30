@@ -15,7 +15,7 @@ struct ChangeSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(step == .hurts ? "Where does it hurt?" : step == .move ? "Which day?" : "Change today")
-                .font(.display(30, weight: .heavy, relativeTo: .title)).textCase(.uppercase)
+                .font(.display(24, relativeTo: .title))
             Text(step == nil ? "Today’s workout adapts. Your goal date stays honest: you’ll see if it moves." : "The lifts that load it are swapped or dropped.")
                 .font(.subheadline).foregroundStyle(Color.inkMuted).padding(.top, 4).padding(.bottom, 14)
                 .opacity(step == .move ? 0 : 1)
@@ -74,7 +74,7 @@ struct LogChoiceSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Log a workout").font(.display(30, weight: .heavy, relativeTo: .title)).textCase(.uppercase)
+            Text("Log a workout").font(.display(24, relativeTo: .title))
             Text("Did it without the app, or did something different? Log it so the plan keeps up.")
                 .font(.subheadline).foregroundStyle(Color.inkMuted).padding(.bottom, 6)
             if hasToday { option("I did today’s workout", "Every set is filled in as planned; fix any that were different.") { onChoose(.today) } }

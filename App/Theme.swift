@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// FIT-297: design system v2 (https://claude.ai/artifact/VwER3yUGiQf7xJF6hxVcQL). Steel neutrals, one plate colour
-/// per theme (competition bumper plates), condensed heavy numbers like a plate's markings.
+/// per theme (competition bumper plates).
 enum Plate: String, CaseIterable, Identifiable {
     case blue, red, yellow, green
     static let key = "plate"
@@ -46,6 +46,9 @@ enum Plate: String, CaseIterable, Identifiable {
 extension Color {
     /// Rows, cards and inputs on the page.
     static let fill = Color(light: 0xeef0f2, dark: 0x1b1d21)
+    /// The page behind cards (Today's days), and the cards on it.
+    static let canvas = Color(light: 0xf5f6f7, dark: 0x08090a)
+    static let surface = Color(light: 0xffffff, dark: 0x0f1012)
     static let fillStrong = Color(light: 0xe1e4e8, dark: 0x2a2d32)
     static let ink = Color(light: 0x0e1013, dark: 0xf1f2f4)
     /// Secondary text, 4.5:1 on the page and on fill in both modes.
@@ -63,15 +66,10 @@ extension Color {
 }
 
 extension Font {
-    /// Titles and big numbers: Archivo Condensed when bundled, else the system face condensed. Scales with Dynamic Type.
-    static func display(_ size: CGFloat, weight: Font.Weight = .black, relativeTo style: Font.TextStyle = .largeTitle) -> Font {
-        let name = switch weight {
-        case .black, .heavy: "ArchivoCondensed-Black"
-        case .bold: "ArchivoCondensed-Bold"
-        default: "ArchivoCondensed-ExtraBold"
-        }
-        if UIFont(name: name, size: size) != nil { return .custom(name, size: size, relativeTo: style) }
-        return .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size), weight: weight).width(.condensed)
+    /// Titles (bold) and big numbers (semibold), in sentence case at normal width: the author dropped the condensed
+    /// caps after using them (2026-10-30). Scales with Dynamic Type.
+    static func display(_ size: CGFloat, weight: Font.Weight = .bold, relativeTo style: Font.TextStyle = .largeTitle) -> Font {
+        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size), weight: weight)
     }
 }
 

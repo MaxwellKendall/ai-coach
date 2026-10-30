@@ -17,7 +17,7 @@ struct PlanReveal: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("YOUR \(program.weeks)-WEEK PLAN IS READY").font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(Color.inkMuted)
             Text(Self.headline(program, reveal: reveal, exercise: name, ends: ends))
-                .font(.display(38)).textCase(.uppercase).fixedSize(horizontal: false, vertical: true)
+                .font(.display(30)).fixedSize(horizontal: false, vertical: true)
             if let reveal {
                 Chart(Array(reveal.loads.enumerated()), id: \.offset) { week, load in
                     LineMark(x: .value("Week", week), y: .value("Load", load))

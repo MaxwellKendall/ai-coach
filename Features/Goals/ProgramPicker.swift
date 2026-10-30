@@ -126,7 +126,7 @@ struct ProgramPicker: View {
     private func question(_ text: String, _ detail: String, @ViewBuilder options: () -> some View) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(text).font(.display(38)).textCase(.uppercase).fixedSize(horizontal: false, vertical: true)
+                Text(text).font(.display(30)).fixedSize(horizontal: false, vertical: true)
                 Text(detail).font(.body).foregroundStyle(.secondary).padding(.top, 8).padding(.bottom, 28)
                 VStack(spacing: 10) { options() }
             }

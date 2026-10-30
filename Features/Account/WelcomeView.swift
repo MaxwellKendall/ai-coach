@@ -98,7 +98,7 @@ struct WelcomeView: View {
 
     private func title(_ text: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(text).font(.display(38)).textCase(.uppercase).fixedSize(horizontal: false, vertical: true)
+            Text(text).font(.display(30)).fixedSize(horizontal: false, vertical: true)
             // Whole even with the keyboard up for Sign in with email (FIT-229).
             Text(detail).font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
@@ -108,14 +108,14 @@ struct WelcomeView: View {
     /// The promise, its proof, and the three doors, each by its outcome.
     private var doors: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Hit your number by the date you set.").font(.display(46)).textCase(.uppercase)
+            Text("Hit your number by the date you set.").font(.display(34))
                 .fixedSize(horizontal: false, vertical: true)
             Text("A free plan from your own lifts, that moves when life does.").font(.body).foregroundStyle(Color.inkMuted)
                 .padding(.top, 10)
             HStack(alignment: .firstTextBaseline) {
                 Text("Back Squat").font(.subheadline).foregroundStyle(Color.inkMuted)
                 Spacer()
-                (Text("225 → ") + Text("250 lb").foregroundStyle(Plate.current.mark)).font(.display(26, weight: .heavy, relativeTo: .title2))
+                (Text("225 → ") + Text("250 lb").foregroundStyle(Plate.current.mark)).font(.display(24, weight: .semibold, relativeTo: .title2))
             }
             .padding(16).background(Color.fill, in: .rect(cornerRadius: 18)).padding(.top, 22)
             .accessibilityLabel("For example, Back Squat from 225 to 250 pounds")
