@@ -106,9 +106,8 @@ struct TodayScreen: View {
         // FIT-235: a later session can be done today only when today has no session of its own waiting.
         let todayFree: Bool = if case .plan = cards[0] { false } else { true }
         VStack(alignment: .leading, spacing: 0) {
-            header(days)
-            // Each day a full-width page swiped sideways (prototype A, https://claude.ai/artifact/M5FZ8bWiGeoJAG8QKdN7BT);
-            // the header names the day shown and the next one.
+            header(days, cards: cards)
+            // Each day a full-width page swiped sideways; the strip above follows it.
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(days.indices, id: \.self) { index in
@@ -123,7 +122,7 @@ struct TodayScreen: View {
             .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(.systemBackground))
+        .background(Color.canvas)
         .overlay {
             if working != nil { EdgeGlow().transition(.opacity) }
         }
@@ -264,16 +263,14 @@ struct TodayScreen: View {
 
     // MARK: Header and strip
 
-    /// The day shown as the title ("Today", "Tomorrow", "Monday") with its date and the program's week above it, the next
-    /// day one tap away beside it, and the goal line under it. One header for every page.
-    private func header(_ days: [Date]) -> some View {
+    /// The day shown as the title ("Today", "Tomorrow", "Monday"), the week strip to jump between days (FIT-27's strip,
+    /// brought back), and the goal line. One header for every page.
+    private func header(_ days: [Date], cards: [DayCard]) -> some View {
         let shown = min(day ?? 0, days.count - 1)
-        let deload = thisWeeksPlan?.warnings.contains { $0.hasPrefix("Deload") } == true
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(days[shown].formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + programWeek(of: days[shown])
-                     + (deload && shown == 0 ? " · light week" : ""))
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+        return VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(Self.dayName(days[shown], index: shown)).font(.display(34)).contentTransition(.opacity)
+                    .animation(.snappy, value: shown)
                 Spacer()
                 Button { you = true } label: {
                     Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(Color.inkMuted)
@@ -281,22 +278,7 @@ struct TodayScreen: View {
                 }
                 .accessibilityLabel("Account and library")
             }
-            HStack(alignment: .firstTextBaseline) {
-                Text(Self.dayName(days[shown], index: shown)).font(.display(34)).contentTransition(.opacity)
-                Spacer()
-                if shown + 1 < days.count {
-                    Button { withAnimation(.snappy) { day = shown + 1 } } label: {
-                        HStack(spacing: 4) {
-                            Text(Self.dayName(days[shown + 1], index: shown + 1))
-                            Image(systemName: "chevron.right").font(.footnote.weight(.bold))
-                        }
-                        .font(.headline).foregroundStyle(Plate.current.mark)
-                        .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .animation(.snappy, value: shown)
+            strip(days, cards: cards, selected: shown)
             if let goal = goalLine {
                 HStack(spacing: 8) {
                     Text(goal.label).font(.subheadline.weight(.semibold))
@@ -307,7 +289,42 @@ struct TodayScreen: View {
             }
             if !pro.coaches.isEmpty { checkInButton }
         }
-        .padding(.leading, 22).padding(.trailing, 12).padding(.top, 4)
+        .padding(.horizontal, 22).padding(.top, 4)
+    }
+
+    /// The seven days from today: weekday, date, and a dot for a session (ring) or one done (filled). Today's date is in
+    /// the plate colour; the shown day is filled.
+    private func strip(_ days: [Date], cards: [DayCard], selected: Int) -> some View {
+        HStack(spacing: 0) {
+            ForEach(days.indices, id: \.self) { index in
+                let on = index == selected
+                Button { withAnimation(.snappy) { day = index } } label: {
+                    VStack(spacing: 6) {
+                        Text(days[index].formatted(.dateTime.weekday(.narrow)))
+                            .font(.caption.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                        Text(days[index].formatted(.dateTime.day()))
+                            .font(.body.weight(on || index == 0 ? .semibold : .regular)).monospacedDigit()
+                            .foregroundStyle(on ? Color(.systemBackground) : index == 0 ? Plate.current.mark : Color.ink)
+                            .frame(width: 36, height: 36)
+                            .background(on ? Color.ink : .clear, in: .circle)
+                        dot(cards[index])
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Self.dayName(days[index], index: index))
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+    }
+
+    @ViewBuilder private func dot(_ card: DayCard) -> some View {
+        switch card {
+        case .done: Circle().fill(Color.ink).frame(width: 5, height: 5)
+        case .plan: Circle().strokeBorder(Color.ink, lineWidth: 1.5).frame(width: 5, height: 5)
+        case .rest: Color.clear.frame(width: 5, height: 5)
+        }
     }
 
     /// FIT-297: the first active goal, "Back squat 250 lb", and how far along its dates today is.
@@ -358,13 +375,6 @@ struct TodayScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint("Weight, sleep and a note for your coach")
-    }
-
-    /// FIT-39's "Week 3 of 16", in the date line since the program has its own tab (FIT-64).
-    private func programWeek(of date: Date) -> String {
-        guard let profile = profiles.first, let weeks = profile.program, let start = profile.programStart else { return "" }
-        let index = ProgramPlan.week(of: date, start: start)
-        return weeks.indices.contains(index) ? " · Week \(index + 1) of \(weeks.count)" : ""
     }
 
     /// "Today", "Tomorrow", then the weekday.
@@ -491,9 +501,15 @@ struct TodayScreen: View {
                         let report = weekReport()
                         WeekReviewCard(report: report) { review = report }
                     }
+                    // The day on a raised card: white on the canvas, a soft shadow rather than a border.
                     dayContent(card, day: day, isToday: index == 0, isPast: false, todayFree: todayFree)
+                        .padding(20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background {
+                            RoundedRectangle(cornerRadius: 24).fill(Color.surface).shadow(color: .black.opacity(0.06), radius: 18, y: 8)
+                        }
                 }
-                .padding(.horizontal, 22).padding(.top, 18).padding(.bottom, 16)
+                .padding(.horizontal, 22).padding(.top, 24).padding(.bottom, 28)
             }
             .scrollBounceBehavior(.basedOnSize)
             Group {
@@ -531,7 +547,7 @@ struct TodayScreen: View {
     private func secondary(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: icon).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48)
-                .background(Color.fill, in: .rect(cornerRadius: 14))
+                .background(Color.surface, in: .rect(cornerRadius: 14))
         }
         .buttonStyle(.plain)
     }
