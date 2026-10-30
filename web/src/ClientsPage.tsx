@@ -4,6 +4,7 @@ import { corrections, HistoryView } from "./HistoryView";
 import { href } from "./paths";
 import { ProgramPage } from "./ProgramPage";
 import catalog from "./catalog.json";
+import { ImportProgram } from "./ImportProgram";
 import { SendProgram } from "./SendProgram";
 import { comments as loadComments, createClientInvite, myClients, postComment, programOffers, pullAll, removeClient, type Comment, type Offer, type Person, type Unit } from "./sync";
 import { byNeed, triage, type Triage } from "./triage";
@@ -133,6 +134,7 @@ export function ClientPage({ config, me, uid, go }: {
   const [thread, setThread] = useState<Comment[]>([]);
   const [tab, setTab] = useState<"program" | "history">("program");
   const [sending, setSending] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [sent, setSent] = useState<Offer[]>([]);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
@@ -167,6 +169,12 @@ export function ClientPage({ config, me, uid, go }: {
       </div>
     );
   }
+  if (importing) {
+    return (
+      <ImportProgram config={config} client={client} onCancel={() => setImporting(false)}
+                     onDone={(text) => { setMessage(text); setImporting(false); }} />
+    );
+  }
   if (sending) {
     return (
       <SendProgram config={config} client={client} onCancel={() => setSending(false)}
@@ -180,6 +188,7 @@ export function ClientPage({ config, me, uid, go }: {
       <p className="crumb"><a href={href("/clients")} onClick={go("/clients")}>Clients</a></p>
       <div className="actions top">
         <button className="button primary" onClick={() => { setMessage(undefined); setSending(true); }}>Send a program</button>
+        <button className="button" onClick={() => { setMessage(undefined); setImporting(true); }}>Import a program</button>
         {message && <span className="status">{message}</span>}
       </div>
       {sent.length > 0 && (

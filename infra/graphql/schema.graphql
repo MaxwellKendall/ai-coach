@@ -292,6 +292,10 @@ type Mutation {
   # FIT-102: one Messages API request to Claude, sent on by the aiProxy Lambda with the key. Signed-in users only.
   # FIT-123: entitlement is the app's Pro transaction as Apple signed it (a JWS); without it, a few requests for good.
   aiMessages(request: AWSJSON!, entitlement: String): AWSJSON
+  "FIT-290: read a pasted program (sheet cells or CSV) into a proposal for a client (uid, or my own) from the Monday of start."
+  importProgram(uid: ID!, text: String!, start: String!, tz: String): ImportedProgram
+  "FIT-290: save an import's proposal into the client's plan."
+  applyImport(uid: ID!, id: ID!, tz: String): Int
 }
 
 type Subscription {
@@ -314,4 +318,12 @@ type SharedItem {
   kind: String!
   name: String
   payload: AWSJSON!
+}
+
+"FIT-290: an imported program, as a proposal to preview: what each day becomes, and the plan checks."
+type ImportedProgram {
+  id: ID!
+  preview: String!
+  days: Int!
+  added: [String!]!
 }

@@ -720,10 +720,10 @@ function startOf(units: Units, day: string, tz: string) {
   return first ? Math.floor(first.at / 60) * 60 : epoch(day, profileOf(units)?.workoutTime ?? 7 * 60, tz);
 }
 
-type DayInput = { date: string; title?: string; exercises: ExerciseInput[] };
+export type DayInput = { date: string; title?: string; exercises: ExerciseInput[] };
 
 /** One or more days' new sessions, checked by the plan rules, stored for apply. */
-async function propose(uid: string, caller: string, tz: string, today: string, days: DayInput[], reason: string, store: Store) {
+export async function propose(uid: string, caller: string, tz: string, today: string, days: DayInput[], reason: string, store: Store) {
   const units = await store.units(uid);
   const profile = profileOf(units);
   const out: { day: string; rows: string }[] = [];
@@ -907,6 +907,28 @@ function sampleNote(clients: Person[], paid: boolean) {
   return `${note}\n\nPlanning, changing and reviewing real clients' training from here is Barbrabell Pro; reading them, notes and invites are free, and so is all coaching on the dashboard (${ORIGIN}/app). How Pro works: ${ORIGIN}/coaches.`;
 }
 
+/**
+ * Writes a proposal into uid's plan, keeping each day's old plan for undo. FIT-290: the dashboard's import applies its
+ * own proposal with allowProblems, since the coach saw the rule checks in its preview and decided.
+ */
+export async function applyProposal(id: string, uid: string, account: Account, store: Store, now = new Date(), { allowProblems = false } = {}) {
+  const proposal = await store.get(account.uid, `proposal#${id}`);
+  if (!proposal) throw new Error("No such proposal (they last 2 days). Propose again.");
+  const owner = (proposal.uid as string | undefined) ?? account.uid;
+  if (owner !== uid) throw new Error(`That proposal is for ${owner === account.uid ? "their own training" : "another client"}: ${owner === account.uid ? "leave client out" : `pass client ${owner}`}.`);
+  if (proposal.problems?.length && !allowProblems) throw new Error(`That proposal breaks the plan rules; fix these and propose again:\n${proposal.problems.map((p: string) => `- ${p}`).join("\n")}`);
+  const days = proposal.days as { day: string; rows: string }[];
+  const units = await store.units(uid);
+  const logged = days.filter((d) => logOf(units, d.day).some((r) => r.kind === "workout")).map((d) => d.day);
+  if (logged.length) throw new Error(`${logged.join(", ")} has been logged since; propose again without it.`);
+  for (const d of days) await store.put(uid, `undo#${d.day}`, { body: units.get(`plan#${d.day}`) ?? null }, 14);
+  await store.write(uid, days.map((d) => ({ key: `plan#${d.day}`, body: JSON.parse(d.rows).length ? d.rows : null })), account.agent, account.uid);
+  // FIT-209: what the agent wrote, to tell later whether it was kept as written.
+  const at = now.toISOString();
+  for (const d of days) await store.put(uid, `written#${d.day}`, { day: d.day, at, by: account.uid, owner: uid, fp: fingerprint(JSON.parse(d.rows) as PlanRow[]) }, 180);
+  return days;
+}
+
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
   const { tz } = account;
   if (args.client !== undefined && !CLIENT_TOOLS.has(name)) throw new Error(`${name} is the client's own to do, so it takes no client.`);
@@ -1087,20 +1109,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     case "propose_week":
       return propose(uid, account.uid, tz, today, args.days as DayInput[], String(args.reason), store);
     case "apply": {
-      const proposal = await store.get(account.uid, `proposal#${args.proposal_id}`);
-      if (!proposal) throw new Error("No such proposal (they last 2 days). Propose again.");
-      const owner = (proposal.uid as string | undefined) ?? account.uid;
-      if (owner !== uid) throw new Error(`That proposal is for ${owner === account.uid ? "their own training" : "another client"}: ${owner === account.uid ? "leave client out" : `pass client ${owner}`}.`);
-      if (proposal.problems?.length) throw new Error(`That proposal breaks the plan rules; fix these and propose again:\n${proposal.problems.map((p: string) => `- ${p}`).join("\n")}`);
-      const days = proposal.days as { day: string; rows: string }[];
-      const units = await store.units(uid);
-      const logged = days.filter((d) => logOf(units, d.day).some((r) => r.kind === "workout")).map((d) => d.day);
-      if (logged.length) throw new Error(`${logged.join(", ")} has been logged since; propose again without it.`);
-      for (const d of days) await store.put(uid, `undo#${d.day}`, { body: units.get(`plan#${d.day}`) ?? null }, 14);
-      await store.write(uid, days.map((d) => ({ key: `plan#${d.day}`, body: JSON.parse(d.rows).length ? d.rows : null })), account.agent, account.uid);
-      // FIT-209: what the agent wrote, to tell later whether it was kept as written.
-      const at = now.toISOString();
-      for (const d of days) await store.put(uid, `written#${d.day}`, { day: d.day, at, by: account.uid, owner: uid, fp: fingerprint(JSON.parse(d.rows) as PlanRow[]) }, 180);
+      const days = await applyProposal(String(args.proposal_id), uid, account, store, now);
       const lines = days.map((d) => `${weekday(d.day)} ${d.day}: ${describeSession(JSON.parse(d.rows) as PlanRow[]).title ?? "rest"}`);
       return `Applied:\n${lines.join("\n")}\nIt shows on their phone at its next sync. undo (per day) puts the old session back.`;
     }

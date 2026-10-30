@@ -413,6 +413,14 @@ export class AICoachStack extends Stack {
       fieldName: "aiMessages",
     });
 
+    // ---- FIT-290: a coach's pasted program, read by Claude on our tokens, capped per coach ----
+    const importProgram = fn("importProgram", { ANTHROPIC_SECRET: anthropicSecret.secretName });
+    table.grant(importProgram, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem");
+    anthropicSecret.grantRead(importProgram);
+    const importSource = api.addLambdaDataSource("ImportProgramSource", importProgram);
+    importSource.createResolver("ImportProgram", { typeName: "Mutation", fieldName: "importProgram" });
+    importSource.createResolver("ApplyImport", { typeName: "Mutation", fieldName: "applyImport" });
+
     // ---- FIT-137: linking Apple and Google sign-ins into one account ----
     const accounts = fn("accounts", { USER_POOL_ID: userPool.userPoolId, CLIENT_IDS: [appClient.userPoolClientId, webClient.userPoolClientId].join(",") });
     table.grant(accounts, "dynamodb:Query", "dynamodb:PutItem", "dynamodb:DeleteItem");

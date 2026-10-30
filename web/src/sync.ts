@@ -125,3 +125,14 @@ export const programOffers = (config: Config, uid: string) =>
   gql<{ programOffers: Offer[] }>(config,
     `query($u: ID) { programOffers(uid: $u) { id coachUid coachName note start weeks days addPerWeek status createdAt answeredAt } }`, { u: uid })
     .then((d) => d.programOffers);
+
+// FIT-290: a pasted program read into a proposal for a client, then saved into their plan.
+export type ImportedProgram = { id: string; preview: string; days: number; added: string[] };
+const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+export const importProgram = (config: Config, uid: string, text: string, start: string) =>
+  gql<{ importProgram: ImportedProgram }>(config, `mutation($u: ID!, $x: String!, $s: String!, $z: String) { importProgram(uid: $u, text: $x, start: $s, tz: $z) { id preview days added } }`,
+    { u: uid, x: text, s: start, z: zone() }).then((d) => d.importProgram);
+
+export const applyImport = (config: Config, uid: string, id: string) =>
+  gql<{ applyImport: number }>(config, `mutation($u: ID!, $i: ID!, $z: String) { applyImport(uid: $u, id: $i, tz: $z) }`, { u: uid, i: id, z: zone() }).then((d) => d.applyImport);

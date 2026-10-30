@@ -65,7 +65,7 @@ export function allowedRequest(raw: unknown): { body: Request } | { error: strin
 export const day = (now: Date) => now.toISOString().slice(0, 10);
 
 /** Counts one request against an allowance; false when it's used up. A day's expires; the free one doesn't. */
-async function allowance(uid: string, sk: string, limit: number, expiresAt?: number): Promise<boolean> {
+export async function allowance(uid: string, sk: string, limit: number, expiresAt?: number): Promise<boolean> {
   try {
     await db.send(new UpdateCommand({
       TableName: TABLE,
@@ -83,7 +83,7 @@ async function allowance(uid: string, sk: string, limit: number, expiresAt?: num
 }
 
 let key: string | undefined;
-async function apiKey() {
+export async function apiKey() {
   if (!key) {
     const secret = await secrets.send(new GetSecretValueCommand({ SecretId: SECRET }));
     key = JSON.parse(secret.SecretString ?? "{}").apiKey;
