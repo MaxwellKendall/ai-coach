@@ -80,11 +80,11 @@ struct OnboardingView: View {
                     .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
-                .background(Color(.systemBackground))
+                .screenBackground()
             }
             if !keyboard { footer }
         }
-        .background(Color(.systemBackground))
+        .screenBackground()
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
         .overlay {

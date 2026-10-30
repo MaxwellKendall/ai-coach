@@ -68,7 +68,7 @@ struct WorkoutModeView: View {
             .padding(.top, 16)
             micArea(onFinish: page == cards.count).frame(height: 104)
         }
-        .background(Color(.systemBackground))
+        .screenBackground()
         .onChange(of: page) {
             editing = nil
             live?.update(draft.live(at: page, names: names))
@@ -289,7 +289,7 @@ struct WorkoutModeView: View {
         }
         .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+        .cardBackground()
         .clipShape(.rect(cornerRadius: 30))
         .accessibilityAction(named: "Unlog") { if done { unlog(line) } }
     }
@@ -386,7 +386,7 @@ struct WorkoutModeView: View {
     private func round(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button { withAnimation(.snappy, action) } label: {
             Image(systemName: symbol).font(.title3.weight(.medium)).frame(width: 56, height: 56)
-                .background(Color(.systemBackground), in: .circle)
+                .background(Color.surface, in: .circle)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -477,7 +477,7 @@ struct WorkoutModeView: View {
         }
         .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+        .cardBackground()
         .contentShape(.rect(cornerRadius: 30))
     }
 
@@ -500,7 +500,7 @@ struct WorkoutModeView: View {
         func makeBody(configuration: Configuration) -> some View {
             configuration.label.font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 14).frame(height: 36)
-                .background(Color(.systemBackground), in: .capsule)
+                .background(Color.surface, in: .capsule)
                 .opacity(configuration.isPressed ? 0.6 : 1)
         }
     }
@@ -618,7 +618,7 @@ struct WorkoutModeView: View {
         }
         .padding(EdgeInsets(top: 26, leading: 24, bottom: 22, trailing: 24))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+        .cardBackground()
     }
 
     private func stat(_ value: String, _ unit: String) -> some View {

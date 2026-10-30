@@ -80,7 +80,7 @@ struct PaywallView: View {
             }
         }
         .padding(16)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+        .background(Color.fill, in: .rect(cornerRadius: 16))
     }
 
     /// What happens on each day of the annual plan's free trial.

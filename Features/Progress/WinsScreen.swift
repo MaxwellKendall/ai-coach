@@ -28,7 +28,7 @@ struct WinsScreen: View {
                             row(win).overlay(alignment: .top) { if index > 0 { Divider().padding(.leading, 70) } }
                         }
                     }
-                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 22))
+                    .cardBackground()
                 }
             }
             .padding(.horizontal, 16).padding(.bottom, 40)
@@ -50,7 +50,7 @@ struct WinsScreen: View {
             Button { withAnimation(.snappy) { open = isOpen ? nil : win.key } } label: {
                 HStack(spacing: 14) {
                     Image(systemName: symbol(win.kind)).font(.body.weight(.semibold))
-                        .frame(width: 40, height: 40).background(Color(.tertiarySystemFill), in: .circle)
+                        .frame(width: 40, height: 40).background(Color.fill, in: .circle)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(words.title).font(.body.weight(.semibold)).multilineTextAlignment(.leading)
                         Text(words.line).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.leading)

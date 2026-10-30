@@ -34,7 +34,7 @@ struct CoachInviteSheet: View {
                     } label: {
                         Text("Turn On Notifications").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .buttonStyle(.primary)
                     Button("Not Now") { withAnimation(.snappy) { askingPush = false } }.controlSize(.large)
                 }
             } else if let accepted {
@@ -43,7 +43,7 @@ struct CoachInviteSheet: View {
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Spacer(minLength: 0)
                 Button("Done") { dismiss() }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .buttonStyle(.primary)
             } else if !loaded {
                 ProgressView()
                 Spacer(minLength: 0)
@@ -59,7 +59,7 @@ struct CoachInviteSheet: View {
                     Button { accept() } label: {
                         if working { ProgressView().frame(maxWidth: .infinity) } else { Text("Allow").frame(maxWidth: .infinity) }
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .buttonStyle(.primary)
                     .disabled(working)
                     Button("Not Now") { dismiss() }.controlSize(.large)
                 }

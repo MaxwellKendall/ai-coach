@@ -99,7 +99,7 @@ struct Nudge: View {
             button("plus", moreLabel, more)
         }
         .padding(4)
-        .background(Color(.secondarySystemBackground), in: .capsule)
+        .background(Color.fill, in: .capsule)
     }
 
     private func commit() {
@@ -113,7 +113,7 @@ struct Nudge: View {
         Button { withAnimation(.snappy) { action() } } label: {
             Image(systemName: symbol).font(.body.weight(.semibold))
                 .frame(width: 44, height: 44)
-                .background(Color(.systemBackground), in: .circle)
+                .background(Color.surface, in: .circle)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

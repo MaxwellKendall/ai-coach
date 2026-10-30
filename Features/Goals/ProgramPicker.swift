@@ -111,7 +111,7 @@ struct ProgramPicker: View {
             Button { path.append(.days) } label: {
                 Text("Continue").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
             }
-            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+            .buttonStyle(.primary)
             .padding(.horizontal, 24).padding(.bottom, 8)
         }
     }
@@ -153,7 +153,7 @@ struct ProgramPicker: View {
             }
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity, minHeight: 64)
-            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+            .rowBackground()
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -189,7 +189,7 @@ private struct KitList: View {
             }
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity, minHeight: 56)
-            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+            .rowBackground()
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -345,7 +345,7 @@ private struct ProgramChoice: View {
             }
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+            .rowBackground()
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -359,7 +359,7 @@ private struct ProgramChoice: View {
             } label: {
                 Text("Start Program").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
             }
-            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+            .buttonStyle(.primary)
             .disabled(!program.days.contains(trainingDays.count))
             .confirmationDialog("Start \(program.name)?", isPresented: $confirming, titleVisibility: .visible) {
                 Button("Start Program") { start(program) }
@@ -447,7 +447,7 @@ private struct RecentSetStep: View {
                 Button { onDone(set) } label: {
                     Text("Continue").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
                 }
-                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+                .buttonStyle(.primary)
                 .disabled(set == nil)
                 Button("I’m Not Sure") { onDone(nil) }
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -466,7 +466,7 @@ private struct RecentSetStep: View {
         }
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, minHeight: 64)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+        .rowBackground()
         .onTapGesture { focus = which }
     }
 }

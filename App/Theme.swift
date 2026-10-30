@@ -73,6 +73,84 @@ extension Font {
     }
 }
 
+// MARK: The look every screen shares (author, 2026-10-30: Today's grey page, white cards with a soft shadow, plenty of
+// room, little text). Colours come from the tokens above and the plate colour, so light, dark and each plate follow.
+
+extension View {
+    /// A screen's page: the canvas behind its cards, edge to edge.
+    func screenBackground() -> some View { background(Color.canvas.ignoresSafeArea()) }
+
+    /// A raised card: white on the canvas, a soft shadow rather than a border.
+    func card(padding: CGFloat = 20) -> some View {
+        self.padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardBackground()
+    }
+
+    /// The card's white and shadow alone, for a view that sets its own padding and size.
+    func cardBackground() -> some View {
+        background { RoundedRectangle(cornerRadius: 24).fill(Color.surface).shadow(color: .black.opacity(0.06), radius: 18, y: 8) }
+    }
+
+    /// A row's white and lighter shadow, for a choice or list row sitting on the canvas.
+    func rowBackground() -> some View {
+        background { RoundedRectangle(cornerRadius: 18).fill(Color.surface).shadow(color: .black.opacity(0.04), radius: 10, y: 4) }
+    }
+
+    /// A List or Form on the canvas, its sections as white cards.
+    func themedList() -> some View {
+        scrollContentBackground(.hidden).background(Color.canvas.ignoresSafeArea())
+    }
+}
+
+/// The one plate-coloured action on a screen.
+struct PrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { Filled(configuration: configuration) }
+
+    private struct Filled: View {
+        let configuration: Configuration
+        @Environment(\.isEnabled) private var enabled
+
+        var body: some View {
+            configuration.label
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .foregroundStyle(Plate.current.onAccent)
+                .background(.tint, in: .rect(cornerRadius: 18))
+                .opacity(enabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
+        }
+    }
+}
+
+/// Actions beside or under the primary one: white on the canvas.
+struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .foregroundStyle(Color.ink)
+            .background(configuration.isPressed ? Color.fillStrong : Color.surface, in: .rect(cornerRadius: 14))
+    }
+}
+
+/// A choice or list row that's tapped as a whole: a white card on the canvas.
+struct RowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 18).fill(configuration.isPressed ? Color.fillStrong : Color.surface)
+                    .shadow(color: .black.opacity(0.04), radius: 10, y: 4)
+            }
+            .contentShape(.rect)
+    }
+}
+
+extension ButtonStyle where Self == PrimaryButtonStyle { static var primary: PrimaryButtonStyle { .init() } }
+extension ButtonStyle where Self == SecondaryButtonStyle { static var secondary: SecondaryButtonStyle { .init() } }
+extension ButtonStyle where Self == RowButtonStyle { static var row: RowButtonStyle { .init() } }
+
 private extension Font.TextStyle {
     var uiKit: UIFont.TextStyle {
         switch self {

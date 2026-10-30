@@ -107,7 +107,7 @@ struct SessionList: View {
             }
             if let letter {
                 Text(letter).font(.caption2.weight(.heavy)).foregroundStyle(Color.inkMuted)
-                    .frame(width: 18, height: 18).background(Color(.systemBackground), in: .circle)
+                    .frame(width: 18, height: 18).background(Color.surface, in: .circle)
                     .overlay { Circle().stroke(Color.inkFaint, lineWidth: 2) }
             }
             VStack(alignment: .leading, spacing: 2) {

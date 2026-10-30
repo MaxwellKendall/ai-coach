@@ -127,7 +127,7 @@ struct TodayScreen: View {
             .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.canvas)
+        .screenBackground()
         .overlay {
             if working != nil { EdgeGlow().transition(.opacity) }
         }
@@ -479,11 +479,8 @@ struct TodayScreen: View {
                 } else {
                     Button { start(plan) } label: {
                         Label(lifting(plan.items).isEmpty ? "Start the run" : "Start", systemImage: lifting(plan.items).isEmpty ? "figure.run" : "play.fill")
-                            .font(.headline).frame(maxWidth: .infinity, minHeight: 58)
-                            .foregroundStyle(Plate.current.onAccent)
-                            .background(.tint, in: .rect(cornerRadius: 18))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.primary)
                     pair("Change", "arrow.left.arrow.right", { sheet = .change(plan.items) }, "Log", "plus", { sheet = .logChoice(plan.items) })
                 }
             case .done(let done):
@@ -510,13 +507,8 @@ struct TodayScreen: View {
                         let report = weekReport()
                         WeekReviewCard(report: report) { review = report }
                     }
-                    // The day on a raised card: white on the canvas, a soft shadow rather than a border.
                     dayContent(card, day: day, isToday: index == todayPos, isPast: index < todayPos, todayFree: todayFree)
-                        .padding(20)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background {
-                            RoundedRectangle(cornerRadius: 24).fill(Color.surface).shadow(color: .black.opacity(0.06), radius: 18, y: 8)
-                        }
+                        .card()
                 }
                 .padding(.horizontal, 22).padding(.top, 24).padding(.bottom, 28)
             }
@@ -555,11 +547,7 @@ struct TodayScreen: View {
     }
 
     private func secondary(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: icon).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48)
-                .background(Color.surface, in: .rect(cornerRadius: 14))
-        }
-        .buttonStyle(.plain)
+        Button(action: action) { Label(title, systemImage: icon) }.buttonStyle(.secondary)
     }
 
     /// FIT-297 (E1): a load changed in place on Today changes the plan's working sets for that exercise.
@@ -604,7 +592,7 @@ struct TodayScreen: View {
             Button { sheet = .own } label: {
                 Label("Log a workout", systemImage: "plus").font(.headline).padding(.horizontal, 20)
                     .frame(maxWidth: .infinity, minHeight: 50)
-                    .background(Color(.systemBackground), in: .capsule)
+                    .background(Color.surface, in: .capsule)
             }
             if let run { runButton("Start the run", run) } else { runButton("Start a run", nil) }
         }
@@ -621,7 +609,7 @@ struct TodayScreen: View {
         Button(action: action) {
             Label(title, systemImage: icon).font(.headline).padding(.horizontal, 20)
                 .frame(maxWidth: .infinity, minHeight: 50)
-                .background(Color(.systemBackground), in: .capsule)
+                .background(Color.surface, in: .capsule)
         }
         .buttonStyle(.plain)
     }

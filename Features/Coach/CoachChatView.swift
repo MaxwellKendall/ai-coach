@@ -91,7 +91,7 @@ struct CoachChatView: View {
                 .font(.body)
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .foregroundStyle(message.coach ? Color.primary : Color(.systemBackground))
-                .background(message.coach ? Color(.secondarySystemBackground) : Color.primary, in: .rect(cornerRadius: 18))
+                .background(message.coach ? Color.fill : Color.primary, in: .rect(cornerRadius: 18))
                 .textSelection(.enabled)
             if message.coach { Spacer(minLength: 48) }
         }
@@ -128,7 +128,7 @@ struct CoachChatView: View {
                     .submitLabel(.send)
                     .onSubmit { send(text) }
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
+                    .background(Color.fill, in: .rect(cornerRadius: 20))
                 if text.isEmpty {
                     MicButton(voice: voice, compact: true) { send($0) }
                 } else {

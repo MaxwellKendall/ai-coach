@@ -77,7 +77,7 @@ struct WelcomeView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .background(Color(.systemBackground))
+        .screenBackground()
         .animation(.snappy, value: account.user)
         .animation(.snappy, value: code)
         .animation(.snappy, value: door)
@@ -193,7 +193,7 @@ struct WelcomeView: View {
                     Group { if working { ProgressView() } else { Text("Allow") } }
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 54)
                 }
-                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+                .buttonStyle(.primary)
                 .disabled(working)
                 Button("Use a Different Code") { self.code = nil }
                     .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
@@ -215,7 +215,7 @@ struct WelcomeView: View {
                     .font(.title3.monospaced())
                     .padding(.horizontal, 16)
                     .frame(minHeight: 54)
-                    .background(Color(.secondarySystemBackground), in: .capsule)
+                    .background(Color.fill, in: .capsule)
                     .onSubmit(submit)
                 // Apple's paste button reads the clipboard only when tapped, so there's no permission prompt.
                 PasteButton(payloadType: String.self) { pasted in
@@ -232,7 +232,7 @@ struct WelcomeView: View {
             Button { submit() } label: {
                 Text("Join").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
             }
-            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+            .buttonStyle(.primary)
             .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
             .padding(.top, 16)
         }
@@ -254,13 +254,13 @@ struct WelcomeView: View {
             } label: {
                 Text("Turn On Notifications").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
             }
-            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+            .buttonStyle(.primary)
             Button("Not Now") { withAnimation(.snappy) { askingPush = nil } }
                 .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .background(Color(.systemBackground))
+        .screenBackground()
     }
 
     private func problem(_ text: String) -> some View {

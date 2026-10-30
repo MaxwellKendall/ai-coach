@@ -140,7 +140,7 @@ struct WeeklyReviewScreen: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+                .background(Color.fill, in: .rect(cornerRadius: 16))
                 .accessibilityElement(children: .combine)
             }
         }
@@ -166,7 +166,7 @@ struct WeeklyReviewScreen: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
+                    .cardBackground()
                     .containerRelativeFrame(.horizontal) { width, _ in width * 0.8 }
                     .accessibilityElement(children: .combine)
                 }
@@ -251,7 +251,7 @@ struct WeeklyReviewScreen: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16).padding(.vertical, 14)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
+        .cardBackground()
     }
 
     /// A pick: it says what happened in place, and a change comes with Undo.
@@ -268,7 +268,7 @@ struct WeeklyReviewScreen: View {
         } label: {
             Text(label).font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 40)
                 .foregroundStyle(primary ? Color(.systemBackground) : .primary)
-                .background(primary ? Color.primary : Color(.tertiarySystemFill), in: .capsule)
+                .background(primary ? Color.primary : Color.fill, in: .capsule)
         }
         .buttonStyle(.plain)
     }

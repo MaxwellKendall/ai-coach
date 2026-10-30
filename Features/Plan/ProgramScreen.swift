@@ -88,7 +88,7 @@ struct ProgramScreen: View {
             .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
             .sheet(item: $amend) { amend in AmendSheet(amend: amend) { applyTravel(amend.travel) } }
             .sheet(item: $programLink) { ActivityView(link: $0).presentationDetents([.medium, .large]) }
-            .background(Color(.systemBackground))
+            .screenBackground()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -221,8 +221,8 @@ struct ProgramScreen: View {
         }
         .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
-        .clipShape(.rect(cornerRadius: 30))
+        .cardBackground()
+        .clipShape(.rect(cornerRadius: 24))
     }
 
     private func weekCard(_ index: Int, weeks: [ProgramWeek], start: Date, current: Int, profile: Profile) -> some View {
@@ -289,8 +289,8 @@ struct ProgramScreen: View {
         }
         .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
-        .clipShape(.rect(cornerRadius: 30))
+        .cardBackground()
+        .clipShape(.rect(cornerRadius: 24))
     }
 
     /// Where each goal should be by a later week: "~190", "185".
@@ -605,7 +605,7 @@ struct ProgramScreen: View {
                                 Text(WeekReport.short(option)).font(.subheadline.weight(.semibold))
                                     .foregroundStyle(on ? Color(.systemBackground) : .secondary)
                                     .padding(.horizontal, 14).frame(minHeight: 34)
-                                    .background(on ? Color.primary : Color(.secondarySystemBackground), in: .capsule)
+                                    .background(on ? Color.primary : Color.surface, in: .capsule)
                                     .contentShape(.capsule)
                             }
                             .buttonStyle(.plain)

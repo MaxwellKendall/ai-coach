@@ -22,7 +22,7 @@ struct GoalCard: View {
         ScrollView { content }
             .scrollIndicators(.hidden)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
+            .cardBackground()
             .clipShape(.rect(cornerRadius: 30))
             .accessibilityElement(children: .contain)
     }
@@ -174,7 +174,7 @@ struct PaceChip: View {
                 switch pace {
                 case .behind: Capsule().fill(.primary)
                 case .ahead: Capsule().strokeBorder(.primary, lineWidth: 1.5)
-                default: Capsule().fill(Color(.tertiarySystemFill))
+                default: Capsule().fill(Color.fill)
                 }
             }
     }
@@ -236,7 +236,7 @@ struct GoalChart: View {
                 }
             PointMark(x: .value("Date", lines.end), y: .value("Value", lines.target))
                 .symbol {
-                    Circle().fill(Color(.secondarySystemBackground))
+                    Circle().fill(Color.fill)
                         .overlay(Circle().strokeBorder(Color.primary, lineWidth: 2))
                         .frame(width: 9, height: 9)
                 }

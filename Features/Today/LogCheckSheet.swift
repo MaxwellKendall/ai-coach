@@ -28,7 +28,7 @@ struct LogCheckSheet: View {
                 }
                 .padding(16)
             }
-            .background(Color(.secondarySystemBackground))
+            .screenBackground()
             .navigationTitle("Check")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -24,7 +24,7 @@ struct CoachThread: View {
                         }
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(mine ? Color(.secondarySystemBackground) : Color(.systemBackground), in: .rect(cornerRadius: 12))
+                        .background(mine ? Color.fill : Color.surface, in: .rect(cornerRadius: 12))
                     }
                     if !pro.coaches.isEmpty {
                         HStack(spacing: 8) {

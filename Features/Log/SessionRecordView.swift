@@ -43,7 +43,7 @@ struct SessionRecordView: View {
                 tabs(record)
                 SwipeDeck(index: $page, count: record.blocks.count, cornerRadius: 0) { index in
                     ScrollView { blockPage(index, record.blocks[index], bySlug) }
-                        .background(Color(.secondarySystemBackground))
+                        .screenBackground()
                 }
                 .padding(.horizontal, 16)
             } else if runs.isEmpty {
@@ -54,7 +54,7 @@ struct SessionRecordView: View {
         }
         .navigationDestination(item: $opened) { RunDetailView(run: $0) }
         .padding(.top, 8)
-        .background(Color(.secondarySystemBackground))
+        .screenBackground()
         .navigationTitle(planned.first?.slot ?? "Workout")
         .navigationSubtitle(day.formatted(.dateTime.weekday(.wide).month().day()))
         .navigationBarTitleDisplayMode(.inline)
@@ -92,7 +92,7 @@ struct SessionRecordView: View {
                     Text(SessionPlan.letter(index))
                         .font(.system(size: 18, weight: .bold))
                         .frame(maxWidth: .infinity, minHeight: 40)
-                        .background(index == page ? Color.primary : Color(.systemBackground), in: .rect(cornerRadius: 12))
+                        .background(index == page ? Color.primary : Color.surface, in: .rect(cornerRadius: 12))
                         .foregroundStyle(index == page ? Color(.systemBackground) : .primary)
                 }
                 .buttonStyle(.plain)

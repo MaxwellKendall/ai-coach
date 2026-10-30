@@ -62,7 +62,7 @@ struct IntakeView: View {
             .padding(.horizontal, 22)
             .padding(.vertical, 12)
         }
-        .background(Color(.systemBackground))
+        .screenBackground()
         .onAppear(perform: prefill)
     }
 

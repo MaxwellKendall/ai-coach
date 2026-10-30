@@ -85,7 +85,7 @@ struct WorkoutDetailView: View {
                 }
             }
         }
-        .background(Color(.secondarySystemBackground))
+        .screenBackground()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !pushed { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -213,7 +213,7 @@ struct WorkoutDetailView: View {
                         Text(SetRow.units[metric] ?? metric).font(.caption).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(isSelected ? Color.primary.opacity(0.12) : Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+                    .background(isSelected ? Color.primary.opacity(0.12) : Color.fill, in: .rect(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isSelected ? Color.primary : .clear, lineWidth: 2))
                     .contentShape(.rect)
                 }
@@ -280,7 +280,7 @@ struct WorkoutDetailView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis").frame(width: 44, height: 36)
-                    .background(Color(.secondarySystemBackground), in: .capsule)
+                    .background(Color.fill, in: .capsule)
             }
             // FIT-81: a short list for the movement, and search, not the whole catalog.
             if block.isGroup {
@@ -299,7 +299,7 @@ struct WorkoutDetailView: View {
                 withAnimation(.snappy) { session.addSet(block: index) }
             } label: {
                 Text(block.isGroup ? "+ Round" : "+ Set").font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(height: 36)
-                    .background(Color(.secondarySystemBackground), in: .capsule)
+                    .background(Color.fill, in: .capsule)
             }
             .buttonStyle(.plain)
         }
@@ -310,7 +310,7 @@ struct WorkoutDetailView: View {
 
     private var swapLabel: some View {
         Text("Swap").font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(height: 36)
-            .background(Color(.secondarySystemBackground), in: .capsule)
+            .background(Color.fill, in: .capsule)
     }
 
     @ViewBuilder private func bottom(_ names: [String: String]) -> some View {
@@ -385,7 +385,7 @@ struct WorkoutDetailView: View {
             }
         } label: {
             Image(systemName: symbol).font(.title2.weight(.bold)).frame(width: 64, height: 64)
-                .background(Color(.secondarySystemBackground), in: .circle)
+                .background(Color.fill, in: .circle)
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.selection, trigger: session.blocks[cell.block].movements[cell.movement].sets[cell.set].value(cell.metric))

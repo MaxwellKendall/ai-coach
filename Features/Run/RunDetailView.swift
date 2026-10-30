@@ -54,7 +54,7 @@ struct RunRow: View {
                     RouteMap(points: route).frame(width: 64, height: 64).clipShape(.rect(cornerRadius: 12)).allowsHitTesting(false)
                 } else {
                     Image(systemName: "figure.run").font(.title2).frame(width: 64, height: 64)
-                        .background(Color(.systemBackground), in: .rect(cornerRadius: 12))
+                        .background(Color.surface, in: .rect(cornerRadius: 12))
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Label("Ran", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)

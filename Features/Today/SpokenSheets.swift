@@ -147,7 +147,7 @@ struct SpokenCheckSheet: View {
     private func round(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button { withAnimation(.snappy, action) } label: {
             Image(systemName: symbol).font(.body.weight(.medium)).frame(width: 36, height: 36)
-                .background(Color(.secondarySystemBackground), in: .circle)
+                .background(Color.fill, in: .circle)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
