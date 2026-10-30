@@ -14,7 +14,7 @@ Coach your strength clients from Claude. Write a client's program in a conversat
 
 ## Set up
 
-1. Sign in at [barbrabell.com/app](https://barbrabell.com/app) and start the coach plan.
+1. Sign in at [barbrabell.com/app](https://barbrabell.com/app). Coaching there is free, with any number of clients. Planning and changing clients' training from Claude is Pro ($19.99 a month, from Billing); try it free on your sample client first.
 2. Install this plugin in Claude (Customize › Plugins), then connect Barbrabell when Claude asks and sign in with the same Google or Apple account.
 3. Ask Claude something like "Invite a new client" or "Who needs me this week?".
 

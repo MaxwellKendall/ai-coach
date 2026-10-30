@@ -22,7 +22,8 @@ describe("comparison pages (FIT-244)", () => {
 
   it("puts prices side by side where the vendor gives them", () => {
     const body = compareRoute("/compare/trainera", site)!.body;
-    expect(body).toContain("<th>20 clients</th><td>$19.99</td><td>$49.99</td>");
+    expect(body).toContain("<th>20 clients</th><td>Free</td><td>$49.99</td>");
+    expect(body).toContain("At 20 clients, Barbrabell is free and Trainera is $49.99.");
   });
 
   it("an unknown comparison falls through", () => {

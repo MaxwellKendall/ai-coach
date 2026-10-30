@@ -580,14 +580,14 @@ function coachInvitePage(coach: string | null, path: string, site: Site) {
 }
 
 /**
- * FIT-217: where a coach starts. Sign-in, the plan's Checkout and inviting clients are on the dashboard (/app).
- * FIT-242: Clients, which for someone new is the coach start: their sample client (FIT-240) and Start the coach plan.
+ * FIT-217: where a coach starts. Sign-in, inviting clients and Pro's Checkout are on the dashboard (/app).
+ * FIT-242: Clients, which for someone new is the coach start: their sample client (FIT-240) and the invite.
  */
 export const START = "/app/clients";
 
 /**
- * FIT-217: the home page is for coaches, the customer since the pilot (author, 2026-10-22). It says who it's for,
- * what it costs and what to do next, and "Start coaching" leads to the dashboard: sign in, then the coach plan.
+ * FIT-217: the home page is for coaches, the customer since the pilot (author, 2026-10-22). FIT-288: business model
+ * v2's pitch, everything they pay other tools for, free; Pro is the AI. "Start free" leads to the dashboard's sign-in.
  */
 function homePage(site: Site) {
   const app = esc(site.appName);
@@ -597,16 +597,16 @@ function homePage(site: Site) {
     { who: "coach", text: "Apply." },
   ];
   return layout(site, {
-    title: `${site.appName}: coach your clients from Claude`,
-    description: `Your clients log in a free app. You coach them from Claude. $19.99 a month; clients are free.`,
+    title: `${site.appName}: free coaching software for strength coaches`,
+    description: `Everything you pay TrueCoach for, free: programs, the client app and any number of clients. Pay only for the AI that does the work.`,
     path: "/",
     body: `${coachStyle}
       <section class="hero">
         <p class="eyebrow">For strength coaches</p>
-        <h1>Your clients log in a free app. You coach them from Claude.</h1>
-        <p class="lede">Ask Claude to write or change a client's week, and it works from every set they logged. You decide what's saved. The dashboard shows who trained, who's slipping and who's hurting.</p>
+        <h1>Everything you pay TrueCoach for, free.</h1>
+        <p class="lede">Write your clients' programs, see every set they log, and know who's slipping or hurting, with any number of clients. Pay only for the AI that does the work: Pro lets Claude write and change each client's week from what they logged.</p>
         <div class="actions">
-          <a class="button primary" href="${START}">Start coaching</a>
+          <a class="button primary" href="${START}">Start free</a>
           <a class="button" href="#how">How it works</a>
         </div>
       </section>
@@ -614,7 +614,7 @@ function homePage(site: Site) {
         <h2>How it works</h2>
         <ol>
           <li><b>Invite your clients</b><span>They get ${app} free on their iPhone, follow the week you wrote, and log each set.</span></li>
-          <li><b>Program in Claude</b><span>Say what you want for a client. Claude reads their logs, proposes the week, and saves it when you say so.</span></li>
+          <li><b>Write their week</b><span>On the dashboard, free. Or with Pro, say what you want in Claude: it reads their logs, proposes the week, and saves it when you say so.</span></li>
           <li><b>See your roster</b><span>Who trained, who's slipping, and who said something hurts, at a glance.</span></li>
         </ol>
       </section>
@@ -624,19 +624,19 @@ function homePage(site: Site) {
         <p class="fine">The dashboard's Clients, those who need you first. Claude reads the same flags when you ask who needs you this week.</p>
       </section>
       <section class="block">
-        <h2>What it looks like in Claude</h2>
+        <h2>With Pro: what it looks like in Claude</h2>
         <ul class="chat">${chat.map((m) => `<li class="${m.who}">${esc(m.text)}</li>`).join("")}</ul>
         <p class="fine">Mike's phone shows the new week as soon as it's applied.</p>
       </section>
       <section class="block price-block">
         <h2>Price</h2>
-        <p class="price"><b>$19.99</b><span>a month, or $199 a year</span></p>
-        <p class="lede">Clients are free. Cancel any time from Billing.</p>
+        <p class="price"><b>Free</b><span>any number of clients, no card</span></p>
+        <p class="lede">Clients are free too. <b>Pro</b> is $19.99 a month or $199 a year: Claude programs and reviews your whole roster from what each client logged. Cancel any time from Billing.</p>
       </section>
       <section class="block">
         <h2>What you need</h2>
         <ul class="needs">
-          <li><b>Claude</b><span>On claude.ai or the Claude app, with ${app} added as a connector. <a href="/claude">How to connect</a></span></li>
+          <li><b>Claude, for Pro</b><span>On claude.ai or the Claude app, with ${app} added as a connector. <a href="/claude">How to connect</a></span></li>
           <li><b>Clients with an iPhone</b><span>${site.appStoreUrl ? `<a href="${esc(site.appStoreUrl)}">${app} on the App Store</a>, free.` : `${app} is free for them; you send each one an invite link.`}</span></li>
         </ul>
       </section>
@@ -644,11 +644,11 @@ function homePage(site: Site) {
         <h2>Get started</h2>
         <ol class="steps">
           <li><b>Sign in</b><span>With Google or Apple.</span></li>
-          <li><b>Connect Claude</b><span>Paste one address into Claude's connectors, and try it on your sample client.</span></li>
-          <li><b>Start the coach plan</b><span>Monthly or yearly, through Stripe.</span></li>
           <li><b>Invite your first client</b><span>Send them the link.</span></li>
+          <li><b>Write their week</b><span>On the dashboard, as many clients as you like.</span></li>
+          <li><b>Try Pro</b><span>Connect Claude and let it plan your sample client's week; start Pro from Billing when you want it for everyone.</span></li>
         </ol>
-        <div class="actions"><a class="button primary" href="${START}">Start coaching</a></div>
+        <div class="actions"><a class="button primary" href="${START}">Start free</a></div>
       </section>
       <section class="block">
         <h2>Weighing it against another tool?</h2>
@@ -791,7 +791,7 @@ export const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><r
 
 /**
  * `linkHome: false` leaves the logo unlinked: on the pages the iPhone app opens (privacy, terms, support, and /claude
- * one tap on), so the app has no path to the home page's coach plan checkout (App Review 3.1.1(a), FIT-59).
+ * one tap on), so the app has no path to the home page's Pro checkout (App Review 3.1.1(a), FIT-59).
  */
 export function layout(site: Site, page: { title: string; description: string; path: string; body: string; image?: string; view?: string; linkHome?: boolean }) {
   const url = `${site.origin}${page.path}`;

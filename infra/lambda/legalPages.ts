@@ -101,7 +101,7 @@ function termsPage(site: Site) {
     <p>You're responsible for what you do with your account. What you log is yours: you give us permission to store it and show it to you, to the coach you link with, to the agents you connect, and to whoever you share a link with, so the service works. The <a href="/privacy">privacy policy</a> says how.</p>
 
     <h2>Coaches</h2>
-    <p>Coaching needs the coach plan, $19.99 a month or $199 a year, billed through Stripe and renewed until you cancel. You can cancel or change it from Billing on the dashboard; it runs to the end of the period you paid for. A coach invites only people who've agreed to be coached, and uses their data only to coach them. Clients use ${app} free.</p>
+    <p>Coaching is free, with any number of clients. Pro, which adds the full connector for coaching from an agent, is $19.99 a month or $199 a year, billed through Stripe and renewed until you cancel. You can cancel or change it from Billing on the dashboard; it runs to the end of the period you paid for, and coaching stays free after it. A coach invites only people who've agreed to be coached, and uses their data only to coach them. Clients use ${app} free.</p>
 
     <h2>Agents</h2>
     <p>The agent you connect (Claude, ChatGPT or another) is a separate service under its maker's terms. It proposes changes, and you or your coach decide what's saved. We aren't responsible for what an agent says.</p>
@@ -129,7 +129,7 @@ function supportPage(site: Site) {
       <dd>Follow the steps on <a href="/claude">Connect Claude</a>.</dd>
       <dt>How do I stop being coached?</dt>
       <dd>In the app, open You and tap Stop next to your coach. A coach can end it with Stop coaching on the client's page on the dashboard.</dd>
-      <dt>How do I cancel the coach plan?</dt>
+      <dt>How do I cancel Pro?</dt>
       <dd>On the dashboard, open Billing and choose Manage billing.</dd>
       <dt>How do I delete my account?</dt>
       <dd>In the app, open You › Account › Delete Account, or email us. See the <a href="/privacy">privacy policy</a>.</dd>

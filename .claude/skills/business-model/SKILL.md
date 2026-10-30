@@ -5,10 +5,11 @@ description: Read Barbrabell's business model and distribution plan from Linear 
 
 # Business model and distribution
 
-Two Linear documents are the source of truth. They depend on each other: the distribution plan exists to hit the business model's checkpoint (3 paying coaches by end of month two), and it restates the model's price and pitch.
+**[Business model v2: free tools, paid intelligence and reach](https://linear.app/custom-voice-app/document/business-model-v2-free-tools-paid-intelligence-and-reach-a0ad450abe02)** (`2b642c59-17ea-480b-81c1-a8f3cb76c4bf`, approved 2026-10-29) is the business model. Coaching and the athlete app are free with no client cap; Pro is referrals plus the exhaustive coach MCP; the paid consumer app is discarded. Read it first. The two docs below carry a banner saying where v2 overrides them; their competitor research, interview questions and distribution channels still apply.
 
 | Doc | Covers | ID |
 |---|---|---|
+| [Business model v2](https://linear.app/custom-voice-app/document/business-model-v2-free-tools-paid-intelligence-and-reach-a0ad450abe02) | The model now: free vs Pro, pitch, pricing, checkpoint, gaps | `2b642c59-17ea-480b-81c1-a8f3cb76c4bf` |
 | [Barbrabell: Coach-First Business Model](https://linear.app/custom-voice-app/document/barbrabell-coach-first-business-model-bf0cd2c8a646) | Vision, roles, pitch, revenue, costs, market, competitors, build plan | `21803109-fe0a-42dd-87d2-d07ded11aa68` |
 | [Distribution engine: Coaches using Barbrabell](https://linear.app/custom-voice-app/document/distribution-engine-coaches-using-barbrabell-6fc6334a2c0f) | Kickoff: coach signal engine, agent-channel listings, automated onboarding, metrics, requirements, timeline to Jan 1 | `f6a769e0-e455-452a-b734-20c7e772d90d` |
 
