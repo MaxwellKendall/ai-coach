@@ -582,7 +582,8 @@ struct ProgramScreen: View {
         let end = profile.targetDate ?? ProgramPlan.monday(weeks.count, start: start)
         let paces = programGoals.map { item in
             let from = item.goal.baseline ?? item.goal.target
-            let now = GoalProgress.current(item.goal.metric, sets: sets, weighIns: weighIns, since: start) ?? from
+            let now = GoalProgress.standing(item.goal.metric, logged: GoalProgress.current(item.goal.metric, sets: sets, weighIns: weighIns, since: start),
+                                            from: from)
             return GoalProgress.pace(from: from, now: now, target: item.goal.target, week: current, weeks: weeks)
         }
         let items = programGoals

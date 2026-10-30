@@ -81,11 +81,27 @@ enum GoalProgress {
         return expected > 0 && done >= expected * 1.25 ? .ahead : .onPace
     }
 
-    /// Where the goal lands by `end` if it keeps moving as it has since `started`. Nil in the first week: too early.
-    static func forecast(from start: Double, now: Double, started: Date, today: Date, end: Date) -> Double? {
+    /// Where the goal stands: the logged value, except that a max or reps goal never reads below where it started.
+    /// Program sets are below a max on purpose (3×4 pull-ups from someone who can do 8), so they aren't a loss. A
+    /// weigh-in or a race time can go either way and is shown as it is.
+    static func standing(_ metric: String, logged: Double?, from start: Double) -> Double {
+        guard let logged else { return start }
+        guard metric != "weight_lb", !lowerIsBetter(metric) else { return logged }
+        return max(logged, start)
+    }
+
+    /// `trend` as `standing` reads it: flat at the start until a set beats it.
+    static func standingTrend(_ metric: String, _ trend: [DatedValue], from start: Double) -> [DatedValue] {
+        trend.map { DatedValue(date: $0.date, value: standing(metric, logged: $0.value, from: start)) }
+    }
+
+    /// Where the goal lands by `end` if it keeps moving as it has since `started`. Nil before two weeks of logs (too
+    /// little to draw a line through), and nil when it hasn't moved toward the target: a line the wrong way, five
+    /// months long, says nothing a few sessions mean ("-45 reps by Apr 3"). Never below zero.
+    static func forecast(from start: Double, now: Double, target: Double, started: Date, today: Date, end: Date) -> Double? {
         let done = today.timeIntervalSince(started), left = max(0, end.timeIntervalSince(today))
-        guard done >= 7 * 86_400 else { return nil }
-        return now + (now - start) / done * left
+        guard done >= 14 * 86_400, (now - start) * (target - start) > 0 else { return nil }
+        return max(0, now + (now - start) / done * left)
     }
 
     /// How much it has to move each week from today to reach the target by `end`.

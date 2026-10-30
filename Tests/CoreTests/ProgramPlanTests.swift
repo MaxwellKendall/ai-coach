@@ -167,10 +167,26 @@ struct GoalProgressTests {
     /// The prototype's weight goal: 201 to 194.6 lb over 8 weeks lands near 188 by the end of 16.
     @Test func forecastAndPerWeek() throws {
         let start = date(2026, 8, 10), today = date(2026, 10, 5), end = date(2026, 11, 30)
-        let forecast = try #require(GoalProgress.forecast(from: 201, now: 194.6, started: start, today: today, end: end))
+        let forecast = try #require(GoalProgress.forecast(from: 201, now: 194.6, target: 180, started: start, today: today, end: end))
         #expect(abs(forecast - 188.2) < 0.1)
         #expect(abs(GoalProgress.perWeek(now: 194.6, target: 180, today: today, end: end) + 1.825) < 0.01)
-        #expect(GoalProgress.forecast(from: 201, now: 200, started: start, today: date(2026, 8, 14), end: end) == nil)
+        // Under two weeks of logs: too early.
+        #expect(GoalProgress.forecast(from: 201, now: 196, target: 180, started: start, today: date(2026, 8, 20), end: end) == nil)
+        // Moving away from the target: no line. The author's pull-ups: 8 to start, 4 a set since, 10 by Apr 3.
+        #expect(GoalProgress.forecast(from: 8, now: 4, target: 10, started: date(2026, 10, 18), today: date(2026, 11, 2),
+                                      end: date(2027, 4, 3)) == nil)
+        // A steep line toward a lower target still stops at zero.
+        #expect(GoalProgress.forecast(from: 20, now: 10, target: 0, started: start, today: date(2026, 8, 24), end: end) == 0)
+    }
+
+    /// Program sets are below a max, so a max or reps goal never reads below its start; weight and race times do.
+    @Test func standing() {
+        #expect(GoalProgress.standing("pull-up.reps", logged: 4, from: 8) == 8)
+        #expect(GoalProgress.standing("pull-up.reps", logged: 9, from: 8) == 9)
+        #expect(GoalProgress.standing("back-squat.1rm_lb", logged: nil, from: 225) == 225)
+        #expect(GoalProgress.standing("weight_lb", logged: 203, from: 200) == 203)
+        let trend = [DatedValue(date: date(2026, 10, 19), value: 1), DatedValue(date: date(2026, 10, 24), value: 9)]
+        #expect(GoalProgress.standingTrend("pull-up.reps", trend, from: 8).map(\.value) == [8, 9])
     }
 
     @Test func weekCopy() {

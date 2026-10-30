@@ -30,10 +30,10 @@ struct GoalCard: View {
     var content: some View {
         let logged = GoalProgress.current(goal.metric, sets: sets, weighIns: weighIns, since: start)
         let from = goal.baseline ?? logged ?? goal.target
-        let now = logged ?? from
-        let trend = GoalProgress.trend(goal.metric, sets: sets, weighIns: weighIns, since: start)
+        let now = GoalProgress.standing(goal.metric, logged: logged, from: from)
+        let trend = GoalProgress.standingTrend(goal.metric, GoalProgress.trend(goal.metric, sets: sets, weighIns: weighIns, since: start), from: from)
         let pace = GoalProgress.pace(from: from, now: now, target: goal.target, week: current, weeks: weeks)
-        let forecast = GoalProgress.forecast(from: from, now: now, started: start, today: .now, end: end)
+        let forecast = GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: end)
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
                                     forecast: forecast, target: goal.target, start: start, end: end, format: option.format)
         return VStack(alignment: .leading, spacing: 0) {
