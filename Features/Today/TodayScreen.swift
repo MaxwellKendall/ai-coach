@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// The app (FIT-27, prototype board 1): this week's days as cards swiped sideways, the M–S strip above them,
-/// and one mic. Planned days start a workout, done days show what happened, and the rest stays one tap away.
+/// Today (FIT-297, design A, https://claude.ai/artifact/QBzBgYEd35faydgEk8Qo3f): only today's session, the goal line
+/// above it, and three actions: Start, Change it when something comes up, or Log what was done. The week is on Program.
 struct TodayScreen: View {
     @Environment(\.modelContext) private var context
     /// FIT-102: signed in, program design uses Claude through our server.
@@ -39,10 +39,14 @@ struct TodayScreen: View {
     @State private var saved = false
     @State private var celebrating: [WinItem]?
     @State private var sessionLink: SharedLink?
+    /// FIT-297: today's blocks checked off as done (L3), saved together.
+    @State private var checked: Set<Int> = []
 
     enum Sheet: Identifiable {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
         case propose(Proposal), spoken(Spoken), own, run(PlannedActivity?), ran(LogEntry)
+        /// FIT-297: Change and Log on Today.
+        case change([PlannedActivity]), logChoice([PlannedActivity])
         /// FIT-235: a workout of their own on a past day: pick the exercises, then log the sets on that day.
         case ownOn(Date), logOwn(WorkoutDraft, Date)
         var id: String {
@@ -59,6 +63,8 @@ struct TodayScreen: View {
             case .check: "check"
             case .propose(let proposal): "propose \(proposal.id)"
             case .spoken(let spoken): "spoken \(spoken.id)"
+            case .change(let items): "change \(items.map(\.id))"
+            case .logChoice(let items): "log choice \(items.map(\.id))"
             }
         }
     }
@@ -93,16 +99,22 @@ struct TodayScreen: View {
         let selected = day ?? todayIndex
         // FIT-235: a later session can be done today only when today has no session of its own waiting.
         let todayFree: Bool = if case .plan = cards[todayIndex] { false } else { true }
+        let _ = (selected, todayFree)
         VStack(alignment: .leading, spacing: 0) {
-            header(week[selected], index: selected)
-            strip(week, cards: cards, selected: selected)
-                .padding(.horizontal, 14).padding(.top, 18)
-            SwipeDeck(index: Binding(get: { day ?? todayIndex }, set: { day = $0 }), count: week.count) { index in
-                card(cards[index], day: week[index], isToday: index == todayIndex, isPast: index < todayIndex, todayFree: todayFree)
+            header(week[todayIndex])
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    // FIT-8: the week's review is the first thing on its last day.
+                    if WeekReport.isDue() {
+                        let report = weekReport()
+                        WeekReviewCard(report: report) { review = report }
+                    }
+                    dayContent(cards[todayIndex], day: week[todayIndex], isToday: true, isPast: false, todayFree: true)
+                }
+                .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 24)
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 22)
-            .padding(.bottom, 24)
+            .scrollBounceBehavior(.basedOnSize)
+            .safeAreaInset(edge: .bottom) { actions(cards[todayIndex], week: cards).padding(.horizontal, 22).padding(.bottom, 8) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))
@@ -243,37 +255,68 @@ struct TodayScreen: View {
 
     // MARK: Header and strip
 
-    private func header(_ date: Date, index: Int) -> some View {
+    /// The date written out with the program's week, the account, and the goal line (FIT-297: no relative title).
+    private func header(_ date: Date) -> some View {
         let deload = thisWeeksPlan?.warnings.contains { $0.hasPrefix("Deload") } == true
-        let title = switch index - todayIndex {
-        case 0: "Today"
-        case -1: "Yesterday"
-        case 1: "Tomorrow"
-        default: date.formatted(.dateTime.weekday(.wide))
-        }
-        return HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text((date.formatted(.dateTime.weekday(.wide).month(.wide).day()) + programWeek + (deload ? " · light week" : "")).uppercased())
-                    .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
-                Text(title).font(.system(size: 34, weight: .bold)).tracking(-0.5)
-                    .contentTransition(.numericText())
-                if let streak {
-                    Label(streak.line, systemImage: "flame.fill")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(streak.atRisk ? .primary : .secondary)
-                        .padding(.top, 2)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + programWeek + (deload ? " · light week" : ""))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                Spacer()
+                Button { you = true } label: {
+                    Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(Color.inkMuted)
+                        .frame(width: 44, height: 44)
                 }
-                if index == todayIndex { checkInButton.padding(.top, 2) }
+                .accessibilityLabel("Account and library")
             }
-            Spacer()
-            Button { you = true } label: {
-                Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
+            if let goal = goalLine {
+                HStack(spacing: 8) {
+                    Text(goal.label).font(.subheadline.weight(.semibold))
+                    ProgressView(value: goal.fraction).tint(Plate.current.mark).scaleEffect(y: 1.4)
+                    Text(goal.end.formatted(.dateTime.month(.abbreviated).day())).font(.subheadline.weight(.bold)).foregroundStyle(Plate.current.mark)
+                }
+                .accessibilityElement(children: .combine)
             }
-            .accessibilityLabel("Account and library")
+            if !pro.coaches.isEmpty { checkInButton }
         }
-        .padding(.leading, 22).padding(.trailing, 12).padding(.top, 8)
-        .animation(.snappy, value: index)
+        .padding(.leading, 22).padding(.trailing, 12).padding(.top, 4)
+    }
+
+    /// FIT-297: the first active goal, "Back squat 250 lb", and how far along its dates today is.
+    private var goalLine: (label: String, end: Date, fraction: Double)? {
+        guard let goal = goals.first(where: { $0.status == .active }), let option = GoalOption.all.first(where: { $0.metric == goal.metric }),
+              let end = goal.deadline.flatMap({ $0 > .now ? $0 : nil }) ?? profiles.first?.targetDate ?? goal.deadline else { return nil }
+        let start = profiles.first?.programStart ?? goal.createdAt
+        let fraction = min(1, max(0.02, Date.now.timeIntervalSince(start) / max(1, end.timeIntervalSince(start))))
+        let label = ["lb", "reps"].contains(goal.unit) ? "\(option.liftName) \(Coach.number(goal.target)) \(goal.unit)" : option.liftName
+        return (label, end, fraction)
+    }
+
+    /// FIT-297: "Squat, bench press, row": a session named by its lifts, not "Day A".
+    static func title(_ session: SessionPlan, names: [String: String], fallback: String) -> String {
+        let lifts = session.blocks.flatMap(\.movements).map { short(names[$0.exercise] ?? $0.exercise) }
+        guard !lifts.isEmpty else { return fallback }
+        let shown = lifts.prefix(3).enumerated().map { $0.offset == 0 ? $0.element.prefix(1).uppercased() + $0.element.dropFirst() : $0.element }
+        return shown.joined(separator: ", ") + (lifts.count > 3 ? " + \(lifts.count - 3) more" : "")
+    }
+
+    /// A lift by the word people say: "Back Squat" → "squat", "Bent Over Barbell Row" → "row", "Bench Press" →
+    /// "bench press" (a press needs its kind).
+    static func short(_ name: String) -> String {
+        let words = name.split(separator: " ").map(String.init)
+        guard let last = words.last else { return name.lowercased() }
+        let needsKind = ["Press", "Raise", "Curl", "Extension", "Fly", "Pulldown", "Thrust"].contains(last)
+        return (needsKind && words.count > 1 ? "\(words[words.count - 2]) \(last)" : last).lowercased()
+    }
+
+    /// The last working load logged for each exercise before today, for "+5 lb".
+    private var previousLoads: [String: Double] {
+        let today = Calendar.current.startOfDay(for: .now)
+        var last: [String: Double] = [:]
+        for set in Planner.loggedSets(entries.filter { $0.kind == .workout && $0.timestamp < today }, templates: templates) {
+            if let load = set.value("load_lb") ?? set.value("load_lb_hand") { last[set.exercise] = load }
+        }
+        return last
     }
 
     /// FIT-204: weight, sleep and a note for the coach, or what today's said.
@@ -289,20 +332,6 @@ struct TodayScreen: View {
         .accessibilityHint("Weight, sleep and a note for your coach")
     }
 
-    /// FIT-121: weeks in a row with every planned session done, or what keeps it going this week.
-    private var streak: (line: String, atRisk: Bool)? {
-        #if DEBUG
-        // `-streak YES`: a streak at risk, so the line can be looked at on a fresh simulator.
-        if UserDefaults.standard.bool(forKey: "streak") { return ("Do Wednesday’s session by Saturday to make it 6 weeks in a row", true) }
-        #endif
-        guard let start = profiles.first?.programStart else { return nil }
-        let status = Streak.status(since: start, plannedDays: planned.filter { $0.kind == .workout }.map(\.date),
-                                   workoutDays: entries.filter { $0.kind == .workout }.map(\.timestamp))
-        guard let line = Streak.line(status) else { return nil }
-        if case .atRisk = status.thisWeek { return (line, true) }
-        return (line, false)
-    }
-
     /// FIT-39's "Week 3 of 16", in the date line since the program has its own tab (FIT-64).
     private var programWeek: String {
         guard let profile = profiles.first, let weeks = profile.program, let start = profile.programStart else { return "" }
@@ -312,40 +341,6 @@ struct TodayScreen: View {
 
     private func takeFromCoach() {
         if let said = coach.take(for: .today) { heard(said) }
-    }
-
-    private func strip(_ week: [Date], cards: [DayCard], selected: Int) -> some View {
-        HStack(spacing: 0) {
-            ForEach(week.indices, id: \.self) { index in
-                let on = index == selected
-                Button { withAnimation(.snappy) { day = index } } label: {
-                    VStack(spacing: 4) {
-                        Text(week[index].formatted(.dateTime.weekday(.narrow)))
-                            .font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
-                        Text(week[index].formatted(.dateTime.day()))
-                            .font(.body.weight(on || index == todayIndex ? .semibold : .regular)).monospacedDigit()
-                            .foregroundStyle(on ? Color(.systemBackground) : index == todayIndex ? .primary : .secondary)
-                            .frame(width: 34, height: 34)
-                            .background(on ? Color.primary : .clear, in: .circle)
-                        dot(cards[index])
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(week[index].formatted(.dateTime.weekday(.wide)))
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-    }
-
-    /// Filled when done, a ring when planned, nothing on rest days.
-    @ViewBuilder private func dot(_ card: DayCard) -> some View {
-        switch card {
-        case .done: Circle().fill(.primary).frame(width: 5, height: 5)
-        case .plan: Circle().strokeBorder(.primary, lineWidth: 1.5).frame(width: 5, height: 5)
-        case .rest: Color.clear.frame(width: 5, height: 5)
-        }
     }
 
     // MARK: Cards
@@ -367,168 +362,160 @@ struct TodayScreen: View {
         WeekReport.make(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
     }
 
-    @ViewBuilder private func card(_ card: DayCard, day: Date, isToday: Bool, isPast: Bool, todayFree: Bool) -> some View {
-        VStack(spacing: 18) {
-            // FIT-8: the week's review is the first thing on its last day.
-            if isToday && WeekReport.isDue() {
-                let report = weekReport()
-                WeekReviewCard(report: report) { review = report }
-            }
-            dayContent(card, day: day, isToday: isToday, isPast: isPast, todayFree: todayFree)
-        }
-        .padding(EdgeInsets(top: 26, leading: 24, bottom: 24, trailing: 24))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 30))
-    }
-
     @ViewBuilder private func dayContent(_ card: DayCard, day: Date, isToday: Bool, isPast: Bool, todayFree: Bool) -> some View {
-        Group {
-            switch card {
-            // FIT-74: the week standing in until the coach's arrives isn't shown as if it were the plan.
-            case .plan where planning:
-                VStack(spacing: 12) {
-                    ProgressView().controlSize(.large)
-                    Text("Your coach is planning this week").font(.headline)
-                    Text("Usually under a minute.").font(.subheadline).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity)
-            case .plan(let plan): planCard(plan, isToday: isToday, isPast: isPast, todayFree: todayFree)
-            case .done(let done): doneCard(done)
-            // FIT-201: a coach's client with nothing planned from this week on is waiting on the coach, not resting.
-            case .rest where awaitingCoach:
-                VStack(spacing: 8) {
-                    Text(planned.contains { $0.kind == .workout } ? "Your coach is writing this week" : "Your coach is writing your first week")
-                        .font(.title2.bold()).multilineTextAlignment(.center)
-                    Text("It shows up here as soon as it’s ready.").font(.subheadline).foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    if isToday { logOwnButton(run: nil).padding(.top, 18) }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .rest(let coach):
-                VStack(spacing: 8) {
-                    Text("Rest").font(.system(size: 30, weight: .bold)).tracking(-0.4)
-                    Text(coach).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        .frame(maxWidth: 240)
-                    // FIT-215: in the pilot anyone can log a workout of their own on a rest day.
-                    if isToday && (!pro.active || Pilot.simple) { logOwnButton(run: nil).padding(.top, 18) } else if isToday { runButton("Start a run", nil).padding(.top, 18) }
-                    // FIT-235: a workout done that day and not logged then.
-                    else if isPast { pill("Log a workout", "plus") { sheet = .ownOn(day) }.padding(.top, 18) }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        switch card {
+        // FIT-74: the week standing in until the coach's arrives isn't shown as if it were the plan.
+        case .plan where planning:
+            VStack(spacing: 12) {
+                ProgressView().controlSize(.large)
+                Text("Your coach is planning this week").font(.headline)
+                Text("Usually under a minute.").font(.subheadline).foregroundStyle(Color.inkMuted)
+            }
+            .frame(maxWidth: .infinity).padding(.top, 80)
+        case .plan(let plan): planView(plan)
+        case .done(let done): doneCard(done)
+        // FIT-201: a coach's client with nothing planned from this week on is waiting on the coach, not resting.
+        case .rest where awaitingCoach:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(planned.contains { $0.kind == .workout } ? "Your coach is writing this week" : "Your coach is writing your first week")
+                    .font(.display(40)).textCase(.uppercase)
+                Text("It shows up here as soon as it’s ready.").foregroundStyle(Color.inkMuted)
+            }
+        case .rest(let coach):
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Rest day").font(.display(46)).textCase(.uppercase)
+                Text(coach).foregroundStyle(Color.inkMuted).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private func planCard(_ plan: DayCard.Planned, isToday: Bool, isPast: Bool, todayFree: Bool) -> some View {
+    /// Design A's session: its lifts as the title, the minutes and the coach's line, then the list (warm-up first,
+    /// supersets bracketed), checked off and changed in place.
+    private func planView(_ plan: DayCard.Planned) -> some View {
         let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-        // FIT-120: the program's sessions show without Pro, but run with it; a friend's (pinned, FIT-113) stays open.
-        let locked = !pro.active && !plan.items.allSatisfy(\.pinned)
+        let lifts = lifting(plan.items)
         return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("\(plan.start.formatted(date: .omitted, time: .shortened)) · \(plan.minutes) min")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-                if !locked { menu(plan, isPast: isPast) }
-            }
-            // The title opens the session, as its exercises do.
-            Button { open(plan, locked: locked) } label: {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(plan.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
-                    Text(plan.coach).font(.subheadline).foregroundStyle(.secondary).lineSpacing(2).padding(.top, 10)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Opens the session")
-            VStack(spacing: 0) {
-                ForEach(Self.keyed(plan.session.blocks), id: \.key) { index, key, block in
-                    let new = isToday && block.movements.contains { fresh.contains($0.exercise) }
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(block.movements.map { names[$0.exercise] ?? $0.exercise }.joined(separator: " + "))
-                            .lineLimit(2)
-                        Spacer(minLength: 0)
-                        Text(block.dose).font(.system(.subheadline, design: .rounded)).foregroundStyle(.secondary)
-                            .fixedSize()
-                    }
-                    .padding(.vertical, 13)
-                    .overlay(alignment: .top) { Divider() }
-                    .overlay(alignment: .leading) {
-                        if new { Circle().fill(.primary).frame(width: 6, height: 6).offset(x: -14).transition(.opacity) }
-                    }
-                    // FIT-50: a spoken edit's new exercises slide in, a new workout's one after another.
-                    .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 12))
-                                                .animation(.snappy.delay(Double(index) * 0.09)),
-                                            removal: .opacity))
-                }
-            }
-            .padding(.top, 22)
-            .contentShape(.rect)
-            .onTapGesture { open(plan, locked: locked) }
+            Text(lifts.isEmpty ? plan.title : Self.title(plan.session, names: names, fallback: plan.title))
+                .font(.display(42)).textCase(.uppercase).fixedSize(horizontal: false, vertical: true)
+            Text("\(plan.minutes) min · \(plan.coach)").font(.subheadline).foregroundStyle(Color.inkMuted)
+                .padding(.top, 6).fixedSize(horizontal: false, vertical: true)
+            SessionList(session: plan.session, names: names, previous: previousLoads,
+                        checked: lifts.isEmpty ? nil : $checked,
+                        onLoad: { exercise, step in changeLoad(exercise, by: step, in: plan.items) })
+                .padding(.top, 10)
             ForEach(plan.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
-            Spacer(minLength: 16)
-            if locked {
-                VStack(spacing: 10) {
-                    Button { pro.paywall = true } label: {
-                        Text(ProOfferBar.title(trialEligible: pro.trialEligible)).font(.headline).frame(maxWidth: .infinity, minHeight: 58)
-                            .foregroundStyle(Color(.systemBackground))
-                            .background(Color.primary, in: .capsule)
+        }
+    }
+
+    /// FIT-297: Start, then Change and Log side by side; a checked-off session's Save bar in their place.
+    @ViewBuilder private func actions(_ card: DayCard, week cards: [DayCard]) -> some View {
+        VStack(spacing: 8) {
+            switch card {
+            case .plan(let plan) where !planning:
+                if !checked.isEmpty {
+                    Button { saveChecked(plan) } label: {
+                        HStack {
+                            Text("\(checked.count) of \(plan.session.blocks.count) done").font(.headline)
+                            Spacer()
+                            Text("Save workout").font(.headline).padding(.horizontal, 16).padding(.vertical, 10)
+                                .foregroundStyle(Plate.current.onAccent).background(.tint, in: .rect(cornerRadius: 12))
+                        }
+                        .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
+                        .foregroundStyle(Color(.systemBackground)).background(Color.ink, in: .rect(cornerRadius: 18))
                     }
                     .buttonStyle(.plain)
-                    if isToday { logOwnButton(run: runs(plan.items).first) }
+                } else {
+                    Button { start(plan) } label: {
+                        Label(lifting(plan.items).isEmpty ? "Start the run" : "Start", systemImage: lifting(plan.items).isEmpty ? "figure.run" : "play.fill")
+                            .font(.headline).frame(maxWidth: .infinity, minHeight: 58)
+                            .foregroundStyle(Plate.current.onAccent)
+                            .background(.tint, in: .rect(cornerRadius: 18))
+                    }
+                    .buttonStyle(.plain)
+                    pair("Change", "arrow.left.arrow.right", { sheet = .change(plan.items) }, "Log", "plus", { sheet = .logChoice(plan.items) })
                 }
-            } else if isToday {
-                Button { start(plan) } label: {
-                    Label(lifting(plan.items).isEmpty ? "Start the run" : "Start", systemImage: lifting(plan.items).isEmpty ? "figure.run" : "play.fill")
-                        .font(.headline).frame(maxWidth: .infinity, minHeight: 58)
-                        .foregroundStyle(Color(.systemBackground))
-                        .background(Color.primary, in: .capsule)
+            case .done(let done):
+                pair("Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned) } },
+                     "Log", "plus", { sheet = .logChoice([]) })
+            default:
+                // FIT-235: the next session this week pulled to today.
+                if let next = nextPlanned(cards) {
+                    pair("Train today", "arrow.uturn.left", { doToday(next) }, "Log", "plus", { sheet = .logChoice([]) })
+                } else {
+                    pair(nil, nil, nil, "Log a workout", "plus", { sheet = .logChoice([]) })
                 }
-                .buttonStyle(.plain)
-                // FIT-179: a run beside the lifting is logged on its own, with its time.
-                if let run = runs(plan.items).first, !lifting(plan.items).isEmpty {
-                    runButton("Start the run", run)
-                } else if racing && runs(plan.items).isEmpty {
-                    runButton("Start a run", nil)
-                }
-            } else if isPast {
-                Button { if lifting(plan.items).isEmpty, let run = runs(plan.items).first { sheet = .run(run) } else { sheet = .log(plan.items) } } label: {
-                    Text("Log it").font(.headline).frame(maxWidth: .infinity, minHeight: 58)
-                        .background(Color(.systemBackground), in: .capsule)
-                }
-                .buttonStyle(.plain)
-            } else if todayFree {
-                // FIT-235: a later session done early, when today has none waiting.
-                pill("Do it today", "arrow.uturn.backward") { doToday(plan) }
             }
+            pips(cards)
         }
     }
 
-    private func menu(_ plan: DayCard.Planned, isPast: Bool) -> some View {
-        Menu {
-            Button("Edit exercises", systemImage: "list.bullet") { sheet = .details(plan.items) }
-            // FIT-113: send this session to a friend, who does it with their own weights.
-            if Pilot.groups, account.user != nil, !isPast {
-                Button("Train with a Friend", systemImage: "person.2") { trainWithFriend(plan) }
-            }
-            // Changing the program's week is Pro (FIT-120).
-            // FIT-202: a coach's client follows the coach's week; Edit exercises still swaps and skips.
-            if pro.active, pro.coaches.isEmpty, let plan = thisWeeksPlan {
-                Button("Change this week", systemImage: "slider.horizontal.3") { sheet = .adjust(plan) }
-            }
-            if pro.active, Pilot.inAppAI {
-                Button("Plan this week again", systemImage: "arrow.clockwise") {
-                    try? Planner.generate(weekOf: .now, in: context)
-                    Task { await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil)) }
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
-                .frame(width: 32, height: 24)
+    private func nextPlanned(_ cards: [DayCard]) -> DayCard.Planned? {
+        for index in cards.indices where index > todayIndex { if case .plan(let plan) = cards[index] { return plan } }
+        return nil
+    }
+
+    private func pair(_ left: String?, _ leftIcon: String?, _ leftAction: (() -> Void)?, _ right: String, _ rightIcon: String,
+                      _ rightAction: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            if let left, let leftIcon, let leftAction { secondary(left, leftIcon, leftAction) }
+            secondary(right, rightIcon, rightAction)
         }
-        .accessibilityLabel("More")
+    }
+
+    private func secondary(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48)
+                .background(Color.fill, in: .rect(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// This week's sessions as short bars: done, today's, still to come.
+    @ViewBuilder private func pips(_ cards: [DayCard]) -> some View {
+        let sessions = cards.indices.filter { index in if case .rest = cards[index] { false } else { true } }
+        if !sessions.isEmpty {
+            let done = sessions.filter { index in if case .done = cards[index] { true } else { false } }.count
+            HStack(spacing: 6) {
+                ForEach(sessions, id: \.self) { index in
+                    let isDone: Bool = if case .done = cards[index] { true } else { false }
+                    Capsule().fill(isDone ? Color.ink : index == todayIndex ? Plate.current.mark : Color.fillStrong).frame(width: 26, height: 6)
+                }
+                Text(done == sessions.count ? "\(done) of \(done) this week" : "\(done) of \(sessions.count) done this week")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(Color.inkMuted).padding(.leading, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// FIT-297 (E1): a load changed in place on Today changes the plan's working sets for that exercise.
+    private func changeLoad(_ exercise: String, by step: Double, in items: [PlannedActivity]) {
+        guard let id = templates.first(where: { $0.slug == exercise })?.id else { return }
+        for item in items where item.templateRef == id && item.note != TrainingGenerator.warmupNote {
+            var targets = item.targets
+            guard let index = targets.firstIndex(where: { ["load_lb", "load_lb_hand"].contains($0.metric) }) else { continue }
+            targets[index].value = max(0, targets[index].value + step)
+            item.targets = targets
+            item.updatedAt = .now
+        }
+        try? context.save()
+    }
+
+    /// FIT-297 (L3): the checked-off lifts saved as planned, with Undo; wins they earn are celebrated.
+    private func saveChecked(_ plan: DayCard.Planned) {
+        var draft = WorkoutDraft(session: plan.title, plan: plan.session)
+        for index in draft.rows.indices where checked.contains(draft.rows[index].block) { draft.rows[index].done = true }
+        winsBefore = Set(allWins.map(\.key))
+        let saved = draft.save(at: .now, templates: templates, in: context)
+        try? context.save()
+        checked = []
+        let earned = Wins.earned(allWins, before: winsBefore)
+        if !earned.isEmpty { celebrating = earned; return }
+        withAnimation { toast = Toast(text: "Workout saved") { [context] in
+            for entry in saved { context.delete(entry) }
+            try? context.save()
+        } }
     }
 
     private func open(_ plan: DayCard.Planned, locked: Bool) {
@@ -568,12 +555,10 @@ struct TodayScreen: View {
 
     private func doneCard(_ done: DayCard.Done) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(done.start.formatted(date: .omitted, time: .shortened)).font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-                Label("Done", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-            }
-            Text(done.title).font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
+            // FIT-297: saved, and how it felt, then the session by its lifts.
+            Label(done.feel.map { "Saved · felt \($0.label.lowercased())" } ?? "Saved", systemImage: "checkmark.circle.fill")
+                .font(.headline).foregroundStyle(Color.good)
+            Text(doneTitle(done)).font(.display(44)).textCase(.uppercase).padding(.top, 6).fixedSize(horizontal: false, vertical: true)
             if let route = done.route {
                 RouteMap(points: route).frame(height: 170).clipShape(.rect(cornerRadius: 16)).padding(.top, 18)
             }
@@ -605,18 +590,21 @@ struct TodayScreen: View {
                 .padding(.bottom, 14)
                 .sensoryFeedback(.success, trigger: wins.map(\.key))
             }
-            if let feel = done.feel {
-                Text("Felt \(feel.label.lowercased())").font(.footnote).foregroundStyle(.tertiary)
-            }
         }
         .contentShape(.rect)
         .onTapGesture { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned) } }
     }
 
+    private func doneTitle(_ done: DayCard.Done) -> String {
+        guard done.run == nil, !done.planned.isEmpty else { return done.title }
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        return Self.title(Planner.session(done.planned, templates: templates), names: names, fallback: done.title)
+    }
+
     private func stat(_ value: String, _ unit: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(value).font(.system(size: 28, weight: .semibold, design: .rounded)).tracking(-0.4)
-            Text(unit).font(.footnote).foregroundStyle(.secondary)
+            Text(value).font(.display(30, weight: .heavy, relativeTo: .title)).monospacedDigit()
+            Text(unit).font(.footnote).foregroundStyle(Color.inkMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -704,6 +692,15 @@ struct TodayScreen: View {
         Task {
             try? await Task.sleep(for: .milliseconds(450))
             sheet = .logOwn(draft, noon)
+        }
+    }
+
+    /// The next sheet, once this one has gone (two can't be presented at once).
+    private func after(_ next: @escaping () -> Void) {
+        sheet = nil
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            next()
         }
     }
 
@@ -974,6 +971,26 @@ struct TodayScreen: View {
         case .adjust(let plan): NavigationStack { AdjustSheet(plan: plan) }
         case .check(let entries): LogCheckSheet(entries: entries)
         case .propose(let proposal): ProposalSheet(proposal: proposal) { apply(proposal) }
+        case .change(let items):
+            ChangeSheet(canChangeWeek: pro.active && pro.coaches.isEmpty && thisWeeksPlan != nil) { choice in
+                after {
+                    switch choice {
+                    case .change(let change): propose(change, said: "")
+                    case .exercises: self.sheet = .details(items)
+                    case .week: if let plan = thisWeeksPlan { self.sheet = .adjust(plan) }
+                    }
+                }
+            }
+        case .logChoice(let items):
+            LogChoiceSheet(hasToday: !lifting(items).isEmpty) { choice in
+                after {
+                    switch choice {
+                    case .today: self.sheet = .log(items)
+                    case .other: self.sheet = .ownOn(.now)
+                    case .run: self.sheet = .run(nil)
+                    }
+                }
+            }
         case .spoken(let spoken):
             SpokenCheckSheet(said: spoken.said, title: spoken.title, draft: spoken.draft, changed: spoken.changed,
                              names: Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first }),

@@ -27,8 +27,9 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var joined: Cloud.GroupSummary?
 
-    /// Graphite (FIT-27): monochrome, the label colour is the only accent.
-    static let accent = Color.primary
+    /// FIT-297: the plate colour picked on You (design system v2); Blue 20 until one is picked.
+    static var accent: Color { Plate.current.accent }
+    @AppStorage(Plate.key) private var plate = Plate.blue.rawValue
 
     /// FIT-64: the app's places as tabs, and the coach in the slot iOS 26 keeps for Search.
     var body: some View {
@@ -77,6 +78,10 @@ struct RootView: View {
             }()
             if Pilot.simple {
                 if profile.programStart == nil, !welcomed { welcoming = true }
+                #if DEBUG
+                // `-welcome YES` opens the first launch over any program, to look at it (FIT-296).
+                if UserDefaults.standard.bool(forKey: "welcome") { welcoming = true }
+                #endif
             } else if !profile.isComplete || profile.programStart == nil {
                 onboarding = profile
             }

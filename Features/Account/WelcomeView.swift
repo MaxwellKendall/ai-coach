@@ -1,9 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// FIT-201: the pilot's first launch. Sign in, then join your coach: the coach's invite link opens the join step with
-/// its code, or the code is typed or pasted. There's no goal or program setup; the coach writes the program. Without a
-/// coach, a ready-made program to pick (FIT-230), or a log of your own.
+/// FIT-296: the first launch, three doors under one promise: train on your own (the quiz, FIT-230), with a coach (sign
+/// in, then the invite link or code, FIT-201), or as a coach (sign in, then the dashboard on the web, FIT-298 for more).
+/// Prototype: https://claude.ai/artifact/TbcJ19r3c4r77p38BERgMw
 struct WelcomeView: View {
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
@@ -26,6 +26,9 @@ struct WelcomeView: View {
     @State private var askingPush: String?
     /// FIT-230: no coach, and no program yet: pick one.
     @State private var picking = false
+    /// FIT-296: the door picked on the first screen; an invite link skips it.
+    @State private var door: Door?
+    enum Door { case athlete, coach }
 
     var body: some View {
         Group {
@@ -52,7 +55,11 @@ struct WelcomeView: View {
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 24)
-            if account.user == nil {
+            if door == nil && code == nil {
+                doors
+            } else if door == .coach {
+                coachDoor
+            } else if account.user == nil {
                 signIn
             } else if let code {
                 invite(code)
@@ -60,13 +67,10 @@ struct WelcomeView: View {
                 join
             }
             Spacer(minLength: 24)
-            Button(account.user == nil ? "No coach? Train on your own" : "I don’t have a coach") {
-                if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
+            if door != nil && code == nil {
+                Button("Back") { withAnimation(.snappy) { door = nil } }
+                    .font(.subheadline).foregroundStyle(Color.inkMuted).frame(maxWidth: .infinity).padding(.bottom, 8)
             }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 8)
             #if DEBUG
             BackendPicker().font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity)
             #endif
@@ -76,6 +80,7 @@ struct WelcomeView: View {
         .background(Color(.systemBackground))
         .animation(.snappy, value: account.user)
         .animation(.snappy, value: code)
+        .animation(.snappy, value: door)
         // Taken from the navigator, so the app's own invite sheet doesn't answer it too.
         .onChange(of: navigator.coachInvite, initial: true) { _, link in
             guard let link else { return }
@@ -93,17 +98,85 @@ struct WelcomeView: View {
 
     private func title(_ text: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(text).font(.system(size: 32, weight: .bold)).tracking(-0.4)
+            Text(text).font(.display(38)).textCase(.uppercase).fixedSize(horizontal: false, vertical: true)
             // Whole even with the keyboard up for Sign in with email (FIT-229).
             Text(detail).font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.bottom, 28)
     }
 
+    /// The promise, its proof, and the three doors, each by its outcome.
+    private var doors: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Hit your number by the date you set.").font(.display(46)).textCase(.uppercase)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("A free plan from your own lifts, that moves when life does.").font(.body).foregroundStyle(Color.inkMuted)
+                .padding(.top, 10)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Back Squat").font(.subheadline).foregroundStyle(Color.inkMuted)
+                Spacer()
+                (Text("225 → ") + Text("250 lb").foregroundStyle(Plate.current.mark)).font(.display(26, weight: .heavy, relativeTo: .title2))
+            }
+            .padding(16).background(Color.fill, in: .rect(cornerRadius: 18)).padding(.top, 22)
+            .accessibilityLabel("For example, Back Squat from 225 to 250 pounds")
+            VStack(spacing: 10) {
+                doorButton("Train on my own", "Your number, by your date", primary: true) {
+                    if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
+                }
+                doorButton("I have a coach", "Their plan, in your pocket") { door = .athlete }
+                doorButton("I’m a coach", "More clients, not more hours") { door = .coach }
+            }
+            .padding(.top, 28)
+        }
+    }
+
+    private func doorButton(_ title: String, _ detail: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
+        Button { withAnimation(.snappy, action) } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline)
+                    Text(detail).font(.subheadline).opacity(primary ? 0.85 : 1)
+                        .foregroundStyle(primary ? AnyShapeStyle(Plate.current.onAccent) : AnyShapeStyle(Color.inkMuted))
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.footnote.weight(.bold)).opacity(0.7)
+            }
+            .foregroundStyle(primary ? AnyShapeStyle(Plate.current.onAccent) : AnyShapeStyle(Color.ink))
+            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 66)
+            .background(primary ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.fill), in: .rect(cornerRadius: 16))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// FIT-296's coach door: sign in, then coaching happens on the dashboard for now (coach mode in the app: FIT-298).
+    @ViewBuilder private var coachDoor: some View {
+        if account.user == nil {
+            VStack(alignment: .leading, spacing: 0) {
+                title("Take on more clients without working more hours",
+                      "Free for any number of clients. Bring the sheets you program in today, and see who needs you first.")
+                if account.isAvailable { SignInButtons {} }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                title("Your clients live on barbrabell.com",
+                      "Sign in there with the same account to import your programs and invite your first client. Your clients use this app, free.")
+                Link(destination: URL(string: "https://barbrabell.com/clients")!) {
+                    Text("Open barbrabell.com").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+                        .foregroundStyle(Plate.current.onAccent).background(.tint, in: .rect(cornerRadius: 16))
+                }
+                Button("Train on my own too") {
+                    if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
+                }
+                .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
+            }
+        }
+    }
+
     private var signIn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            title(code == nil ? "Train with your coach" : "Sign in to join your coach",
-                  "Your coach writes your program. You follow it here and log each set.")
+            title(code == nil ? "Get stronger with your coach in your pocket" : "Sign in to join your coach",
+                  "Your coach writes every session and sees every set you log. Free for you.")
             if account.isAvailable { SignInButtons {} }
         }
     }

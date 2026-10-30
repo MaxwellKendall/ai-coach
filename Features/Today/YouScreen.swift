@@ -14,12 +14,17 @@ struct YouScreen: View {
     @Query private var profiles: [Profile]
     /// FIT-230: picking or changing the ready-made program.
     @State private var choosing = false
+    @AppStorage(Plate.key) private var plate = Plate.blue.rawValue
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     NavigationLink { CatalogScreen() } label: { Label("Library", systemImage: "books.vertical") }
+                    // FIT-297: the app's colour, after the competition bumper plates.
+                    Picker(selection: $plate) {
+                        ForEach(Plate.allCases) { plate in Text(plate.name).tag(plate.rawValue) }
+                    } label: { Label("Colour", systemImage: "circle.lefthalf.filled") }
                     #if DEBUG
                     if Pilot.inAppAI {
                         NavigationLink { VoiceLogView() } label: { Label("Spoken attempts", systemImage: "waveform") }

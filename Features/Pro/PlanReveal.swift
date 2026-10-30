@@ -15,9 +15,9 @@ struct PlanReveal: View {
         let reveal = program.projection(days: days, deloads: program.deloads, recent: recent)
         let name = reveal.flatMap { reveal in templates.first { $0.slug == reveal.exercise }?.name } ?? reveal?.exercise ?? ""
         VStack(alignment: .leading, spacing: 10) {
-            Text("YOUR \(program.weeks)-WEEK PLAN IS READY").font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
+            Text("YOUR \(program.weeks)-WEEK PLAN IS READY").font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(Color.inkMuted)
             Text(Self.headline(program, reveal: reveal, exercise: name, ends: ends))
-                .font(.system(size: 30, weight: .bold)).tracking(-0.4).fixedSize(horizontal: false, vertical: true)
+                .font(.display(38)).textCase(.uppercase).fixedSize(horizontal: false, vertical: true)
             if let reveal {
                 Chart(Array(reveal.loads.enumerated()), id: \.offset) { week, load in
                     LineMark(x: .value("Week", week), y: .value("Load", load))
@@ -27,13 +27,13 @@ struct PlanReveal: View {
                 .chartXAxis(.hidden)
                 .chartYAxis(.hidden)
                 .chartYScale(domain: reveal.start...max(reveal.end, reveal.start + 1))
-                .foregroundStyle(.primary)
+                .foregroundStyle(Plate.current.mark)
                 .frame(height: 110)
                 .padding(.vertical, 6)
                 .accessibilityHidden(true)
             }
             Text("\(program.name) · \(days) days a week · about \(program.minutes) min")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(.subheadline).foregroundStyle(Color.inkMuted)
         }
     }
 

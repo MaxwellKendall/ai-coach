@@ -17,7 +17,7 @@ struct ProgramPicker: View {
     @State private var recent: StartingSet?
     @State private var started = false
 
-    enum Step: Hashable { case lifted, kit, days, recent, program }
+    enum Step: Hashable { case lifted, kit, kitDetail, days, recent, program }
 
     /// The main lift of the program the answers so far pick, which the recent set is of.
     private var lift: String? {
@@ -46,6 +46,8 @@ struct ProgramPicker: View {
                     }
                 case .kit:
                     kit
+                case .kitDetail:
+                    kitDetail
                 case .days:
                     question("How many days a week?", "The days themselves come next.") {
                         ForEach(2...6, id: \.self) { count in
@@ -78,14 +80,32 @@ struct ProgramPicker: View {
         started = true
         have = Set(profile.equipment)
         days = profile.trainingDays.count
-        path = [.kit, .days, .program]
+        path = [.kitDetail, .days, .program]
     }
 
+    /// FIT-297: one tap for where they lift; the exact equipment is a quiet link away.
     private var kit: some View {
-        question("What do you have?", "Tick what you can use. The program only uses these.") {
-            KitList(have: $have)
-            Text(have.isEmpty ? "Nothing ticked: a body-weight program." : " ")
-                .font(.footnote).foregroundStyle(.secondary).padding(.top, 4)
+        question("Where do you lift?", "Every session uses only what you have.") {
+            ForEach(Self.places, id: \.title) { place in
+                option(place.title, detail: place.detail, next: .days) { have = place.equipment }
+            }
+            Button("Choose exact equipment") { path.append(.kitDetail) }
+                .font(.subheadline).foregroundStyle(Color.inkMuted).underline()
+                .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 6)
+        }
+    }
+
+    /// The tiers, as equipment from the catalog.
+    static let places: [(title: String, detail: String, equipment: Set<String>)] = [
+        ("A full gym", "Racks, barbells, dumbbells, machines", Set(Profile.allEquipment)),
+        ("A home gym", "Barbell, squat rack and bench", ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"]),
+        ("Dumbbells", "Adjustable or a set", ["dumbbells", "bench"]),
+        ("Nothing yet", "Body weight, anywhere", []),
+    ]
+
+    private var kitDetail: some View {
+        question("What do you have?", "Tick everything you can use. Change it any time on You.") {
+            EquipmentList(have: $have)
         }
         .safeAreaBar(edge: .bottom) {
             Button { path.append(.days) } label: {
@@ -106,7 +126,7 @@ struct ProgramPicker: View {
     private func question(_ text: String, _ detail: String, @ViewBuilder options: () -> some View) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(text).font(.system(size: 32, weight: .bold)).tracking(-0.4)
+                Text(text).font(.display(38)).textCase(.uppercase).fixedSize(horizontal: false, vertical: true)
                 Text(detail).font(.body).foregroundStyle(.secondary).padding(.top, 8).padding(.bottom, 28)
                 VStack(spacing: 10) { options() }
             }
@@ -243,10 +263,12 @@ private struct ProgramChoice: View {
         .onChange(of: have) { withAnimation(.snappy) { select(matches.first) } }
     }
 
+    /// FIT-297: the outcome first: the plan's promise from their own set and the line to it, then the program.
     private func header(_ program: ReadyProgram) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(program.name).font(.system(size: 32, weight: .bold)).tracking(-0.4)
-            Text(program.summary).font(.body).foregroundStyle(.secondary).padding(.top, 8)
+            PlanReveal(program: program, days: trainingDays.count, recent: recent,
+                       ends: Calendar.current.date(byAdding: .day, value: program.weeks * 7 - 1, to: .now) ?? .now)
+            Text(program.summary).font(.body).foregroundStyle(Color.inkMuted).padding(.top, 14)
             Text([Self.level(program), "\(program.weeks) weeks", "about \(program.minutes) min a session"].joined(separator: " · "))
                 .font(.subheadline).padding(.top, 12)
         }
@@ -446,5 +468,51 @@ private struct RecentSetStep: View {
         .frame(maxWidth: .infinity, minHeight: 64)
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
         .onTapGesture { focus = which }
+    }
+}
+
+/// FIT-297: every piece of the catalog's equipment, the essentials first in the order lifters think of them.
+private struct EquipmentList: View {
+    @Binding var have: Set<String>
+
+    static let groups: [(name: String, items: [(slug: String, name: String)])] = [
+        ("The essentials", [("pull_up_bar", "Pull-up bar"), ("rack", "Squat rack"), ("bench", "Bench"), ("barbell", "Barbell and plates"),
+                            ("dumbbells", "Dumbbells"), ("machine", "Machines"), ("cable", "Cable machine")]),
+        ("More", [("kettlebells", "Kettlebells"), ("bands", "Bands"), ("ez_bar", "EZ bar"), ("trap_bar", "Trap bar"), ("dip_station", "Dip station"),
+                  ("box", "Plyo box"), ("medicine_ball", "Medicine ball"), ("exercise_ball", "Exercise ball"), ("suspension", "Suspension trainer"),
+                  ("sled", "Sled")]),
+        ("Cardio", [("bike", "Bike"), ("treadmill", "Treadmill"), ("rower", "Rower"), ("jump_rope", "Jump rope")]),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            let all = Set(Profile.allEquipment)
+            row("Everything in a full gym", on: have.isSuperset(of: all)) { have = $0 ? all : [] }
+            ForEach(Self.groups, id: \.name) { group in
+                Text(group.name.uppercased()).font(.caption.weight(.bold)).tracking(0.6).foregroundStyle(Color.inkMuted)
+                    .padding(.top, 14).padding(.leading, 4)
+                ForEach(group.items, id: \.slug) { item in
+                    row(item.name, on: have.contains(item.slug)) { on in
+                        if on { have.insert(item.slug) } else { have.remove(item.slug) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func row(_ title: String, on: Bool, set: @escaping (Bool) -> Void) -> some View {
+        Button { withAnimation(.snappy) { set(!on) } } label: {
+            HStack {
+                Text(title).font(.body.weight(.semibold))
+                Spacer()
+                Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.title3)
+                    .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.inkFaint))
+            }
+            .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 50)
+            .background(Color.fill, in: .rect(cornerRadius: 14))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
