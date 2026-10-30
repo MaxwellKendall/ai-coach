@@ -82,7 +82,7 @@ struct YouScreen: View {
                     }
                 }
                 // FIT-201: someone who started without a coach joins one later, by link or code.
-                if Pilot.coaches, pro.coaches.isEmpty, account.isAvailable {
+                if pro.coaches.isEmpty, account.isAvailable {
                     Section {
                         Button { joining = true } label: { Label("Join Your Coach", systemImage: "person.2") }
                     }

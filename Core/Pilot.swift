@@ -4,19 +4,14 @@
 enum Pilot {
     static let simple = true
 
-    /// Pro is sold and gates the program; off, everything Pro gated is free. FIT-267: the consumer app sells its plan,
-    /// as a hard paywall after the program is picked.
-    static var sellsPro: Bool { !simple || Edition.consumer }
-    /// FIT-122: Pro given as a gift, bought on the web. Not the consumer app's.
-    static var gifts: Bool { sellsPro && !Edition.consumer }
+    /// Pro is sold and gates the program; off, everything Pro gated is free.
+    static var sellsPro: Bool { !simple }
+    /// FIT-122: Pro given as a gift, bought on the web.
+    static var gifts: Bool { sellsPro }
     /// The on-device model and Claude through our server, and with them voice (spoken entry needs the model).
     static var inAppAI: Bool { !simple }
     /// Groups, live workouts, and sessions or programs shared with friends.
     static var groups: Bool { !simple }
-    /// FIT-273: runs, check-ins and coaches aren't in the consumer app's launch set.
-    static var runs: Bool { !Edition.consumer }
-    static var checkIns: Bool { !Edition.consumer }
-    static var coaches: Bool { !Edition.consumer }
 
     /// FIT-201: in the pilot the app plans weeks itself only for a program of its own. A coach's client gets the weeks
     /// the coach writes; someone logging on their own, none.

@@ -8,12 +8,11 @@ import UserNotifications
 /// FIT-120: Pro runs the program; free keeps logging, progress and groups. FIT-122: or a year of it, as a gift.
 @MainActor @Observable
 final class Pro {
-    /// FIT-267: the consumer app sells one plan, annual only, with a week's free trial (author, 2026-10-27).
-    nonisolated static let annual = Edition.consumer ? "com.maxwellkendall.liftplan.yearly" : "com.maxwellkendall.aicoach.pro.yearly"
+    nonisolated static let annual = "com.maxwellkendall.aicoach.pro.yearly"
     nonisolated static let monthly = "com.maxwellkendall.aicoach.pro.monthly"
-    nonisolated static let products = Edition.consumer ? [annual] : [annual, monthly]
+    nonisolated static let products = [annual, monthly]
     /// The annual plan's free trial (author, 2026-10-12): two training weeks, the second one adapted to the first.
-    nonisolated static let trialDays = Edition.consumer ? 7 : 14
+    nonisolated static let trialDays = 14
 
     /// An App Store subscription (or its trial) is in force.
     private(set) var subscribed = false
@@ -22,12 +21,10 @@ final class Pro {
     /// FIT-130: the coaches this account has; a coached client has Pro while linked (free during the beta).
     private(set) var coaches: [Cloud.Person] = (UserDefaults.standard.data(forKey: coachesKey))
         .flatMap { try? JSONDecoder().decode([Cloud.Person].self, from: $0) } ?? []
-    /// FIT-281: the consumer plan bought on the web (Stripe), on the account. Kept on the phone so it holds offline.
-    private(set) var webPlan = UserDefaults.standard.bool(forKey: webPlanKey)
     /// The App Store has answered once since launch, so a paywall isn't shown to a subscriber before it knows.
     private(set) var checked = false
     /// FIT-215: while Pro isn't sold, everyone has what it gated.
-    var active: Bool { !Pilot.sellsPro || subscribed || webPlan || giftUntil.map { $0 > .now } == true || !coaches.isEmpty }
+    var active: Bool { !Pilot.sellsPro || subscribed || giftUntil.map { $0 > .now } == true || !coaches.isEmpty }
     /// When the free trial ends, while in one.
     private(set) var trialEnds: Date?
     /// Whether this Apple Account can still have the free trial; someone whose Pro lapsed can't.
@@ -103,29 +100,6 @@ final class Pro {
         UserDefaults.standard.set(try? JSONEncoder().encode(coaches), forKey: Self.coachesKey)
     }
 
-    // MARK: Bought on the web (FIT-281)
-
-    private static let webPlanKey = "pro.webPlan"
-
-    /// The consumer plan on the account, from the server, with the quiz's answers it was bought with; signed out, none.
-    /// Offline, the last answer stands.
-    @discardableResult
-    func refreshWebPlan(signedIn: Bool) async -> Cloud.TrainerPlan? {
-        guard Edition.consumer else { return nil }
-        guard signedIn else {
-            setWebPlan(false)
-            return nil
-        }
-        guard let plan = try? await Cloud.trainerPlan() else { return nil }
-        setWebPlan(plan.active)
-        return plan
-    }
-
-    private func setWebPlan(_ on: Bool) {
-        webPlan = on
-        UserDefaults.standard.set(on, forKey: Self.webPlanKey)
-    }
-
     // MARK: Gifts (FIT-122)
 
     private static let giftKey = "pro.giftUntil"
@@ -175,7 +149,7 @@ final class Pro {
         if let trialEnds, let reminder = Self.reminderDate(trialEnds: trialEnds) {
             date = reminder
             content.title = "Your free trial ends in 2 days"
-            content.body = "\(Edition.consumer ? "Your plan" : "Pro") renews on \(trialEnds.formatted(.dateTime.month(.wide).day())). To cancel, go to Settings › Apple Account › Subscriptions."
+            content.body = "Pro renews on \(trialEnds.formatted(.dateTime.month(.wide).day())). To cancel, go to Settings › Apple Account › Subscriptions."
         } else if !subscribed, let giftUntil, let reminder = Self.giftReminderDate(until: giftUntil) {
             date = reminder
             content.title = "Your gift of Pro ends in 2 weeks"

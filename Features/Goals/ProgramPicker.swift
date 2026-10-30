@@ -1,15 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// FIT-230: no coach: what you have to train with, then how many days (one tap), then the ready-made program that fits,
-/// to start on Today. Opened again from You, it starts on the program being followed, with the questions a step back.
-/// FIT-281: the consumer app asks the goal and whether they've lifted first, and a recent set of the main lift last, as
-/// the web's quiz does (web/src/StartPage.tsx).
+/// FIT-230: no coach: the goal and whether they've lifted (FIT-281, as the web's quiz, web/src/StartPage.tsx), what you
+/// have to train with, how many days (one tap), a recent set of the main lift, then the ready-made program that fits,
+/// to start on Today, free (FIT-294). Opened again from You, it starts on the program being followed, a step back.
 struct ProgramPicker: View {
     @Query private var profiles: [Profile]
     var onDone: () -> Void
-    /// FIT-267: the consumer app's first launch has no Skip; someone who started on the web signs in instead.
-    var signIn: (() -> Void)?
 
     @State private var path: [Step] = []
     /// Catalog equipment ticked on "What do you have?".
@@ -29,26 +26,16 @@ struct ProgramPicker: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Group {
-                if Edition.consumer {
-                    question("What’s your goal?", "Your plan is built around it.") {
-                        ForEach(Self.goals, id: \.goal) { line in
-                            option(line.title, detail: line.detail, next: line.goal == .start ? .kit : .lifted) {
-                                goal = line.goal
-                                if line.goal == .start { lifted = false }
-                            }
-                        }
+            question("What’s your goal?", "Your plan is built around it.") {
+                ForEach(Self.goals, id: \.goal) { line in
+                    option(line.title, detail: line.detail, next: line.goal == .start ? .kit : .lifted) {
+                        goal = line.goal
+                        if line.goal == .start { lifted = false }
                     }
-                } else {
-                    kit
                 }
             }
             .toolbar {
-                if let signIn {
-                    ToolbarItem(placement: .cancellationAction) { Button("Sign In", action: signIn) }
-                } else if !Edition.consumer || profiles.first?.programSlug != nil {
-                    ToolbarItem(placement: .cancellationAction) { Button(profiles.first?.programSlug == nil ? "Skip" : "Cancel", action: onDone) }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button(profiles.first?.programSlug == nil ? "Skip" : "Cancel", action: onDone) }
             }
             .navigationDestination(for: Step.self) { step in
                 switch step {
@@ -65,7 +52,7 @@ struct ProgramPicker: View {
                             option("\(count) days", next: .program) {
                                 days = count
                                 // Someone who's lifted gives a recent set first, when the program has a lift to load.
-                                if Edition.consumer, lifted == true, lift != nil { path.append(.recent) } else { path.append(.program) }
+                                if lifted == true, lift != nil { path.append(.recent) } else { path.append(.program) }
                             }
                         }
                     }
@@ -91,7 +78,7 @@ struct ProgramPicker: View {
         started = true
         have = Set(profile.equipment)
         days = profile.trainingDays.count
-        path = Edition.consumer ? [.kit, .days, .program] : [.days, .program]
+        path = [.kit, .days, .program]
     }
 
     private var kit: some View {
@@ -366,7 +353,7 @@ private struct ProgramChoice: View {
         guard let profile = profiles.first else { return }
         do {
             // FIT-281: the recent set, while it's of this program's main lift.
-            let starts = Edition.consumer ? [recent].compactMap { $0 }.filter { $0.exercise == program.mainLift?.exercise } : nil
+            let starts = [recent].compactMap { $0 }.filter { $0.exercise == program.mainLift?.exercise }
             try Planner.start(program, days: trainingDays, equipment: equipment, starts: starts, profile: profile, in: context)
             onStart()
         } catch {
