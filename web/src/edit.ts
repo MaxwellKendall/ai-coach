@@ -40,6 +40,53 @@ export function editLines(rows: PlanRow[]): EditLine[] {
   return out;
 }
 
+/**
+ * FIT-300: the session's written warm-up: rows marked warm-up for exercises with no working sets that day (a row, band
+ * pull-aparts), one line per run of the same exercise and dose, as the app and the MCP read it. A lift's own ramp sets go
+ * with the lift, so they aren't here.
+ */
+export function warmupLines(rows: PlanRow[]): EditLine[] {
+  const worked = new Set(rows.filter(working).map((r) => r.template));
+  const out: EditLine[] = [];
+  for (const row of ordered(rows).filter((r) => r.kind === "workout" && r.note === WARMUP && !worked.has(r.template))) {
+    const targets = row.targets.filter((m) => m.metric !== "sets");
+    const sets = value(row.targets, "sets") ?? 1;
+    const last = out[out.length - 1];
+    if (last && last.template === row.template && same(last.targets, targets)) {
+      last.ids.push(row.id);
+      last.sets += sets;
+    } else {
+      out.push({ ids: [row.id], template: row.template, sets, targets, note: row.note });
+    }
+  }
+  return out;
+}
+
+/** A warm-up item after the session's others, before the lifts: 1 × 5 min until it's edited. */
+export function addWarmup(rows: PlanRow[], template: string, slot: string | undefined, dayStart: number, id: string = crypto.randomUUID()): PlanRow[] {
+  const all = ordered(rows);
+  const warm = new Set(warmupLines(rows).flatMap((l) => l.ids));
+  const row: PlanRow = {
+    id,
+    kind: "workout",
+    at: all[0]?.at ?? dayStart + 7 * 3600,
+    slot: all[0]?.slot ?? slot,
+    template,
+    targets: [{ metric: "sets", value: 1, unit: "sets" }, { metric: "duration_s", value: 300, unit: "s" }],
+    note: WARMUP,
+    adjustedReason: "edited",
+    main: false,
+    pinned: true,
+  };
+  return pin(renumber([...all.filter((r) => warm.has(r.id)), row, ...all.filter((r) => !warm.has(r.id))]));
+}
+
+/** A warm-up item taken out. */
+export function removeWarmup(rows: PlanRow[], line: EditLine): PlanRow[] {
+  const gone = new Set(line.ids);
+  return pin(renumber(ordered(rows).filter((r) => !gone.has(r.id))));
+}
+
 /** Rows renumbered from the session's start minute, one second apart, in the given order. */
 function renumber(rows: PlanRow[]): PlanRow[] {
   if (rows.length === 0) return rows;

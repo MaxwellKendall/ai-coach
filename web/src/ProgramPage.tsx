@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Config, User } from "./auth";
 import catalog from "./catalog.json";
-import { addLine, copyDay, editLine, editLines, editOf, groupWithNext, moveDay, moveLine, removeLine, ungroup, type Edit, type EditLine } from "./edit";
+import { addLine, addWarmup, copyDay, editLine, editLines, editOf, groupWithNext, moveDay, moveLine, removeLine, removeWarmup, ungroup, warmupLines, type Edit, type EditLine } from "./edit";
 import { checkDay, checkWeek, type Exercise, type Profile } from "./guard";
 import { dayKey, describe, week, weekStart, type Day } from "./program";
 import { pullAll, pushDay, type PlanRow, type Unit } from "./sync";
@@ -173,9 +173,10 @@ export function DayCard({ day, today, editable, rows, equipment, onSave, warning
   day: Day; today: boolean; editable: boolean; rows: PlanRow[]; equipment?: Set<string>; onSave: (rows: PlanRow[]) => void;
   warnings?: string[]; onDrop?: (fromKey: string) => void; onCopy?: () => void;
 }) {
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<"lift" | "warmup" | false>(false);
   const [over, setOver] = useState(false);
   const lines = editLines(rows);
+  const warmups = warmupLines(rows);
   const dayStart = day.date.getTime() / 1000;
   const empty = editable ? lines.length === 0 : day.lines.length === 0;
   return (
@@ -200,6 +201,16 @@ export function DayCard({ day, today, editable, rows, equipment, onSave, warning
         {empty && !adding && <p className="muted">{day.done ? "Trained" : "Rest"}</p>}
         {editable ? (
           <>
+            {/* FIT-300: the session's own warm-up, before the lifts; the app adds the ramp to the first lift. */}
+            {lines.length > 0 && (warmups.length > 0 || adding === "warmup") && (
+              <ul className="edit warmup">
+                <li className="label">Warm-up</li>
+                {warmups.map((line) => (
+                  <WarmupRow key={line.ids[0]} line={line} onEdit={(edit) => onSave(editLine(rows, line, edit))}
+                             onRemove={() => onSave(removeWarmup(rows, line))} />
+                ))}
+              </ul>
+            )}
             {lines.length > 0 && (
               <ul className="edit">
                 {lines.map((line, i) => (
@@ -217,10 +228,17 @@ export function DayCard({ day, today, editable, rows, equipment, onSave, warning
               <ul className="warnings">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
             )}
             {adding ? (
-              <ExercisePicker equipment={equipment} onPick={(slug) => { setAdding(false); onSave(addLine(rows, slug, "Workout", dayStart)); }}
+              <ExercisePicker equipment={equipment}
+                              onPick={(slug) => {
+                                setAdding(false);
+                                onSave(adding === "warmup" ? addWarmup(rows, slug, "Workout", dayStart) : addLine(rows, slug, "Workout", dayStart));
+                              }}
                               onCancel={() => setAdding(false)} />
             ) : (
-              <button className="add" onClick={() => setAdding(true)}>+ Add exercise</button>
+              <>
+                <button className="add" onClick={() => setAdding("lift")}>+ Add exercise</button>
+                {lines.length > 0 && <button className="add" onClick={() => setAdding("warmup")}>+ Add warm-up</button>}
+              </>
             )}
           </>
         ) : (
@@ -291,6 +309,31 @@ function LineRow({ line, first, last, grouped, startsGroup, onGroup, onEdit, onM
                 title={grouped ? "Take out of the superset" : "Superset with the next exercise"}
                 disabled={!grouped && last} onClick={onGroup}>{grouped ? "⊖" : "⊕"}</button>
         <button aria-label={`Remove ${name}`} onClick={onRemove}>✕</button>
+      </span>
+    </li>
+  );
+}
+
+/** FIT-300: a warm-up item: sets of minutes, seconds or reps, and a way to take it out. */
+function WarmupRow({ line, onEdit, onRemove }: { line: EditLine; onEdit: (e: Edit) => void; onRemove: () => void }) {
+  const edit = editOf(line);
+  const name = (line.template && names.get(line.template)) ?? line.template ?? "Exercise";
+  const timed = edit.seconds !== undefined && edit.reps === undefined;
+  const set = (patch: Partial<Edit>) => onEdit({ ...edit, ...patch });
+  return (
+    <li>
+      <span className="name">{name}</span>
+      <span className="cells">
+        <NumberCell label={`${name} sets`} value={edit.sets} onCommit={(v) => set({ sets: v ?? 1 })} />
+        <span className="x">×</span>
+        {timed ? (
+          <><NumberCell label={`${name} seconds`} value={edit.seconds} step={15} onCommit={(v) => set({ seconds: v })} /><span className="unit">s</span></>
+        ) : (
+          <NumberCell label={`${name} reps`} value={edit.reps} onCommit={(v) => set({ reps: v })} />
+        )}
+      </span>
+      <span className="tools">
+        <button aria-label={`Remove ${name} from the warm-up`} onClick={onRemove}>✕</button>
       </span>
     </li>
   );

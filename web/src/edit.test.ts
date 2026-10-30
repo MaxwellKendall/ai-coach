@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLine, copyDay, editLine, editLines, editOf, groupWithNext, moveDay, moveLine, removeLine, ungroup } from "./edit";
+import { addLine, addWarmup, copyDay, editLine, editLines, editOf, groupWithNext, moveDay, moveLine, removeLine, removeWarmup, ungroup, warmupLines } from "./edit";
 import { describe as text, lines, WARMUP } from "./program";
 import type { PlanRow } from "./sync";
 
@@ -121,5 +121,25 @@ describe("supersets (FIT-128)", () => {
     const three = groupWithNext(two, editLines(two)[1]);
     expect(editLines(three).map((l) => l.group)).toEqual([1, 1, 1]);
     expect(groupWithNext(rows, lines[2])).toBe(rows);
+  });
+});
+
+describe("a session's written warm-up (FIT-300)", () => {
+  it("adds items before the lifts, edits and removes them, and leaves a lift's ramp sets with the lift", () => {
+    const rows = session();
+    expect(warmupLines(rows)).toEqual([]); // the bench's ramp set is the bench's
+    const withRow = addWarmup(rows, "rowing-stationary", "Upper", start, "w1");
+    const withBands = addWarmup(withRow, "band-pull-apart", "Upper", start, "w2");
+    const ordered = [...withBands].sort((a, b) => a.at - b.at);
+    expect(ordered.map((r) => r.template)).toEqual(["rowing-stationary", "band-pull-apart", "bench-press", "bench-press", "dumbbell-row", "plank"]);
+    expect(ordered[0]).toMatchObject({ note: WARMUP, main: false, pinned: true, targets: [m("sets", 1, "sets"), m("duration_s", 300, "s")] });
+    // The lifts are unchanged, and the warm-up isn't one of them.
+    expect(shown(withBands)).toEqual(shown(rows));
+    const bands = warmupLines(withBands)[1];
+    const edited = editLine(withBands, bands, { sets: 2, seconds: 30 });
+    expect(warmupLines(edited)[1]).toMatchObject({ template: "band-pull-apart", sets: 2, targets: [m("duration_s", 30, "s")] });
+    const out = removeWarmup(edited, warmupLines(edited)[0]);
+    expect(warmupLines(out).map((l) => l.template)).toEqual(["band-pull-apart"]);
+    expect(out.find((r) => r.id === "w1")).toBeUndefined();
   });
 });

@@ -111,6 +111,10 @@ h3 { font-size: 17px; font-weight: 650; display: flex; align-items: center; gap:
 .tools button:hover:not(:disabled) { background: var(--bg); color: var(--text); }
 .tools button:disabled { opacity: 0.3; cursor: default; }
 .add { margin-top: 10px; border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 14px; padding: 4px 0; }
+.add + .add { margin-left: 16px; }
+/* FIT-300: the session's warm-up, above its lifts. */
+.session ul.edit.warmup { margin-bottom: 8px; }
+.session ul.edit.warmup li.label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .add:hover { color: var(--text); }
 .picker { margin-top: 10px; display: grid; gap: 8px; justify-items: start; }
 .picker input { width: min(100%, 320px); padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font: inherit; color: inherit; }
