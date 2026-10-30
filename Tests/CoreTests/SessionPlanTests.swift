@@ -37,6 +37,24 @@ struct SessionPlanTests {
         #expect(SessionPlan(generated).warmup.isEmpty)
     }
 
+    /// FIT-300: a lifter adds a warm-up item; it goes before the lifts, after any others, and its sets come and go.
+    @Test func addingAWarmupItem() {
+        var plan = SessionPlan(generated)
+        plan.addWarmup("rowing-stationary")
+        plan.addWarmup("band-pull-apart")
+        #expect(plan.warmup.map(\.exercise) == ["rowing-stationary", "band-pull-apart"])
+        #expect(plan.warmup[0].sets.first?.value("duration_s") == 300)
+        #expect(plan.blocks[2].movements[0].exercise == "bench")
+        plan.addSet(block: 1)
+        #expect(plan.warmup[1].sets.count == 2)
+        #expect(plan.warmup[1].sets.allSatisfy { $0.isWarmup })
+        plan.removeSet(block: 1)
+        plan.removeSet(block: 1)
+        #expect(plan.warmup[1].sets.count == 1)
+        // Back to rows and in again, it's still the warm-up.
+        #expect(SessionPlan(plan.items).warmup.map(\.exercise) == ["rowing-stationary", "band-pull-apart"])
+    }
+
     @Test func rowsSharingAGroupAreASuperset() {
         let plan = SessionPlan([item("bench", sets: 3), item("db-row", sets: 3, group: 4), item("db-bench", sets: 2, group: 4),
                                 item("plank", sets: 2, group: 5), item("dead-bug", sets: 2, group: 5)])

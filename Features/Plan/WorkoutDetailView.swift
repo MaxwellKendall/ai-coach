@@ -31,10 +31,13 @@ struct WorkoutDetailView: View {
     enum Picking: Identifiable {
         case swap(block: Int, movement: Int, exercise: String)
         case add
+        /// FIT-300: an exercise for the warm-up.
+        case addWarmup
         var id: String {
             switch self {
             case .swap(let block, let movement, _): "swap \(block) \(movement)"
             case .add: "add"
+            case .addWarmup: "add warm-up"
             }
         }
     }
@@ -68,14 +71,10 @@ struct WorkoutDetailView: View {
                     ForEach(Array(session.blocks.enumerated()), id: \.element.id) { index, block in
                         blockCard(index, block, names).id(block.id)
                     }
-                    Button { picking = .add } label: {
-                        Label("Add exercise", systemImage: "plus")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
-                            .contentShape(.rect)
+                    HStack(spacing: 10) {
+                        addButton("Add exercise") { picking = .add }
+                        addButton("Add warm-up") { picking = .addWarmup }
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(16)
             }
@@ -111,8 +110,23 @@ struct WorkoutDetailView: View {
                 ExercisePicker(title: "Add exercise", excluding: inSession) { slug in
                     withAnimation(.snappy) { session.add(slug) }
                 }
+            case .addWarmup:
+                ExercisePicker(title: "Add to the warm-up", excluding: inSession) { slug in
+                    withAnimation(.snappy) { session.addWarmup(slug) }
+                }
             }
         }
+    }
+
+    private func addButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: "plus")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Header

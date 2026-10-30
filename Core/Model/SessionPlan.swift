@@ -150,10 +150,11 @@ struct SessionPlan: Equatable, Sendable {
         }
     }
 
-    /// One more set (a round, in a superset): a copy of each movement's last working set.
+    /// One more set (a round, in a superset): a copy of each movement's last working set, or of a warm-up item's last set.
     mutating func addSet(block: Int) {
+        let warmup = blocks[block].rounds == 0
         for m in blocks[block].movements.indices {
-            guard var set = blocks[block].movements[m].working.last else { continue }
+            guard var set = warmup ? blocks[block].movements[m].sets.last : blocks[block].movements[m].working.last else { continue }
             set.id = UUID()
             set.plannedRef = nil
             set.adjustedReason = "edited"
@@ -163,6 +164,11 @@ struct SessionPlan: Equatable, Sendable {
 
     /// Drops the last working set (or round), keeping at least one.
     mutating func removeSet(block: Int) {
+        // A warm-up item (FIT-300) loses its last set, keeping one.
+        if blocks[block].rounds == 0 {
+            for m in blocks[block].movements.indices where blocks[block].movements[m].sets.count > 1 { blocks[block].movements[m].sets.removeLast() }
+            return
+        }
         guard blocks[block].rounds > 1 else { return }
         for m in blocks[block].movements.indices {
             if let last = blocks[block].movements[m].sets.lastIndex(where: { !$0.isWarmup }),
@@ -185,5 +191,12 @@ struct SessionPlan: Equatable, Sendable {
             + (rpe.map { [Measurement(metric: "rpe", value: $0, unit: "RPE")] } ?? [])
         let sets = (0..<3).map { _ in PlannedSet(targets: targets, adjustedReason: "edited") }
         blocks.append(Block(movements: [Movement(exercise: exercise, sets: sets)]))
+    }
+
+    /// FIT-300: a warm-up item, after the session's others and before the lifts: 5 minutes until it's changed.
+    mutating func addWarmup(_ exercise: String) {
+        let set = PlannedSet(targets: [Measurement(metric: "duration_s", value: 300, unit: "s")], note: TrainingGenerator.warmupNote,
+                             adjustedReason: "edited")
+        blocks.insert(Block(movements: [Movement(exercise: exercise, sets: [set])]), at: blocks.prefix { $0.rounds == 0 }.count)
     }
 }
