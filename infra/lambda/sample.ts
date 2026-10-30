@@ -5,7 +5,7 @@ import { item } from "./sync.ts";
 
 // FIT-240: a coach can't see what Barbrabell does before paying for it, so every new coach gets one sample client:
 // FIT-221's Mike, with a program, goals, a stalled squat and a sore knee in his latest note. The coach tools and the
-// dashboard work on him without the coach plan; inviting and coaching real clients still need it. He has no sign-in,
+// dashboard work on him without Pro, so a coach can try Pro's tools first (FIT-286). He has no sign-in,
 // like the review account's clients (FIT-236), so nothing he's sent ever reaches a phone.
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));

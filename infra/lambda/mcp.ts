@@ -477,7 +477,7 @@ export const tools = [
     name: "roster_review",
     title: "Review the roster's week",
     annotations: { title: "Review the roster's week", ...READ },
-    description: "For a coach: the week holding date across every client, those who need them first: flags, workouts done of planned, sets, each goal's pace, the week's alerts, and whether next week is planned yet. For \"who needs me this week\"; then get_week_review or get_context with client for one in full.",
+    description: "For a coach: the week holding date across every client, those who need them first: flags, workouts done of planned, sets, each goal's pace, the week's alerts, and whether next week is planned yet. For \"who needs me this week\"; then get_week_review or get_context with client for one in full. Barbrabell Pro, except on sample clients.",
     inputSchema: { type: "object", properties: { date: DATE } },
   },
   {
@@ -840,7 +840,14 @@ function weekLines(units: Units, day: string, nowSec: number, tz: string) {
 /** The tools a coach can point at a client. Logging and sharing stay the client's own. */
 export const CLIENT_TOOLS = new Set(["get_context", "get_day", "add_note", "find_exercises", "swap_options", "create_exercise", "edit_exercise", "clear_day",
   "propose_session", "propose_week", "apply", "undo", "get_program", "set_program", "get_progress", "get_week_review", "set_profile", "add_goal", "change_goal", "drop_goal"]);
-const CLIENT = { type: "string", description: "Coaches only: the client to act on, by name or id as get_context and list_clients show them. Leave it out for the caller's own training." };
+/**
+ * FIT-286: what Pro (the coach plan) adds for a coach here, besides roster_review: planning and changing a real client's
+ * training. Reading a client, notes, finding exercises, list_clients and invite_client are free, as all coaching is on
+ * the dashboard. A sample client takes every tool, so a coach can try Pro first.
+ */
+export const PRO_CLIENT_TOOLS = new Set(["propose_session", "propose_week", "apply", "undo", "clear_day", "set_program", "swap_options",
+  "get_week_review", "set_profile", "add_goal", "change_goal", "drop_goal", "create_exercise", "edit_exercise"]);
+const CLIENT = { type: "string", description: "Coaches only: the client to act on, by name or id as get_context and list_clients show them. Leave it out for the caller's own training. For a real client, the tools that plan or change their training are Barbrabell Pro; reading and notes are free." };
 for (const t of tools) if (CLIENT_TOOLS.has(t.name)) (t.inputSchema.properties as Record<string, unknown>).client = CLIENT;
 
 const shownName = (p: Person) => p.name ?? `a client without a name (${p.uid})`;
@@ -864,53 +871,47 @@ async function clientOf(account: Account, said: unknown, store: Store): Promise<
   const caller = account.uid;
   const client = pickClient(await store.clients(caller), String(said));
   if (!(await store.coachOf(caller, client.uid))) throw new Error(`They don't coach ${shownName(client)} any more: one of them ended the link. invite_client makes a new invite if they both want it.`);
-  if (!isSample(client.uid)) await needsPlan(account, store);
   return client;
 }
 
 /**
- * The coach tools are Pro, the coach plan (FIT-284: coaching on the dashboard and in the app is free; the coach MCP is
- * what Pro buys). The athlete tools stay free. FIT-237: the tools say so and point to the coach page, with no price or
- * Checkout link: ChatGPT's directory lets a tool explain a plan gate but not sell one.
+ * FIT-286: a Pro coach tool asked for without Pro (FIT-284: coaching on the dashboard and in the app is free; the full
+ * coach MCP is what Pro buys). The athlete tools stay free. FIT-237: the tools say so and point to the coach page, with
+ * no price or Checkout link: ChatGPT's directory lets a tool explain a plan gate but not sell one.
  */
-async function needsPlan(account: Account, store: Store) {
+async function needsPro(tool: string, account: Account, store: Store) {
   if (await store.coachPlan(account.uid)) return;
   // FIT-241: a coach who paid with another sign-in has a second, unpaid account here; name this one and the way out.
   const agent = account.agent.charAt(0).toUpperCase() + account.agent.slice(1);
   const signedIn = account.who ? `${agent} is signed in to Barbrabell as ${account.who}` : `This is the account ${agent} signed in to Barbrabell with`;
-  throw new Error(`Coaching from ${agent} needs Barbrabell Pro, which this account doesn't have. Coaching on the dashboard is free, with any number of clients (${ORIGIN}/app), and their clients keep logging either way. `
+  throw new Error(`${tool} for a client is part of Barbrabell Pro, which this account doesn't have: Pro lets ${agent} plan, change and review every client's training. `
+    + `Free here: list_clients, invite_client, and reading a client's context, days, program and progress, with notes. On the dashboard all coaching is free, with any number of clients (${ORIGIN}/app). `
     + `${signedIn}. If they started Pro with another sign-in, reconnect with that one, or link the two on the dashboard's Account page (${ORIGIN}/app/account). `
     + `How Pro works: ${ORIGIN}/coaches. Once it's on, coaching works here on their next request; there's nothing to reconnect.`);
 }
 
-/**
- * FIT-240: the clients a coach sees here. One with no clients gets the sample client first; without Pro only sample
- * clients show, and with none of those it's Pro's message.
- */
+/** FIT-240: the clients a coach sees here. One with no clients gets the sample client first. */
 async function roster(account: Account, store: Store, today: string) {
   const coach = account.uid;
   let clients = await store.clients(coach);
   if (!clients.length && (await store.sample(coach, today))) clients = await store.clients(coach);
-  if (await store.coachPlan(coach)) return { clients, paid: true };
-  const samples = clients.filter((c) => isSample(c.uid));
-  if (!samples.length) await needsPlan(account, store);
-  return { clients: samples, paid: false };
+  return { clients, paid: await store.coachPlan(coach) };
 }
 
-/** What a coach is told when their list has a sample client in it. */
+/** What a coach is told about a sample client in their list, and, without Pro, what Pro adds. */
 function sampleNote(clients: Person[], paid: boolean) {
   const samples = clients.filter((c) => isSample(c.uid));
-  if (!samples.length) return "";
-  const note = `\n\n${samples.map(shownName).join(" and ")} ${samples.length === 1 ? "is a sample client" : "are sample clients"}, there to try coaching on: `
-    + "plan, apply and undo work as for a real client, but nothing reaches a phone.";
-  return paid ? note : `${note} Inviting and coaching real clients from here needs Pro; on the dashboard it's free (${ORIGIN}/app). How Pro works: ${ORIGIN}/coaches.`;
+  const note = samples.length ? `\n\n${samples.map(shownName).join(" and ")} ${samples.length === 1 ? "is a sample client" : "are sample clients"}, there to try coaching on: `
+    + "plan, apply and undo work as for a real client, but nothing reaches a phone." : "";
+  if (paid || !clients.length || clients.every((c) => isSample(c.uid))) return note;
+  return `${note}\n\nPlanning, changing and reviewing real clients' training from here is Barbrabell Pro; reading them, notes and invites are free, and so is all coaching on the dashboard (${ORIGIN}/app). How Pro works: ${ORIGIN}/coaches.`;
 }
 
 export async function callTool(name: string, args: Args, account: Account, store: Store, now = new Date()): Promise<string> {
   const { tz } = account;
   if (args.client !== undefined && !CLIENT_TOOLS.has(name)) throw new Error(`${name} is the client's own to do, so it takes no client.`);
   const client = await clientOf(account, args.client, store);
-  if (name === "invite_client") await needsPlan(account, store);
+  if (client && !isSample(client.uid) && PRO_CLIENT_TOOLS.has(name)) await needsPro(name, account, store);
   // Whose data this call is about. A coach's changes reach the client's phone at its next sync, as the dashboard's do.
   const uid = client?.uid ?? account.uid;
   useAccountExercises(await store.units(uid)); // FIT-173: their own exercises, beside the catalog
@@ -922,12 +923,10 @@ export async function callTool(name: string, args: Args, account: Account, store
       const units = await store.units(uid);
       const text = context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
       if (client) return `Client: ${shownName(client)}, coached by them since ${client.since.slice(0, 10)}. Everything below is the client's.\n\n${text}`;
-      const all = await store.clients(uid);
-      const paid = all.length > 0 && (await store.coachPlan(uid));
-      const clients = paid ? all : all.filter((p) => isSample(p.uid)), waiting = all.length - clients.length;
-      const ended = waiting ? `\n\nThey coach ${waiting} client${waiting === 1 ? "" : "s"} on the dashboard, free (${ORIGIN}/app). Seeing or changing them from here needs Pro (any coaching tool gives the link). Their own training above is free as ever.` : "";
-      const shown = clients.length ? `\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}${waiting ? " meanwhile" : ""}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.${sampleNote(clients, paid)}` : "";
-      return `${text}${ended}${shown}`;
+      const clients = await store.clients(uid);
+      const paid = clients.length > 0 && (await store.coachPlan(uid));
+      const shown = clients.length ? `\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.${sampleNote(clients, paid)}` : "";
+      return `${text}${shown}`;
     }
     case "invite_client": {
       const made = await store.invite(uid);
@@ -946,6 +945,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     case "list_clients":
     case "roster_review": {
       const { clients, paid } = await roster(account, store, today);
+      if (name === "roster_review" && !clients.every((c) => isSample(c.uid))) await needsPro(name, account, store);
       if (!clients.length) return "They have no clients yet. invite_client makes an invite link to send one.";
       const rows = await Promise.all(clients.map(async (c) => {
         if (!(await store.coachOf(uid, c.uid))) return undefined;

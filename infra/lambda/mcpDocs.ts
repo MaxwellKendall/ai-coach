@@ -84,7 +84,8 @@ export function docsPage(site: Site, mcpUrl: string, tools: Tool[], prompts: Pro
       <section class="block doc">
         <h2>Coaching</h2>
         <ul>
-          <li>Coaching clients needs the coach plan, on the dashboard's Billing page at <a href="/app">${esc(new URL(mcpUrl).host)}/app</a>. Connecting and training yourself are free.</li>
+          <li>Coaching is free, with any number of clients, on the dashboard at <a href="/app">${esc(new URL(mcpUrl).host)}/app</a>. Connecting and training yourself are free too.</li>
+          <li>Here, reading a client, notes, listing clients and inviting are free. Planning and changing a client's training (proposals, apply and undo, their program, goals and swaps) and the roster and weekly reviews are ${esc(site.appName)} Pro, from Billing on the dashboard. A sample client takes every tool, so you can try Pro first.</li>
           <li>Invite a client with a link or code (from Claude or the dashboard). They accept in the free app; they need no AI account.</li>
           <li>You can read a client's training and plan it: their goals, profile, program, sessions, logs and notes. Logging and sharing stay theirs.</li>
           <li>Clients can stop sharing with you any time in the app. You can stop coaching one on the dashboard.</li>
