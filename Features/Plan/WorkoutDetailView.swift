@@ -48,11 +48,8 @@ struct WorkoutDetailView: View {
         var metric: String
     }
 
-    /// FIT-300: the picker to open on arrival (Today's "Add a warm-up").
-    private var opening: Picking?
-
     init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil, startIcon: String = "play.fill",
-         pushed: Bool = false, opening: Picking? = nil, onStart: @escaping ([PlannedActivity]) -> Void = { _ in },
+         pushed: Bool = false, onStart: @escaping ([PlannedActivity]) -> Void = { _ in },
          onSave: @escaping ([PlannedActivity]) -> Void = { _ in }, onStartOwn: ((SessionPlan) -> Void)? = nil) {
         self.items = items
         self.onStartOwn = onStartOwn
@@ -61,7 +58,6 @@ struct WorkoutDetailView: View {
         self.onStart = onStart
         self.onSave = onSave
         self.pushed = pushed
-        self.opening = opening
         _session = State(initialValue: session)
         _original = State(initialValue: session)
     }
@@ -104,7 +100,6 @@ struct WorkoutDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { bottom(names) }
-        .onAppear { if let opening, picking == nil { picking = opening } }
         .sheet(item: Binding(get: { howTo.map(HowToID.init) }, set: { howTo = $0?.id })) { item in
             let template = templates.first { $0.slug == item.id }
             HowToSheet(name: template?.name ?? item.id, steps: template?.values("instructions") ?? [])
@@ -169,49 +164,15 @@ struct WorkoutDetailView: View {
         return TodayScreen.title(lifts: lifts)
     }
 
-    /// FIT-300: the warm-up items together: each one's name and dose, − and + (a minute, or a rep), and remove.
+    /// FIT-300: the warm-up items together, on a card of their own.
     private func warmupCard(_ names: [String: String]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Warm-up").font(.headline)
-            ForEach(session.blocks.indices.filter { session.blocks[$0].rounds == 0 }, id: \.self) { index in
-                ForEach(session.blocks[index].movements.indices, id: \.self) { m in
-                    let movement = session.blocks[index].movements[m]
-                    let first = movement.sets.first
-                    let timed = first?.value("duration_s") != nil
-                    let metric = timed ? "duration_s" : "reps"
-                    let step: Double = timed ? 60 : 1
-                    let value = first?.value(metric) ?? (timed ? 300 : 10)
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(names[movement.exercise] ?? movement.exercise).font(.body.weight(.semibold)).lineLimit(2)
-                            Text(movement.warmupDose).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit()
-                        }
-                        Spacer(minLength: 8)
-                        smallButton("minus", timed ? "A minute less" : "One fewer") {
-                            session.set(metric, to: max(step, value - step), block: index, movement: m, set: 0, remaining: true)
-                        }
-                        smallButton("plus", timed ? "A minute more" : "One more") {
-                            session.set(metric, to: value + step, block: index, movement: m, set: 0, remaining: true)
-                        }
-                        smallButton("xmark", "Remove \(names[movement.exercise] ?? movement.exercise)") {
-                            withAnimation(.snappy) { session.remove(block: index, movement: m) }
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-            }
+            WarmupList(session: $session, names: names)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background, in: .rect(cornerRadius: 20))
-    }
-
-    private func smallButton(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.footnote.weight(.bold)).frame(width: 36, height: 36).background(Color.fill, in: .circle)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 
     // MARK: Blocks

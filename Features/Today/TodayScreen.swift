@@ -46,9 +46,8 @@ struct TodayScreen: View {
         case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
         case propose(Proposal), spoken(Spoken), own, run(PlannedActivity?), ran(LogEntry)
         /// FIT-297: Change and Log on Today.
-        case change([PlannedActivity]), logChoice([PlannedActivity])
-        /// FIT-300: the session editor, opening on the warm-up picker.
-        case warmup([PlannedActivity])
+        /// FIT-302: Move (Change and its quick fixes are gone; the session is edited on Today), and Log.
+        case move, logChoice([PlannedActivity])
         /// FIT-235: a workout of their own on a past day: pick the exercises, then log the sets on that day.
         case ownOn(Date), logOwn(WorkoutDraft, Date)
         var id: String {
@@ -65,8 +64,7 @@ struct TodayScreen: View {
             case .check: "check"
             case .propose(let proposal): "propose \(proposal.id)"
             case .spoken(let spoken): "spoken \(spoken.id)"
-            case .change(let items): "change \(items.map(\.id))"
-            case .warmup(let items): "warm-up \(items.map(\.id))"
+            case .move: "move"
             case .logChoice(let items): "log choice \(items.map(\.id))"
             }
         }
@@ -463,7 +461,7 @@ struct TodayScreen: View {
             SessionList(session: plan.session, names: names, previous: previousLoads,
                         checked: lifts.isEmpty || !isToday ? nil : $checked,
                         onLoad: isToday ? { exercise, step in changeLoad(exercise, by: step, in: plan.items) } : nil,
-                        onAddWarmup: isToday ? { sheet = .warmup(plan.items) } : nil)
+                        onEdit: isToday ? { edited($0, over: plan.items) } : nil)
             ForEach(plan.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
         }
     }
@@ -490,7 +488,7 @@ struct TodayScreen: View {
                         Label(lifting(plan.items).isEmpty ? "Start the run" : "Start", systemImage: lifting(plan.items).isEmpty ? "figure.run" : "play.fill")
                     }
                     .buttonStyle(.primary)
-                    pair("Change", "arrow.left.arrow.right", { sheet = .change(plan.items) }, "Log", "plus", { sheet = .logChoice(plan.items) })
+                    pair("Move", "calendar", { sheet = .move }, "Log", "plus", { sheet = .logChoice(plan.items) })
                 }
             case .done(let done):
                 pair("Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned) } },
@@ -534,11 +532,8 @@ struct TodayScreen: View {
     /// Another day: pull its session to today (FIT-235) when today has none waiting, or open its sets.
     @ViewBuilder private func laterActions(_ card: DayCard, todayFree: Bool) -> some View {
         if case .plan(let plan) = card, !planning {
-            if todayFree {
-                pair("Do It Today", "arrow.uturn.left", { doToday(plan) }, "See the Sets", "list.bullet", { sheet = .details(plan.items) })
-            } else {
-                pair(nil, nil, nil, "See the Sets", "list.bullet", { sheet = .details(plan.items) })
-            }
+            // FIT-302: no editor here; Today already lists the day's lifts.
+            if todayFree { pair(nil, nil, nil, "Do It Today", "arrow.uturn.left", { doToday(plan) }) }
         }
     }
 
@@ -557,6 +552,14 @@ struct TodayScreen: View {
 
     private func secondary(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) { Label(title, systemImage: icon) }.buttonStyle(.secondary)
+    }
+
+    /// FIT-302: today's session as changed by hand on Today, saved as it's made and pinned like any edit. A change to
+    /// the lifts' order or number starts the check-offs again, since they're kept by position.
+    private func edited(_ session: SessionPlan, over items: [PlannedActivity]) {
+        let before = Planner.session(items, templates: templates)
+        _ = Planner.save(session, over: items, templates: templates, in: context)
+        if before.blocks.map(\.movements.first?.exercise) != session.blocks.map(\.movements.first?.exercise) { checked = [] }
     }
 
     /// FIT-297 (E1): a load changed in place on Today changes the plan's working sets for that exercise.
@@ -1018,10 +1021,6 @@ struct TodayScreen: View {
             NavigationStack {
                 WorkoutDetailView(items: items, session: Planner.session(items, templates: templates))
             }
-        case .warmup(let items):
-            NavigationStack {
-                WorkoutDetailView(items: items, session: Planner.session(items, templates: templates), opening: .addWarmup)
-            }
         case .record(let items): NavigationStack { SessionRecordView(planned: items) }
         case .ran(let entry): NavigationStack { RunDetailView(run: entry) }
         case .own:
@@ -1045,17 +1044,8 @@ struct TodayScreen: View {
         case .adjust(let plan): NavigationStack { AdjustSheet(plan: plan) }
         case .check(let entries): LogCheckSheet(entries: entries)
         case .propose(let proposal): ProposalSheet(proposal: proposal) { apply(proposal) }
-        case .change(let items):
-            ChangeSheet(canChangeWeek: pro.active && pro.coaches.isEmpty && thisWeeksPlan != nil) { choice in
-                after {
-                    switch choice {
-                    case .change(let change): propose(change, said: "")
-                    case .exercises: self.sheet = .details(items)
-                    case .warmup: self.sheet = .warmup(items)
-                    case .week: if let plan = thisWeeksPlan { self.sheet = .adjust(plan) }
-                    }
-                }
-            }
+        case .move:
+            MoveSheet { weekday in after { propose(.move(weekday: weekday), said: "") } }
         case .logChoice(let items):
             LogChoiceSheet(hasToday: !lifting(items).isEmpty) { choice in
                 after {

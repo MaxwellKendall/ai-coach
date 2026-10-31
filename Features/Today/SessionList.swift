@@ -1,8 +1,10 @@
 import SwiftUI
 
 /// FIT-297, design A: today's session as a list. The warm-up first, folded to one line; each lift with its sets and its
-/// load, big, and "+5 lb" when it went up; a superset's lifts bracketed with A and B. Tap a lift to check it off as
-/// done (L3), tap its load to change it right there (E1). Prototype: https://claude.ai/artifact/QBzBgYEd35faydgEk8Qo3f
+/// load, big, and "+5 lb" when it went up; a superset's lifts bracketed with A and B. Tap the circle to check a lift off
+/// (L3), its load to change it right there (E1). FIT-302: today's session is edited right here, by hand (no AI, no
+/// presets): tap a lift's name for its sets, reps, swap, order and remove; the warm-up opens to its items; Add exercise
+/// at the end. Each change is saved as it's made. Prototype: https://claude.ai/artifact/QBzBgYEd35faydgEk8Qo3f
 struct SessionList: View {
     let session: SessionPlan
     let names: [String: String]
@@ -13,33 +15,75 @@ struct SessionList: View {
     var checked: Binding<Set<Int>>?
     /// A load changed in place: the exercise and the step (±5 lb).
     var onLoad: ((String, Double) -> Void)?
-    /// FIT-300: today's "Add a warm-up"; nil on another day.
-    var onAddWarmup: (() -> Void)?
+    /// FIT-302: the session as changed by hand, to save; nil where it can't be changed (another day).
+    var onEdit: ((SessionPlan) -> Void)?
     @State private var warm = false
     /// The exercise whose load is being changed.
     @State private var editing: String?
+    /// The lift open for editing: its block and movement.
+    @State private var open: Pick?
+    @State private var picking: Picking?
+
+    struct Pick: Equatable { var block: Int, movement: Int }
+
+    /// What the exercise picker is for.
+    enum Picking: Identifiable {
+        case warmup, add, swap(Pick, String)
+        var id: String {
+            switch self {
+            case .warmup: "warm-up"
+            case .add: "add"
+            case .swap(let pick, _): "swap \(pick.block) \(pick.movement)"
+            }
+        }
+    }
+
+    /// One change to the session, saved.
+    private func change(_ edit: (inout SessionPlan) -> Void) {
+        var changed = session
+        edit(&changed)
+        onEdit?(changed)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             if !session.warmup.isEmpty || firstLoad != nil {
                 warmup(firstLoad)
-            } else if let onAddWarmup {
+            } else if onEdit != nil {
                 // A session with nothing to warm up to (bodyweight, say) has no warm-up row: offer one.
-                Button(action: onAddWarmup) {
-                    Label("Add a warm-up", systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .overlay(alignment: .bottom) { Divider() }
+                addButton("Add a warm-up") { picking = .warmup }.overlay(alignment: .bottom) { Divider() }
             }
             // FIT-300: the written warm-up's blocks are in the warm-up row, not among the lifts; indices stay the session's.
             ForEach(session.blocks.indices.filter { session.blocks[$0].rounds > 0 }, id: \.self) { index in
                 let block = session.blocks[index]
                 if block.isGroup { superset(block, index: index) } else if let movement = block.movements.first { row(movement, block: index) }
             }
+            if onEdit != nil { addButton("Add exercise") { picking = .add } }
         }
         .animation(.snappy, value: warm)
         .animation(.snappy, value: editing)
+        .animation(.snappy, value: open)
+        .sheet(item: $picking) { picking in
+            let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
+            switch picking {
+            case .warmup:
+                ExercisePicker(title: "Add to the warm-up", excluding: inSession, warmup: true) { slug in change { $0.addWarmup(slug) } }
+            case .add:
+                ExercisePicker(title: "Add exercise", excluding: inSession) { slug in change { $0.add(slug) } }
+            case .swap(let pick, let exercise):
+                ExercisePicker(title: "Swap \(names[exercise] ?? exercise)", replacing: exercise, excluding: inSession) { slug in
+                    change { $0.swap(block: pick.block, movement: pick.movement, to: slug) }
+                }
+            }
+        }
+    }
+
+    private func addButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 
     /// The first lift's working weight, the warm-up's target; none for a session without a loaded lift first.
@@ -76,14 +120,15 @@ struct SessionList: View {
                 VStack(alignment: .leading, spacing: 10) {
                     if session.warmup.isEmpty {
                         HStack { Text("Row, bike or walk, easy").foregroundStyle(Color.inkMuted); Spacer(); Text("\(WarmupRamp.cardioMinutes) min").bold() }
+                    } else if let onEdit {
+                        WarmupList(session: Binding(get: { session }, set: { onEdit($0) }), names: names).font(.body)
                     } else {
                         ForEach(session.warmup) { movement in
                             HStack { Text(names[movement.exercise] ?? movement.exercise).foregroundStyle(Color.inkMuted); Spacer(); Text(movement.warmupDose).bold() }
                         }
                     }
-                    if let onAddWarmup {
-                        Button(session.warmup.isEmpty ? "Change the warm-up" : "Add to the warm-up", systemImage: "plus", action: onAddWarmup)
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark).buttonStyle(.plain)
+                    if onEdit != nil {
+                        addButton(session.warmup.isEmpty ? "Your own warm-up" : "Add to the warm-up") { picking = .warmup }
                     }
                     if let first {
                         VStack(alignment: .leading, spacing: 6) {
@@ -129,7 +174,9 @@ struct SessionList: View {
         let done = checked?.wrappedValue.contains(block) == true
         let load = Self.load(movement)
         let up = load.flatMap { load in previous[movement.exercise].map { load - $0 } }.flatMap { $0 > 0 ? $0 : nil }
-        return HStack(alignment: .center, spacing: 12) {
+        let pick = Pick(block: block, movement: session.blocks[block].movements.firstIndex { $0.id == movement.id } ?? 0)
+        return VStack(alignment: .leading, spacing: 0) {
+        HStack(alignment: .center, spacing: 12) {
             if let checked {
                 Button { toggle(block, in: checked) } label: {
                     Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title2)
@@ -155,12 +202,86 @@ struct SessionList: View {
                 Text(Self.dose(movement)).font(.footnote).foregroundStyle(Color.inkMuted)
             }
             .contentShape(.rect)
-            .onTapGesture { if let checked { toggle(block, in: checked) } }
+            .onTapGesture {
+                if onEdit != nil { open = open == pick ? nil : pick } else if let checked { toggle(block, in: checked) }
+            }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(onEdit != nil ? "Change this exercise" : "")
             Spacer(minLength: 8)
             loadView(movement, load: load)
         }
         .padding(.vertical, 12)
+        if open == pick { editor(movement, pick: pick).padding(.bottom, 12).transition(.opacity.combined(with: .move(edge: .top))) }
+        }
         .overlay(alignment: .bottom) { if letter == nil || !last { Divider() } }
+    }
+
+    /// FIT-302: a lift opened for editing: its sets and reps (or seconds), then swap, move up or down, and remove.
+    private func editor(_ movement: SessionPlan.Movement, pick: Pick) -> some View {
+        let working = movement.working
+        let first = movement.sets.firstIndex { !$0.isWarmup } ?? 0
+        let timed = working.first?.value("duration_s") != nil && working.first?.value("reps") == nil
+        let metric = timed ? "duration_s" : "reps"
+        let step: Double = timed ? 5 : 1
+        let amount = working.first?.value(metric) ?? 0
+        let lifts = session.blocks.indices.filter { session.blocks[$0].rounds > 0 }
+        let place = lifts.firstIndex(of: pick.block) ?? 0
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                counter("Sets", "\(working.count)") {
+                    change { $0.removeSet(block: pick.block) }
+                } more: {
+                    change { $0.addSet(block: pick.block) }
+                }
+                counter(timed ? "Seconds" : "Reps", Coach.number(amount)) {
+                    change { $0.set(metric, to: max(step, amount - step), block: pick.block, movement: pick.movement, set: first, remaining: true) }
+                } more: {
+                    change { $0.set(metric, to: amount + step, block: pick.block, movement: pick.movement, set: first, remaining: true) }
+                }
+            }
+            HStack(spacing: 8) {
+                chip("Swap") { picking = .swap(pick, movement.exercise) }
+                chip("Move up", symbol: "arrow.up", disabled: place == 0) { change { $0.move(block: pick.block, by: lifts[place - 1] - pick.block) } }
+                chip("Move down", symbol: "arrow.down", disabled: place == lifts.count - 1) {
+                    change { $0.move(block: pick.block, by: lifts[place + 1] - pick.block) }
+                }
+                Spacer()
+                Button("Remove", role: .destructive) {
+                    open = nil
+                    change { $0.remove(block: pick.block, movement: pick.movement) }
+                }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+            }
+        }
+        .padding(14)
+        .background(Color.fill.opacity(0.6), in: .rect(cornerRadius: 16))
+    }
+
+    private func counter(_ label: String, _ value: String, less: @escaping () -> Void, more: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            stepButton("minus", "\(label): fewer", action: less)
+            VStack(spacing: 0) {
+                Text(value).font(.display(20, weight: .semibold, relativeTo: .title3)).monospacedDigit()
+                Text(label).font(.caption).foregroundStyle(Color.inkMuted)
+            }
+            .frame(minWidth: 52)
+            stepButton("plus", "\(label): more", action: more)
+        }
+    }
+
+    /// A small capsule action: its title, or only its symbol (Up, Down) with the title read aloud.
+    private func chip(_ title: String, symbol: String? = nil, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if let symbol { Image(systemName: symbol).accessibilityLabel(title) } else { Text(title) }
+        }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 14).frame(minWidth: 44, minHeight: 36)
+            .background(Color.surface, in: .capsule)
+            .buttonStyle(.plain)
+            .disabled(disabled)
+            .opacity(disabled ? 0.4 : 1)
     }
 
     @ViewBuilder private func loadView(_ movement: SessionPlan.Movement, load: Double?) -> some View {
