@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 /// FIT-296: the first launch, three doors under one promise: train on your own (the quiz, FIT-230), with a coach (sign
-/// in, then the invite link or code, FIT-201), or as a coach (sign in, then the dashboard on the web, FIT-298 for more).
+/// in, then the invite link or code, FIT-201), or as a coach (sign in, then coach mode, FIT-298).
 /// Prototype: https://claude.ai/artifact/TbcJ19r3c4r77p38BERgMw
 struct WelcomeView: View {
     @Environment(Account.self) private var account
@@ -149,7 +149,7 @@ struct WelcomeView: View {
         .buttonStyle(.plain)
     }
 
-    /// FIT-296's coach door: sign in, then coaching happens on the dashboard for now (coach mode in the app: FIT-298).
+    /// FIT-296's coach door: sign in, then coach mode (FIT-298); the dashboard keeps import, programs and billing.
     @ViewBuilder private var coachDoor: some View {
         if account.user == nil {
             VStack(alignment: .leading, spacing: 0) {
@@ -159,13 +159,17 @@ struct WelcomeView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                title("Your clients live on barbrabell.com",
-                      "Sign in there with the same account to import your programs and invite your first client. Your clients use this app, free.")
-                Link(destination: URL(string: "https://barbrabell.com/clients")!) {
-                    Text("Open barbrabell.com").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+                title("Your clients, in your pocket",
+                      "See who needs you, reply to their notes, change a session and invite clients, here. Import programs and billing are on barbrabell.com.")
+                Button {
+                    UserDefaults.standard.set(true, forKey: Roster.coachingKey)
+                    onDone()
+                } label: {
+                    Text("Go to My Clients").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
                         .foregroundStyle(Plate.current.onAccent).background(.tint, in: .rect(cornerRadius: 16))
                 }
                 Button("Train on my own too") {
+                    UserDefaults.standard.set(true, forKey: Roster.coachingKey)
                     if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
                 }
                 .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
