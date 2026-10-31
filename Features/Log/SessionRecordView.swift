@@ -10,13 +10,15 @@ struct SessionRecordView: View {
     @Query private var templates: [Template]
     @Query private var profiles: [Profile]
     let planned: [PlannedActivity]
+    /// The day shown when nothing was planned on it (a workout of their own).
+    var day: Date? = nil
     @State private var page = 0
     /// FIT-188: a run that day, opened to its route.
     @State private var opened: LogEntry?
 
     var body: some View {
         let bySlug = Dictionary(templates.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
-        let day = planned.first?.date ?? .now
+        let day = planned.first?.date ?? self.day ?? .now
         let onDay = entries.filter { $0.kind == .workout && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }
         // FIT-188: runs are listed on their own, each opening to its route, not counted as sets.
         let runIDs = Set(templates.filter { Running.runs.contains($0.slug) }.map(\.id))

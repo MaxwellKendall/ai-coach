@@ -43,7 +43,7 @@ struct TodayScreen: View {
     @State private var checked: Set<Int> = []
 
     enum Sheet: Identifiable {
-        case details([PlannedActivity]), record([PlannedActivity]), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
+        case details([PlannedActivity]), record([PlannedActivity], Date), log([PlannedActivity]), adjust(Plan), check([LogDraftEntry])
         case propose(Proposal), spoken(Spoken), own, run(PlannedActivity?), ran(LogEntry)
         /// FIT-297: Change and Log on Today.
         /// FIT-302: Move (Change and its quick fixes are gone; the session is edited on Today), and Log.
@@ -58,7 +58,7 @@ struct TodayScreen: View {
             case .ran(let entry): "ran \(entry.id)"
             case .run(let item): "run \(item?.id.uuidString ?? "")"
             case .details(let items): "details \(items.map(\.id))"
-            case .record(let items): "record \(items.map(\.id))"
+            case .record(let items, let day): "record \(items.map(\.id)) \(day)"
             case .log(let items): "log \(items.map(\.id))"
             case .adjust(let plan): "adjust \(plan.id)"
             case .check: "check"
@@ -229,7 +229,7 @@ struct TodayScreen: View {
         guard let date = target.day, let index = days.firstIndex(where: { Calendar.current.isDate($0, inSameDayAs: date) }) else { return }
         withAnimation(.snappy) { day = index }
         if target.kind == .reply, case .done(let done) = cards(days)[index] {
-            sheet = done.run.map { .ran($0) } ?? .record(done.planned)
+            sheet = done.run.map { .ran($0) } ?? .record(done.planned, done.start)
         }
     }
 
@@ -345,7 +345,8 @@ struct TodayScreen: View {
 
     /// FIT-297: "Squat, bench press, row": a session named by its lifts, not "Day A".
     static func title(_ session: SessionPlan, names: [String: String], fallback: String) -> String {
-        let lifts = session.blocks.flatMap(\.movements).map { names[$0.exercise] ?? $0.exercise }
+        // The warm-up (blocks with no working sets) isn't what the session is called.
+        let lifts = session.blocks.filter { $0.rounds > 0 }.flatMap(\.movements).map { names[$0.exercise] ?? $0.exercise }
         return lifts.isEmpty ? fallback : title(lifts: lifts)
     }
 
@@ -430,6 +431,12 @@ struct TodayScreen: View {
                 Text("Usually under a minute.").font(.subheadline).foregroundStyle(Color.inkMuted)
             }
             .frame(maxWidth: .infinity).padding(.top, 80)
+        case .plan(let plan) where isPast:
+            // A past session with nothing logged against it says so; the footer logs it on its own day.
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Not logged", systemImage: "circle.dashed").font(.headline).foregroundStyle(Color.inkMuted)
+                planView(plan, isToday: false)
+            }
         case .plan(let plan): planView(plan, isToday: isToday)
         case .done(let done): doneCard(done)
         // FIT-201: a coach's client with nothing planned from this week on is waiting on the coach, not resting.
@@ -491,7 +498,7 @@ struct TodayScreen: View {
                     pair("Move", "calendar", { sheet = .move }, "Log", "plus", { sheet = .logChoice(plan.items) })
                 }
             case .done(let done):
-                pair("Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned) } },
+                pair("Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned, done.start) } },
                      "Log", "plus", { sheet = .logChoice([]) })
             default:
                 // FIT-235: the next session this week pulled to today.
@@ -522,7 +529,9 @@ struct TodayScreen: View {
             .scrollBounceBehavior(.basedOnSize)
             Group {
                 // Another day this week, earlier or later: its session can be moved to today when today has none.
-                if index == todayPos { actions(card, week: weekCards) } else { laterActions(card, todayFree: todayFree) }
+                if index == todayPos { actions(card, week: weekCards) }
+                else if index < todayPos { pastActions(card, day: day, todayFree: todayFree) }
+                else { laterActions(card, todayFree: todayFree) }
             }
             .padding(.horizontal, 22).padding(.bottom, 16)
         }
@@ -534,6 +543,26 @@ struct TodayScreen: View {
         if case .plan(let plan) = card, !planning {
             // FIT-302: no editor here; Today already lists the day's lifts.
             if todayFree { pair(nil, nil, nil, "Do It Today", "arrow.uturn.left", { doToday(plan) }) }
+        }
+    }
+
+    /// An earlier day this week: its session logged on that day, or anything else logged there; a logged day's sets
+    /// can still be corrected.
+    @ViewBuilder private func pastActions(_ card: DayCard, day: Date, todayFree: Bool) -> some View {
+        switch card {
+        case .plan(let plan) where !planning:
+            let lifts = lifting(plan.items)
+            Button { sheet = lifts.isEmpty ? .run(plan.items.first) : .log(plan.items) } label: {
+                Label("Log it", systemImage: "checkmark")
+            }
+            .buttonStyle(.primary)
+            if todayFree { pair(nil, nil, nil, "Do It Today", "arrow.uturn.left", { doToday(plan) }) }
+        case .done(let done):
+            pair(nil, nil, nil, "Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned, done.start) } })
+        case .rest:
+            pair(nil, nil, nil, "Log a workout", "plus", { sheet = .ownOn(day) })
+        default:
+            EmptyView()
         }
     }
 
@@ -665,7 +694,7 @@ struct TodayScreen: View {
             }
         }
         .contentShape(.rect)
-        .onTapGesture { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned) } }
+        .onTapGesture { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned, done.start) } }
     }
 
     private func doneTitle(_ done: DayCard.Done) -> String {
@@ -1021,7 +1050,7 @@ struct TodayScreen: View {
             NavigationStack {
                 WorkoutDetailView(items: items, session: Planner.session(items, templates: templates))
             }
-        case .record(let items): NavigationStack { SessionRecordView(planned: items) }
+        case .record(let items, let day): NavigationStack { SessionRecordView(planned: items, day: day) }
         case .ran(let entry): NavigationStack { RunDetailView(run: entry) }
         case .own:
             NavigationStack {
