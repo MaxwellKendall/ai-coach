@@ -34,6 +34,7 @@ struct WorkoutModeView: View {
     @State private var message: String?
     /// FIT-53: groups I opted in to see each set as it happens.
     @State private var live: LiveShare?
+    @State private var activity = WorkoutActivity()
 
     /// The running rest, on its card.
     struct Rest: Equatable {
@@ -50,6 +51,7 @@ struct WorkoutModeView: View {
         let cards = draft.cards
         let names = names
         let warming = warmStep < draft.warmups.count
+        let lockScreen = lockScreen(cards: cards, names: names, warming: warming)
         VStack(spacing: 0) {
             topBar
             segments.padding(.horizontal, 22).padding(.top, 8)
@@ -83,6 +85,7 @@ struct WorkoutModeView: View {
             live?.update(draft.live(at: page, names: names))
         }
         .onChange(of: draft.rows.filter(\.done).count) { live?.update(draft.live(at: page, names: names)) }
+        .onChange(of: lockScreen) { activity.update(lockScreen) }
         .overlay {
             if voice.listening || working != nil {
                 ListeningVeil(voice: voice, working: working,
@@ -112,6 +115,7 @@ struct WorkoutModeView: View {
         // A phone that locks mid-set loses the clock; keep it awake while training.
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
+            activity.start(lockScreen)
             if Pilot.groups, account.user != nil, live == nil {
                 live = LiveShare(workout: draft.session, startedAt: startedAt)
                 live?.start()
@@ -120,6 +124,7 @@ struct WorkoutModeView: View {
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
+            activity.end()
             live?.end(saved: nil)
             live = nil
         }
@@ -215,6 +220,32 @@ struct WorkoutModeView: View {
         .padding(.vertical, 5)
         .animation(.snappy, value: draft.rows.filter(\.done).count)
         .accessibilityHidden(true)
+    }
+
+    // MARK: Lock Screen
+
+    /// FIT-304: the Live Activity's one card: the step on screen; during a rest, the set after it and the rest's end.
+    private func lockScreen(cards: [WorkoutDraft.Card], names: [String: String], warming: Bool) -> WorkoutActivityAttributes.ContentState {
+        let progress = draft.rows.isEmpty ? 0 : Double(draft.rows.filter(\.done).count) / Double(draft.rows.count)
+        if warming {
+            let step = draft.warmups[warmStep]
+            return .init(title: step.exercise.map { names[$0] ?? $0 } ?? "Row, bike or walk, easy",
+                         detail: "Warm-up · \(step.dose)", step: "\(warmStep + 1)/\(draft.warmups.count)", load: nil, restEnds: nil, progress: 0)
+        }
+        let line: [Int]? = if page >= cards.count { nil } else if case .set(let line) = cards[page] { line } else { nextSet(after: page, in: cards) }
+        guard let line else {
+            return .init(title: draft.session, detail: "Done · save it in Barbrabell", step: "✓", load: nil, restEnds: nil, progress: progress)
+        }
+        let rows = line.map { draft.rows[$0] }
+        let first = rows[0]
+        let rounds = draft.lines(block: first.block).count
+        let loads = rows.compactMap(\.load).reduce(into: [Double]()) { if !$0.contains($1) { $0.append($1) } }
+        let load = first.loadMetric == nil || loads.isEmpty ? nil
+            : loads.map(Coach.number).joined(separator: "/") + " " + (SetRow.units[first.loadMetric ?? "load_lb"] ?? "lb")
+        let values = rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+")
+            + (first.metric == "reps" ? "" : " " + (SetRow.units[first.metric] ?? ""))
+        return .init(title: Self.names(rows, names), detail: "Set \(first.round + 1) of \(rounds) · " + (load.map { "\($0) × " } ?? "") + values,
+                     step: "\(first.round + 1)/\(rounds)", load: load, restEnds: rest?.ends, progress: progress)
     }
 
     // MARK: Set card
@@ -466,6 +497,17 @@ struct WorkoutModeView: View {
                 }
             }
             HStack(spacing: 10) {
+                // FIT-304: a rest can be cut short as well as stretched; one that runs out moves on as it would.
+                Button("−30 s") {
+                    if let active {
+                        rest?.ends = max(.now, active.ends - 30)
+                    } else if seconds > 30 {
+                        rest = Rest(ends: .now + seconds - 30, total: seconds - 30, page: index)
+                    } else {
+                        skip()
+                    }
+                }
+                .accessibilityLabel("30 seconds less")
                 Button("+30 s") {
                     if let active {
                         let left = max(0, active.ends.timeIntervalSinceNow)

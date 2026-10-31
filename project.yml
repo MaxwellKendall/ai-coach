@@ -29,9 +29,12 @@ targetTemplates:
       path: App/Info.plist
       properties:
         UIBackgroundModes: [location]
+        # FIT-304: the live workout on the Lock Screen and in the Dynamic Island.
+        NSSupportsLiveActivities: true
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
     dependencies:
+      - target: AICoachWidgets
       - package: Amplify
         product: Amplify
       - package: Amplify
@@ -80,6 +83,24 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach
         INFOPLIST_KEY_CFBundleDisplayName: Barbrabell
+  # FIT-304: the live workout's Live Activity. Shares only its data type with the app.
+  AICoachWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [Widgets, Features/Log/WorkoutActivityAttributes.swift]
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Barbrabell
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach.widgets
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
   AICoachTests:
     type: bundle.unit-test
     platform: iOS

@@ -11,6 +11,8 @@ struct AICoachApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // FIT-304: a workout ends with the app; its Live Activity shouldn't outlive it.
+        WorkoutActivity.endAll()
         do {
             container = AppSchema.shared
             try Seeder.seed(container.mainContext)
