@@ -57,14 +57,14 @@ struct SessionList: View {
                 warmup(firstLoad)
             } else if onEdit != nil {
                 // A session with nothing to warm up to (bodyweight, say) has no warm-up row: offer one.
-                addButton("Add a warm-up") { picking = .warmup }.overlay(alignment: .bottom) { Divider() }
+                addButton("Warm-up") { picking = .warmup }.overlay(alignment: .bottom) { Divider() }
             }
             // FIT-300: the written warm-up's blocks are in the warm-up row, not among the lifts; indices stay the session's.
             ForEach(session.blocks.indices.filter { session.blocks[$0].rounds > 0 }, id: \.self) { index in
                 let block = session.blocks[index]
                 if block.isGroup { superset(block, index: index) } else if let movement = block.movements.first { row(movement, block: index) }
             }
-            if onEdit != nil { addButton("Add exercise") { picking = .add } }
+            if onEdit != nil { addButton("Exercise") { picking = .add } }
         }
         .animation(.snappy, value: warm)
         .animation(.snappy, value: editing)
@@ -84,21 +84,20 @@ struct SessionList: View {
         }
     }
 
-    /// A ＋ row: the ＋ in the check circles' column, its words on the names' edge. Inside the open warm-up, which is
-    /// already on that edge, the ＋ sits flush.
+    /// A ＋ row: a thin ring with a ＋ in the check circles' column, then one grey word (author picked prototype 8: the
+    /// verb is the ＋). Inside the open warm-up, which is already on the names' edge, the ring sits flush.
     private func addButton(_ title: String, nested: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: nested || checked == nil ? 6 : Self.gap) {
-                // Quieter than the lifts (author: "should be smaller"): a footnote-sized +, subheadline words.
-                Image(systemName: "plus").font(.footnote.weight(.bold))
+            HStack(spacing: nested || checked == nil ? 8 : Self.gap) {
+                Image(systemName: "plus").font(.caption2.weight(.bold)).foregroundStyle(Plate.current.mark)
+                    .frame(width: 24, height: 24).overlay(Circle().strokeBorder(Plate.current.mark, lineWidth: 1.5))
                     .frame(width: nested || checked == nil ? nil : Self.column)
-                Text(title).font(.subheadline.weight(.semibold))
+                Text(title).font(.footnote.weight(.semibold)).foregroundStyle(Color.inkMuted)
             }
-            .foregroundStyle(Plate.current.mark)
             .padding(.vertical, nested ? 4 : Self.rowPadding)
             .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain).accessibilityLabel("Add \(title.lowercased())")
     }
 
     /// The first lift's working weight, the warm-up's target; none for a session without a loaded lift first.
@@ -151,7 +150,7 @@ struct SessionList: View {
                         }
                     }
                     if onEdit != nil {
-                        addButton(session.warmup.isEmpty ? "Your own warm-up" : "Add to the warm-up", nested: true) { picking = .warmup }
+                        addButton("Exercise", nested: true) { picking = .warmup }
                     }
                     if let first {
                         VStack(alignment: .leading, spacing: 6) {
