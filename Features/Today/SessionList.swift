@@ -89,9 +89,10 @@ struct SessionList: View {
     private func addButton(_ title: String, nested: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: nested || checked == nil ? 6 : Self.gap) {
-                Image(systemName: "plus").font(.body.weight(.semibold))
+                // Quieter than the lifts (author: "should be smaller"): a footnote-sized +, subheadline words.
+                Image(systemName: "plus").font(.footnote.weight(.bold))
                     .frame(width: nested || checked == nil ? nil : Self.column)
-                Text(title).font(.body.weight(.semibold))
+                Text(title).font(.subheadline.weight(.semibold))
             }
             .foregroundStyle(Plate.current.mark)
             .padding(.vertical, nested ? 4 : Self.rowPadding)
