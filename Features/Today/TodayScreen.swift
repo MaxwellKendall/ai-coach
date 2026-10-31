@@ -546,15 +546,20 @@ struct TodayScreen: View {
     @ViewBuilder private func laterActions(_ card: DayCard, todayPlan: DayCard.Planned?) -> some View {
         if case .plan(let plan) = card, !planning {
             // FIT-302: no editor here; Today already lists the day's lifts.
-            trainToday { doToday(plan, swapping: todayPlan); start(plan) }
+            trainToday(icon: todayPlan == nil ? "arrow.uturn.left" : "arrow.left.arrow.right") { doToday(plan, swapping: todayPlan); start(plan) }
         }
     }
 
-    /// Another day's session, started now: a small link under the card, quieter than the day's own actions.
-    private func trainToday(_ action: @escaping () -> Void) -> some View {
+    /// Another day's session, started now: a small link under the card, quieter than the day's own actions. Its icon
+    /// says what happens to the plan: back to today, or a swap with today's; a missed day moves nothing, so has none.
+    private func trainToday(icon: String? = nil, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label("Train this today", systemImage: "arrow.uturn.left").font(.subheadline.weight(.semibold))
-                .foregroundStyle(Plate.current.mark).frame(maxWidth: .infinity).padding(.vertical, 8).contentShape(.rect)
+            HStack(spacing: 6) {
+                if let icon { Image(systemName: icon) }
+                Text("Train this today")
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Plate.current.mark).frame(maxWidth: .infinity).padding(.vertical, 8).contentShape(.rect)
         }
         .buttonStyle(.plain)
     }
