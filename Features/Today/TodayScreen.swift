@@ -273,7 +273,7 @@ struct TodayScreen: View {
     /// brought back), and the goal line. One header for every page.
     private func header(_ days: [Date], cards: [DayCard]) -> some View {
         let shown = min(day ?? todayPos, days.count - 1)
-        return VStack(alignment: .leading, spacing: 18) {
+        return VStack(alignment: .leading, spacing: 24) {
             HStack(alignment: .firstTextBaseline) {
                 Text(Self.dayName(days[shown])).font(.display(34)).contentTransition(.opacity)
                     .animation(.snappy, value: shown)
@@ -295,7 +295,7 @@ struct TodayScreen: View {
             }
             if !pro.coaches.isEmpty { checkInButton }
         }
-        .padding(.horizontal, 22).padding(.top, 4)
+        .padding(.horizontal, 20).padding(.top, 4)
     }
 
     /// The seven days from today: weekday, date, and a dot for a session (ring) or one done (filled). Today's date is in
@@ -434,7 +434,7 @@ struct TodayScreen: View {
         case .plan(let plan) where isPast:
             // A past session with nothing logged against it says so; the footer logs it on its own day.
             VStack(alignment: .leading, spacing: 12) {
-                Label("Not logged", systemImage: "circle.dashed").font(.headline).foregroundStyle(Color.inkMuted)
+                Label("Not logged", systemImage: "circle.dashed").font(.headline).foregroundStyle(Color.inkMuted).padding(.top, 16)
                 planView(plan, isToday: false)
             }
         case .plan(let plan): planView(plan, isToday: isToday)
@@ -521,10 +521,14 @@ struct TodayScreen: View {
                         let report = weekReport()
                         WeekReviewCard(report: report) { review = report }
                     }
+                    // A session's rows bring their own 16 pt above and below, so its card adds only 4: the text sits
+                    // 20 pt from every edge, as on the other cards.
                     dayContent(card, day: day, isToday: index == todayPos, isPast: index < todayPos, todayFree: todayFree)
-                        .card()
+                        .padding(.horizontal, 20).padding(.vertical, Self.isList(card) && !planning ? 4 : 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .cardBackground()
                 }
-                .padding(.horizontal, 22).padding(.top, 24).padding(.bottom, 28)
+                .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
             }
             .scrollBounceBehavior(.basedOnSize)
             Group {
@@ -533,7 +537,7 @@ struct TodayScreen: View {
                 else if index < todayPos { pastActions(card, day: day, todayFree: todayFree) }
                 else { laterActions(card, todayFree: todayFree) }
             }
-            .padding(.horizontal, 22).padding(.bottom, 16)
+            .padding(.horizontal, 20).padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -546,9 +550,15 @@ struct TodayScreen: View {
         }
     }
 
+    /// A card that's a session's list of rows, not a message or a summary.
+    static func isList(_ card: DayCard) -> Bool {
+        if case .plan = card { true } else { false }
+    }
+
     /// An earlier day this week: its session logged on that day, or anything else logged there; a logged day's sets
     /// can still be corrected.
-    @ViewBuilder private func pastActions(_ card: DayCard, day: Date, todayFree: Bool) -> some View {
+    private func pastActions(_ card: DayCard, day: Date, todayFree: Bool) -> some View {
+        VStack(spacing: 8) {
         switch card {
         case .plan(let plan) where !planning:
             let lifts = lifting(plan.items)
@@ -563,6 +573,7 @@ struct TodayScreen: View {
             pair(nil, nil, nil, "Log a workout", "plus", { sheet = .ownOn(day) })
         default:
             EmptyView()
+        }
         }
     }
 

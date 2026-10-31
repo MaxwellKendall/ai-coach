@@ -38,6 +38,12 @@ struct SessionList: View {
         }
     }
 
+    /// One grid for every row (author: "geometrically perfect"): the check circle and the ＋ share one column, and
+    /// every row's text starts on one edge.
+    static let column: CGFloat = 28, gap: CGFloat = 12, rowPadding: CGFloat = 16
+    /// Where the text starts: past the column on Today, where there's a check circle; flush otherwise.
+    private var inset: CGFloat { checked != nil ? Self.column + Self.gap : 0 }
+
     /// One change to the session, saved.
     private func change(_ edit: (inout SessionPlan) -> Void) {
         var changed = session
@@ -78,10 +84,18 @@ struct SessionList: View {
         }
     }
 
-    private func addButton(_ title: String, action: @escaping () -> Void) -> some View {
+    /// A ＋ row: the ＋ in the check circles' column, its words on the names' edge. Inside the open warm-up, which is
+    /// already on that edge, the ＋ sits flush.
+    private func addButton(_ title: String, nested: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(.rect)
+            HStack(spacing: nested || checked == nil ? 6 : Self.gap) {
+                Image(systemName: "plus").font(.body.weight(.semibold))
+                    .frame(width: nested || checked == nil ? nil : Self.column)
+                Text(title).font(.body.weight(.semibold))
+            }
+            .foregroundStyle(Plate.current.mark)
+            .padding(.vertical, nested ? 4 : Self.rowPadding)
+            .frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
         }
         .buttonStyle(.plain)
     }
@@ -100,24 +114,32 @@ struct SessionList: View {
             .joined(separator: ", ")
     }
 
+    private var chevron: some View {
+        Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Color.inkMuted)
+            .rotationEffect(.degrees(warm ? 90 : 0))
+            .frame(width: 24, height: 24).background(Color.fill, in: .circle)  // the check circle's size
+            .frame(width: Self.column, height: Self.column)
+    }
+
     private func warmup(_ first: (name: String, load: Double)?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { warm.toggle() } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("WARM-UP").font(.caption.weight(.bold)).tracking(0.6).foregroundStyle(Color.inkMuted)
-                        Text(warmupLine(first)).font(.body.weight(.semibold))
+                HStack(spacing: Self.gap) {
+                    // In the check circles' column on Today, so the row keeps the list's edge; at the end elsewhere.
+                    if checked != nil { chevron }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(warmupLine(first)).font(.body.weight(.semibold)).multilineTextAlignment(.leading)
+                        Text("Warm-up").font(.footnote).foregroundStyle(Color.inkMuted)
                     }
-                    Spacer()
-                    Image(systemName: "chevron.down").font(.footnote.weight(.bold)).frame(width: 28, height: 28)
-                        .background(Color.fill, in: .circle).rotationEffect(.degrees(warm ? 180 : 0))
+                    Spacer(minLength: 0)
+                    if checked == nil { chevron }
                 }
-                .padding(.vertical, 12).contentShape(.rect)
+                .padding(.vertical, Self.rowPadding).contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityHint(warm ? "Hides the warm-up" : "Shows the warm-up")
             if warm {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     if session.warmup.isEmpty {
                         HStack { Text("Row, bike or walk, easy").foregroundStyle(Color.inkMuted); Spacer(); Text("\(WarmupRamp.cardioMinutes) min").bold() }
                     } else if let onEdit {
@@ -128,7 +150,7 @@ struct SessionList: View {
                         }
                     }
                     if onEdit != nil {
-                        addButton(session.warmup.isEmpty ? "Your own warm-up" : "Add to the warm-up") { picking = .warmup }
+                        addButton(session.warmup.isEmpty ? "Your own warm-up" : "Add to the warm-up", nested: true) { picking = .warmup }
                     }
                     if let first {
                         VStack(alignment: .leading, spacing: 6) {
@@ -146,7 +168,7 @@ struct SessionList: View {
                     }
                 }
                 .font(.subheadline)
-                .padding(.bottom, 12)
+                .padding(.leading, inset).padding(.bottom, Self.rowPadding)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -176,11 +198,12 @@ struct SessionList: View {
         let up = load.flatMap { load in previous[movement.exercise].map { load - $0 } }.flatMap { $0 > 0 ? $0 : nil }
         let pick = Pick(block: block, movement: session.blocks[block].movements.firstIndex { $0.id == movement.id } ?? 0)
         return VStack(alignment: .leading, spacing: 0) {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: Self.gap) {
             if let checked {
                 Button { toggle(block, in: checked) } label: {
                     Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title2)
                         .foregroundStyle(done ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.inkFaint))
+                        .frame(width: Self.column, height: Self.column)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(done ? "Done" : "Check off as done")
@@ -210,8 +233,8 @@ struct SessionList: View {
             Spacer(minLength: 8)
             loadView(movement, load: load)
         }
-        .padding(.vertical, 12)
-        if open == pick { editor(movement, pick: pick).padding(.bottom, 12).transition(.opacity.combined(with: .move(edge: .top))) }
+        .padding(.vertical, Self.rowPadding)
+        if open == pick { editor(movement, pick: pick).padding(.leading, inset).padding(.bottom, Self.rowPadding).transition(.opacity.combined(with: .move(edge: .top))) }
         }
         .overlay(alignment: .bottom) { if letter == nil || !last { Divider() } }
     }
@@ -301,8 +324,6 @@ struct SessionList: View {
             .buttonStyle(.plain)
             .disabled(onLoad == nil)
             .accessibilityHint(onLoad == nil ? "" : "Change the weight")
-        } else {
-            Text("Body weight").font(.subheadline).foregroundStyle(Color.inkMuted)
         }
     }
 
