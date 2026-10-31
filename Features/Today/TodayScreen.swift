@@ -109,15 +109,15 @@ struct TodayScreen: View {
         let weekCards = cards(week)
         let days = days
         let cards = cards(days)
-        // FIT-235: a later session can be done today only when today has no session of its own waiting.
-        let todayFree: Bool = if case .plan = cards[todayPos] { false } else { true }
+        // FIT-235: another day's session comes to today; when today has a session of its own waiting, the two swap.
+        let todayPlan: DayCard.Planned? = if case .plan(let plan) = cards[todayPos] { plan } else { nil }
         VStack(alignment: .leading, spacing: 0) {
             header(days, cards: cards)
             // Each day a full-width page swiped sideways; the strip above follows it.
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(days.indices, id: \.self) { index in
-                        page(cards[index], day: days[index], index: index, week: weekCards, todayFree: todayFree)
+                        page(cards[index], day: days[index], index: index, week: weekCards, todayPlan: todayPlan)
                             .containerRelativeFrame(.horizontal)
                     }
                 }
@@ -421,7 +421,7 @@ struct TodayScreen: View {
         WeekReport.make(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
     }
 
-    @ViewBuilder private func dayContent(_ card: DayCard, day: Date, isToday: Bool, isPast: Bool, todayFree: Bool) -> some View {
+    @ViewBuilder private func dayContent(_ card: DayCard, day: Date, isToday: Bool, isPast: Bool) -> some View {
         switch card {
         // FIT-74: the week standing in until the coach's arrives isn't shown as if it were the plan.
         case .plan where planning:
@@ -512,7 +512,7 @@ struct TodayScreen: View {
     }
 
     /// One day: the session (scrolling on its own when it's long), then that day's actions, the only footer.
-    private func page(_ card: DayCard, day: Date, index: Int, week weekCards: [DayCard], todayFree: Bool) -> some View {
+    private func page(_ card: DayCard, day: Date, index: Int, week weekCards: [DayCard], todayPlan: DayCard.Planned?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -523,7 +523,7 @@ struct TodayScreen: View {
                     }
                     // A session's rows bring their own 16 pt above and below, so its card adds only 4: the text sits
                     // 20 pt from every edge, as on the other cards.
-                    dayContent(card, day: day, isToday: index == todayPos, isPast: index < todayPos, todayFree: todayFree)
+                    dayContent(card, day: day, isToday: index == todayPos, isPast: index < todayPos)
                         .padding(.horizontal, 20).padding(.vertical, Self.isList(card) && !planning ? 4 : 20)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .cardBackground()
@@ -532,22 +532,31 @@ struct TodayScreen: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             Group {
-                // Another day this week, earlier or later: its session can be moved to today when today has none.
+                // Another day this week, earlier or later: its session can be moved to today, or swapped with today's.
                 if index == todayPos { actions(card, week: weekCards) }
-                else if index < todayPos { pastActions(card, day: day, todayFree: todayFree) }
-                else { laterActions(card, todayFree: todayFree) }
+                else if index < todayPos { pastActions(card, day: day) }
+                else { laterActions(card, todayPlan: todayPlan) }
             }
             .padding(.horizontal, 20).padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// Another day: pull its session to today (FIT-235) when today has none waiting, or open its sets.
-    @ViewBuilder private func laterActions(_ card: DayCard, todayFree: Bool) -> some View {
+    /// A later day: train its session now (FIT-235). It becomes today's, and a session waiting today takes its day.
+    @ViewBuilder private func laterActions(_ card: DayCard, todayPlan: DayCard.Planned?) -> some View {
         if case .plan(let plan) = card, !planning {
             // FIT-302: no editor here; Today already lists the day's lifts.
-            if todayFree { pair(nil, nil, nil, "Do It Today", "arrow.uturn.left", { doToday(plan) }) }
+            trainToday { doToday(plan, swapping: todayPlan); start(plan) }
         }
+    }
+
+    /// Another day's session, started now: a small link under the card, quieter than the day's own actions.
+    private func trainToday(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label("Train this today", systemImage: "arrow.uturn.left").font(.subheadline.weight(.semibold))
+                .foregroundStyle(Plate.current.mark).frame(maxWidth: .infinity).padding(.vertical, 8).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 
     /// A card that's a session's list of rows, not a message or a summary.
@@ -557,7 +566,7 @@ struct TodayScreen: View {
 
     /// An earlier day this week: its session logged on that day, or anything else logged there; a logged day's sets
     /// can still be corrected.
-    private func pastActions(_ card: DayCard, day: Date, todayFree: Bool) -> some View {
+    private func pastActions(_ card: DayCard, day: Date) -> some View {
         VStack(spacing: 8) {
         switch card {
         case .plan(let plan) where !planning:
@@ -566,7 +575,8 @@ struct TodayScreen: View {
                 Label("Log it", systemImage: "checkmark")
             }
             .buttonStyle(.primary)
-            if todayFree { pair(nil, nil, nil, "Do It Today", "arrow.uturn.left", { doToday(plan) }) }
+            // A missed day is trained today as it is: nothing moves, and the day stays unlogged.
+            trainToday { start(plan) }
         case .done(let done):
             pair(nil, nil, nil, "Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned, done.start) } })
         case .rest:
@@ -778,20 +788,26 @@ struct TodayScreen: View {
 
     /// A workout of your own, started once its sheet has gone (two can't be presented at once).
     /// FIT-235: a later session moves to today, each row at its own time of day, and Today shows it ready to start.
-    /// The coach sees it on today, and Undo puts it back.
-    private func doToday(_ plan: DayCard.Planned) {
+    /// The coach sees it on today, and Undo puts it back. Today's own session, if one is waiting, takes the other's day.
+    private func doToday(_ plan: DayCard.Planned, swapping todays: DayCard.Planned? = nil) {
         let calendar = Calendar.current
-        let was = plan.items.map { ($0, $0.date) }
+        let moving = plan.items + (todays?.items ?? [])
+        let was = moving.map { ($0, $0.date) }
         let today = calendar.startOfDay(for: .now)
-        for item in plan.items {
-            item.date = today + item.date.timeIntervalSince(calendar.startOfDay(for: item.date))
-            item.updatedAt = .now
+        let other = calendar.startOfDay(for: plan.start)
+        func move(_ items: [PlannedActivity], to day: Date) {
+            for item in items {
+                item.date = day + item.date.timeIntervalSince(calendar.startOfDay(for: item.date))
+                item.updatedAt = .now
+            }
         }
+        move(plan.items, to: today)
+        if let todays { move(todays.items, to: other) }
         try? context.save()
         let from = plan.start.formatted(.dateTime.weekday(.wide))
         withAnimation(.snappy) {
             day = todayPos
-            toast = Toast(text: "\(from)’s session is today") { [context] in
+            toast = Toast(text: todays == nil ? "\(from)’s session is today" : "Swapped with \(from)") { [context] in
                 for (item, date) in was { item.date = date; item.updatedAt = .now }
                 try? context.save()
             }
