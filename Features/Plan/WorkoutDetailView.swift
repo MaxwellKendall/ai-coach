@@ -116,7 +116,7 @@ struct WorkoutDetailView: View {
                     withAnimation(.snappy) { session.add(slug) }
                 }
             case .addWarmup:
-                ExercisePicker(title: "Add to the warm-up", excluding: inSession) { slug in
+                ExercisePicker(title: "Add to the warm-up", excluding: inSession, warmup: true) { slug in
                     withAnimation(.snappy) { session.addWarmup(slug) }
                 }
             }

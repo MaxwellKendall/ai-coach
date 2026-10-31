@@ -12,6 +12,8 @@ struct ExercisePicker: View {
     var replacing: String?
     /// Already in the session.
     var excluding: Set<String> = []
+    /// FIT-300: picking for the warm-up: cardio and mobility first instead of the common lifts.
+    var warmup = false
     let onPick: (String) -> Void
     @State private var query = ""
 
@@ -29,6 +31,8 @@ struct ExercisePicker: View {
             }())
         } else if let replacing, let exercise = catalog.first(where: { $0.slug == replacing }) {
             ("Same movement", ExerciseSearch.alternatives(to: exercise, in: catalog, names: names, settings: settings, excluding: excluding))
+        } else if warmup {
+            ("Warm-up", ExerciseSearch.warmups(in: catalog, settings: settings, excluding: excluding))
         } else {
             ("Common", ExerciseSearch.suggestions(in: catalog, names: names, settings: settings, excluding: excluding))
         }

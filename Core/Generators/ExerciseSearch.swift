@@ -41,6 +41,22 @@ enum ExerciseSearch {
     }
 
     /// The exercises to offer before anything's typed: the author's cards and the staples the user can do.
+    /// FIT-300: what a warm-up is usually made of, easy cardio first, then mobility and activation.
+    static let warmupSlugs = [
+        "rowing-stationary", "bicycling-stationary", "air-bike", "elliptical-trainer", "jogging-treadmill", "rope-jumping", "star-jump",
+        "bodyweight-squat", "bodyweight-walking-lunge", "butt-lift-bridge", "dead-bug", "band-pull-apart", "external-rotation-with-band",
+        "monster-walk", "scapular-pull-up",
+    ]
+
+    /// The warm-up picker's list: `warmupSlugs` the catalog has and the equipment allows, in that order.
+    static func warmups(in catalog: [Exercise], settings: TrainingSettings, excluding: Set<String> = []) -> [String] {
+        let bySlug = Dictionary(catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
+        return warmupSlugs.filter { slug in
+            guard let exercise = bySlug[slug] else { return false }
+            return !excluding.contains(slug) && TrainingGenerator.allows(exercise, settings)
+        }
+    }
+
     static func suggestions(in catalog: [Exercise], names: [String: String], settings: TrainingSettings,
                             excluding: Set<String> = []) -> [String] {
         catalog.filter { ($0.isCurated || $0.tags.contains("staple")) && !excluding.contains($0.slug) && TrainingGenerator.allows($0, settings) }
