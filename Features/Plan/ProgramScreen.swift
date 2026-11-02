@@ -20,6 +20,8 @@ struct ProgramScreen: View {
     let tabs: [Tab]
     @State private var selected: Int?
     @State private var goalIndex = 0
+    /// FIT-233: Add a goal, from Progress › Goals.
+    @State private var addingGoal = false
     @State private var nextWeek: [PlannedWorkout] = []
     @State private var regenerating: Regenerate?
     @State private var toast: Toast?
@@ -67,13 +69,18 @@ struct ProgramScreen: View {
                     // FIT-201: a coach's client, or someone logging on their own, has no program of the app's.
                     plannedWeeks
                 } else {
-                    ContentUnavailableView("No goals yet", systemImage: "target",
-                                           description: Text("Your goals show here once your program starts."))
+                    goalsWithoutProgram
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 14) }
+            .sheet(isPresented: $addingGoal) {
+                NewGoalSheet { goal in
+                    goalIndex = programGoals.firstIndex { $0.goal.id == goal.id } ?? goalIndex
+                    toast = Toast(text: "Added. Your coach sees it too.")
+                }
+            }
             // FIT-64: program changes said to the coach land here.
             .onChange(of: coach.request) { takeFromCoach() }
             .onAppear { takeFromCoach() }
@@ -593,7 +600,11 @@ struct ProgramScreen: View {
                             .id(position)
                             .accessibilityLabel(option.name)
                             .accessibilityAddTraits(on ? .isSelected : [])
+                            .contextMenu {
+                                Button("Drop This Goal", systemImage: "trash", role: .destructive) { drop(items[position].goal) }
+                            }
                         }
+                        addGoalChip
                     }
                     .padding(.horizontal, 22)
                 }
@@ -630,6 +641,53 @@ struct ProgramScreen: View {
         let today = Calendar.current.startOfDay(for: .now)
         let ids = Set(templates.filter { $0.slug == exercise }.map(\.id))
         return planned.first { $0.kind == .workout && $0.date >= today && $0.templateRef.map(ids.contains) == true }?.date
+    }
+
+    /// FIT-233: a blue ring + at the end of the goals, as Today's add rows.
+    private var addGoalChip: some View {
+        Button { addingGoal = true } label: {
+            Image(systemName: "plus").font(.caption.weight(.bold)).foregroundStyle(Plate.current.mark)
+                .frame(width: 34, height: 34).overlay(Circle().strokeBorder(Plate.current.mark, lineWidth: 1.5))
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add a goal")
+    }
+
+    /// Without a program of the app's (a coach's client), the goals as a list, each with its target, and Add a goal.
+    private var goalsWithoutProgram: some View {
+        let active = goals.filter { $0.status == .active }
+        return List {
+            ForEach(active) { goal in
+                let option = GoalOption.all.first { $0.metric == goal.metric }
+                HStack {
+                    Text(option?.name ?? goal.metric).font(.body.weight(.semibold))
+                    Spacer()
+                    Text("\(option?.format(goal.target) ?? Coach.number(goal.target)) \(option?.measure == .time ? "" : goal.unit)")
+                        .foregroundStyle(Color.inkMuted)
+                }
+                .swipeActions { Button("Drop", role: .destructive) { drop(goal) } }
+            }
+            Button("Add a Goal", systemImage: "plus") { addingGoal = true }
+        }
+        .overlay {
+            if active.isEmpty {
+                ContentUnavailableView {
+                    Label("No goals yet", systemImage: "target")
+                } actions: {
+                    Button("Add a Goal") { addingGoal = true }.buttonStyle(.primary)
+                }
+            }
+        }
+    }
+
+    /// FIT-233: they drop a goal themselves; it stays, abandoned, so the coach sees it went.
+    private func drop(_ goal: Goal) {
+        goal.status = .abandoned
+        goal.updatedAt = .now
+        try? context.save()
+        goalIndex = 0
+        toast = Toast(text: "Goal dropped.")
     }
 
     private func setTarget(_ goal: Goal, _ target: Double) {
