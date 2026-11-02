@@ -26,6 +26,13 @@ struct ExercisePhotosTests {
         #expect(ExercisePhotos.bundled == (try ExercisePhotos.map(json: json, catalog: catalog)).photos)
     }
 
+    /// FIT-318: on the site, under /exercises/, by free-exercise-db's own paths; none for an exercise without photos.
+    @Test func urlsOnTheSite() {
+        let base = Backend.current.web.absoluteString
+        #expect(ExercisePhotos.urls("back-squat").map(\.absoluteString) == ["\(base)/exercises/Barbell_Squat/0.jpg", "\(base)/exercises/Barbell_Squat/1.jpg"])
+        #expect(ExercisePhotos.urls("dumbbell-romanian-deadlift").isEmpty)
+    }
+
     /// Every program exercise has its two photos, except the author's own card free-exercise-db has no match for.
     @Test func programExercisesHavePhotos() {
         let missing = programExercises.filter { ExercisePhotos.bundled[$0]?.count != 2 }

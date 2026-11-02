@@ -12,6 +12,9 @@ enum Backend: String, CaseIterable {
     static let current = Backend.prod
     #endif
 
+    /// FIT-318: the site, which also serves exercise photos (/exercises/*).
+    var web: URL { URL(string: self == .prod ? "https://barbrabell.com" : "https://dev.barbrabell.com")! }
+
     /// Where this backend's data lives on the phone; nil is SwiftData's default store, the one each build always used.
     var store: URL? {
         #if DEBUG
