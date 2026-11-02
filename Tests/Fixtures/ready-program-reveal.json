@@ -360,7 +360,7 @@
     "days": 3,
     "goal": "strength",
     "lifted": true,
-    "slug": "full-body-3",
+    "slug": "strength-waves",
     "trainingDays": [
       0,
       2,
@@ -369,22 +369,22 @@
     "projection": {
       "exercise": "back-squat",
       "loads": [
-        45,
-        50,
-        55,
-        65,
-        70,
-        80,
-        85,
-        85,
-        90,
-        100,
+        95,
+        95,
+        95,
+        105,
+        105,
         105,
         115,
-        120
+        115,
+        115,
+        115,
+        125,
+        125,
+        125
       ],
       "perHand": false,
-      "from": 45
+      "from": 95
     }
   },
   {
@@ -484,7 +484,7 @@
       "weight": 225,
       "reps": 5
     },
-    "slug": "full-body-3",
+    "slug": "strength-waves",
     "trainingDays": [
       0,
       2,
@@ -493,22 +493,22 @@
     "projection": {
       "exercise": "back-squat",
       "loads": [
-        205,
-        210,
-        215,
-        225,
         230,
-        235,
-        235,
-        235,
+        230,
+        230,
         240,
         240,
-        245,
-        245,
-        250
+        240,
+        250,
+        250,
+        250,
+        250,
+        260,
+        260,
+        260
       ],
       "perHand": false,
-      "from": 225
+      "from": 230
     }
   },
   {
@@ -528,7 +528,7 @@
       "weight": 135,
       "reps": 10
     },
-    "slug": "full-body-3",
+    "slug": "strength-waves",
     "trainingDays": [
       0,
       2,
@@ -537,19 +537,19 @@
     "projection": {
       "exercise": "back-squat",
       "loads": [
-        145,
-        150,
-        155,
         160,
-        165,
-        165,
-        165,
-        165,
+        160,
+        160,
         170,
         170,
         170,
-        170,
-        175
+        180,
+        180,
+        180,
+        180,
+        190,
+        190,
+        190
       ],
       "perHand": false,
       "from": 160

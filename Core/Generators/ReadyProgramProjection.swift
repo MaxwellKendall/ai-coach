@@ -35,7 +35,24 @@ extension ReadyProgram {
 
     /// The lift the reveal promises and the quiz asks a recent set of: the first main lift with a load.
     var mainLift: Item? {
-        sessions.flatMap(\.exercises).first { $0.main == true && $0.start != nil && $0.reps != nil && $0.exercise != nil }
+        sessions.flatMap(\.exercises).first { $0.main == true && $0.start != nil && ($0.reps != nil || $0.wave == true) && $0.exercise != nil }
+    }
+
+    /// FIT-322: a wave lift's promise is its training max (`ReadyProgram.wave`): 90% of their estimated max, else the
+    /// start, then up a step at the end of every three weeks that aren't deloads.
+    private func waveProjection(_ item: Item, slug: String, start itemStart: Double, deloads light: Set<Int>,
+                                recent: StartingSet?) -> Projection {
+        let own = recent.flatMap { set -> Double? in
+            guard let load = set.value("load_lb"), let reps = set.value("reps") else { return nil }
+            return TrainingGenerator.roundTo5(ProgramPlan.estimatedMax(load: load, reps: reps) * 0.9)
+        }
+        let start = own ?? itemStart, step = item.step ?? 5
+        var loads = [start], done = 0
+        for week in 0..<weeks {
+            if !light.contains(week) { done += 1 }
+            loads.append(start + Double(done / 3) * step)
+        }
+        return Projection(exercise: slug, loads: loads, perHand: false, from: start)
     }
 
     /// Their load for the item's reps (`ProgramPlan.load(forMax:reps:)`), and where the program starts them: 90% of it,
@@ -52,9 +69,9 @@ extension ReadyProgram {
 
     /// Nil for a body-weight program, which has no load to promise.
     func projection(days count: Int, deloads light: Set<Int>, recent: StartingSet? = nil) -> Projection? {
-        guard let item = mainLift, let slug = item.exercise, let itemStart = item.start,
-              let low = item.reps?.min(), let high = item.reps?.max()
-        else { return nil }
+        guard let item = mainLift, let slug = item.exercise, let itemStart = item.start else { return nil }
+        if item.wave == true { return waveProjection(item, slug: slug, start: itemStart, deloads: light, recent: recent) }
+        guard let low = item.reps?.min(), let high = item.reps?.max() else { return nil }
         let perStep = high - low + 1
         let step = item.step ?? 5
         let own = recent.flatMap { Self.fromRecent(item, $0) }

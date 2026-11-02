@@ -22,6 +22,8 @@ export type Item = {
   step?: number;
   main?: boolean;
   group?: number;
+  /** FIT-321: percentage waves on a training max, instead of reps and a progression rule. */
+  wave?: boolean;
 };
 
 export type ReadyProgram = {
@@ -112,9 +114,23 @@ export type Projection = {
 };
 
 /** The lift the reveal promises and the quiz asks a recent set of: the program's first main lift with a load. */
-export function mainLift(program: ReadyProgram): (Item & { exercise: string; start: number; reps: number[] }) | undefined {
+export function mainLift(program: ReadyProgram): (Item & { exercise: string; start: number }) | undefined {
   return program.sessions.flatMap((s) => s.exercises)
-    .find((i): i is Item & { exercise: string; start: number; reps: number[] } => Boolean(i.main && i.start !== undefined && i.reps && i.exercise));
+    .find((i): i is Item & { exercise: string; start: number } => Boolean(i.main && i.start !== undefined && (i.reps || i.wave) && i.exercise));
+}
+
+/** FIT-322: a wave lift's promise is its training max (ReadyProgram.wave): 90% of their estimated max, else the start,
+ * then up a step at the end of every three weeks that aren't deloads. */
+function waveProjection(program: ReadyProgram, item: Item & { exercise: string; start: number }, light: Set<number>, recent?: RecentSet): Projection {
+  const start = recent ? roundTo5(estimatedMax(recent) * 0.9) : item.start;
+  const step = item.step ?? 5;
+  const loads = [start];
+  let done = 0;
+  for (let week = 0; week < program.weeks; week++) {
+    if (!light.has(week)) done += 1;
+    loads.push(start + Math.floor(done / 3) * step);
+  }
+  return { exercise: item.exercise, loads, perHand: false, from: start };
 }
 
 /** Someone who has lifted gains this much on their own number over a program, at most and in proportion to the weeks
@@ -141,6 +157,8 @@ export function fromRecent(item: { start: number }, low: number, recent: RecentS
 export function projection(program: ReadyProgram, days: number, light = deloads(program.weeks), recent?: RecentSet): Projection | undefined {
   const item = mainLift(program);
   if (!item) return undefined;
+  if (item.wave) return waveProjection(program, item, light, recent);
+  if (!item.reps) return undefined;
   const slug = item.exercise;
   const low = Math.min(...item.reps);
   const high = Math.max(...item.reps);
