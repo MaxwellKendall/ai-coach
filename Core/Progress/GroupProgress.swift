@@ -30,7 +30,7 @@ enum GroupProgress {
                      sets: [LoggedSet], weighIns: [DatedValue], now: Date = .now) -> Mine? {
         guard let value = current(metric, sets: sets, weighIns: weighIns) else { return nil }
         let start = baseline ?? value
-        let done = GoalProgress.fraction(from: start, now: value, target: target(goal, mode: mode, baseline: start))
+        let done = GoalProgress.fraction(metric, from: start, now: value, target: target(goal, mode: mode, baseline: start))
         return Mine(baseline: start, value: value, pct: (done * 100).rounded(),
                     onPace: deadline.flatMap { onPace(done: done, from: joined, to: $0, now: now) })
     }

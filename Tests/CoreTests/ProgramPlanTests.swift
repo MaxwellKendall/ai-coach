@@ -137,15 +137,22 @@ struct GoalProgressTests {
 
     @Test func pace() {
         let weeks = ProgramPlan.weeks(count: 16, deloadEvery: 6)
-        #expect(GoalProgress.fraction(from: 200, now: 195, target: 180) == 0.25)
-        #expect(GoalProgress.fraction(from: 200, now: 205, target: 180) == 0)
-        #expect(GoalProgress.pace(from: 200, now: 200, target: 180, week: 0, weeks: weeks) == .starting)
+        #expect(GoalProgress.fraction("weight_lb", from: 200, now: 195, target: 180) == 0.25)
+        #expect(GoalProgress.fraction("weight_lb", from: 200, now: 205, target: 180) == 0)
+        // FIT-263: a lift goes up, whatever its start. 253 against a start of 330 and a target of 315 is 0, not 100%.
+        #expect(GoalProgress.fraction("deadlift.1rm_lb", from: 330, now: 253, target: 315) == 0)
+        #expect(GoalProgress.fraction("deadlift.1rm_lb", from: 315, now: 315, target: 315) == 0)
+        #expect(GoalProgress.fraction("deadlift.1rm_lb", from: 250, now: 260, target: 290) == 0.25)
+        // Weight to gain goes up, and a race time goes down.
+        #expect(GoalProgress.fraction("weight_lb", from: 150, now: 155, target: 170) == 0.25)
+        #expect(GoalProgress.fraction(Running.metric(meters: 5000), from: 1800, now: 1750, target: 1600) == 0.25)
+        #expect(GoalProgress.pace("weight_lb", from: 200, now: 200, target: 180, week: 0, weeks: weeks) == .starting)
         // After week 4 (index 3) the line expects 4/14 of the way: 194.3 lb. 80% of that is 195.4.
-        #expect(GoalProgress.pace(from: 200, now: 195, target: 180, week: 4, weeks: weeks) == .onPace)
-        #expect(GoalProgress.pace(from: 200, now: 196, target: 180, week: 4, weeks: weeks) == .behind)
+        #expect(GoalProgress.pace("weight_lb", from: 200, now: 195, target: 180, week: 4, weeks: weeks) == .onPace)
+        #expect(GoalProgress.pace("weight_lb", from: 200, now: 196, target: 180, week: 4, weeks: weeks) == .behind)
         // 125% of 4/14 of the way is 192.9 lb.
-        #expect(GoalProgress.pace(from: 200, now: 193, target: 180, week: 4, weeks: weeks) == .onPace)
-        #expect(GoalProgress.pace(from: 200, now: 192.5, target: 180, week: 4, weeks: weeks) == .ahead)
+        #expect(GoalProgress.pace("weight_lb", from: 200, now: 193, target: 180, week: 4, weeks: weeks) == .onPace)
+        #expect(GoalProgress.pace("weight_lb", from: 200, now: 192.5, target: 180, week: 4, weeks: weeks) == .ahead)
     }
 
     @Test func trendIsTheBestSoFarAndBestIsTheSetBehindIt() {

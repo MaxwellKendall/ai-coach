@@ -67,7 +67,7 @@ struct WeekReport {
                                                 from: first)
                 let before = GoalProgress.standing(goal.metric, logged: GoalProgress.current(goal.metric, sets: sets.filter { $0.date < days.lowerBound },
                                                    weighIns: weighIns.filter { $0.date < days.lowerBound }, since: start), from: first)
-                let pace = GoalProgress.pace(from: first, now: now, target: goal.target, week: current, weeks: weeks)
+                let pace = GoalProgress.pace(goal.metric, from: first, now: now, target: goal.target, week: current, weeks: weeks)
                 let forecast = GoalProgress.forecast(from: first, now: now, target: goal.target, started: start, today: date, end: end)
                 rows.append(GoalRow(goal: goal, option: option,
                                     week: .init(from: before, to: now, target: goal.target, pace: pace), start: first,

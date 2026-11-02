@@ -32,7 +32,7 @@ struct GoalCard: View {
         let from = goal.baseline ?? logged ?? goal.target
         let now = GoalProgress.standing(goal.metric, logged: logged, from: from)
         let trend = GoalProgress.standingTrend(goal.metric, GoalProgress.trend(goal.metric, sets: sets, weighIns: weighIns, since: start), from: from)
-        let pace = GoalProgress.pace(from: from, now: now, target: goal.target, week: current, weeks: weeks)
+        let pace = GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: current, weeks: weeks)
         let forecast = GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: end)
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
                                     forecast: forecast, target: goal.target, start: start, end: end, format: option.format)
@@ -112,7 +112,7 @@ struct GoalCard: View {
     /// "29 lb up since Aug 10 · 45% there".
     private func line(from: Double, now: Double) -> String {
         let moved = abs(now - from)
-        let percent = Int((GoalProgress.fraction(from: from, now: now, target: goal.target) * 100).rounded())
+        let percent = Int((GoalProgress.fraction(goal.metric, from: from, now: now, target: goal.target) * 100).rounded())
         guard moved > 0 else { return "Started at \(format(from)) on \(day(start))" }
         if option.measure == .time {
             return "\(Running.clock(moved)) \(now < from ? "faster" : "slower") since \(day(start)) · \(percent)% there"
@@ -125,7 +125,7 @@ struct GoalCard: View {
         var facts: [(String, String)] = []
         if let forecast { facts.append(("At this rate", "\(format(forecast)) \(option.shownUnit) by \(day(end))".replacingOccurrences(of: "  ", with: " "))) }
         let perWeek = GoalProgress.perWeek(now: now, target: goal.target, today: .now, end: end)
-        let there = GoalProgress.fraction(from: from, now: now, target: goal.target) >= 1
+        let there = GoalProgress.fraction(goal.metric, from: from, now: now, target: goal.target) >= 1
         let needed = option.measure == .time ? "\(Running.clock(abs(perWeek))) faster a week" : "\(Coach.number(abs(perWeek))) \(goal.unit) a week"
         facts.append(("To get there", there ? "Already there" : needed))
         if option.measure == .time {
