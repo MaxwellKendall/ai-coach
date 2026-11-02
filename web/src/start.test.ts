@@ -25,15 +25,18 @@ describe("the quiz's plan", () => {
   });
 
   it("picks by goal and experience where the equipment and days leave a choice", () => {
-    expect(pick(quiz(gym, 3, { goal: "strength", lifted: true }))?.slug).toBe("full-body-3");
+    // FIT-322: some experience and a strength goal is Strength Waves; someone new still starts on Full Body.
+    expect(pick(quiz(gym, 3, { goal: "strength", lifted: true }))?.slug).toBe("strength-waves");
+    expect(pick(quiz(gym, 3, { goal: "strength", lifted: false }))?.slug).toBe("full-body-3");
     expect(pick(quiz(gym, 3, { goal: "muscle", lifted: true }))?.slug).toBe("push-pull-legs");
   });
 
   it("starts someone who has lifted from their own number", () => {
     const made = plan(quiz(gym, 3, { goal: "strength", lifted: true, recent: { weight: 225, reps: 5 } }), tuesday)!;
     expect(made.answers.recent).toEqual({ exercise: "back-squat", weight: 225, reps: 5 });
-    expect(headline(made)).toBe("Back Squat 225 → 250 lb by Jan 16");
-    expect(made.reveal!.loads[0]).toBe(205);
+    // Strength Waves promises its training max: 90% of the 253 lb that 225 × 5 estimates, +10 lb a wave.
+    expect(headline(made)).toBe("Back Squat 230 → 260 lb by Jan 16");
+    expect(made.reveal!.loads[0]).toBe(230);
   });
 
   it("keeps no recent set for someone new", () => {

@@ -50,14 +50,14 @@ struct ReadyProgramTests {
     @Test func seedProgramsUseTheCatalog() {
         let slugs = Set(catalog.map(\.slug))
         let bySlug = Dictionary(catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
-        #expect(ReadyProgram.all.count == 7)
+        #expect(ReadyProgram.all.count == 8)
         for ready in ReadyProgram.all {
             #expect(!ready.sessions.isEmpty && !ready.days.isEmpty, "\(ready.slug)")
             let have = Set(ready.equipment + (ready.optional ?? []))
             for item in ready.sessions.flatMap(\.exercises) {
                 for slug in item.choices { #expect(slugs.contains(slug), "\(ready.slug): \(slug)") }
                 #expect(item.choices.contains { bySlug[$0]?.equipment.isSubset(of: have) == true }, "\(ready.slug): \(item.choices)")
-                #expect(item.reps != nil || item.seconds != nil, "\(ready.slug): \(item.choices)")
+                #expect(item.reps != nil || item.seconds != nil || item.wave == true, "\(ready.slug): \(item.choices)")
             }
         }
     }
@@ -68,7 +68,10 @@ struct ReadyProgramTests {
         #expect(ReadyProgram.matches(have: gym, days: 2).first?.slug == "full-body-2")
         #expect(ReadyProgram.matches(have: gym, days: 4).first?.slug == "upper-lower-4")
         #expect(ReadyProgram.matches(have: gym, days: 6).first?.slug == "push-pull-legs")
-        #expect(ReadyProgram.matches(have: gym, days: 3).count == 7)
+        #expect(ReadyProgram.matches(have: gym, days: 3).count == 8)
+        // FIT-322: some experience and a strength goal, at a gym 3 days a week: Strength Waves.
+        #expect(ReadyProgram.matches(have: gym, days: 3, goal: .strength, lifted: true).first?.slug == "strength-waves")
+        #expect(ReadyProgram.matches(have: gym, days: 3, goal: .strength, lifted: false).first?.slug == "full-body-3")
         // Dumbbells only: the dumbbell programs first, then body weight; nothing with a barbell.
         #expect(ReadyProgram.matches(have: ["dumbbells"], days: 3).map(\.slug) == ["dumbbell-full-body", "bodyweight-basics", "dumbbell-upper-lower"])
         #expect(ReadyProgram.matches(have: ["dumbbells"], days: 6).first?.slug == "dumbbell-upper-lower")

@@ -302,5 +302,49 @@
         ]
       }
     ]
+  },
+  {
+    "slug": "strength-waves",
+    "name": "Strength Waves",
+    "summary": "For when the beginner programs stall: squat, bench, deadlift and press in three-week waves, heavier with fewer reps each week, and a little stronger each wave.",
+    "level": "some",
+    "goals": ["strength"],
+    "place": "gym",
+    "days": [3],
+    "weeks": 12,
+    "minutes": 60,
+    "equipment": ["barbell", "rack", "bench", "dumbbells"],
+    "sessions": [
+      {
+        "name": "Squat and bench",
+        "exercises": [
+          { "exercise": "back-squat", "sets": 4, "start": 95, "step": 10, "main": true, "wave": true },
+          { "exercise": "bench-press", "sets": 4, "start": 65, "step": 5, "main": true, "wave": true },
+          { "exercise": "incline-dumbbell-press", "or": ["push-up"], "sets": 3, "reps": [8, 12], "start": 25 },
+          { "exercise": "chin-up", "or": ["wide-grip-lat-pulldown", "inverted-row"], "sets": 3, "reps": [6, 12] },
+          { "exercise": "dumbbell-lunges", "or": ["split-squat-with-dumbbells"], "sets": 3, "reps": [8, 12], "start": 15 }
+        ]
+      },
+      {
+        "name": "Deadlift and press",
+        "exercises": [
+          { "exercise": "deadlift", "sets": 4, "start": 135, "step": 10, "main": true, "wave": true },
+          { "exercise": "standing-military-press", "sets": 4, "start": 45, "step": 5, "main": true, "wave": true },
+          { "exercise": "push-up", "sets": 3, "reps": [10, 20] },
+          { "exercise": "dumbbell-row", "sets": 3, "reps": [8, 12], "start": 30 },
+          { "exercise": "plank", "sets": 3, "seconds": [30, 60] }
+        ]
+      },
+      {
+        "name": "Bench and squat",
+        "exercises": [
+          { "exercise": "bench-press", "sets": 4, "start": 65, "step": 5, "main": true, "wave": true },
+          { "exercise": "back-squat", "sets": 4, "start": 95, "step": 10, "main": true, "wave": true },
+          { "exercise": "incline-dumbbell-press", "or": ["push-up"], "sets": 3, "reps": [8, 12], "start": 25 },
+          { "exercise": "chin-up", "or": ["wide-grip-lat-pulldown", "inverted-row"], "sets": 3, "reps": [6, 12] },
+          { "exercise": "split-squat-with-dumbbells", "or": ["dumbbell-step-ups"], "sets": 3, "reps": [8, 12], "start": 15 }
+        ]
+      }
+    ]
   }
 ]
