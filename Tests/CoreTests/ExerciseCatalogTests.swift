@@ -163,6 +163,10 @@ struct ExerciseSearchTests {
         #expect(!bodyweight.isEmpty && bodyweight.contains("bodyweight-squat"))
         #expect(bodyweight.allSatisfy { slug in catalog.first { $0.slug == slug }!.equipment.isEmpty })
         #expect(!ExerciseSearch.warmups(in: catalog, settings: settings([]), excluding: ["bodyweight-squat"]).contains("bodyweight-squat"))
+        // FIT-306: the cardio before the mobility is cardio. "Air Bike" in the catalog is the bicycle crunch, core.
+        let cardio = ExerciseSearch.warmupSlugs.prefix { $0 != "bodyweight-squat" }
+        #expect(cardio.allSatisfy { slug in catalog.first { $0.slug == slug }?.pattern == "conditioning" }, "\(cardio)")
+        #expect(catalog.first { $0.slug == "air-bike" }?.pattern == "core")
     }
 }
 
