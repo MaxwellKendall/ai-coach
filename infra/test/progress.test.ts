@@ -48,9 +48,12 @@ describe("goal progress (GoalProgress)", () => {
 
   it("forecasts at the rate so far, and says what each week needs", () => {
     const start = noon(8, 10), today = noon(10, 5), end = noon(11, 30);
-    expect(forecast(201, 194.6, start, today, end)!).toBeCloseTo(188.2, 1);
+    expect(forecast(201, 194.6, 180, start, today, end)!).toBeCloseTo(188.2, 1);
     expect(perWeek(194.6, 180, today, end)).toBeCloseTo(-1.825, 2);
-    expect(forecast(201, 200, start, noon(8, 14), end)).toBeUndefined();
+    expect(forecast(201, 200, 180, start, noon(8, 14), end)).toBeUndefined();
+    // FIT-307: moving away from the target forecasts nothing, and a forecast never goes below zero.
+    expect(forecast(8, 4, 10, start, today, end)).toBeUndefined();
+    expect(forecast(8, 4, 2, start, today, noon(12, 31) + 400 * 86_400)).toBe(0);
   });
 });
 

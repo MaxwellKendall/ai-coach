@@ -145,10 +145,14 @@ export function pace(metric: string, start: number, now: number, target: number,
   return want > 0 && done >= want * 1.25 ? "ahead" : "onPace";
 }
 
-/** Where it lands by `end` at the rate since `started`; nothing in the first week. */
-export function forecast(start: number, now: number, started: number, today: number, end: number) {
+/**
+ * GoalProgress.forecast: where it lands by `end` at the rate since `started`. Nothing before two weeks, nor when it
+ * hasn't moved toward the target (a line the wrong way says nothing: "-406 lb by Apr 3", FIT-307); never below zero.
+ */
+export function forecast(start: number, now: number, target: number, started: number, today: number, end: number) {
   const done = today - started, left = Math.max(0, end - today);
-  return done >= 7 * 86_400 ? now + ((now - start) / done) * left : undefined;
+  if (done < 14 * 86_400 || (now - start) * (target - start) <= 0) return undefined;
+  return Math.max(0, now + ((now - start) / done) * left);
 }
 
 /** How much it has to move each week to reach the target by `end`. */
@@ -426,7 +430,7 @@ export function weekReport(units: Units, today: string, nowSec: number, tz: stri
       const now = current(g.metric, sets, weighs, startSec) ?? first;
       const was = current(g.metric, sets.filter((s) => s.at < weekSec), weighs.filter((w) => w.at < weekSec), startSec) ?? first;
       const p = pace(g.metric, first, now, g.target, week, program.weeks);
-      const fc = forecast(first, now, startSec, nowSec, end);
+      const fc = forecast(first, now, g.target, startSec, nowSec, end);
       report.goals.push({ id: g.id, goal: g, option, from: was, to: now, start: first, pace: p, forecast: fc, perWeek: perWeek(now, g.target, nowSec, end),
         checkIn: checkIn(first, now, g.target, p, fc, stepOf(option), week, program.weeks.length) });
     }
