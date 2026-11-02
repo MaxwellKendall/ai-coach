@@ -38,3 +38,11 @@ enum ExercisePhotos {
     static let bundled: [String: [String]] = Bundle.main.url(forResource: "exercise-photos", withExtension: "json")
         .flatMap { try? JSONDecoder().decode([String: [String]].self, from: Data(contentsOf: $0)) } ?? [:]
 }
+
+/// FIT-319: a YouTube demo for each exercise the ready-made programs use (Resources/Seed/exercise-videos.json),
+/// hand-picked and checked to exist (YouTube's oEmbed). Links only: the video plays in YouTube, never re-hosted.
+enum ExerciseVideos {
+    static let bundled: [String: URL] = (Bundle.main.url(forResource: "exercise-videos", withExtension: "json")
+        .flatMap { try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: $0)) } ?? [:])
+        .compactMapValues(URL.init(string:))
+}

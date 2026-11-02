@@ -13,6 +13,8 @@ struct TemplateDetailView: View {
 
     var body: some View {
         List {
+            // FIT-319: a demo to watch, where there is one.
+            if ExerciseVideos.bundled[template.slug] != nil { Section { HowToVideo(slug: template.slug) } }
             // FIT-75: collapsed until asked for.
             if !steps.isEmpty {
                 Section {

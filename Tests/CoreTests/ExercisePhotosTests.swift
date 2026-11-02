@@ -26,6 +26,16 @@ struct ExercisePhotosTests {
         #expect(ExercisePhotos.bundled == (try ExercisePhotos.map(json: json, catalog: catalog)).photos)
     }
 
+    /// FIT-319: every program exercise has a YouTube demo, and every link is a YouTube video of a catalog exercise.
+    @Test func programExercisesHaveVideos() {
+        #expect(programExercises.filter { ExerciseVideos.bundled[$0] == nil }.isEmpty)
+        let slugs = Set(catalog.map(\.slug))
+        for (slug, url) in ExerciseVideos.bundled {
+            #expect(slugs.contains(slug), "\(slug)")
+            #expect(url.host() == "www.youtube.com" && url.path() == "/watch" && url.query()?.hasPrefix("v=") == true, "\(url)")
+        }
+    }
+
     /// Every program exercise has its two photos, except the author's own card free-exercise-db has no match for.
     @Test func programExercisesHavePhotos() {
         let missing = programExercises.filter { ExercisePhotos.bundled[$0]?.count != 2 }

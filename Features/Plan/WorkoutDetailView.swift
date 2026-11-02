@@ -97,7 +97,7 @@ struct WorkoutDetailView: View {
         .safeAreaInset(edge: .bottom) { bottom(names) }
         .sheet(item: Binding(get: { howTo.map(HowToID.init) }, set: { howTo = $0?.id })) { item in
             let template = templates.first { $0.slug == item.id }
-            HowToSheet(name: template?.name ?? item.id, steps: template?.values("instructions") ?? [])
+            HowToSheet(name: template?.name ?? item.id, slug: item.id, steps: template?.values("instructions") ?? [])
         }
         .sheet(item: $picking) { picking in
             let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
@@ -281,7 +281,8 @@ struct WorkoutDetailView: View {
                 }
                 // FIT-75: how to do it, for exercises the model picked that you may not know.
                 ForEach(block.movements, id: \.id) { movement in
-                    if !(templates.first { $0.slug == movement.exercise }?.values("instructions") ?? []).isEmpty {
+                    if !(templates.first { $0.slug == movement.exercise }?.values("instructions") ?? []).isEmpty
+                        || ExerciseVideos.bundled[movement.exercise] != nil {
                         Button(block.isGroup ? "How to Do \(names[movement.exercise] ?? movement.exercise)" : "How to Do It",
                                systemImage: "questionmark.circle") { howTo = movement.exercise }
                     }
