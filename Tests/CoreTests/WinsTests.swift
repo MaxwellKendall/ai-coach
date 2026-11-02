@@ -46,6 +46,19 @@ struct WinsTests {
         #expect(loss.filter { $0.kind == .pr }.isEmpty)
     }
 
+    /// FIT-263: a lift whose starting max is at or above its target isn't a goal to go down: 253 against a start of 330
+    /// and a target of 315 is no milestone, nor is the start itself, until a set beats the start.
+    @Test func aStartAtOrPastTheTargetEarnsNoMilestoneOnItsFirstDay() {
+        let above = Wins.Goal(metric: "deadlift.1rm_lb", unit: "lb", baseline: 330, target: 315)
+        let at = Wins.Goal(metric: "deadlift.1rm_lb", unit: "lb", baseline: 315, target: 315)
+        let sets = [set("deadlift", 9, 14, load: 225, reps: 5), set("deadlift", 10, 3, load: 245, reps: 3)]
+        #expect(detect([above], sets: sets).filter { $0.kind == .milestone }.isEmpty)
+        #expect(detect([at], sets: sets).filter { $0.kind == .milestone }.isEmpty)
+        // 300 × 5 estimates 338: past the start, so the goal is reached.
+        let beaten = detect([above], sets: sets + [set("deadlift", 10, 4, load: 300, reps: 5)]).filter { $0.kind == .milestone }
+        #expect(beaten.compactMap(\.percent).sorted() == [25, 50, 75, 100] && beaten.allSatisfy { $0.date == day(10, 4) })
+    }
+
     @Test func milestonesAreTheFirstCrossingOfEach() {
         // Squat 186 → 250: 50% is 218, so 219 crosses 25 and 50 on Oct 3, 208 had crossed 25 on Sep 14.
         let sets = [set("back-squat", 9, 14, load: 185, reps: 5), set("back-squat", 10, 3, load: 195, reps: 5)]

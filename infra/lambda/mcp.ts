@@ -576,18 +576,37 @@ function context(units: Units, today: string, back: number, ahead: number, tz: s
  * Where a new goal starts, as onboarding's answers.baseline: their logs if any, else the starting set (Brzycki
  * rounded, or reps), else the profile's weight. The app's wins and pace count from it.
  */
+/**
+ * Where a goal starts. FIT-307: a max or reps goal starts from their starting set for the lift, what they told us they
+ * do now; without one, the best logged since the program began. Never the best of all their history, which can be
+ * years old and above where they are ("start 276, now 215"). Weight and race times start from the latest logged.
+ */
 function baselineOf(units: Units, metric: string): number | undefined {
+  const profile = profileOf(units) as Record<string, any> | undefined;
+  const [slug, kind] = metric.split(".");
+  if (kind === "1rm_lb" || kind === "reps") {
+    const start = (profile?.starts ?? []).find((s: { exercise: string }) => s.exercise === slug);
+    const v = (m: string) => start?.measurements.find((x: { metric: string }) => x.metric === m)?.value as number | undefined;
+    if (kind === "1rm_lb" && v("load_lb") !== undefined && v("reps") !== undefined) return Math.round(progress.estimatedMax(v("load_lb")!, v("reps")!));
+    if (kind === "reps" && v("reps") !== undefined && v("load_lb") === undefined) return v("reps");
+    return progress.current(metric, progress.logSets(units), [], profile?.programStart ?? -Infinity);
+  }
   const logged = progress.current(metric, progress.logSets(units), progress.weighIns(units), -Infinity);
   if (logged !== undefined) return logged;
-  const profile = profileOf(units) as Record<string, any> | undefined;
   if (metric === "weight_lb") return profile?.weightLb;
   const race = goalMeters(metric);
-  if (race !== undefined) return runTime(units, profile as any, race);
-  const [slug, kind] = metric.split(".");
-  const start = (profile?.starts ?? []).find((s: { exercise: string }) => s.exercise === slug);
-  const v = (m: string) => start?.measurements.find((x: { metric: string }) => x.metric === m)?.value as number | undefined;
-  if (kind === "1rm_lb" && v("load_lb") !== undefined && v("reps") !== undefined) return Math.round(progress.estimatedMax(v("load_lb")!, v("reps")!));
-  return kind === "reps" ? v("reps") : undefined;
+  return race !== undefined ? runTime(units, profile as any, race) : undefined;
+}
+
+/** FIT-307: new starting sets move the start of each active max or reps goal on those lifts, so progress counts from them. */
+function restartGoals(units: Units, starts: { exercise: string }[]): { key: string; body: string }[] {
+  const lifts = new Set(starts.map((s) => s.exercise));
+  return goalsOf(units).flatMap(({ id, ...goal }) => {
+    const [slug, kind] = goal.metric.split(".");
+    if (!lifts.has(slug) || (kind !== "1rm_lb" && kind !== "reps")) return [];
+    const baseline = baselineOf(units, goal.metric);
+    return baseline === undefined || baseline === goal.baseline ? [] : [{ key: `goal#${id}`, body: encode({ ...goal, baseline }) }];
+  });
 }
 
 const PACE: Record<progress.Pace, string> = { starting: "just starting", behind: "behind the program's pace", onPace: "on pace", ahead: "ahead of pace" };
@@ -614,10 +633,10 @@ function describeProgress(units: Units, today: string, nowSec: number, tz: strin
     const lines = [`- ${name}: target ${n(g.target)}${u}${g.deadline ? ` by ${dayOf(new Date(g.deadline * 1000), tz)}` : ""} [goal_id ${g.id}]`];
     if (now === undefined) lines.push(time ? "  No runs since the program started to predict from (log_run)." : "  Nothing logged toward it yet.");
     else {
-      lines.push(`  Now ${n(now)}${u}${time ? " predicted from their runs" : ""}${g.baseline !== undefined ? `, from ${n(first)} at the start: ${Math.round(progress.fraction(first, now, g.target) * 100)}% of the way` : ""}.`);
+      lines.push(`  Now ${n(now)}${u}${time ? " predicted from their runs" : ""}${g.baseline !== undefined ? `, from ${n(first)} at the start: ${Math.round(progress.fraction(g.metric, first, now, g.target) * 100)}% of the way` : ""}.`);
       if (program && end && profile?.programStart && option) {
-        const p = progress.pace(first, now, g.target, week, program.weeks);
-        const fc = progress.forecast(first, now, profile.programStart, nowSec, end);
+        const p = progress.pace(g.metric, first, now, g.target, week, program.weeks);
+        const fc = progress.forecast(first, now, g.target, profile.programStart, nowSec, end);
         const per = progress.perWeek(now, g.target, nowSec, end);
         lines.push(`  ${PACE[p][0].toUpperCase()}${PACE[p].slice(1)}.${fc !== undefined ? ` At this rate, ${time ? clock(fc) : `${progress.number(Math.round(fc * 10) / 10)} ${g.unit}`} by ${program.target}.` : ""} `
           + (time ? `Needs ${clock(Math.abs(per))} ${per <= 0 ? "faster" : "slower"} each week from here.` : `Needs ${progress.number(Math.round(per * 10) / 10)} ${g.unit} a week from here.`));
@@ -1225,11 +1244,13 @@ export async function callTool(name: string, args: Args, account: Account, store
         return `Saved: they're ${name} on what they share.`;
       }
       const merged = mergeProfile(current ? JSON.parse(current) : undefined, args as ProfileInput);
-      await store.write(uid, [{ key: "profile", body: encode(merged) }], account.agent);
+      const restarted = args.starting_sets ? restartGoals(new Map([...units, ["profile", encode(merged)]]), merged.starts ?? []) : [];
+      await store.write(uid, [{ key: "profile", body: encode(merged) }, ...restarted], account.agent);
       const days = ((merged.trainingDays ?? []) as number[]).map((d) => WEEKDAYS[d]).join(", ");
       return `Saved. Age ${merged.age}, ${merged.weightLb} lb; trains ${days}, ${merged.sessionMinutes} min at ${String(Math.floor(merged.workoutTime / 60)).padStart(2, "0")}:${String(merged.workoutTime % 60).padStart(2, "0")}; `
         + `equipment ${((merged.equipment ?? []) as string[]).join(", ") || "none"}; injured ${((merged.injuredAreas ?? []) as string[]).join(", ") || "none"}; never ${((merged.avoidExercises ?? []) as string[]).map(nameOf).join(", ") || "none"}; `
-        + `${merged.style}; ${(merged.starts ?? []).length} starting set(s).`;
+        + `${merged.style}; ${(merged.starts ?? []).length} starting set(s).`
+        + (restarted.length ? ` ${restarted.length} goal${restarted.length === 1 ? "" : "s"} now start${restarted.length === 1 ? "s" : ""} from the new starting sets.` : "");
     }
     // FIT-237: one tool each, as ChatGPT's review asks of every operation an agent can call.
     case "add_goal":
@@ -1250,7 +1271,7 @@ export async function callTool(name: string, args: Args, account: Account, store
           return `Added: ${distanceName(race)} in ${clock(body.target)}${by ? ` by ${by}` : ""} [goal_id ${id}].`
             + (body.baseline !== undefined ? ` Their runs put them at ${clock(body.baseline)} now.` : " Ask for their last race or a recent hard run (distance and time) and save it as a starting set.");
         }
-        return `Added: ${body.metric} ${body.target} ${body.unit}${by ? ` by ${by}` : ""} [goal_id ${id}].`;
+        return `Added: ${body.metric} ${body.target} ${body.unit}${by ? ` by ${by}` : ""} [goal_id ${id}].` + pastTarget(body);
       }
       const current = units.get(`goal#${args.goal_id}`);
       if (!current) throw new Error("No goal with that goal_id; get_context lists them.");
@@ -1262,11 +1283,20 @@ export async function callTool(name: string, args: Args, account: Account, store
         if (deadline !== undefined) goal.deadline = deadline;
       }
       await store.write(uid, [{ key: `goal#${args.goal_id}`, body: encode(goal) }], account.agent);
-      return name === "drop_goal" ? "Dropped." : `Changed: ${goal.metric} ${goal.target} ${goal.unit}${by ? ` by ${by}` : ""}.`;
+      return name === "drop_goal" ? "Dropped." : `Changed: ${goal.metric} ${goal.target} ${goal.unit}${by ? ` by ${by}` : ""}.` + pastTarget(goal);
     }
     default:
       throw new Error(`Unknown tool ${name}. The tools: ${tools.map((t) => t.name).join(", ")}.`);
   }
+}
+
+/**
+ * FIT-263: a max or reps target at or below where they start is no goal: it reads as reached on day one. Saved as
+ * asked, with a word to the agent to check it.
+ */
+function pastTarget(goal: { metric: string; target: number; baseline?: number; unit: string }) {
+  if (goal.baseline === undefined || !/\.(1rm_lb|reps)$/.test(goal.metric) || goal.target > goal.baseline) return "";
+  return ` Their starting set already estimates ${progress.number(goal.baseline)} ${goal.unit}, so this target is already met; ask whether they meant one above it (change_goal).`;
 }
 
 // ---- MCP over HTTP ----

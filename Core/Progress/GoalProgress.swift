@@ -64,19 +64,29 @@ enum GoalProgress {
     /// Whether a smaller value is better: a race time.
     static func lowerIsBetter(_ metric: String) -> Bool { Running.meters(metric) != nil }
 
-    /// How far from the start to the target, 0–1, in either direction (weight goes down).
-    static func fraction(from start: Double, now: Double, target: Double) -> Double {
-        guard target != start else { return 1 }
-        return min(1, max(0, (now - start) / (target - start)))
+    /// FIT-263: which way the goal is met. A race time, and weight to lose, go down; a max, reps and weight to gain go
+    /// up. Never read from start against target alone: a lift's start at or above its target isn't a goal to go down.
+    static func goesDown(_ metric: String, from start: Double, target: Double) -> Bool {
+        lowerIsBetter(metric) || (metric == "weight_lb" && target < start)
+    }
+
+    /// How far from the start to the target, 0–1, the goal's way. Behind the start is 0. A start already at or past
+    /// the target (a lift target set below the starting max) counts only once `now` moves past the start, so it never
+    /// reads 100% on its first day (FIT-263).
+    static func fraction(_ metric: String, from start: Double, now: Double, target: Double) -> Double {
+        let way: Double = goesDown(metric, from: start, target: target) ? -1 : 1
+        let moved = (now - start) * way, needed = (target - start) * way
+        guard needed > 0 else { return moved > 0 ? 1 : 0 }
+        return min(1, max(0, moved / needed))
     }
 
     /// Against the way the program expects by the end of last week (prototype rule): under 80% is behind, 125% or
     /// more is ahead, which is when the 4-week check-in offers to raise the goal.
-    static func pace(from start: Double, now: Double, target: Double, week: Int, weeks: [ProgramWeek]) -> Pace {
+    static func pace(_ metric: String, from start: Double, now: Double, target: Double, week: Int, weeks: [ProgramWeek]) -> Pace {
         guard week > 0 else { return .starting }
-        let expected = fraction(from: start, now: ProgramPlan.expected(from: start, target: target, at: week - 1, weeks: weeks),
+        let expected = fraction(metric, from: start, now: ProgramPlan.expected(from: start, target: target, at: week - 1, weeks: weeks),
                                 target: target)
-        let done = fraction(from: start, now: now, target: target)
+        let done = fraction(metric, from: start, now: now, target: target)
         if done < expected * 0.8 { return .behind }
         return expected > 0 && done >= expected * 1.25 ? .ahead : .onPace
     }

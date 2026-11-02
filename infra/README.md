@@ -87,6 +87,23 @@ npx cdk destroy --profile aicoach-dev            # dev is fully removable
 After the first deploy, confirm the SNS email subscription sent to the alert address, or alarms
 won't arrive. The budget email needs no confirmation.
 
+## Exercise photos (FIT-318)
+
+free-exercise-db's start and end photos (public domain, the Unlicense) are served at `/exercises/*` on the site, from
+the cards bucket. They're uploaded by hand once per stage, after a deploy that has the route:
+
+```bash
+git clone --depth 1 https://github.com/yuhonas/free-exercise-db /tmp/free-exercise-db
+BUCKET=$(aws cloudformation describe-stacks --profile aicoach-dev --stack-name AICoach-dev \
+  --query "Stacks[0].Outputs[?OutputKey=='CardsBucket'].OutputValue" --output text)
+aws s3 sync /tmp/free-exercise-db/exercises "s3://$BUCKET/exercises/" --profile aicoach-dev \
+  --exclude "*" --include "*.jpg" --content-type image/jpeg --cache-control "public, max-age=31536000, immutable"
+curl -sI https://dev.barbrabell.com/exercises/Barbell_Squat/0.jpg | head -1   # HTTP/2 200
+```
+
+For prod, `AICoach-prod` and `https://barbrabell.com`. The app asks for the paths in
+`Resources/Seed/exercise-photos.json`; an exercise whose photos don't load shows none.
+
 ## Prod runbook (FIT-57)
 
 **First deploy**

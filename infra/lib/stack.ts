@@ -622,6 +622,13 @@ export class AICoachStack extends Stack {
             viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           },
+          // FIT-318: free-exercise-db's exercise photos (public domain), uploaded by hand under exercises/ in the cards
+          // bucket: see infra/README.md. The app asks for them by the paths in Resources/Seed/exercise-photos.json.
+          "/exercises/*": {
+            origin: origins.S3BucketOrigin.withOriginAccessControl(cards),
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          },
           // FIT-151: the MCP server and its sign-in. No origin access control, which would pass only GETs.
           "/mcp": { ...mcpBehavior, responseHeadersPolicy: signInHeader },
           // FIT-236: /docs, the connector's documentation, which the MCP server writes from its own tools.
@@ -643,6 +650,7 @@ export class AICoachStack extends Stack {
         new route53.AaaaRecord(this, `Web6${host}`, { zone, recordName, target });
       }
       new CfnOutput(this, "ShareOrigin", { value: shareOrigin });
+      new CfnOutput(this, "CardsBucket", { value: cards.bucketName });
       if (site) {
         new s3deploy.BucketDeployment(this, "AppFiles", {
           sources: [s3deploy.Source.asset(props.app!.assets), s3deploy.Source.jsonData("config.json", webConfig)],

@@ -67,6 +67,14 @@ struct SeedGenerator {
         #expect(skipped.isEmpty)
     }
 
+    /// FIT-317: Resources/Seed/exercise-photos.json, from the bundled catalog and free-exercise-db (Tests/Fixtures).
+    @Test func writePhotos() throws {
+        let catalog = try Seeder.decode([TemplateSeed].self, "exercises", .main)
+        let map = try ExercisePhotos.map(json: Data(contentsOf: repoRoot.appending(path: "Tests/Fixtures/free-exercise-db.json")), catalog: catalog)
+        print("exercise photos: \(map.photos.count) exercises, none for \(map.missing.count): \(map.missing.joined(separator: ", "))")
+        try write(map.photos, "exercise-photos")
+    }
+
     @Test func writeHistory() throws {
         var history = HistoryImporter.Result()
         func add(_ result: HistoryImporter.Result) {

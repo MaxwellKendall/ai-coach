@@ -146,19 +146,32 @@ const isoDate = (v: unknown) => {
   return d;
 };
 
+/** The goals a shared milestone names (WinFeed.shortName) that go up, and those that go down; "weight" goes either way. */
+const UP = new Set(["squat", "bench", "deadlift", "pull-up", "push-up"]);
+const DOWN = new Set(["5K", "10K", "half marathon", "marathon"]);
+
+/**
+ * FIT-263: a milestone at 100% whose own numbers say the goal isn't reached. App builds before the fix read a lift goal
+ * whose start was past its target as one going down, and saved 100% on the first logged day ("253 of 315 lb").
+ */
+export const falseGoalReached = (w: Win) =>
+  w.kind === "milestone" && w.percent === 100 && w.showNumbers && w.target !== undefined &&
+  ((UP.has(w.metric) && w.value < w.target) || (DOWN.has(w.metric) && w.value > w.target));
+
 /** A saved win, or undefined when it doesn't hold together. `name` is the sharer's, from their profile. */
 export function readWin(v: unknown, name: string): Win | undefined {
   try {
     if (!isObject(v)) return undefined;
     const kind = v.kind === "pr" || v.kind === "milestone" || v.kind === "streak" ? v.kind : undefined;
     if (!kind) return undefined;
-    return {
+    const win: Win = {
       kind, name, date: isoDate(v.date), metric: str(v.metric), unit: str(v.unit, 12), value: num(v.value),
       previous: optNum(v.previous), target: optNum(v.target), percent: optNum(v.percent, 0, 100),
       trend: v.trend === undefined ? undefined : list(v.trend, 60, (x) => num(x)),
       showNumbers: v.showNumbers === true, style: v.style === "paper" ? "paper" : "dark",
       invite: code(v.invite), program: code(v.program),
     };
+    return falseGoalReached(win) ? undefined : win;
   } catch (e) {
     if (e instanceof Invalid) return undefined;
     throw e;

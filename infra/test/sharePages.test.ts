@@ -84,6 +84,17 @@ describe("reading what users saved (FIT-105)", () => {
     expect(readRecap({ week: "<i>", weeks: 12 }, "Max")).toBeUndefined();
     expect(readProgram("nope", "Max")).toBeUndefined();
   });
+
+  it("drops a goal milestone at 100% whose numbers say it isn't reached (FIT-263)", async () => {
+    const { readWin } = await import("../lambda/sharePages.ts");
+    const milestone = { kind: "milestone", date: "2026-10-24", metric: "deadlift", unit: "lb", value: 253, target: 315, percent: 100, showNumbers: true };
+    expect(readWin(milestone, "Max")).toBeUndefined();
+    expect(readWin({ ...milestone, value: 320 }, "Max")).toMatchObject({ percent: 100 });
+    expect(readWin({ ...milestone, percent: 75 }, "Max")).toMatchObject({ percent: 75 });
+    // Without the numbers there's nothing to check; a race time at 100% is under its target.
+    expect(readWin({ ...milestone, showNumbers: false, value: 100, target: 100 }, "Max")).toBeDefined();
+    expect(readWin({ ...milestone, metric: "5K", unit: "", value: 1700, target: 1600 }, "Max")).toBeUndefined();
+  });
 });
 
 describe("sessions (FIT-113)", () => {
