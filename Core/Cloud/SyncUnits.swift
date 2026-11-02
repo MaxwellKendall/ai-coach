@@ -84,6 +84,8 @@ enum SyncUnits {
         var travelWeeks: [Int]
         var starts: [StartingSet]
         var brief: ProgramBrief.Stored?
+        /// FIT-324: the ready-made program they follow, so a second phone plans its weeks too.
+        var programSlug: String?
     }
 
     static func encode(_ value: some Encodable) -> String {
@@ -171,7 +173,7 @@ enum SyncUnits {
                     injuredAreas: p.injuredAreas, fineAreas: p.fineAreas, avoidExercises: p.avoidExercises, maxWeeklySets: p.maxWeeklySets,
                     style: p.style, warmups: p.warmups, deloadEveryWeeks: p.deloadEveryWeeks, cookWindows: p.cookWindows,
                     groceryDay: p.groceryDay, weeklyBudgetUSD: p.weeklyBudgetUSD, programStart: p.programStart, targetDate: p.targetDate,
-                    travelWeeks: p.travelWeeks, starts: p.starts, brief: p.brief)
+                    travelWeeks: p.travelWeeks, starts: p.starts, brief: p.brief, programSlug: p.programSlug)
     }
 
     // MARK: Into the store
@@ -314,6 +316,7 @@ enum SyncUnits {
             p.travelWeeks = b.travelWeeks
             p.starts = b.starts
             p.brief = b.brief
+            p.programSlug = b.programSlug
             p.updatedAt = now
         }
     }

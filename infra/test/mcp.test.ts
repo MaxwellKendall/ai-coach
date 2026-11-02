@@ -200,6 +200,15 @@ describe("mcp", () => {
     expect(await callTool("add_note", { note: "Slept 5 h." }, me, store, now)).toMatch(/Knee fine today Slept 5 h\./);
   });
 
+  // FIT-324: the app's ready-made program rides on the profile; a coach's profile write keeps it.
+  it("keeps the ready-made program the app put on the profile", async () => {
+    const units = data();
+    units.me.profile = JSON.stringify({ ...JSON.parse(units.me.profile), programSlug: "strength-waves" });
+    const store = memory({}, units);
+    await callTool("set_profile", { session_minutes: 60 }, me, store, now);
+    expect(JSON.parse(units.me.profile)).toMatchObject({ programSlug: "strength-waves", sessionMinutes: 60 });
+  });
+
   it("proposes, applies and undoes a day's session", async () => {
     const units = data();
     const store = memory({}, units);
