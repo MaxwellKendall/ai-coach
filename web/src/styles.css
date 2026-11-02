@@ -212,7 +212,7 @@ h3.handle::before { content: "⠿"; color: var(--muted); font-size: 14px; margin
 h3 .copy { margin-left: auto; font-size: 13px; font-weight: 600; border: 0; background: none; color: var(--muted); padding: 2px 0; }
 h3 .copy:hover { color: var(--text); }
 .form .claude { grid-column: 1 / -1; font-size: 14px; }
-.flags li.plateau { color: var(--text); border-color: var(--text); }
+.flags li.plateau, .flags li.behind { color: var(--text); border-color: var(--text); }
 
 /* FIT-137: the account's sign-ins */
 .account-page { gap: 12px; }

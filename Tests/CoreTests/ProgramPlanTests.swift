@@ -186,6 +186,23 @@ struct GoalProgressTests {
         #expect(GoalProgress.forecast(from: 20, now: 10, target: 0, started: start, today: date(2026, 8, 24), end: end) == 0)
     }
 
+    /// FIT-278: a goal with its own date ("bench 225 by June") is paced on a straight line to that date, and its
+    /// forecast says how far short of the target it lands, the goal's way.
+    @Test func paceAndShortfallToTheGoalsDate() {
+        let start = date(2026, 9, 1), due = date(2026, 12, 1)
+        // Halfway through the time: under 80% of halfway is behind, 125% of it or more is ahead.
+        let half = date(2026, 10, 16)
+        #expect(GoalProgress.pace("bench-press.1rm_lb", from: 200, now: 215, target: 250, started: start, today: half, due: due) == .behind)
+        #expect(GoalProgress.pace("bench-press.1rm_lb", from: 200, now: 225, target: 250, started: start, today: half, due: due) == .onPace)
+        #expect(GoalProgress.pace("bench-press.1rm_lb", from: 200, now: 235, target: 250, started: start, today: half, due: due) == .ahead)
+        #expect(GoalProgress.pace("bench-press.1rm_lb", from: 200, now: 200, target: 250, started: start, today: date(2026, 9, 5), due: due) == .starting)
+        #expect(GoalProgress.shortfall("bench-press.1rm_lb", from: 200, lands: 238, target: 250) == 12)
+        #expect(GoalProgress.shortfall("bench-press.1rm_lb", from: 200, lands: 265, target: 250) == -15)
+        // Weight to lose, and a race time, go down: landing above the target is short of it.
+        #expect(GoalProgress.shortfall("weight_lb", from: 201, lands: 188, target: 180) == 8)
+        #expect(GoalProgress.shortfall("run_5000m.time_s", from: 1800, lands: 1450, target: 1500) == -50)
+    }
+
     /// Program sets are below a max, so a max or reps goal never reads below its start; weight and race times do.
     @Test func standing() {
         #expect(GoalProgress.standing("pull-up.reps", logged: 4, from: 8) == 8)

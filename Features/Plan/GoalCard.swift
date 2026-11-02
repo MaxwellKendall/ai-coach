@@ -10,6 +10,8 @@ struct GoalCard: View {
     /// The program's first day and its target date.
     let start: Date
     let end: Date
+    /// FIT-278: the goal's own date when it has one, else the program's.
+    private var due: Date { goal.deadline ?? end }
     /// This week of the program, 0-based.
     let current: Int
     let sets: [LoggedSet]
@@ -32,10 +34,12 @@ struct GoalCard: View {
         let from = goal.baseline ?? logged ?? goal.target
         let now = GoalProgress.standing(goal.metric, logged: logged, from: from)
         let trend = GoalProgress.standingTrend(goal.metric, GoalProgress.trend(goal.metric, sets: sets, weighIns: weighIns, since: start), from: from)
-        let pace = GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: current, weeks: weeks)
-        let forecast = GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: end)
+        let pace = goal.deadline == nil
+            ? GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: current, weeks: weeks)
+            : GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now, due: due)
+        let forecast = GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: due)
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
-                                    forecast: forecast, target: goal.target, start: start, end: end, format: option.format)
+                                    forecast: forecast, target: goal.target, start: start, end: due, format: option.format)
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(option.name).font(.subheadline).foregroundStyle(.secondary)
@@ -60,7 +64,7 @@ struct GoalCard: View {
             GoalChart(lines: lines)
                 .frame(height: 150)
                 .padding(.top, 18)
-                .accessibilityLabel("\(option.name) from \(format(from)) to \(format(now)), goal \(format(goal.target)) by \(day(end))")
+                .accessibilityLabel("\(option.name) from \(format(from)) to \(format(now)), goal \(format(goal.target)) by \(day(due))")
             HStack(spacing: 14) {
                 legend("Logged", StrokeStyle(lineWidth: 2), .primary)
                 legend("Plan", StrokeStyle(lineWidth: 2, dash: [3, 3]), Color(.systemGray3))
@@ -101,12 +105,13 @@ struct GoalCard: View {
         }
     }
 
-    /// The program's line for the goal: from where it started to the target, flat through deloads and travel.
+    /// The program's line for the goal: from where it started to the target, flat through deloads and travel, up to
+    /// the goal's date.
     private func plan(from: Double) -> [DatedValue] {
         [DatedValue(date: start, value: from)] + weeks.indices.map { index in
             DatedValue(date: min(ProgramPlan.monday(index + 1, start: start), end),
                        value: ProgramPlan.expected(from: from, target: goal.target, at: index, weeks: weeks))
-        }
+        }.filter { $0.date <= due }
     }
 
     /// "29 lb up since Aug 10 · 45% there".
@@ -123,8 +128,8 @@ struct GoalCard: View {
 
     private func facts(from: Double, now: Double, forecast: Double?) -> [(String, String)] {
         var facts: [(String, String)] = []
-        if let forecast { facts.append(("At this rate", "\(format(forecast)) \(option.shownUnit) by \(day(end))".replacingOccurrences(of: "  ", with: " "))) }
-        let perWeek = GoalProgress.perWeek(now: now, target: goal.target, today: .now, end: end)
+        if let forecast { facts.append(("At this rate", outlook(from: from, lands: forecast))) }
+        let perWeek = GoalProgress.perWeek(now: now, target: goal.target, today: .now, end: due)
         let there = GoalProgress.fraction(goal.metric, from: from, now: now, target: goal.target) >= 1
         let needed = option.measure == .time ? "\(Running.clock(abs(perWeek))) faster a week" : "\(Coach.number(abs(perWeek))) \(goal.unit) a week"
         facts.append(("To get there", there ? "Already there" : needed))
@@ -145,6 +150,19 @@ struct GoalCard: View {
         }
         if let next { facts.append(("Next chance", chance(next))) }
         return facts
+    }
+
+    /// FIT-278: "12 lb short of 250 by Jan 16", "15 lb past 250 by Jan 16", or for a race time "0:45 slower than 25:00".
+    private func outlook(from: Double, lands: Double) -> String {
+        let gap = GoalProgress.shortfall(goal.metric, from: from, lands: lands, target: goal.target)
+        let by = "\(format(goal.target)) by \(day(due))"
+        if option.measure == .time {
+            guard Int(abs(gap).rounded()) > 0 else { return "Right on \(by)" }
+            return "\(Running.clock(abs(gap))) \(gap > 0 ? "slower" : "faster") than \(by)"
+        }
+        let amount = format(abs(gap))
+        guard amount != format(0) else { return "Right on \(by)" }
+        return "\(amount) \(goal.unit) \(gap > 0 ? "short of" : "past") \(by)"
     }
 
     /// Maxes and reps in whole numbers, body weight to a tenth, a race time as a clock.

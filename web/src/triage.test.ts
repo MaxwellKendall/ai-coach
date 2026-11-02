@@ -98,3 +98,30 @@ describe("the client's daily check-in (FIT-223)", () => {
     expect(triage(checkedIn(""), [], names, "sam", now).flags).toEqual([]);
   });
 });
+
+describe("a goal that lands short of its date (FIT-278)", () => {
+  const goal = (body: object): [string, Unit] => ["goal#g1", { key: "goal#g1", updatedAt: "", deleted: false, body: JSON.stringify({ kind: "strength", unit: "lb", status: "active", ...body }) }];
+  const profile = (body: object): [string, Unit] => ["profile", { key: "profile", updatedAt: "", deleted: false, body: JSON.stringify(body) }];
+  const squat = (load: number) => log("2026-10-12", { measurements: [{ metric: "load_lb", value: load, unit: "lb" }, { metric: "reps", value: 5, unit: "reps" }] } as Partial<LogRow>);
+  const client = (load: number, over: object = {}, start = "2026-09-01") => new Map([plan("2026-10-12"), squat(load),
+    goal({ metric: "back-squat.1rm_lb", target: 250, baseline: 200, deadline: at("2026-12-01"), ...over }), profile({ programStart: at(start) })]);
+
+  it("flags it, after the pain, missed, RPE and stall flags, by its own date", () => {
+    const flags = triage(client(185), [], names, "sam", now).flags;
+    expect(flags).toEqual([{ kind: "behind", text: "Back Squat: 34 lb short of 250 by Dec 1" }]);
+    expect(byNeed([{ triage: { done: 0, planned: 0, flags } }, { triage: { done: 0, planned: 0, flags: [{ kind: "plateau", text: "" }] } }])[0].triage.flags[0].kind).toBe("plateau");
+  });
+
+  it("leaves a goal on course, a new program, a goal without a date and a race time alone", () => {
+    expect(triage(client(225), [], names, "sam", now).flags).toEqual([]);
+    expect(triage(client(185, {}, "2026-10-10"), [], names, "sam", now).flags).toEqual([]);
+    expect(triage(client(185, { deadline: undefined }), [], names, "sam", now).flags).toEqual([]);
+    expect(triage(client(185, { metric: "run_5000m.time_s" }), [], names, "sam", now).flags).toEqual([]);
+  });
+
+  it("uses the program's date when the goal has none", () => {
+    const units = client(185, { deadline: undefined });
+    units.set(...profile({ programStart: at("2026-09-01"), targetDate: at("2026-11-20") }));
+    expect(triage(units, [], names, "sam", now).flags[0].text).toMatch(/ by Nov 20$/);
+  });
+});
