@@ -230,7 +230,8 @@ struct WorkoutModeView: View {
         if warming {
             let step = draft.warmups[warmStep]
             return .init(title: step.exercise.map { names[$0] ?? $0 } ?? "Row, bike or walk, easy",
-                         detail: "Warm-up · \(step.dose)", step: "\(warmStep + 1)/\(draft.warmups.count)", load: nil, restEnds: nil, progress: 0)
+                         detail: "Warm-up · \(step.dose)", step: "\(warmStep + 1)/\(draft.warmups.count)", load: nil, restEnds: nil, progress: 0,
+                         lift: "Warm-up", set: step.dose)
         }
         let line: [Int]? = if page >= cards.count { nil } else if case .set(let line) = cards[page] { line } else { nextSet(after: page, in: cards) }
         guard let line else {
@@ -244,8 +245,12 @@ struct WorkoutModeView: View {
             : loads.map(Coach.number).joined(separator: "/") + " " + (SetRow.units[first.loadMetric ?? "load_lb"] ?? "lb")
         let values = rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+")
             + (first.metric == "reps" ? "" : " " + (SetRow.units[first.metric] ?? ""))
-        return .init(title: Self.names(rows, names), detail: "Set \(first.round + 1) of \(rounds) · " + (load.map { "\($0) × " } ?? "") + values,
-                     step: "\(first.round + 1)/\(rounds)", load: load, restEnds: rest?.ends, progress: progress)
+        let title = Self.names(rows, names)
+        let weight = loads.isEmpty || first.loadMetric == nil ? (first.metric == "reps" ? "×" : "") : loads.map(Coach.number).joined(separator: "/") + "×"
+        return .init(title: title, detail: "Set \(first.round + 1) of \(rounds) · " + (load.map { "\($0) × " } ?? "") + values,
+                     step: "\(first.round + 1)/\(rounds)", load: load, restEnds: rest?.ends, progress: progress,
+                     lift: WorkoutActivityAttributes.short(names[first.exercise] ?? title),
+                     set: weight + values)
     }
 
     // MARK: Set card

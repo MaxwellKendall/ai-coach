@@ -18,15 +18,47 @@ struct WorkoutLiveActivity: Widget {
             let state = context.state
             let tint = tint(context.attributes.plate)
             return DynamicIsland {
-                DynamicIslandExpandedRegion(.bottom) { Card(state: state, tint: tint).padding(.horizontal, 4).padding(.bottom, 4) }
+                // Long-pressed: the lift and the set large, the rest's countdown or the load on the right, then progress.
+                DynamicIslandExpandedRegion(.leading) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(state.title).font(.headline).lineLimit(1)
+                        Text(state.step.contains("/") ? "Set \(state.step.replacingOccurrences(of: "/", with: " of "))" : state.step)
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .padding(.leading, 6)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Group {
+                        if let ends = state.restEnds, ends > .now {
+                            Text(timerInterval: Date.now...ends, countsDown: true).foregroundStyle(tint)
+                        } else {
+                            Text(state.set.isEmpty ? (state.load ?? "") : state.set)
+                        }
+                    }
+                    .font(.title2.weight(.semibold)).monospacedDigit().multilineTextAlignment(.trailing).padding(.trailing, 6)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(state.detail).font(.subheadline).monospacedDigit().lineLimit(1)
+                        ProgressView(value: state.progress).tint(tint)
+                    }
+                    .padding(.horizontal, 6).padding(.bottom, 4)
+                }
             } compactLeading: {
-                Text(state.step).monospacedDigit().padding(.leading, 4)
+                // "Squat 2/3": which lift and which set, always.
+                HStack(spacing: 4) {
+                    if !state.lift.isEmpty { Text(state.lift).lineLimit(1) }
+                    Text(state.step).foregroundStyle(.secondary)
+                }
+                .font(.subheadline.weight(.semibold)).monospacedDigit().padding(.leading, 4)
             } compactTrailing: {
+                // "185×5", or the rest's countdown while resting.
                 if let ends = state.restEnds, ends > .now {
                     Text(timerInterval: Date.now...ends, countsDown: true).monospacedDigit().foregroundStyle(tint)
                         .multilineTextAlignment(.trailing).frame(maxWidth: 44)
-                } else if let load = state.load {
-                    Text(load).monospacedDigit()
+                } else {
+                    Text(state.set.isEmpty ? (state.load ?? "") : state.set).font(.subheadline.weight(.semibold)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.8).foregroundStyle(tint)
                 }
             } minimal: {
                 ProgressView(value: state.progress).progressViewStyle(.circular).tint(tint)
