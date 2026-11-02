@@ -190,10 +190,26 @@ struct WorkoutDraft: Equatable {
         for index in line {
             let step = load || rows[index].metric != "reps" ? 5.0 : 1.0
             if load {
-                rows[index].load = rows[index].load.map { max(0, $0 + step * direction) }
+                // FIT-326: an empty load (a lift swapped in with no last time) steps up from zero.
+                guard rows[index].loadMetric != nil else { continue }
+                rows[index].load = max(0, (rows[index].load ?? 0) + step * direction)
             } else {
                 rows[index].value = rows[index].value.map { max(0, $0 + step * direction) }
             }
+            rows[index].heard = false
+        }
+    }
+
+    /// FIT-326: the lift swapped for another mid-workout, for its sets still to do: logged sets stay as they were done.
+    /// Sets and reps carry over; the load is the new lift's last time, else empty (nil) to set on the stepper, and none
+    /// for a lift with no load (`loadMetric` nil).
+    mutating func swap(block: Int, from old: String, to new: String, loadMetric: String?, load: Double?) {
+        guard old != new else { return }
+        for index in rows.indices where rows[index].block == block && rows[index].exercise == old && !rows[index].done {
+            rows[index].exercise = new
+            rows[index].loadMetric = loadMetric
+            rows[index].load = loadMetric == nil ? nil : load
+            rows[index].plannedLoad = rows[index].load
             rows[index].heard = false
         }
     }

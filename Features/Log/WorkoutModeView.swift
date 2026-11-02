@@ -35,6 +35,14 @@ struct WorkoutModeView: View {
     /// FIT-53: groups I opted in to see each set as it happens.
     @State private var live: LiveShare?
     @State private var activity = WorkoutActivity()
+    /// FIT-326: the lift being swapped, from the set card's name or the list.
+    @State private var swapping: SwapTarget?
+
+    struct SwapTarget: Identifiable {
+        var block: Int
+        var exercise: String
+        var id: String { "\(block) \(exercise)" }
+    }
 
     /// The running rest, on its card.
     struct Rest: Equatable {
@@ -134,6 +142,10 @@ struct WorkoutModeView: View {
             Text("Nothing is saved until you press Save on the last card.")
         }
         .sheet(isPresented: $peeking) { peek }
+        .sheet(item: $swapping) { target in
+            ExercisePicker(title: "Swap \(names[target.exercise] ?? target.exercise)", replacing: target.exercise,
+                           excluding: Set(draft.rows.map(\.exercise))) { slug in swap(target, to: slug) }
+        }
     }
 
     /// The whole session at a glance: every set, logged or not. Tap one to go to it.
@@ -166,6 +178,15 @@ struct WorkoutModeView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(line == current ? .isSelected : [])
+                            .swipeActions {
+                                if !done, rows.count == 1 {
+                                    Button("Swap", systemImage: "arrow.triangle.2.circlepath") {
+                                        peeking = false
+                                        swapping = SwapTarget(block: rows[0].block, exercise: rows[0].exercise)
+                                    }
+                                    .tint(Plate.current.mark)
+                                }
+                            }
                         }
                     }
                 }
@@ -275,7 +296,8 @@ struct WorkoutModeView: View {
         let done = rows.allSatisfy(\.done)
         let values = rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+")
         let loads = rows.compactMap(\.load).reduce(into: [Double]()) { if !$0.contains($1) { $0.append($1) } }
-        let load = first.loadMetric == nil ? nil : loads.map(Coach.number).joined(separator: "/")
+        // FIT-326: a lift swapped in with no last time has its load to set: "–" until it's stepped.
+        let load = first.loadMetric == nil ? nil : loads.isEmpty ? "–" : loads.map(Coach.number).joined(separator: "/")
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Set \(first.round + 1) of \(rounds)\(exercises.count > 1 ? " · superset" : "")")
@@ -285,9 +307,23 @@ struct WorkoutModeView: View {
                     Label("Logged", systemImage: "checkmark.circle.fill").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkMuted)
                 }
             }
-            Text(exercises.map { names[$0] ?? $0 }.joined(separator: " + "))
-                .font(.display(30)).padding(.top, 4)
-                .lineLimit(2).minimumScaleFactor(0.7)
+            // FIT-326: the name swaps the lift for its sets still to do (a superset's names stay put).
+            Button {
+                if exercises.count == 1, !done { swapping = SwapTarget(block: first.block, exercise: exercises[0]) }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(exercises.map { names[$0] ?? $0 }.joined(separator: " + "))
+                        .font(.display(30)).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.leading)
+                    if exercises.count == 1, !done {
+                        Image(systemName: "arrow.triangle.2.circlepath").font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Plate.current.mark)
+                    }
+                }
+                .foregroundStyle(Color.ink)
+            }
+            .buttonStyle(.plain).padding(.top, 4)
+            .disabled(exercises.count != 1 || done)
+            .accessibilityHint(exercises.count == 1 && !done ? "Swap this exercise" : "")
             if let cue = cue(rows) {
                 Text(cue).font(.subheadline).foregroundStyle(Color.inkMuted).padding(.top, 6).lineLimit(3)
             }
@@ -671,6 +707,47 @@ struct WorkoutModeView: View {
             Text(unit).font(.footnote).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// FIT-326: swaps the lift's sets still to do, here and in today's plan, so the saved session, sync and the coach
+    /// agree. The new lift starts from its last time, else with the load empty to set. No confirm: swapping back undoes it.
+    private func swap(_ target: SwapTarget, to slug: String) {
+        let exercise = Planner.catalog(templates).first { $0.slug == slug }
+        let last = lastLoad(slug)
+        let perHand = exercise.map { !$0.equipment.isDisjoint(with: ["dumbbells", "kettlebells"]) && !$0.equipment.contains("barbell") } ?? false
+        let loadMetric: String? = exercise?.isLoaded == false ? nil : (last?.metric ?? (perHand ? "load_lb_hand" : "load_lb"))
+        let logged = draft.rows.filter { $0.block == target.block && $0.exercise == target.exercise && $0.done }.count
+        withAnimation(.snappy) {
+            draft.swap(block: target.block, from: target.exercise, to: slug, loadMetric: loadMetric, load: last?.value)
+        }
+        // Today's plan: the day's rows, as Today edits them.
+        let day = Calendar.current.startOfDay(for: startedAt)
+        let items = planned.filter { $0.kind == .workout && Calendar.current.isDate($0.date, inSameDayAs: day) }
+        guard !items.isEmpty else { return }
+        var session = Planner.session(items, templates: templates)
+        // The draft's blocks are the plan's, warm-up blocks included (WorkoutDraft.init).
+        guard session.blocks.indices.contains(target.block),
+              let movement = session.blocks[target.block].movements.firstIndex(where: { $0.exercise == target.exercise }) else { return }
+        session.swap(block: target.block, movement: movement, to: slug, after: logged,
+                     loadMetric: loadMetric, load: loadMetric == nil ? nil : last?.value)
+        let written = Planner.save(session, over: items, templates: templates, in: context)
+        // The swapped sets now point at the new lift's rows, so their logs match the plan.
+        if let id = templates.first(where: { $0.slug == slug })?.id, let row = written.first(where: { $0.templateRef == id }) {
+            for index in draft.rows.indices where draft.rows[index].block == target.block && draft.rows[index].exercise == slug && !draft.rows[index].done {
+                draft.rows[index].plannedRef = row.id
+            }
+        }
+    }
+
+    /// The new lift's top load the last session before today, and its metric.
+    private func lastLoad(_ slug: String) -> (metric: String, value: Double)? {
+        let today = Calendar.current.startOfDay(for: startedAt)
+        let sets = Planner.loggedSets(entries.filter { $0.timestamp < today }, templates: templates).filter { $0.exercise == slug }
+        guard let day = sets.last.map({ Calendar.current.startOfDay(for: $0.date) }) else { return nil }
+        for metric in ["load_lb", "load_lb_hand"] {
+            if let top = sets.filter({ Calendar.current.startOfDay(for: $0.date) == day }).compactMap({ $0.value(metric) }).max() { return (metric, top) }
+        }
+        return nil
     }
 
     private func save() {

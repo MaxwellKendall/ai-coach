@@ -168,6 +168,30 @@ struct SessionPlan: Equatable, Sendable {
         }
     }
 
+    /// FIT-326: a swap mid-workout, after `logged` of the movement's working sets were done: those stay the old lift,
+    /// and the rest move to a block of their own right after, for the new lift at `load` (or none). With none logged,
+    /// or in a superset, the movement is swapped whole.
+    mutating func swap(block: Int, movement: Int, to exercise: String, after logged: Int, loadMetric: String?, load: Double?) {
+        let working = blocks[block].movements[movement].working
+        guard blocks[block].movements[movement].exercise != exercise else { return }
+        func dosed(_ set: PlannedSet) -> PlannedSet {
+            var set = set
+            set.targets.removeAll { ["load_lb", "load_lb_hand"].contains($0.metric) }
+            if let loadMetric, let load { set.targets.append(Measurement(metric: loadMetric, value: load, unit: loadMetric == "load_lb_hand" ? "lb/hand" : "lb")) }
+            set.adjustedReason = "edited"
+            return set
+        }
+        guard logged > 0, logged < working.count, !blocks[block].isGroup else {
+            swap(block: block, movement: movement, to: exercise)
+            blocks[block].movements[movement].sets = blocks[block].movements[movement].sets.map(dosed)
+            return
+        }
+        let rest = working[logged...].map { set in var set = dosed(set); set.id = UUID(); set.plannedRef = nil; return set }
+        let warmups = blocks[block].movements[movement].sets.filter(\.isWarmup)
+        blocks[block].movements[movement].sets = warmups + working.prefix(logged)
+        blocks.insert(Block(movements: [Movement(exercise: exercise, sets: Array(rest))]), at: block + 1)
+    }
+
     /// One more set (a round, in a superset): a copy of each movement's last working set, or of a warm-up item's last set.
     mutating func addSet(block: Int) {
         let warmup = blocks[block].rounds == 0
