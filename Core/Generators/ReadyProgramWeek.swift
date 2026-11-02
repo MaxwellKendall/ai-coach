@@ -9,8 +9,40 @@ import Foundation
 /// The first time, the program's starting load and the bottom of the range, or (FIT-281) a little under a recent set
 /// they gave (`fromRecent`). Deload weeks (`ProgramPlan.weeks`) cut the
 /// sets and loads as `TrainingGenerator` does, and their sessions don't count when the next week progresses.
+/// FIT-277: each change says why, from the numbers, on the row's `adjustedReason` (`Why`).
 extension ReadyProgram {
     static let firstTimeNote = "First time: pick a weight you could lift 2–3 more times."
+
+    /// FIT-277: why an exercise changed from last time, one line each: "+5 lb: you hit every rep".
+    enum Why: Equatable, Sendable {
+        case hitEveryRep(step: Double, unit: String)
+        case topOfRange(step: Double, unit: String)
+        case missedTwice(load: Double, unit: String)
+        case held(fewest: Double, planned: Double)
+        case oneMoreRep(reps: Double)
+        case nextRung
+        case longerHold(seconds: Double)
+        case deload
+
+        var text: String {
+            switch self {
+            case let .hitEveryRep(step, unit): "+\(Coach.number(step)) \(unit): you hit every rep"
+            case let .topOfRange(step, unit): "+\(Coach.number(step)) \(unit): top of the range on every set"
+            case let .missedTwice(load, unit): "Down to \(Coach.number(load)) \(unit): short of the reps twice"
+            case let .held(fewest, planned): "Held: \(Coach.number(fewest)) of \(Coach.number(planned)) reps on a set"
+            case let .oneMoreRep(reps): "One more rep: \(Coach.number(reps)) a set"
+            case .nextRung: "Next step: top of the range on every set"
+            case let .longerHold(seconds): "+5 s: \(Coach.number(seconds)) s a set"
+            case .deload: "Deload week: lighter, to recover"
+            }
+        }
+
+        /// Whether a row's reason is one of these, to show it under the lift (other reasons, like "edited", aren't).
+        static func explains(_ reason: String?) -> Bool {
+            guard let reason else { return false }
+            return ["+", "Down to ", "Held: ", "One more rep: ", "Next step: ", "Deload week: "].contains { reason.hasPrefix($0) }
+        }
+    }
 
     func week(startingOn monday: Date, start: Date, settings: TrainingSettings, catalog: [Exercise],
               history: [LoggedSet], program: [ProgramWeek], calendar: Calendar = .current) -> TrainingWeek {
@@ -72,6 +104,7 @@ extension ReadyProgram {
 
         // A ladder carries on from its most recent rung, and climbs one once the top of the range is done on every set.
         var last = Self.sessions(of: slug, history, calendar: calendar).last ?? []
+        var climbed = false
         if item.ladder != nil {
             if let latest = history.last(where: { choices.contains($0.exercise) })?.exercise { slug = latest }
             last = Self.sessions(of: slug, history, calendar: calendar).last ?? []
@@ -79,19 +112,24 @@ extension ReadyProgram {
                let rung = choices.firstIndex(of: slug), choices.indices.contains(rung + 1) {
                 slug = choices[rung + 1]
                 last = []
+                climbed = true
             }
         }
         let exercise = catalog[slug]!
         var targets = [Measurement(metric: "sets", value: Double(sets), unit: "sets")]
         var note: String?
+        var why: Why? = light && !last.isEmpty ? .deload : climbed ? .nextRung : nil
 
         if item.seconds != nil {
             let held = last.compactMap { $0.value("duration_s") }.min()
-            targets.append(Measurement(metric: "duration_s", value: held.map { min(max($0 + 5, low), high) } ?? low, unit: "s"))
+            let seconds = held.map { min(max($0 + 5, low), high) } ?? low
+            if !light, let held, seconds > held { why = .longerHold(seconds: seconds) }
+            targets.append(Measurement(metric: "duration_s", value: seconds, unit: "s"))
         } else {
             let perHand = !exercise.equipment.isDisjoint(with: ["dumbbells", "kettlebells"]) && !exercise.equipment.contains("barbell")
             let metric = perHand ? "load_lb_hand" : "load_lb"
             let step = item.step ?? 5
+            let unit = perHand ? "lb a hand" : "lb"
             let lastLoad = last.compactMap { $0.value("load_lb") ?? $0.value("load_lb_hand") }.max()
             var reps = low
             var load = lastLoad ?? starts.first { $0.exercise == slug }.flatMap { Self.fromRecent(item, $0)?.start } ?? item.start
@@ -100,16 +138,22 @@ extension ReadyProgram {
                 if low == high {
                     if Self.done(last, metric: "reps", value: low, sets: item.sets) {
                         load = load.map { $0 + step }
+                        if load != nil, !light { why = .hitEveryRep(step: step, unit: unit) }
                     } else if let lastLoad, let previous = Self.sessions(of: slug, history, calendar: calendar).dropLast().last,
                               !Self.done(previous, metric: "reps", value: low, sets: item.sets),
                               (previous.compactMap { $0.value("load_lb") ?? $0.value("load_lb_hand") }.max() ?? 0) >= lastLoad {
                         // Two misses in a row: back off 10% and build again.
                         load = Self.round(lastLoad * 0.9, perHand: perHand)
+                        if !light { why = .missedTwice(load: load!, unit: unit) }
+                    } else if !light {
+                        why = .held(fewest: fewest, planned: low)
                     }
                 } else if Self.done(last, metric: "reps", value: high, sets: item.sets), let current = load {
                     load = current + step
+                    if !light { why = .topOfRange(step: step, unit: unit) }
                 } else {
                     reps = min(max(fewest + 1, low), high)
+                    if !light, reps > fewest { why = .oneMoreRep(reps: reps) }
                 }
             } else if item.start != nil, !light {
                 note = Self.firstTimeNote
@@ -121,7 +165,7 @@ extension ReadyProgram {
             }
         }
         return PlannedWorkout(date: date, session: session, exercise: slug, targets: targets, note: note,
-                              group: item.group, main: item.main ?? false)
+                              adjustedReason: why?.text, group: item.group, main: item.main ?? false)
     }
 
     /// Every working set planned was done, at `value` or more.

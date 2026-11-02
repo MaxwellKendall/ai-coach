@@ -192,6 +192,38 @@ struct ReadyProgramTests {
         #expect(working(week("full-body-3", monday8, history: after), "back-squat").first?.target("load_lb") == 155)
     }
 
+    /// FIT-277: every change says why, from the numbers, one rule each; the first time and an unchanged hold say nothing.
+    @Test func eachChangeSaysWhy() {
+        func why(_ slug: String, _ exercise: String, _ history: [LoggedSet], equipment: [String] = Profile.allEquipment,
+                 monday: Date = date(11, 1)) -> String? {
+            working(week(slug, monday, equipment: equipment, history: history), exercise).first?.adjustedReason
+        }
+        #expect(why("full-body-3", "back-squat", []) == nil)
+        #expect(why("full-body-3", "back-squat", logged("back-squat", on: date(10, 26), sets: 3, reps: 5, load: 100)) == "+5 lb: you hit every rep")
+        #expect(why("full-body-3", "deadlift", logged("deadlift", on: date(10, 28), sets: 3, reps: 5, load: 135)) == "+10 lb: you hit every rep")
+        let missedOnce = logged("back-squat", on: date(10, 26), sets: 3, reps: 4, load: 100)
+        #expect(why("full-body-3", "back-squat", missedOnce) == "Held: 4 of 5 reps on a set")
+        #expect(why("full-body-3", "back-squat", missedOnce + logged("back-squat", on: date(10, 30), sets: 3, reps: 3, load: 100))
+                == "Down to 90 lb: short of the reps twice")
+
+        let dumbbells = ["dumbbells"], split = "split-squat-with-dumbbells"
+        #expect(why("dumbbell-full-body", split, logged(split, on: date(10, 26), sets: 3, reps: 8, load: 20, metric: "load_lb_hand"),
+                    equipment: dumbbells) == "One more rep: 9 a set")
+        #expect(why("dumbbell-full-body", split, logged(split, on: date(10, 26), sets: 3, reps: 12, load: 20, metric: "load_lb_hand"),
+                    equipment: dumbbells) == "+5 lb a hand: top of the range on every set")
+
+        #expect(why("bodyweight-basics", "push-up", logged("incline-push-up", on: date(10, 26), sets: 3, reps: 10), equipment: [])
+                == "Next step: top of the range on every set")
+        let plank = { (seconds: Double) in [LoggedSet(date: date(10, 26), exercise: "plank", pattern: nil,
+                                                      measurements: [Measurement(metric: "duration_s", value: seconds, unit: "s")])] }
+        #expect(why("bodyweight-basics", "plank", plank(30), equipment: []) == "+5 s: 35 s a set")
+
+        #expect(why("full-body-3", "back-squat", logged("back-squat", on: date(11, 30), sets: 3, reps: 5, load: 150), monday: date(12, 7))
+                == "Deload week: lighter, to recover")
+        #expect(["+5 lb: you hit every rep", "Held: 4 of 5 reps on a set", "Deload week: lighter, to recover"].allSatisfy(ReadyProgram.Why.explains))
+        #expect(!["edited", "asked for", "From Sam", "30 min available"].contains(where: ReadyProgram.Why.explains))
+    }
+
     /// A ready-made program's weeks are its 12, with deloads but no phases or test week, and need no age or weight.
     @Test func profileWeeks() {
         let profile = Profile(age: 0, weightLb: 0)
