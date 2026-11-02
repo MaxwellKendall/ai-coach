@@ -32,13 +32,18 @@ describe("goal progress (GoalProgress)", () => {
 
   it("paces against the program's line, flat through deloads", () => {
     const weeks = programWeeks(16, 6);
-    expect(fraction(200, 195, 180)).toBe(0.25);
-    expect(fraction(200, 205, 180)).toBe(0);
-    expect(pace(200, 200, 180, 0, weeks)).toBe("starting");
-    expect(pace(200, 195, 180, 4, weeks)).toBe("onPace");
-    expect(pace(200, 196, 180, 4, weeks)).toBe("behind");
-    expect(pace(200, 193, 180, 4, weeks)).toBe("onPace");
-    expect(pace(200, 192.5, 180, 4, weeks)).toBe("ahead");
+    expect(fraction("weight_lb", 200, 195, 180)).toBe(0.25);
+    expect(fraction("weight_lb", 200, 205, 180)).toBe(0);
+    // FIT-263: a lift goes up, whatever its start: 253 against a start of 330 and a target of 315 is 0, not 100%.
+    expect(fraction("deadlift.1rm_lb", 330, 253, 315)).toBe(0);
+    expect(fraction("deadlift.1rm_lb", 315, 315, 315)).toBe(0);
+    expect(fraction("deadlift.1rm_lb", 250, 260, 290)).toBe(0.25);
+    expect(fraction("weight_lb", 150, 155, 170)).toBe(0.25);
+    expect(pace("weight_lb", 200, 200, 180, 0, weeks)).toBe("starting");
+    expect(pace("weight_lb", 200, 195, 180, 4, weeks)).toBe("onPace");
+    expect(pace("weight_lb", 200, 196, 180, 4, weeks)).toBe("behind");
+    expect(pace("weight_lb", 200, 193, 180, 4, weeks)).toBe("onPace");
+    expect(pace("weight_lb", 200, 192.5, 180, 4, weeks)).toBe("ahead");
   });
 
   it("forecasts at the rate so far, and says what each week needs", () => {
@@ -172,6 +177,6 @@ describe("race times (FIT-177)", () => {
     expect(current(goal.metric, runs, [], noon(8, 10))).toBe(3497);
     const won = wins([goal], runs, [], d(8, 10), noon(8, 10), noon(11, 29), new Set(), new Set(), d(10, 5), tz);
     expect(won.filter((w) => w.kind === "pr").map((w) => [w.day, w.value, w.previous])).toEqual([[d(9, 8), 3497, 3540], [d(9, 1), 3540, 3600]]);
-    expect(pace(3600, 3497, 3300, 4, programWeeks(16, 6))).toBe("onPace"); // 34% of the way, 29% expected: under 125% of it
+    expect(pace(goal.metric, 3600, 3497, 3300, 4, programWeeks(16, 6))).toBe("onPace"); // 34% of the way, 29% expected: under 125% of it
   });
 });

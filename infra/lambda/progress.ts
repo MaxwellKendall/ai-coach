@@ -113,8 +113,19 @@ export function trend(metric: string, sets: LogSet[], weighs: Dated[], since: nu
   return [...byDay.keys()].sort().map((day) => ({ day, value: byDay.get(day)! }));
 }
 
-/** How far from the start to the target, 0–1, either direction. */
-export const fraction = (start: number, now: number, target: number) => (target === start ? 1 : Math.min(1, Math.max(0, (now - start) / (target - start))));
+/** FIT-263 (GoalProgress.goesDown): a race time and weight to lose go down; a max, reps and weight to gain go up. */
+export const goesDown = (metric: string, start: number, target: number) => lowerIsBetter(metric) || (metric === "weight_lb" && target < start);
+
+/**
+ * GoalProgress.fraction: how far from the start to the target, 0–1, the goal's way. Behind the start is 0; a start
+ * already at or past the target counts only once `now` moves past it, so it never reads 100% on its first day (FIT-263).
+ */
+export function fraction(metric: string, start: number, now: number, target: number) {
+  const way = goesDown(metric, start, target) ? -1 : 1;
+  const moved = (now - start) * way, needed = (target - start) * way;
+  if (needed <= 0) return moved > 0 ? 1 : 0;
+  return Math.min(1, Math.max(0, moved / needed));
+}
 
 /** ProgramPlan.expected: a straight line over the weeks that count; deload and travel weeks hold it flat. */
 export function expected(start: number, target: number, index: number, weeks: ProgramWeek[]) {
@@ -126,10 +137,10 @@ export function expected(start: number, target: number, index: number, weeks: Pr
 export type Pace = "starting" | "behind" | "onPace" | "ahead";
 
 /** Against where the program expects it by the end of last week: under 80% is behind, 125% or more ahead. */
-export function pace(start: number, now: number, target: number, week: number, weeks: ProgramWeek[]): Pace {
+export function pace(metric: string, start: number, now: number, target: number, week: number, weeks: ProgramWeek[]): Pace {
   if (week <= 0) return "starting";
-  const want = fraction(start, expected(start, target, week - 1, weeks), target);
-  const done = fraction(start, now, target);
+  const want = fraction(metric, start, expected(start, target, week - 1, weeks), target);
+  const done = fraction(metric, start, now, target);
   if (done < want * 0.8) return "behind";
   return want > 0 && done >= want * 1.25 ? "ahead" : "onPace";
 }
@@ -241,7 +252,7 @@ export function wins(goals: { metric: string; unit: string; baseline: number; ta
         out.push({ kind: "pr", day: p.day, key: `pr:${g.metric}:${round(p.value)}`, metric: g.metric, unit: g.unit, value: p.value, previous: top, target: g.target, weeksLeft: left(p.day), trend: [...values] });
         top = p.value;
       }
-      const done = fraction(g.baseline, p.value, g.target);
+      const done = fraction(g.metric, g.baseline, p.value, g.target);
       for (const percent of [25, 50, 75, 100]) {
         if (crossed.has(percent) || done < percent / 100) continue;
         crossed.add(percent);
@@ -414,7 +425,7 @@ export function weekReport(units: Units, today: string, nowSec: number, tz: stri
       const first = g.baseline ?? g.target;
       const now = current(g.metric, sets, weighs, startSec) ?? first;
       const was = current(g.metric, sets.filter((s) => s.at < weekSec), weighs.filter((w) => w.at < weekSec), startSec) ?? first;
-      const p = pace(first, now, g.target, week, program.weeks);
+      const p = pace(g.metric, first, now, g.target, week, program.weeks);
       const fc = forecast(first, now, startSec, nowSec, end);
       report.goals.push({ id: g.id, goal: g, option, from: was, to: now, start: first, pace: p, forecast: fc, perWeek: perWeek(now, g.target, nowSec, end),
         checkIn: checkIn(first, now, g.target, p, fc, stepOf(option), week, program.weeks.length) });

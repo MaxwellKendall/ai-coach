@@ -566,7 +566,7 @@ struct ProgramScreen: View {
             let from = item.goal.baseline ?? item.goal.target
             let now = GoalProgress.standing(item.goal.metric, logged: GoalProgress.current(item.goal.metric, sets: sets, weighIns: weighIns, since: start),
                                             from: from)
-            return GoalProgress.pace(from: from, now: now, target: item.goal.target, week: current, weeks: weeks)
+            return GoalProgress.pace(item.goal.metric, from: from, now: now, target: item.goal.target, week: current, weeks: weeks)
         }
         let items = programGoals
         let index = Binding(get: { min(goalIndex, max(0, items.count - 1)) }, set: { goalIndex = $0 })

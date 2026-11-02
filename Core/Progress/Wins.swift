@@ -56,7 +56,7 @@ enum Wins {
                                     trend: values, weeksLeft: weeksLeft(from: point.date, to: end)))
                     best = point.value
                 }
-                let done = GoalProgress.fraction(from: goal.baseline, now: point.value, target: goal.target)
+                let done = GoalProgress.fraction(goal.metric, from: goal.baseline, now: point.value, target: goal.target)
                 for percent in milestones where !crossed.contains(percent) && done >= Double(percent) / 100 {
                     crossed.insert(percent)
                     wins.append(WinItem(kind: .milestone, date: point.date, key: "milestone:\(goal.metric):\(percent)", metric: goal.metric,
