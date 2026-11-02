@@ -2,11 +2,13 @@
 // on: sessions missed this past week, a very hard set (RPE 9+) on a main lift, a note the coach hasn't answered (pain
 // words, WeeklyReview.hurts, come first), a main lift stalled, or nothing logged in two weeks. Flagged clients first.
 //
+// FIT-278: a goal that, at its rate since the program started, lands short of its target by its date.
+//
 // FIT-196: shared by the dashboard (web/src/triage.ts) and the MCP's roster tools (infra/lambda/mcp.ts), so it imports
 // nothing: units are each unit's JSON body by key, and days are YYYY-MM-DD strings.
 
 export type Comment = { day: string; at: string; by: string; byName: string | null; text: string };
-export type Flag = { kind: "pain" | "note" | "missed" | "hard" | "plateau" | "quiet"; text: string };
+export type Flag = { kind: "pain" | "note" | "missed" | "hard" | "plateau" | "behind" | "quiet"; text: string };
 export type Triage = {
   done: number;
   planned: number;
@@ -86,6 +88,68 @@ function plateaued(units: Map<string, string>, exercise: string, today: string, 
   return before > 0 && recent.size >= days && Math.max(...recent.values()) <= before;
 }
 
+type Goal = { metric: string; target: number; deadline?: number; baseline?: number; status: string };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const short = (epoch: number) => { const d = new Date(epoch * 1000); return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`; };
+/** Coach.number: at most one decimal. */
+const number = (x: number) => String(Math.round(x * 10) / 10);
+
+/** GoalProgress.current for a max, reps or body weight since `since` (a race time isn't flagged here). */
+function goalNow(units: Map<string, string>, metric: string, since: string): number | undefined {
+  let best: number | undefined;
+  let weighed: string | undefined;
+  for (const key of units.keys()) {
+    if (!key.startsWith("log#") || key.slice(4) < since) continue;
+    const day = key.slice(4);
+    for (const r of rows(units, key)) {
+      if (metric === "weight_lb") {
+        const w = r.kind === "bodyweight" ? value(r, "weight_lb") : undefined;
+        if (w !== undefined && (!weighed || day > weighed)) { weighed = day; best = w; }
+        continue;
+      }
+      const [exercise, kind] = metric.split(".");
+      if (r.kind !== "workout" || r.template !== exercise) continue;
+      const load = value(r, "load_lb"), reps = value(r, "reps");
+      const v = kind === "1rm_lb" && load !== undefined && reps !== undefined && reps <= 12 ? Math.round((load * 36) / (37 - reps))
+        : kind === "reps" && load === undefined ? reps : undefined;
+      if (v !== undefined) best = Math.max(best ?? v, v);
+    }
+  }
+  return best;
+}
+
+/**
+ * FIT-278: GoalProgress.forecast to the goal's own date, else the program's, and how far short of the target it lands
+ * (as on the goal card: "12 lb short of 250 by Jan 16"). Not before two weeks of the program; a goal that hasn't moved
+ * toward its target lands where it is.
+ */
+function behind(units: Map<string, string>, names: Map<string, string>, today: string): string[] {
+  const profile = units.get("profile");
+  const { programStart, targetDate } = profile ? (JSON.parse(profile) as { programStart?: number; targetDate?: number }) : {};
+  const now = date(today).getTime() / 1000;
+  if (programStart === undefined || now - programStart < 14 * 86_400) return [];
+  const out: string[] = [];
+  for (const [key, body] of [...units].sort(([a], [b]) => a.localeCompare(b))) {
+    if (!key.startsWith("goal#")) continue;
+    const g = JSON.parse(body) as Goal;
+    const due = g.deadline ?? targetDate;
+    if (g.status !== "active" || g.baseline === undefined || due === undefined || due <= now) continue;
+    if (g.metric !== "weight_lb" && !/\.(1rm_lb|reps)$/.test(g.metric)) continue;
+    const start = g.baseline, logged = goalNow(units, g.metric, new Date(programStart * 1000).toISOString().slice(0, 10));
+    const at = logged === undefined ? start : g.metric === "weight_lb" ? logged : Math.max(logged, start);
+    const way = g.metric === "weight_lb" && g.target < start ? -1 : 1;
+    const moved = (at - start) * way > 0;
+    const lands = moved ? Math.max(0, at + ((at - start) / (now - programStart)) * (due - now)) : at;
+    const gap = (g.target - lands) * way;
+    if (gap <= 0) continue;
+    const name = g.metric === "weight_lb" ? "Weight" : names.get(g.metric.split(".")[0]) ?? g.metric.split(".")[0];
+    const unit = g.metric.endsWith(".reps") ? (Math.round(gap) === 1 ? "rep" : "reps") : "lb";
+    const amount = g.metric === "weight_lb" ? number(gap) : String(Math.max(1, Math.round(gap)));
+    out.push(`${name}: ${amount} ${unit} short of ${number(g.target)} by ${short(due)}`);
+  }
+  return out;
+}
+
 /** Streak.status's weeks: weeks in a row with as many days trained as sessions planned (FIT-121), from the program's start. */
 function streakWeeks(start: string, planned: string[], done: string[], today: string) {
   const first = sundayOf(start), thisWeek = Math.floor((date(sundayOf(today)).getTime() - date(first).getTime()) / (7 * 86_400_000));
@@ -145,6 +209,8 @@ export function triage(units: Map<string, string>, comments: Comment[], names: M
   const stalled = [...mainLifts].filter((slug) => plateaued(units, slug, today)).map((slug) => names.get(slug) ?? slug);
   if (stalled.length) flags.push({ kind: "plateau", text: `No new best on ${stalled.join(", ")} in 3 weeks` });
 
+  for (const text of behind(units, names, today)) flags.push({ kind: "behind", text });
+
   // Planned but nothing logged for two weeks.
   if (planned.some((d) => d < today) && (!lastSession || lastSession < addDays(today, -14))) {
     flags.push({ kind: "quiet", text: lastSession ? "Nothing logged in over two weeks" : "Nothing logged yet" });
@@ -161,7 +227,7 @@ export function triage(units: Map<string, string>, comments: Comment[], names: M
   };
 }
 
-const order: Flag["kind"][] = ["pain", "missed", "hard", "plateau", "quiet", "note"];
+const order: Flag["kind"][] = ["pain", "missed", "hard", "plateau", "behind", "quiet", "note"];
 /** Clients who need the coach first: by their most pressing flag, then by how many. */
 export function byNeed<T extends { triage?: Triage }>(clients: T[]): T[] {
   const rank = (t?: Triage) => (t && t.flags.length ? Math.min(...t.flags.map((f) => order.indexOf(f.kind))) : order.length);

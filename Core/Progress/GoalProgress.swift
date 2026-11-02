@@ -91,6 +91,20 @@ enum GoalProgress {
         return expected > 0 && done >= expected * 1.25 ? .ahead : .onPace
     }
 
+    /// FIT-278: the same rule against a goal's own date, a straight line from the program's start to it.
+    static func pace(_ metric: String, from start: Double, now: Double, target: Double, started: Date, today: Date, due: Date) -> Pace {
+        let done = today.timeIntervalSince(started), total = due.timeIntervalSince(started)
+        guard done >= 7 * 86_400, total > 0 else { return .starting }
+        let expected = min(1, done / total), reached = fraction(metric, from: start, now: now, target: target)
+        if reached < expected * 0.8 { return .behind }
+        return reached >= expected * 1.25 ? .ahead : .onPace
+    }
+
+    /// FIT-278: how far short of the target a forecast lands, the goal's way; below zero is past it.
+    static func shortfall(_ metric: String, from start: Double, lands: Double, target: Double) -> Double {
+        (target - lands) * (goesDown(metric, from: start, target: target) ? -1 : 1)
+    }
+
     /// Where the goal stands: the logged value, except that a max or reps goal never reads below where it started.
     /// Program sets are below a max on purpose (3×4 pull-ups from someone who can do 8), so they aren't a loss. A
     /// weigh-in or a race time can go either way and is shown as it is.

@@ -5,7 +5,7 @@ import Foundation
 /// sync units' keys have them.
 enum Triage {
     struct Flag: Equatable, Sendable {
-        enum Kind: String, CaseIterable, Sendable { case pain, missed, hard, plateau, quiet, note }
+        enum Kind: String, CaseIterable, Sendable { case pain, missed, hard, plateau, behind, quiet, note }
         var kind: Kind
         var text: String
         /// The day a note was left on, so the phone can open it to reply (not in shared/triage.ts).
@@ -97,6 +97,69 @@ enum Triage {
         return before > 0 && recent.count >= 3 && (recent.values.max() ?? 0) <= before
     }
 
+    private struct GoalBody: Decodable { var metric: String; var target: Double; var deadline: Double?; var baseline: Double?; var status: String }
+    private struct ProfileBody: Decodable { var programStart: Double?; var targetDate: Double? }
+    private static let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    private static func short(_ epoch: Double) -> String {
+        let date = Date(timeIntervalSince1970: epoch)
+        return "\(months[utc.component(.month, from: date) - 1]) \(utc.component(.day, from: date))"
+    }
+    /// Coach.number, as shared/triage.ts writes it: at most one decimal.
+    private static func number(_ x: Double) -> String {
+        let x = (x * 10).rounded() / 10
+        return x == x.rounded() ? String(Int(x)) : String(x)
+    }
+
+    /// GoalProgress.current for a max, reps or body weight since `since` (a race time isn't flagged here).
+    private static func goalNow(_ units: [String: String], _ metric: String, since: String) -> Double? {
+        var best: Double?, weighed: String?
+        let parts = metric.split(separator: ".").map(String.init)
+        for key in units.keys where key.hasPrefix("log#") && String(key.dropFirst(4)) >= since {
+            let day = String(key.dropFirst(4))
+            for row in rows(units, key) {
+                if metric == "weight_lb" {
+                    if row.kind == "bodyweight", let w = row.value("weight_lb"), weighed.map({ day > $0 }) ?? true { weighed = day; best = w }
+                    continue
+                }
+                guard parts.count == 2, row.kind == "workout", row.template == parts[0] else { continue }
+                let load = row.value("load_lb"), reps = row.value("reps")
+                var v: Double?
+                if parts[1] == "1rm_lb", let load, let reps, reps <= 12 { v = (load * 36 / (37 - reps)).rounded() }
+                if parts[1] == "reps", load == nil { v = reps }
+                if let v { best = max(best ?? v, v) }
+            }
+        }
+        return best
+    }
+
+    /// FIT-278: GoalProgress.forecast to the goal's own date, else the program's, and how far short of the target it
+    /// lands ("12 lb short of 250 by Jan 16"). Not before two weeks of the program; a goal that hasn't moved toward its
+    /// target lands where it is.
+    private static func behind(_ units: [String: String], names: [String: String], today: String) -> [String] {
+        let profile = units["profile"].flatMap { try? JSONDecoder().decode(ProfileBody.self, from: Data($0.utf8)) }
+        let now = date(today).addingTimeInterval(12 * 3600).timeIntervalSince1970
+        guard let programStart = profile?.programStart, now - programStart >= 14 * 86_400 else { return [] }
+        let since = Date(timeIntervalSince1970: programStart).formatted(format)
+        var out: [String] = []
+        for key in units.keys.sorted() where key.hasPrefix("goal#") {
+            guard let g = units[key].flatMap({ try? JSONDecoder().decode(GoalBody.self, from: Data($0.utf8)) }),
+                  g.status == "active", let start = g.baseline, let due = g.deadline ?? profile?.targetDate, due > now,
+                  g.metric == "weight_lb" || g.metric.hasSuffix(".1rm_lb") || g.metric.hasSuffix(".reps") else { continue }
+            let logged = goalNow(units, g.metric, since: since)
+            let at = logged.map { g.metric == "weight_lb" ? $0 : max($0, start) } ?? start
+            let way: Double = g.metric == "weight_lb" && g.target < start ? -1 : 1
+            let lands = (at - start) * way > 0 ? max(0, at + (at - start) / (now - programStart) * (due - now)) : at
+            let gap = (g.target - lands) * way
+            guard gap > 0 else { continue }
+            let slug = String(g.metric.split(separator: ".")[0])
+            let name = g.metric == "weight_lb" ? "Weight" : names[slug] ?? slug
+            let unit = g.metric.hasSuffix(".reps") ? (gap.rounded() == 1 ? "rep" : "reps") : "lb"
+            let amount = g.metric == "weight_lb" ? number(gap) : String(Int(max(1, gap.rounded())))
+            out.append("\(name): \(amount) \(unit) short of \(number(g.target)) by \(short(due))")
+        }
+        return out
+    }
+
     static func week(_ units: [String: String], comments: [Comment], names: [String: String], coach: String, today: String) -> Week {
         var planned: [String] = [], done: [String] = []
         for key in units.keys {
@@ -144,6 +207,8 @@ enum Triage {
 
         let stalled = mainLifts.filter { plateaued(units, $0, today: today) }.map { names[$0] ?? $0 }
         if !stalled.isEmpty { flags.append(Flag(kind: .plateau, text: "No new best on \(stalled.joined(separator: ", ")) in 3 weeks")) }
+
+        flags += behind(units, names: names, today: today).map { Flag(kind: .behind, text: $0) }
 
         if planned.contains(where: { $0 < today }), lastSession.map({ $0 < add(-14, to: today) }) ?? true {
             flags.append(Flag(kind: .quiet, text: lastSession == nil ? "Nothing logged yet" : "Nothing logged in over two weeks"))

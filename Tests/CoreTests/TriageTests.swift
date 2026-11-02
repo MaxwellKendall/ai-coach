@@ -83,4 +83,30 @@ struct TriageTests {
         #expect(Triage.hurts("Lower back a bit sore"))
         #expect(!Triage.hurts("Felt great"))
     }
+
+    // FIT-278: web/src/triage.test.ts's "a goal that lands short of its date".
+    private func at(_ day: String) -> Double { (try! Date("\(day)T12:00:00Z", strategy: .iso8601)).timeIntervalSince1970 }
+    private func client(_ load: Double, deadline: String? = "2026-12-01", metric: String = "back-squat.1rm_lb", start: String = "2026-09-01",
+                        targetDate: String? = nil) -> [String: String] {
+        var goal: [String: Any] = ["kind": "strength", "unit": "lb", "status": "active", "metric": metric, "target": 250, "baseline": 200]
+        if let deadline { goal["deadline"] = at(deadline) }
+        var profile: [String: Any] = ["programStart": at(start)]
+        if let targetDate { profile["targetDate"] = at(targetDate) }
+        let body = { (o: [String: Any]) in String(decoding: try! JSONSerialization.data(withJSONObject: o), as: UTF8.self) }
+        return units(plan("2026-10-12"), log("2026-10-12", measurements: [["metric": "load_lb", "value": load, "unit": "lb"], ["metric": "reps", "value": 5, "unit": "reps"]]),
+                     ("goal#g1", body(goal)), ("profile", body(profile)))
+    }
+
+    @Test func flagsAGoalThatLandsShortOfItsDate() {
+        #expect(week(client(185)).flags == [Triage.Flag(kind: .behind, text: "Back Squat: 34 lb short of 250 by Dec 1")])
+        #expect(Triage.Flag.Kind.allCases.firstIndex(of: .behind)! > Triage.Flag.Kind.allCases.firstIndex(of: .plateau)!)
+        #expect(week(client(185, deadline: nil, targetDate: "2026-11-20")).flags.first?.text.hasSuffix(" by Nov 20") == true)
+    }
+
+    @Test func leavesGoalsOnCourseOrTooNewAlone() {
+        #expect(week(client(225)).flags.isEmpty)
+        #expect(week(client(185, start: "2026-10-10")).flags.isEmpty)
+        #expect(week(client(185, deadline: nil)).flags.isEmpty)
+        #expect(week(client(185, metric: "run_5000m.time_s")).flags.isEmpty)
+    }
 }
