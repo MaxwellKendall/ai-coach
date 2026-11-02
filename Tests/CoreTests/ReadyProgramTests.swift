@@ -265,6 +265,25 @@ struct ReadyProgramTests {
         #expect(ReadyProgram.Why.explains("+10 lb on the training max: a new wave"))
     }
 
+    /// FIT-325: after its last week a program plans nothing, and offers the one to go on to.
+    @Test func endsAfterItsLastWeekAndOffersTheNext() {
+        let all = Set(ReadyProgram.all.map(\.slug))
+        for ready in ReadyProgram.all {
+            #expect(!(ready.next ?? []).isEmpty && (ready.next ?? []).allSatisfy(all.contains), "\(ready.slug)")
+        }
+        #expect(program("full-body-3").following(days: 3).slug == "strength-waves")
+        #expect(program("full-body-3").following(days: 4).slug == "upper-lower-4")
+        #expect(program("full-body-2").following(days: 2).slug == "full-body-3")
+        #expect(program("dumbbell-full-body").following(days: 3).slug == "dumbbell-upper-lower")
+        #expect(program("bodyweight-basics").following(days: 3).slug == "bodyweight-basics")
+
+        let start = date(10, 25)
+        #expect(!program("full-body-3").isFinished(started: start, on: ProgramPlan.monday(11, start: start, calendar: calendar), calendar: calendar))
+        #expect(program("full-body-3").isFinished(started: start, on: ProgramPlan.monday(12, start: start, calendar: calendar), calendar: calendar))
+        #expect(!week("full-body-3", ProgramPlan.monday(11, start: start, calendar: calendar)).workouts.isEmpty)
+        #expect(week("full-body-3", ProgramPlan.monday(12, start: start, calendar: calendar)).workouts.isEmpty)
+    }
+
     /// A ready-made program's weeks are its 12, with deloads but no phases or test week, and need no age or weight.
     @Test func profileWeeks() {
         let profile = Profile(age: 0, weightLb: 0)

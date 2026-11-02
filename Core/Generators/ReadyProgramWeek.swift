@@ -50,6 +50,8 @@ extension ReadyProgram {
               history: [LoggedSet], program: [ProgramWeek], calendar: Calendar = .current) -> TrainingWeek {
         let monday = Week.start(of: monday, calendar: calendar)
         let index = ProgramPlan.week(of: monday, start: start, calendar: calendar)
+        // FIT-325: nothing after its last week; Today offers the recap and the next program instead.
+        guard index < weeks else { return TrainingWeek(workouts: [], deload: false, warnings: []) }
         let light = program.indices.contains(index) && program[index].kind == .deload
         let lightWeeks = Set(program.indices.filter { program[$0].kind == .deload })
         let past = history.filter { set in

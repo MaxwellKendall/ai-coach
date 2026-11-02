@@ -30,6 +30,8 @@ struct TodayScreen: View {
     @State private var live: WorkoutDraft?
     @State private var tracking: RunTarget?
     @State private var you = false
+    /// FIT-325: the picker, from a finished program's card.
+    @State private var picking = false
     /// FIT-204: today's check-in sheet.
     @State private var checkingIn = false
     @State private var review: WeekReport?
@@ -184,6 +186,7 @@ struct TodayScreen: View {
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen().tint(RootView.accent) }
+        .fullScreenCover(isPresented: $picking) { ProgramPicker { picking = false } }
         .sheet(isPresented: $checkingIn) {
             CheckInSheet(lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
         }
@@ -417,6 +420,25 @@ struct TodayScreen: View {
         }
     }
 
+    /// FIT-325: the ready-made program they follow, once it's past its last week.
+    private var finishedProgram: ReadyProgram? {
+        guard let profile = profiles.first, let ready = ReadyProgram.named(profile.programSlug), let start = profile.programStart,
+              ready.isFinished(started: start, on: .now) else { return nil }
+        return ready
+    }
+
+    /// The next program, from today, on their days where it runs on that many, with their equipment and starting sets.
+    private func startNext(after done: ReadyProgram) {
+        guard let profile = profiles.first else { return }
+        let next = done.following(days: profile.trainingDays.count)
+        let days = next.days.contains(profile.trainingDays.count) ? profile.trainingDays : ReadyProgram.days(for: next.days(nearest: profile.trainingDays.count))
+        do {
+            try Planner.start(next, days: days, equipment: profile.equipment, profile: profile, in: context)
+        } catch {
+            message = "Couldn’t start the program. Try again."
+        }
+    }
+
     private func weekReport() -> WeekReport {
         WeekReport.make(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
     }
@@ -520,6 +542,10 @@ struct TodayScreen: View {
                     if index == todayPos, WeekReport.isDue() {
                         let report = weekReport()
                         WeekReviewCard(report: report) { review = report }
+                    }
+                    if index == todayPos, let done = finishedProgram {
+                        ProgramDoneCard(finished: done, next: done.following(days: profiles.first?.trainingDays.count ?? 3),
+                                        recap: { review = weekReport() }, start: { startNext(after: done) }, pick: { picking = true })
                     }
                     // A session's rows bring their own 16 pt above and below, so its card adds only 4: the text sits
                     // 20 pt from every edge, as on the other cards.
