@@ -19,6 +19,12 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
               return {};
             }
             case "DeleteCommand": table.delete(id(input.Key)); return {};
+            // FIT-228: setDisplayName's SET of displayName on the profile.
+            case "UpdateCommand": {
+              const key = id(input.Key);
+              table.set(key, { ...(table.get(key) ?? input.Key), displayName: input.ExpressionAttributeValues[":n"] });
+              return {};
+            }
             case "QueryCommand": {
               const v = input.ExpressionAttributeValues;
               const prefix = v[":c"] ?? v[":p"];
@@ -80,11 +86,22 @@ describe("coach invites (FIT-130)", () => {
   });
 
   it("from a coach with no name read as no name: the app's ask and the link (FIT-227)", async () => {
+    // An invite made before FIT-228, with no name on it.
+    table.set("COACHINVITE#ABCDEFGHJK|META", { PK: "COACHINVITE#ABCDEFGHJK", SK: "META", coachUid: "sam", coachName: null,
+      createdAt: now.toISOString(), expiresAt: now.getTime() / 1000 + 86_400 });
+    expect(await coach.inviteName("ABCDEFGHJK", now)).toBe("Your coach");
+    expect(await coach.accept("ann", "ABCDEFGHJK", undefined, now)).toMatchObject({ uid: "sam", name: null });
+  });
+
+  it("asks a coach with no name for one before an invite, and keeps it as theirs (FIT-228)", async () => {
     table.set("USER#sam|PROFILE", { PK: "USER#sam", SK: "PROFILE", displayName: "  " });
-    const { code } = await coach.createInvite("sam", { name: "" }, now);
-    expect(table.get(`COACHINVITE#${code}|META`)).toMatchObject({ coachName: null });
-    expect(await coach.inviteName(code, now)).toBe("Your coach");
-    expect(await coach.accept("ann", code, undefined, now)).toMatchObject({ uid: "sam", name: null });
+    await expect(coach.createInvite("sam", { name: "" }, now)).rejects.toThrow(coach.NAME_NEEDED);
+    const { code } = await coach.createInvite("sam", { name: "" }, now, "  Sam Rivera ");
+    expect(table.get(`COACHINVITE#${code}|META`)).toMatchObject({ coachName: "Sam Rivera" });
+    expect(table.get("USER#sam|PROFILE")).toMatchObject({ displayName: "Sam Rivera" });
+    // The next invite needs no name: it's on the account now.
+    const next = await coach.createInvite("sam", { name: "" }, now);
+    expect(await coach.inviteName(next.code, now)).toBe("Sam Rivera");
   });
 
   it("link both sides once, then are used up", async () => {

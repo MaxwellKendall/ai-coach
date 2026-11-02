@@ -126,6 +126,9 @@ struct InviteSheet: View {
     @State private var invite: Cloud.ClientInvite?
     @State private var problem: String?
     @State private var copied = false
+    /// FIT-228: asked for only when the account has no name, so the invite says who it's from.
+    @State private var asking = false
+    @State private var name = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -137,6 +140,11 @@ struct InviteSheet: View {
                     Text(invite.code).font(.system(size: 34, weight: .medium, design: .monospaced)).tracking(6)
                         .textSelection(.enabled)
                     Text(invite.url.replacingOccurrences(of: "https://", with: "")).font(.subheadline).foregroundStyle(Color.inkMuted)
+                } else if asking {
+                    TextField("Your name, as your client will see it", text: $name)
+                        .font(.body.weight(.semibold)).multilineTextAlignment(.center)
+                        .textContentType(.name).submitLabel(.done)
+                        .onSubmit { Task { await make() } }
                 } else if let problem {
                     Text(problem).font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
                 } else {
@@ -147,6 +155,11 @@ struct InviteSheet: View {
             .padding(16)
             .background(Color.fill, in: .rect(cornerRadius: 16))
             .padding(.top, 24)
+            if asking {
+                Button("Make the Invite") { Task { await make() } }
+                    .buttonStyle(.primary).padding(.top, 24)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
             if let invite, let url = URL(string: invite.url) {
                 ShareLink(item: url, message: Text("Train with me in Barbrabell. Your code is \(invite.code).")) {
                     Label("Share Link", systemImage: "square.and.arrow.up")
@@ -162,10 +175,17 @@ struct InviteSheet: View {
         .padding(.horizontal, 24).padding(.top, 32)
         .frame(maxHeight: .infinity, alignment: .top)
         .presentationDetents([.medium])
-        .task {
-            do { invite = try await Cloud.createClientInvite() } catch {
-                problem = (error as? Cloud.Failure)?.message ?? "Couldn’t make an invite. Try again."
-            }
+        .task { await make() }
+    }
+
+    private func make() async {
+        let given = name.trimmingCharacters(in: .whitespaces)
+        do {
+            invite = try await Cloud.createClientInvite(name: asking ? given : nil)
+            asking = false
+        } catch {
+            let message = (error as? Cloud.Failure)?.message
+            if message?.contains(Cloud.nameNeeded) == true { asking = true } else { problem = message ?? "Couldn’t make an invite. Try again." }
         }
     }
 }

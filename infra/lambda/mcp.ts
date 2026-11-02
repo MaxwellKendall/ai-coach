@@ -15,7 +15,7 @@ import * as progress from "./progress.ts";
 import { clock, distanceName, goalMeters, meters, MILE, miles, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
-import { comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, list as linked, postComment, type Person } from "./coach.ts";
+import { comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, NAME_NEEDED, list as linked, postComment, type Person } from "./coach.ts";
 import { ensureSample, isSample } from "./sample.ts";
 import { fingerprint } from "./programStats.ts";
 import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
@@ -971,7 +971,10 @@ export async function callTool(name: string, args: Args, account: Account, store
       return `${text}${shown}`;
     }
     case "invite_client": {
-      const made = await store.invite(uid);
+      // FIT-228: an invite says who it's from, so a coach with no name gives one first.
+      const made = await store.invite(uid).catch((e: Error) => {
+        throw e.message === NAME_NEEDED ? new Error("Their account has no name, and the invite should say who it's from. Ask for the name to show their clients, save it with set_profile name, then invite again.") : e;
+      });
       return `Invite link: ${made.url}\nOr the code: ${made.code}, typed on "Join your coach" in the app.\nSend it to one client. They open it on their phone, install the free Barbrabell app and accept; then they're your client here. It works once, for ${INVITE_DAYS} days.`;
     }
     case "get_day": {

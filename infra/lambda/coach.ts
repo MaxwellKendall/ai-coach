@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DeleteCommand, DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { HAS_PLAN, planRecord } from "./coachPlan.ts";
 import { ensureSample } from "./sample.ts";
@@ -36,6 +36,15 @@ async function nameOf(uid: string, claims?: Record<string, unknown>) {
   if (fromToken) return fromToken;
   const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROFILE" } }));
   return (Item?.displayName as string | undefined)?.trim() || null;
+}
+
+/** The account's name on what it shares, as set_profile name saves it. */
+export async function setDisplayName(uid: string, name: string, now = new Date()) {
+  await db.send(new UpdateCommand({
+    TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROFILE" },
+    UpdateExpression: "SET displayName = :n, updatedAt = :u, createdAt = if_not_exists(createdAt, :u), #id = :id",
+    ExpressionAttributeNames: { "#id": "uid" }, ExpressionAttributeValues: { ":n": name, ":u": now.toISOString(), ":id": uid },
+  }));
 }
 
 export async function isCoachOf(coach: string, client: string) {
@@ -83,14 +92,21 @@ export async function coaching(uid: string) {
   return (Items?.length ?? 0) > 0;
 }
 
-export async function createInvite(coach: string, claims: Record<string, unknown> | undefined, now = new Date()) {
+/** FIT-228: a coach with no name on their account is asked for one before an invite, so the client knows who it's from. */
+export const NAME_NEEDED = "Add your name first, so your client knows who's inviting them.";
+
+export async function createInvite(coach: string, claims: Record<string, unknown> | undefined, now = new Date(), given?: string | null) {
+  const name = given?.trim().slice(0, 40);
+  if (name) await setDisplayName(coach, name, now);
+  const coachName = name || (await nameOf(coach, claims));
+  if (!coachName) throw new CoachError(NAME_NEEDED);
   const code = newCode();
   await db.send(new TransactWriteCommand({
     TransactItems: [{
       Put: {
         TableName: TABLE(),
         Item: {
-          PK: `COACHINVITE#${code}`, SK: "META", coachUid: coach, coachName: await nameOf(coach, claims),
+          PK: `COACHINVITE#${code}`, SK: "META", coachUid: coach, coachName,
           createdAt: now.toISOString(), expiresAt: Math.floor(now.getTime() / 1000) + INVITE_DAYS * 86_400,
         },
         ConditionExpression: "attribute_not_exists(PK)",
@@ -200,7 +216,7 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
   const args = event.arguments;
   try {
     switch (event.info.fieldName) {
-      case "createClientInvite": return await createInvite(me, identity.claims);
+      case "createClientInvite": return await createInvite(me, identity.claims, new Date(), args.name);
       case "coachInvite": return await inviteName(args.code);
       case "acceptCoach": return await accept(me, args.code, identity.claims);
       case "myCoaches": return await list(me, "COACH#");

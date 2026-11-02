@@ -225,7 +225,8 @@ type Mutation {
   "FIT-144: a Stripe customer portal URL for the coach's billing, or null without a plan."
   coachBillingPortal: String
   "FIT-130: a single-use link for someone to make me their coach (14 days)."
-  createClientInvite: ClientInvite
+  # FIT-228: name, when the coach has none yet, is saved as theirs and put on the invite.
+  createClientInvite(name: String): ClientInvite
   "FIT-130: make the invite's coach mine; returns the coach."
   acceptCoach(code: String!): Person
   "FIT-130: end a link, as the client (unlinkCoach) or the coach (removeClient)."

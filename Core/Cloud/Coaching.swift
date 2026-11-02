@@ -29,8 +29,13 @@ extension Cloud {
         try await run("query { myClients { uid name since } }", at: "myClients", query: true)
     }
 
-    @MainActor static func createClientInvite() async throws -> ClientInvite {
-        try await run("mutation { createClientInvite { code url } }", at: "createClientInvite")
+    /// FIT-228: the server's answer to a coach with no name; `name` is then saved as theirs and put on the invite.
+    static let nameNeeded = "Add your name first, so your client knows who's inviting them."
+
+    @MainActor static func createClientInvite(name: String? = nil) async throws -> ClientInvite {
+        var variables: [String: Any] = [:]
+        if let name { variables["n"] = name }
+        return try await run("mutation($n: String) { createClientInvite(name: $n) { code url } }", variables, at: "createClientInvite")
     }
 
     /// Every unit the client has, newest copy of each, key → body; deleted ones left out.
