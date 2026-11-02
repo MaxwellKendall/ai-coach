@@ -224,6 +224,44 @@ struct ReadyProgramTests {
         #expect(!["edited", "asked for", "From Sam", "30 min available"].contains(where: ReadyProgram.Why.explains))
     }
 
+    /// FIT-321: a wave lift is set by the week of its 3-week cycle on a training max that rises each cycle; deload
+    /// weeks are light and don't count. An in-test program, as none in the seed uses waves yet.
+    @Test func wavesOnATrainingMax() {
+        let waves = ReadyProgram(slug: "waves", name: "Waves", summary: "", level: "some", place: .gym, days: [3], weeks: 12,
+                                 minutes: 45, equipment: ["barbell", "rack"],
+                                 sessions: [.init(name: "Day A", exercises: [
+                                    .init(exercise: "back-squat", sets: 3, start: 135, step: 10, main: true, wave: true)])])
+        func squat(_ index: Int, starts: [StartingSet] = []) -> [PlannedWorkout] {
+            var s = settings(Profile.allEquipment, days: [0])
+            s.starts = starts
+            let week = waves.week(startingOn: ProgramPlan.monday(index, start: date(10, 25), calendar: calendar), start: date(10, 25),
+                                  settings: s, catalog: catalog, history: [], program: twelve, calendar: calendar)
+            return working(week, "back-squat")
+        }
+        func sets(_ rows: [PlannedWorkout]) -> [String] {
+            rows.map { "\(Int($0.target("sets")!))×\(Int($0.target("reps")!))@\(Int($0.target("load_lb")!))" }
+        }
+        let r5 = TrainingGenerator.roundTo5
+        // Training max 135 (the start): 65, 75, 85% × 5, then 5 × 5 at 65%.
+        #expect(sets(squat(0)) == ["1×5@90", "1×5@100", "1×5@115", "5×5@90"])
+        #expect(squat(0).allSatisfy { $0.adjustedReason == nil })
+        #expect(sets(squat(1)) == ["1×3@\(Int(r5(135 * 0.7)))", "1×3@\(Int(r5(135 * 0.8)))", "1×3@\(Int(r5(135 * 0.9)))", "5×5@\(Int(r5(135 * 0.7)))"])
+        #expect(squat(2).map { $0.target("reps")! } == [5, 3, 1, 5])
+        // A new cycle: 10 lb more on the training max, and it says so.
+        #expect(squat(3).first?.target("load_lb") == r5(145 * 0.65))
+        #expect(squat(3).first?.adjustedReason == "+10 lb on the training max: a new wave")
+        // Week 7 is the deload: three light sets. Week 8 starts the third cycle, as the deload didn't count.
+        #expect(twelve[6].kind == .deload)
+        #expect(sets(squat(6)) == ["1×5@\(Int(r5(155 * 0.65 * 0.87)))", "1×5@\(Int(r5(155 * 0.75 * 0.87)))", "1×5@\(Int(r5(155 * 0.85 * 0.87)))"])
+        #expect(squat(6).first?.adjustedReason == "Deload week: lighter, to recover")
+        #expect(squat(7).first?.target("load_lb") == r5(155 * 0.65) && squat(7).first?.target("reps") == 5)
+        // From a recent set: 225 × 5 estimates 253, so a training max of 230.
+        let recent = StartingSet(exercise: "back-squat", measurements: [Measurement(metric: "load_lb", value: 225, unit: "lb"),
+                                                                         Measurement(metric: "reps", value: 5, unit: "reps")])
+        #expect(squat(0, starts: [recent]).first?.target("load_lb") == r5(230 * 0.65))
+        #expect(ReadyProgram.Why.explains("+10 lb on the training max: a new wave"))
+    }
+
     /// A ready-made program's weeks are its 12, with deloads but no phases or test week, and need no age or weight.
     @Test func profileWeeks() {
         let profile = Profile(age: 0, weightLb: 0)
