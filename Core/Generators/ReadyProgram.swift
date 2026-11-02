@@ -47,6 +47,8 @@ struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
         var main: Bool?
         /// Consecutive items with one number are a superset, done in rounds.
         var group: Int?
+        /// FIT-321: percentage waves on a training max (`ReadyProgram.wave`), instead of reps and a progression rule.
+        var wave: Bool?
 
         var choices: [String] { ladder ?? ([exercise].compactMap { $0 } + (or ?? [])) }
     }

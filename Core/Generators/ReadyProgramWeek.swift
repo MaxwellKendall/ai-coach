@@ -22,6 +22,7 @@ extension ReadyProgram {
         case oneMoreRep(reps: Double)
         case nextRung
         case longerHold(seconds: Double)
+        case newWave(step: Double)
         case deload
 
         var text: String {
@@ -33,6 +34,7 @@ extension ReadyProgram {
             case let .oneMoreRep(reps): "One more rep: \(Coach.number(reps)) a set"
             case .nextRung: "Next step: top of the range on every set"
             case let .longerHold(seconds): "+5 s: \(Coach.number(seconds)) s a set"
+            case let .newWave(step): "+\(Coach.number(step)) lb on the training max: a new wave"
             case .deload: "Deload week: lighter, to recover"
             }
         }
@@ -72,6 +74,16 @@ extension ReadyProgram {
             let session = sessions[(before + offset) % sessions.count]
             let date = calendar.date(byAdding: .minute, value: settings.workoutTime, to: calendar.startOfDay(for: day))!
             for item in session.exercises {
+                if item.wave == true {
+                    let rows = wave(item, on: date, session: session.name, week: index, light: lightWeeks, allowed: allowed,
+                                    catalog: byslug, starts: settings.starts)
+                    if let first = rows.first, first.main, let load = first.target("load_lb"), load >= 95,
+                       let warmup = TrainingGenerator.warmup(for: first, settings: settings, tier: AgeTier.of(age: settings.age)) {
+                        workouts.append(warmup)
+                    }
+                    workouts += rows
+                    continue
+                }
                 guard let row = dose(item, on: date, session: session.name, allowed: allowed, catalog: byslug, starts: settings.starts,
                                      history: past, light: light, calendar: calendar) else { continue }
                 if row.main, let load = row.target("load_lb"), load >= 95,
@@ -166,6 +178,42 @@ extension ReadyProgram {
         }
         return PlannedWorkout(date: date, session: session, exercise: slug, targets: targets, note: note,
                               adjustedReason: why?.text, group: item.group, main: item.main ?? false)
+    }
+
+    /// FIT-321: a lift's sets by the week of its 3-week cycle, as percentages of a training max, then 5 × 5 at the
+    /// day's first percentage; one row a set, which Today shows as one lift.
+    static let waves: [[(percent: Double, reps: Double)]] = [
+        [(0.65, 5), (0.75, 5), (0.85, 5)],
+        [(0.70, 3), (0.80, 3), (0.90, 3)],
+        [(0.75, 5), (0.85, 3), (0.95, 1)],
+    ]
+
+    /// The training max: 90% of the estimated max from their recent set of the lift, else the program's start; up the
+    /// item's step (5 lb upper body, 10 lower) after each cycle. Deload weeks don't count toward a cycle and stay light:
+    /// the first week's three sets, lighter, without the 5 × 5.
+    private func wave(_ item: Item, on date: Date, session: String, week index: Int, light: Set<Int>, allowed: Set<String>,
+                      catalog: [String: Exercise], starts: [StartingSet]) -> [PlannedWorkout] {
+        guard let slug = item.choices.first(where: { allowed.contains($0) && catalog[$0] != nil }) else { return [] }
+        let step = item.step ?? 5
+        let recent = starts.first { $0.exercise == slug }.flatMap { set -> Double? in
+            guard let load = set.value("load_lb"), let reps = set.value("reps") else { return nil }
+            return TrainingGenerator.roundTo5(ProgramPlan.estimatedMax(load: load, reps: reps) * 0.9)
+        }
+        guard let base = recent ?? item.start else { return [] }
+        let done = (0..<max(0, index)).filter { !light.contains($0) }.count
+        let cycle = done / 3, trainingMax = base + Double(cycle) * step
+        let deload = light.contains(index)
+        let sets = deload ? Self.waves[0] : Self.waves[done % 3]
+        let why: Why? = deload ? .deload : cycle > 0 && done % 3 == 0 ? .newWave(step: step) : nil
+        func row(_ percent: Double, _ reps: Double, count: Int) -> PlannedWorkout {
+            let load = TrainingGenerator.roundTo5(trainingMax * percent * (deload ? TrainingGenerator.deloadLoad : 1))
+            return PlannedWorkout(date: date, session: session, exercise: slug,
+                                  targets: [Measurement(metric: "sets", value: Double(count), unit: "sets"),
+                                            Measurement(metric: "reps", value: reps, unit: "reps"),
+                                            Measurement(metric: "load_lb", value: load, unit: "lb")],
+                                  adjustedReason: why?.text, main: item.main ?? false)
+        }
+        return sets.map { row($0.percent, $0.reps, count: 1) } + (deload ? [] : [row(sets[0].percent, 5, count: 5)])
     }
 
     /// Every working set planned was done, at `value` or more.
