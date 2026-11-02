@@ -39,6 +39,17 @@ struct HowToPhotos: View {
     }
 }
 
+/// FIT-319: the exercise's demo on YouTube, when it has one.
+struct HowToVideo: View {
+    let slug: String
+
+    var body: some View {
+        if let url = ExerciseVideos.bundled[slug] {
+            Link(destination: url) { Label("Watch a Demo", systemImage: "play.rectangle") }
+        }
+    }
+}
+
 /// The how-to for one exercise, from a session (FIT-75).
 struct HowToSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -52,6 +63,7 @@ struct HowToSheet: View {
                 if !ExercisePhotos.urls(slug).isEmpty {
                     Section { HowToPhotos(slug: slug) }.listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
                 }
+                if ExerciseVideos.bundled[slug] != nil { Section { HowToVideo(slug: slug) } }
                 if !steps.isEmpty { Section { HowToSteps(steps: steps) } }
             }
                 .navigationTitle(name)

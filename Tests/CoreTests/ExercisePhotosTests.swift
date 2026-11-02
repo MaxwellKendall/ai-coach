@@ -26,6 +26,16 @@ struct ExercisePhotosTests {
         #expect(ExercisePhotos.bundled == (try ExercisePhotos.map(json: json, catalog: catalog)).photos)
     }
 
+    /// FIT-319: every program exercise has a YouTube demo, and every link is a YouTube video of a catalog exercise.
+    @Test func programExercisesHaveVideos() {
+        #expect(programExercises.filter { ExerciseVideos.bundled[$0] == nil }.isEmpty)
+        let slugs = Set(catalog.map(\.slug))
+        for (slug, url) in ExerciseVideos.bundled {
+            #expect(slugs.contains(slug), "\(slug)")
+            #expect(url.host() == "www.youtube.com" && url.path() == "/watch" && url.query()?.hasPrefix("v=") == true, "\(url)")
+        }
+    }
+
     /// FIT-318: on the site, under /exercises/, by free-exercise-db's own paths; none for an exercise without photos.
     @Test func urlsOnTheSite() {
         let base = Backend.current.web.absoluteString
