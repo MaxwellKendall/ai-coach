@@ -296,6 +296,11 @@ describe("agent-first onboarding (FIT-150)", () => {
     const low = await callTool("change_goal", { goal_id: id, target: 200 }, fresh, store, now);
     expect(low).toMatch(/Their starting set already estimates \d+ lb, so this target is already met/);
     await callTool("change_goal", { goal_id: id, target: 235 }, fresh, store, now);
+    // FIT-307: a max goal starts from the starting set (185 × 5 estimates 208), and new starting sets move it.
+    expect(JSON.parse(units.new[`goal#${id}`]).baseline).toBe(208);
+    expect(await callTool("set_profile", { starting_sets: [{ exercise: "back squat", weight_lb: 215, reps: 1 }] }, fresh, store, now))
+      .toMatch(/1 goal now starts from the new starting sets/);
+    expect(JSON.parse(units.new[`goal#${id}`]).baseline).toBe(215);
     await callTool("add_goal", { type: "body_weight", target: 185 }, fresh, store, now);
     const ctx = await callTool("get_context", {}, fresh, store, now);
     expect(ctx).not.toMatch(/NOT SET UP YET/);
