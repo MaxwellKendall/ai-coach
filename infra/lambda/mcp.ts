@@ -614,9 +614,9 @@ function describeProgress(units: Units, today: string, nowSec: number, tz: strin
     const lines = [`- ${name}: target ${n(g.target)}${u}${g.deadline ? ` by ${dayOf(new Date(g.deadline * 1000), tz)}` : ""} [goal_id ${g.id}]`];
     if (now === undefined) lines.push(time ? "  No runs since the program started to predict from (log_run)." : "  Nothing logged toward it yet.");
     else {
-      lines.push(`  Now ${n(now)}${u}${time ? " predicted from their runs" : ""}${g.baseline !== undefined ? `, from ${n(first)} at the start: ${Math.round(progress.fraction(first, now, g.target) * 100)}% of the way` : ""}.`);
+      lines.push(`  Now ${n(now)}${u}${time ? " predicted from their runs" : ""}${g.baseline !== undefined ? `, from ${n(first)} at the start: ${Math.round(progress.fraction(g.metric, first, now, g.target) * 100)}% of the way` : ""}.`);
       if (program && end && profile?.programStart && option) {
-        const p = progress.pace(first, now, g.target, week, program.weeks);
+        const p = progress.pace(g.metric, first, now, g.target, week, program.weeks);
         const fc = progress.forecast(first, now, profile.programStart, nowSec, end);
         const per = progress.perWeek(now, g.target, nowSec, end);
         lines.push(`  ${PACE[p][0].toUpperCase()}${PACE[p].slice(1)}.${fc !== undefined ? ` At this rate, ${time ? clock(fc) : `${progress.number(Math.round(fc * 10) / 10)} ${g.unit}`} by ${program.target}.` : ""} `
@@ -1250,7 +1250,7 @@ export async function callTool(name: string, args: Args, account: Account, store
           return `Added: ${distanceName(race)} in ${clock(body.target)}${by ? ` by ${by}` : ""} [goal_id ${id}].`
             + (body.baseline !== undefined ? ` Their runs put them at ${clock(body.baseline)} now.` : " Ask for their last race or a recent hard run (distance and time) and save it as a starting set.");
         }
-        return `Added: ${body.metric} ${body.target} ${body.unit}${by ? ` by ${by}` : ""} [goal_id ${id}].`;
+        return `Added: ${body.metric} ${body.target} ${body.unit}${by ? ` by ${by}` : ""} [goal_id ${id}].` + pastTarget(body);
       }
       const current = units.get(`goal#${args.goal_id}`);
       if (!current) throw new Error("No goal with that goal_id; get_context lists them.");
@@ -1262,11 +1262,20 @@ export async function callTool(name: string, args: Args, account: Account, store
         if (deadline !== undefined) goal.deadline = deadline;
       }
       await store.write(uid, [{ key: `goal#${args.goal_id}`, body: encode(goal) }], account.agent);
-      return name === "drop_goal" ? "Dropped." : `Changed: ${goal.metric} ${goal.target} ${goal.unit}${by ? ` by ${by}` : ""}.`;
+      return name === "drop_goal" ? "Dropped." : `Changed: ${goal.metric} ${goal.target} ${goal.unit}${by ? ` by ${by}` : ""}.` + pastTarget(goal);
     }
     default:
       throw new Error(`Unknown tool ${name}. The tools: ${tools.map((t) => t.name).join(", ")}.`);
   }
+}
+
+/**
+ * FIT-263: a max or reps target at or below where they start is no goal: it reads as reached on day one. Saved as
+ * asked, with a word to the agent to check it.
+ */
+function pastTarget(goal: { metric: string; target: number; baseline?: number; unit: string }) {
+  if (goal.baseline === undefined || !/\.(1rm_lb|reps)$/.test(goal.metric) || goal.target > goal.baseline) return "";
+  return ` Their starting set already estimates ${progress.number(goal.baseline)} ${goal.unit}, so this target is already met; ask whether they meant one above it (change_goal).`;
 }
 
 // ---- MCP over HTTP ----

@@ -291,6 +291,10 @@ describe("agent-first onboarding (FIT-150)", () => {
     const added = await callTool("add_goal", { type: "lift_max", exercise: "Back Squat", target: 225, by: "2027-03-01" }, fresh, store, now);
     const id = added.match(/goal_id (\S+)\]/)![1];
     expect(JSON.parse(units.new[`goal#${id}`])).toMatchObject({ kind: "training", metric: "back-squat.1rm_lb", target: 225, unit: "lb", status: "active" });
+    expect(added).not.toMatch(/already met/);
+    // FIT-263: a target at or below where their starting set puts them is saved, with a word to check it.
+    const low = await callTool("change_goal", { goal_id: id, target: 200 }, fresh, store, now);
+    expect(low).toMatch(/Their starting set already estimates \d+ lb, so this target is already met/);
     await callTool("change_goal", { goal_id: id, target: 235 }, fresh, store, now);
     await callTool("add_goal", { type: "body_weight", target: 185 }, fresh, store, now);
     const ctx = await callTool("get_context", {}, fresh, store, now);
