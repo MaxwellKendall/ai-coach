@@ -75,6 +75,8 @@ struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
     var optional: [String]?
     /// Done in turn, one per training day, carrying on across weeks.
     var sessions: [Session]
+    /// FIT-325: what to move on to after its last week, best first; itself to go round again from where they are.
+    var next: [String]?
 
     var id: String { slug }
 
@@ -102,6 +104,18 @@ struct ReadyProgram: Codable, Equatable, Identifiable, Sendable {
                 return key(a).lexicographicallyPrecedes(key(b))
             }
             .map(\.element)
+    }
+
+    /// FIT-325: the program to offer once this one's done: the first of `next` that runs on their number of days
+    /// (Strength Waves only on 3), else the first; this one again without a `next`.
+    func following(days count: Int) -> ReadyProgram {
+        let options = (next ?? []).compactMap(Self.named)
+        return options.first { $0.days.contains(count) } ?? options.first ?? self
+    }
+
+    /// FIT-325: past its last week, on `date`.
+    func isFinished(started start: Date, on date: Date, calendar: Calendar = .current) -> Bool {
+        ProgramPlan.week(of: date, start: start, calendar: calendar) >= weeks
     }
 
     /// Its days a week closest to `wanted`, the fewer on a tie.

@@ -40,6 +40,8 @@ export type ReadyProgram = {
   equipment: string[];
   optional?: string[];
   sessions: { name: string; exercises: Item[] }[];
+  /** FIT-325: what to move on to after its last week (the app's ReadyProgram.following). */
+  next?: string[];
 };
 
 /** "What do you have?": each line and the catalog equipment it stands for. */
