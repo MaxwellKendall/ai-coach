@@ -22,13 +22,14 @@ struct ProgramPicker: View {
         var days: Int
         var goal: ReadyProgram.Goal?
         var lifted: Bool?
-        var recent: StartingSet?
+        /// FIT-323: a recent set of each lift asked about (one, or Strength Waves' four).
+        var recent: [StartingSet] = []
 
-        /// The program these answers pick, whose main lift the recent set is of.
+        /// The program these answers pick, whose main lifts the recent sets are of.
         var pick: ReadyProgram? { ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted).first }
     }
 
-    enum Step: Hashable { case lifted, kit, kitDetail, days, recent(String, Answers), program(Answers) }
+    enum Step: Hashable { case lifted, kit, kitDetail, days, recent([String], Answers), program(Answers) }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -60,18 +61,18 @@ struct ProgramPicker: View {
                             option("\(count) days") {
                                 let answers = Answers(have: have, days: count, goal: goal, lifted: lifted)
                                 // Someone who's lifted gives a recent set first, when the program has a lift to load.
-                                if lifted == true, let lift = answers.pick?.mainLift?.exercise {
-                                    path.append(.recent(lift, answers))
+                                if lifted == true, let lifts = answers.pick?.recentLifts, !lifts.isEmpty {
+                                    path.append(.recent(lifts, answers))
                                 } else {
                                     path.append(.program(answers))
                                 }
                             }
                         }
                     }
-                case .recent(let lift, let answers):
-                    RecentSetStep(exercise: lift, perHand: answers.pick?.place == .dumbbells) { set in
+                case .recent(let lifts, let answers):
+                    RecentSetStep(exercises: lifts, perHand: answers.pick?.place == .dumbbells) { sets in
                         var answers = answers
-                        answers.recent = set
+                        answers.recent = sets
                         path.append(.program(answers))
                     }
                 case .program(let answers):
@@ -221,7 +222,7 @@ private struct ProgramChoice: View {
     var days: Int
     var goal: ReadyProgram.Goal?
     var lifted: Bool?
-    var recent: StartingSet?
+    var recent: [StartingSet]
     var onStart: () -> Void
 
     @State private var selected: ReadyProgram?
@@ -274,7 +275,7 @@ private struct ProgramChoice: View {
     /// FIT-297: the outcome first: the plan's promise from their own set and the line to it, then the program.
     private func header(_ program: ReadyProgram) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            PlanReveal(program: program, days: trainingDays.count, recent: recent,
+            PlanReveal(program: program, days: trainingDays.count, recent: program.recent(in: recent),
                        ends: Calendar.current.date(byAdding: .day, value: program.weeks * 7 - 1, to: .now) ?? .now)
             Text(program.summary).font(.body).foregroundStyle(Color.inkMuted).padding(.top, 14)
             Text([Self.level(program), "\(program.weeks) weeks", "about \(program.minutes) min a session"].joined(separator: " · "))
@@ -382,8 +383,8 @@ private struct ProgramChoice: View {
     private func start(_ program: ReadyProgram) {
         guard let profile = profiles.first else { return }
         do {
-            // FIT-281: the recent set, while it's of this program's main lift.
-            let starts = [recent].compactMap { $0 }.filter { $0.exercise == program.mainLift?.exercise }
+            // FIT-281: the recent sets, while they're of this program's lifts (FIT-323: each of Strength Waves' four).
+            let starts = recent.filter { program.recentLifts.contains($0.exercise) }
             try Planner.start(program, days: trainingDays, equipment: equipment, starts: starts, profile: profile, in: context)
             onStart()
         } catch {
@@ -415,53 +416,76 @@ private struct ProgramChoice: View {
 }
 
 /// FIT-281: "Your best recent Back Squat": a hard set from the last few months, which the plan starts a little under.
+/// FIT-323: Strength Waves asks for each of its four lifts on one screen; a lift left blank starts at the program's load.
 private struct RecentSetStep: View {
     @Query private var templates: [Template]
-    let exercise: String
+    let exercises: [String]
     let perHand: Bool
-    var onDone: (StartingSet?) -> Void
+    var onDone: ([StartingSet]) -> Void
 
-    @State private var weight = ""
-    @State private var reps = ""
+    @State private var weight: [String: String] = [:]
+    @State private var reps: [String: String] = [:]
     @FocusState private var focus: Field?
 
-    enum Field { case weight, reps }
+    struct Field: Hashable { var exercise: String, weight: Bool }
 
-    private var set: StartingSet? {
-        guard let load = Double(weight), (1...1000).contains(load), let count = Int(reps), (1...12).contains(count) else { return nil }
-        return StartingSet.recent(exercise, weight: load, reps: Double(count), perHand: perHand)
+    /// Nil while a lift is half filled or out of range; else the sets given, which may be none.
+    private var sets: [StartingSet]? {
+        var sets: [StartingSet] = []
+        for exercise in exercises {
+            let w = weight[exercise, default: ""], r = reps[exercise, default: ""]
+            if w.isEmpty && r.isEmpty { continue }
+            guard let load = Double(w), (1...1000).contains(load), let count = Int(r), (1...12).contains(count) else { return nil }
+            sets.append(StartingSet.recent(exercise, weight: load, reps: Double(count), perHand: perHand))
+        }
+        return sets
     }
 
+    private func name(_ exercise: String) -> String { templates.first { $0.slug == exercise }?.name ?? exercise }
+
     var body: some View {
-        let name = templates.first { $0.slug == exercise }?.name ?? exercise
+        let one = exercises.count == 1
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Your best recent \(name)").font(.system(size: 32, weight: .bold)).tracking(-0.4)
-                Text("A hard set from the last few months, 1 to 12 reps. Your plan starts a little under it.")
+                Text(one ? "Your best recent \(name(exercises[0]))" : "Your best recent sets").font(.system(size: 32, weight: .bold)).tracking(-0.4)
+                Text(one ? "A hard set from the last few months, 1 to 12 reps. Your plan starts a little under it."
+                         : "A hard set of each from the last few months, 1 to 12 reps. Leave any you don’t know.")
                     .font(.body).foregroundStyle(.secondary).padding(.top, 8).padding(.bottom, 28)
-                HStack(spacing: 12) {
-                    field($weight, perHand ? "lb a hand" : "lb", .weight, keyboard: .decimalPad)
-                    Text("×").font(.title2).foregroundStyle(.secondary)
-                    field($reps, "reps", .reps, keyboard: .numberPad)
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(exercises, id: \.self) { exercise in
+                        VStack(alignment: .leading, spacing: 8) {
+                            if !one { Text(name(exercise)).font(.subheadline.weight(.semibold)) }
+                            HStack(spacing: 12) {
+                                field(binding(true, exercise), perHand ? "lb a hand" : "lb", Field(exercise: exercise, weight: true), keyboard: .decimalPad)
+                                Text("×").font(.title2).foregroundStyle(.secondary)
+                                field(binding(false, exercise), "reps", Field(exercise: exercise, weight: false), keyboard: .numberPad)
+                            }
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 24)
             .padding(.top, 8)
         }
         .toolbarTitleDisplayMode(.inline)
-        .onAppear { focus = .weight }
+        .onAppear { focus = Field(exercise: exercises[0], weight: true) }
         .safeAreaBar(edge: .bottom) {
             VStack(spacing: 4) {
-                Button { onDone(set) } label: {
+                Button { onDone(sets ?? []) } label: {
                     Text("Continue").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
                 }
                 .buttonStyle(.primary)
-                .disabled(set == nil)
-                Button("I’m Not Sure") { onDone(nil) }
+                .disabled(sets?.isEmpty != false)
+                Button("I’m Not Sure") { onDone([]) }
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .padding(.horizontal, 24).padding(.bottom, 8)
         }
+    }
+
+    private func binding(_ which: Bool, _ exercise: String) -> Binding<String> {
+        Binding(get: { (which ? weight : reps)[exercise, default: ""] },
+                set: { if which { weight[exercise] = $0 } else { reps[exercise] = $0 } })
     }
 
     private func field(_ text: Binding<String>, _ unit: String, _ which: Field, keyboard: UIKeyboardType) -> some View {
