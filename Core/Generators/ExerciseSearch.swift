@@ -41,9 +41,10 @@ enum ExerciseSearch {
     }
 
     /// The exercises to offer before anything's typed: the author's cards and the staples the user can do.
-    /// FIT-300: what a warm-up is usually made of, easy cardio first, then mobility and activation.
+    /// FIT-300: what a warm-up is usually made of, easy cardio first, then mobility and activation. FIT-306: not
+    /// "air-bike", which in free-exercise-db is the bicycle crunch on the floor (core), not a fan bike.
     static let warmupSlugs = [
-        "rowing-stationary", "bicycling-stationary", "air-bike", "elliptical-trainer", "jogging-treadmill", "rope-jumping", "star-jump",
+        "rowing-stationary", "bicycling-stationary", "elliptical-trainer", "jogging-treadmill", "rope-jumping", "star-jump",
         "bodyweight-squat", "bodyweight-walking-lunge", "butt-lift-bridge", "dead-bug", "band-pull-apart", "external-rotation-with-band",
         "monster-walk", "scapular-pull-up",
     ]
