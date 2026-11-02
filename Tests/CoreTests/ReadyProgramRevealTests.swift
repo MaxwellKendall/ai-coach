@@ -89,8 +89,8 @@ struct PlanRevealHeadlineTests {
         var answers = ProgramPicker.Answers(have: ProgramPicker.places[0].equipment, days: 4, goal: .strength, lifted: true)
         let program = try #require(answers.pick)
         #expect(program.slug == "upper-lower-4" && program.mainLift?.exercise == "bench-press")
-        answers.recent = StartingSet.recent("bench-press", weight: 185, reps: 5, perHand: false)
-        let reveal = program.projection(days: answers.days, deloads: program.deloads, recent: answers.recent)
+        answers.recent = [StartingSet.recent("bench-press", weight: 185, reps: 5, perHand: false)]
+        let reveal = program.projection(days: answers.days, deloads: program.deloads, recent: program.recent(in: answers.recent))
         #expect(reveal?.from == 185)
     }
 
@@ -103,5 +103,12 @@ struct PlanRevealHeadlineTests {
     @Test func hasNoLoadForBodyWeight() {
         let program = ReadyProgram.named("bodyweight-basics")!
         #expect(PlanReveal.headline(program, reveal: nil, exercise: "", ends: ends) == "Bodyweight Basics: 12 weeks, done by Jan 16")
+    }
+
+    /// FIT-323: Strength Waves asks for a recent set of each of its four lifts; the others, of their main lift.
+    @Test func asksForEachWaveLift() {
+        #expect(ReadyProgram.named("strength-waves")?.recentLifts == ["back-squat", "bench-press", "deadlift", "standing-military-press"])
+        #expect(ReadyProgram.named("full-body-3")?.recentLifts == ["back-squat"])
+        #expect(ReadyProgram.named("bodyweight-basics")?.recentLifts == [])
     }
 }

@@ -107,6 +107,13 @@ extension ReadyProgram {
         return Projection(exercise: slug, loads: loads, perHand: place == .dumbbells, from: from)
     }
 
+    /// FIT-323: the lifts the quiz asks a recent set of: each wave lift (a training max apiece), else the main lift.
+    var recentLifts: [String] {
+        let waves = sessions.flatMap(\.exercises).filter { $0.wave == true }.compactMap(\.exercise)
+        let lifts = waves.isEmpty ? [mainLift?.exercise].compactMap { $0 } : waves
+        return lifts.reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+    }
+
     /// The quiz's recent set as `Profile.starts` keeps it.
     func recent(in starts: [StartingSet]) -> StartingSet? {
         mainLift.flatMap { lift in starts.first { $0.exercise == lift.exercise } }
