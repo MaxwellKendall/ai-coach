@@ -152,6 +152,18 @@ struct ExerciseSearchTests {
         let common = ExerciseSearch.suggestions(in: catalog, names: names, settings: settings(Set(Profile.allEquipment)))
         #expect(common.count < 100 && common.contains("back-squat"))
     }
+
+    /// FIT-300: the warm-up picker offers cardio and mobility, every one in the catalog, and only what the equipment allows.
+    @Test func warmupListFitsTheEquipment() {
+        let slugs = Set(catalog.map(\.slug))
+        #expect(ExerciseSearch.warmupSlugs.allSatisfy(slugs.contains))
+        let gym = ExerciseSearch.warmups(in: catalog, settings: settings(Set(Profile.allEquipment)))
+        #expect(gym.first == "rowing-stationary" && gym.contains("band-pull-apart"))
+        let bodyweight = ExerciseSearch.warmups(in: catalog, settings: settings([]))
+        #expect(!bodyweight.isEmpty && bodyweight.contains("bodyweight-squat"))
+        #expect(bodyweight.allSatisfy { slug in catalog.first { $0.slug == slug }!.equipment.isEmpty })
+        #expect(!ExerciseSearch.warmups(in: catalog, settings: settings([]), excluding: ["bodyweight-squat"]).contains("bodyweight-squat"))
+    }
 }
 
 /// FIT-75: how-to steps come with the catalog, and reach exercises already in a store.

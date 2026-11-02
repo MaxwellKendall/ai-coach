@@ -3,7 +3,7 @@ import SwiftData
 
 /// The app's tabs (FIT-64). The coach sits in the slot iOS 26 keeps for Search.
 enum AppTab: Hashable {
-    case today, program, progress, groups, coach
+    case clients, today, program, progress, groups, coach
 }
 
 /// What was said or typed to the coach, waiting for the screen that acts on it. That screen does the work in place

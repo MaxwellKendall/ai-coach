@@ -26,6 +26,9 @@ struct RootView: View {
     @State private var pendingCoach: String?
     @Environment(\.scenePhase) private var scenePhase
     @State private var joined: Cloud.GroupSummary?
+    /// FIT-298: coach mode, for someone who came in as a coach or has clients.
+    @State private var roster = Roster()
+    @AppStorage(Roster.coachingKey) private var coaching = false
 
     /// FIT-297: the plate colour picked on You (design system v2); Blue 20 until one is picked.
     static var accent: Color { Plate.current.accent }
@@ -34,6 +37,9 @@ struct RootView: View {
     /// FIT-64: the app's places as tabs, and the coach in the slot iOS 26 keeps for Search.
     var body: some View {
         TabView(selection: $tab) {
+            if coaching {
+                Tab("Clients", systemImage: "person.2", value: AppTab.clients) { ClientsScreen() }
+            }
             Tab("Today", systemImage: "figure.strengthtraining.traditional", value: AppTab.today) { TodayScreen() }
             Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
             Tab("Progress", systemImage: "chart.bar", value: AppTab.progress) { ProgramScreen(tabs: [.goals, .wins]) }
@@ -52,6 +58,13 @@ struct RootView: View {
             }
         }
         .environment(coach)
+        .environment(roster)
+        // FIT-298: a coach opens on their clients; one who has clients is a coach, whichever door they came in by.
+        .onChange(of: coaching, initial: true) { _, coaching in if coaching { tab = .clients } }
+        .task(id: account.user?.uid) {
+            guard account.user != nil, !coaching, let clients = try? await Cloud.myClients(), !clients.isEmpty else { return }
+            coaching = true
+        }
         .onChange(of: tab) { _, new in if new != .coach { lastTab = new } }
         // FIT-65: Talk to Coach opens the coach, which starts listening; without Apple Intelligence, Today.
         .onChange(of: navigator.coach, initial: true) { _, wanted in
@@ -79,6 +92,7 @@ struct RootView: View {
             if Pilot.simple {
                 if profile.programStart == nil, !welcomed { welcoming = true }
                 #if DEBUG
+                if Roster.sample { roster = Roster(clients: Roster.samples()); coaching = true }
                 // `-welcome YES` opens the first launch over any program, to look at it (FIT-296).
                 if UserDefaults.standard.bool(forKey: "welcome") { welcoming = true }
                 #endif

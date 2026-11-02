@@ -3,7 +3,8 @@ import SwiftData
 
 /// The workout (FIT-301, design A, https://claude.ai/artifact/UV27EdoNaNCytWRRxd38Sa): one card at a time. The
 /// warm-up first, a step each; then each set with its weight and reps big and − and + under them, and one Done that
-/// logs it and starts its rest; the rest as a countdown with +30 s and Skip. The list button shows the whole session
+/// logs it and starts its rest; the rest as a countdown with +30 s and Skip. A swipe to the left does what the card's
+/// button does, and one to the right goes back a card (the author, 2026-10-30). The list button shows the whole session
 /// and goes to any set. The last card is the log: Save writes it.
 struct WorkoutModeView: View {
     @Environment(\.modelContext) private var context
@@ -20,6 +21,9 @@ struct WorkoutModeView: View {
     @State private var peeking = false
     /// The warm-up step on screen; past the last, the sets.
     @State private var warmStep = 0
+    /// A card being dragged sideways, and whether the last move was back (the next card comes in from the left).
+    @State private var dragX: CGFloat = 0
+    @State private var backward = false
     @State private var rest: Rest?
     @State private var restsFinished = 0
     @State private var quitting = false
@@ -30,6 +34,7 @@ struct WorkoutModeView: View {
     @State private var message: String?
     /// FIT-53: groups I opted in to see each set as it happens.
     @State private var live: LiveShare?
+    @State private var activity = WorkoutActivity()
 
     /// The running rest, on its card.
     struct Rest: Equatable {
@@ -46,6 +51,7 @@ struct WorkoutModeView: View {
         let cards = draft.cards
         let names = names
         let warming = warmStep < draft.warmups.count
+        let lockScreen = lockScreen(cards: cards, names: names, warming: warming)
         VStack(spacing: 0) {
             topBar
             segments.padding(.horizontal, 22).padding(.top, 8)
@@ -62,7 +68,10 @@ struct WorkoutModeView: View {
                 }
             }
             .id("\(warming ? warmStep : -1) \(page)")
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            .transition(.asymmetric(insertion: .move(edge: backward ? .leading : .trailing).combined(with: .opacity), removal: .opacity))
+            .offset(x: dragX)
+            .rotationEffect(.degrees(Double(dragX) / 40))
+            .gesture(swipe(cards: cards))
             .padding(.horizontal, 22)
             .padding(.top, 16)
             footer(cards: cards, names: names, warming: warming)
@@ -76,6 +85,7 @@ struct WorkoutModeView: View {
             live?.update(draft.live(at: page, names: names))
         }
         .onChange(of: draft.rows.filter(\.done).count) { live?.update(draft.live(at: page, names: names)) }
+        .onChange(of: lockScreen) { activity.update(lockScreen) }
         .overlay {
             if voice.listening || working != nil {
                 ListeningVeil(voice: voice, working: working,
@@ -105,6 +115,7 @@ struct WorkoutModeView: View {
         // A phone that locks mid-set loses the clock; keep it awake while training.
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
+            activity.start(lockScreen)
             if Pilot.groups, account.user != nil, live == nil {
                 live = LiveShare(workout: draft.session, startedAt: startedAt)
                 live?.start()
@@ -113,6 +124,7 @@ struct WorkoutModeView: View {
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
+            activity.end()
             live?.end(saved: nil)
             live = nil
         }
@@ -208,6 +220,32 @@ struct WorkoutModeView: View {
         .padding(.vertical, 5)
         .animation(.snappy, value: draft.rows.filter(\.done).count)
         .accessibilityHidden(true)
+    }
+
+    // MARK: Lock Screen
+
+    /// FIT-304: the Live Activity's one card: the step on screen; during a rest, the set after it and the rest's end.
+    private func lockScreen(cards: [WorkoutDraft.Card], names: [String: String], warming: Bool) -> WorkoutActivityAttributes.ContentState {
+        let progress = draft.rows.isEmpty ? 0 : Double(draft.rows.filter(\.done).count) / Double(draft.rows.count)
+        if warming {
+            let step = draft.warmups[warmStep]
+            return .init(title: step.exercise.map { names[$0] ?? $0 } ?? "Row, bike or walk, easy",
+                         detail: "Warm-up · \(step.dose)", step: "\(warmStep + 1)/\(draft.warmups.count)", load: nil, restEnds: nil, progress: 0)
+        }
+        let line: [Int]? = if page >= cards.count { nil } else if case .set(let line) = cards[page] { line } else { nextSet(after: page, in: cards) }
+        guard let line else {
+            return .init(title: draft.session, detail: "Done · save it in Barbrabell", step: "✓", load: nil, restEnds: nil, progress: progress)
+        }
+        let rows = line.map { draft.rows[$0] }
+        let first = rows[0]
+        let rounds = draft.lines(block: first.block).count
+        let loads = rows.compactMap(\.load).reduce(into: [Double]()) { if !$0.contains($1) { $0.append($1) } }
+        let load = first.loadMetric == nil || loads.isEmpty ? nil
+            : loads.map(Coach.number).joined(separator: "/") + " " + (SetRow.units[first.loadMetric ?? "load_lb"] ?? "lb")
+        let values = rows.map { Coach.number($0.value ?? 0) }.joined(separator: "+")
+            + (first.metric == "reps" ? "" : " " + (SetRow.units[first.metric] ?? ""))
+        return .init(title: Self.names(rows, names), detail: "Set \(first.round + 1) of \(rounds) · " + (load.map { "\($0) × " } ?? "") + values,
+                     step: "\(first.round + 1)/\(rounds)", load: load, restEnds: rest?.ends, progress: progress)
     }
 
     // MARK: Set card
@@ -311,18 +349,53 @@ struct WorkoutModeView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let nextLine { Text(nextLine).font(.subheadline).foregroundStyle(Color.inkMuted).lineLimit(1) }
             if warming {
-                Button("Done") { withAnimation(.snappy) { warmStep += 1 } }.buttonStyle(.primary)
+                Button("Done") { forward(cards: cards) }.buttonStyle(.primary)
             } else if cards.indices.contains(page), case .set(let line) = cards[page] {
                 let done = line.allSatisfy { draft.rows[$0].done }
                 let restAfter: TimeInterval? = if cards.indices.contains(page + 1), case .rest(let seconds) = cards[page + 1] { seconds } else { nil }
                 Button(done ? "Next" : restAfter.map { "Done · rest \(Duration.seconds($0).formatted(.time(pattern: .minuteSecond)))" } ?? "Done") {
-                    _ = swiped(from: page, .next, cards: cards)
-                    withAnimation(.snappy) { page += 1 }
+                    forward(cards: cards)
                 }
                 .buttonStyle(.primary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The card's main action, from its button or a swipe to the left: a warm-up step is done, a set is logged and its
+    /// rest starts, a rest is skipped. The finish card stays (Save is its own button).
+    private func forward(cards: [WorkoutDraft.Card]) {
+        backward = false
+        if warmStep < draft.warmups.count { withAnimation(.snappy) { warmStep += 1 }; return }
+        guard cards.indices.contains(page) else { return }
+        _ = swiped(from: page, .next, cards: cards)
+        withAnimation(.snappy) { page += 1 }
+    }
+
+    /// A swipe to the right: the card before, the last warm-up step before the first set. A rest still running keeps
+    /// running, and nothing is unlogged.
+    private func back() {
+        backward = true
+        withAnimation(.snappy) {
+            if warmStep < draft.warmups.count { warmStep = max(0, warmStep - 1) }
+            else if page > 0 { page -= 1 }
+            else if !draft.warmups.isEmpty { warmStep = draft.warmups.count - 1 }
+        }
+    }
+
+    /// The card follows a sideways drag; far enough (or flicked) and it goes forward or back, else it springs home.
+    private func swipe(cards: [WorkoutDraft.Card]) -> some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                dragX = value.translation.width
+            }
+            .onEnded { value in
+                let distance = value.predictedEndTranslation.width
+                withAnimation(.snappy) { dragX = 0 }
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                if distance < -120 { forward(cards: cards) } else if distance > 120 { back() }
+            }
     }
 
     /// "Next: Back Squat · 170 × 5", from the step on screen.
@@ -424,6 +497,17 @@ struct WorkoutModeView: View {
                 }
             }
             HStack(spacing: 10) {
+                // FIT-304: a rest can be cut short as well as stretched; one that runs out moves on as it would.
+                Button("−30 s") {
+                    if let active {
+                        rest?.ends = max(.now, active.ends - 30)
+                    } else if seconds > 30 {
+                        rest = Rest(ends: .now + seconds - 30, total: seconds - 30, page: index)
+                    } else {
+                        skip()
+                    }
+                }
+                .accessibilityLabel("30 seconds less")
                 Button("+30 s") {
                     if let active {
                         let left = max(0, active.ends.timeIntervalSinceNow)

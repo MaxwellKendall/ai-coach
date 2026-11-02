@@ -127,9 +127,9 @@ struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
-            .frame(maxWidth: .infinity, minHeight: 48)
+            .frame(maxWidth: .infinity, minHeight: 56)
             .foregroundStyle(Color.ink)
-            .background(configuration.isPressed ? Color.fillStrong : Color.surface, in: .rect(cornerRadius: 14))
+            .background(configuration.isPressed ? Color.fillStrong : Color.surface, in: .rect(cornerRadius: 18))
     }
 }
 

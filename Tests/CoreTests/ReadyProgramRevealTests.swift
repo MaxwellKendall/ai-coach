@@ -75,6 +75,25 @@ struct PlanRevealHeadlineTests {
         #expect(PlanReveal.headline(program, reveal: reveal, exercise: "Back Squat", ends: ends) == "Back Squat 225 → 250 lb by Jan 16")
     }
 
+    /// FIT-305: every quiz answer picks a program, one with equipment has a lift to ask the recent set of, and the
+    /// reveal for Get Stronger, a full gym and 4 days starts from the set given (it came up blank, then ignored it).
+    @Test func quizAnswersCarryThroughToTheReveal() throws {
+        for place in ProgramPicker.places {
+            for days in 2...6 {
+                for goal in ReadyProgram.Goal.allCases {
+                    let pick = try #require(ProgramPicker.Answers(have: place.equipment, days: days, goal: goal, lifted: true).pick)
+                    #expect(place.equipment.isEmpty || pick.mainLift != nil, "\(place.title), \(days) days, \(goal)")
+                }
+            }
+        }
+        var answers = ProgramPicker.Answers(have: ProgramPicker.places[0].equipment, days: 4, goal: .strength, lifted: true)
+        let program = try #require(answers.pick)
+        #expect(program.slug == "upper-lower-4" && program.mainLift?.exercise == "bench-press")
+        answers.recent = StartingSet.recent("bench-press", weight: 185, reps: 5, perHand: false)
+        let reveal = program.projection(days: answers.days, deloads: program.deloads, recent: answers.recent)
+        #expect(reveal?.from == 185)
+    }
+
     @Test func saysAHandForDumbbells() {
         let program = ReadyProgram.named("dumbbell-full-body")!
         let reveal = program.projection(days: 3, deloads: program.deloads)

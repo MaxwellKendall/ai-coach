@@ -68,8 +68,13 @@ struct WorkoutDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     header
+                    // FIT-300: the warm-up on a card of its own, first; the lifts after it lettered from A.
+                    if session.blocks.contains(where: { $0.rounds == 0 }) { warmupCard(names) }
                     ForEach(Array(session.blocks.enumerated()), id: \.element.id) { index, block in
-                        blockCard(index, block, names).id(block.id)
+                        if block.rounds > 0 {
+                            blockCard(index, block, names, letter: SessionPlan.letter(session.blocks[..<index].filter { $0.rounds > 0 }.count))
+                                .id(block.id)
+                        }
                     }
                     HStack(spacing: 10) {
                         addButton("Add exercise") { picking = .add }
@@ -111,7 +116,7 @@ struct WorkoutDetailView: View {
                     withAnimation(.snappy) { session.add(slug) }
                 }
             case .addWarmup:
-                ExercisePicker(title: "Add to the warm-up", excluding: inSession) { slug in
+                ExercisePicker(title: "Add to the warm-up", excluding: inSession, warmup: true) { slug in
                     withAnimation(.snappy) { session.addWarmup(slug) }
                 }
             }
@@ -131,38 +136,49 @@ struct WorkoutDetailView: View {
 
     // MARK: Header
 
+    /// The day, the session's name, one quiet line of what's in it, and the coach's reason as text (not chips).
     private var header: some View {
         let rpe = session.blocks.flatMap(\.movements).flatMap(\.sets).compactMap { $0.value("rpe") }.max()
         let sets = session.blocks.flatMap(\.movements).reduce(0) { $0 + $1.working.count }
-        return VStack(alignment: .leading, spacing: 8) {
+        let reasons = Set(session.blocks.flatMap(\.movements).flatMap(\.sets).compactMap(\.adjustedReason)).subtracting(["edited"]).sorted()
+        return VStack(alignment: .leading, spacing: 6) {
             if let date = items.first?.date {
-                Text(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()).uppercased())
-                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
             }
-            Text(items.first?.slot ?? "Workout")
-                .font(.system(size: 40, weight: .bold))
-            HStack(spacing: 6) {
-                chip("\(sets) working sets")
-                if let rpe { chip("RPE ≤ \(Self.number(rpe))") }
-                ForEach(Set(session.blocks.flatMap(\.movements).flatMap(\.sets).compactMap(\.adjustedReason)).sorted(), id: \.self) {
-                    chip($0)
-                }
-            }
+            Text(title).font(.display(30)).fixedSize(horizontal: false, vertical: true)
+            Text((["\(sets) working \(sets == 1 ? "set" : "sets")"] + [rpe.map { "RPE ≤ \(Self.number($0))" }].compactMap { $0 }).joined(separator: " · "))
+                .font(.subheadline).foregroundStyle(Color.inkMuted)
+            ForEach(reasons, id: \.self) { Text($0).font(.subheadline).foregroundStyle(Color.inkMuted).fixedSize(horizontal: false, vertical: true) }
         }
-        .padding(.bottom, 6)
+        .padding(.bottom, 10)
     }
 
-    private func chip(_ text: String) -> some View {
-        Text(text).font(.footnote.weight(.semibold))
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(.background, in: .capsule)
+    /// The coach's name for the session, or its lifts ("Squat, bench press, row", as Today and Program say it) in place
+    /// of a generated "Day A".
+    private var title: String {
+        let slot = items.first?.slot ?? "Workout"
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let lifts = session.blocks.filter { $0.rounds > 0 }.flatMap(\.movements).map { names[$0.exercise] ?? $0.exercise }
+        guard !lifts.isEmpty, slot == "Workout" || slot.wholeMatch(of: /Day [A-Z]/) != nil else { return slot }
+        return TodayScreen.title(lifts: lifts)
+    }
+
+    /// FIT-300: the warm-up items together, on a card of their own.
+    private func warmupCard(_ names: [String: String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Warm-up").font(.headline)
+            WarmupList(session: $session, names: names)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background, in: .rect(cornerRadius: 20))
     }
 
     // MARK: Blocks
 
-    private func blockCard(_ index: Int, _ block: SessionPlan.Block, _ names: [String: String]) -> some View {
+    private func blockCard(_ index: Int, _ block: SessionPlan.Block, _ names: [String: String], letter: String) -> some View {
         let open = !collapsed.contains(block.id)
-        let letter = SessionPlan.letter(index)
         return VStack(alignment: .leading, spacing: 12) {
             Button {
                 withAnimation(.snappy) { if open { collapsed.insert(block.id) } else { collapsed.remove(block.id) } }

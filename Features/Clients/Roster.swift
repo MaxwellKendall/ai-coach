@@ -1,0 +1,71 @@
+import Foundation
+import Observation
+
+/// FIT-298: coach mode's clients, each with their units, the replies on their days and this week's triage. Kept for
+/// the session; Clients refreshes it when it appears and on a pull.
+@MainActor @Observable
+final class Roster {
+    struct Client: Identifiable, Sendable {
+        var person: Cloud.Person
+        /// Every unit they have, key → body (FIT-126).
+        var units: [String: String]
+        var comments: [Triage.Comment]
+        var week: Triage.Week
+
+        var id: String { person.uid }
+        var name: String { person.name ?? "Client" }
+        var initials: String {
+            let words = (person.name ?? "?").split(separator: " ").prefix(2)
+            return words.compactMap(\.first).map(String.init).joined().uppercased()
+        }
+    }
+
+    /// FIT-298: someone who came in by "I'm a coach", or has clients: the Clients tab shows.
+    static let coachingKey = "coaching"
+
+    private(set) var clients: [Client] = []
+    private(set) var loaded = false
+    var problem: String?
+
+    /// Signed out, or before the first load, none; `clients` for a preview.
+    init(clients: [Client] = []) {
+        self.clients = Triage.byNeed(clients, \.week)
+        loaded = !clients.isEmpty
+    }
+
+    var needsYou: [Client] { clients.filter { $0.week.need != nil } }
+    var onTrack: [Client] { clients.filter { $0.week.need == nil } }
+
+    /// Every client, then their units and replies, then who needs the coach first.
+    func refresh(coach: String?, names: [String: String]) async {
+        #if DEBUG
+        if Self.sample { return }
+        #endif
+        guard let coach else { clients = []; loaded = true; return }
+        do {
+            let people = try await Cloud.myClients()
+            if !people.isEmpty { UserDefaults.standard.set(true, forKey: Self.coachingKey) }
+            let today = SyncUnits.day(.now)
+            var loaded: [Client] = []
+            for person in people {
+                let units = try await Cloud.units(of: person.uid)
+                let comments = try await Cloud.comments(of: person.uid)
+                loaded.append(Client(person: person, units: units, comments: comments,
+                                     week: Triage.week(units, comments: comments, names: names, coach: coach, today: today)))
+            }
+            clients = Triage.byNeed(loaded, \.week)
+            problem = nil
+        } catch {
+            problem = "Couldn’t load your clients. Pull to try again."
+        }
+        self.loaded = true
+    }
+
+    /// A client as just changed here (a reply, an edited day), without fetching everyone again.
+    func update(_ client: Client, coach: String, names: [String: String]) {
+        var client = client
+        client.week = Triage.week(client.units, comments: client.comments, names: names, coach: coach, today: SyncUnits.day(.now))
+        if let index = clients.firstIndex(where: { $0.id == client.id }) { clients[index] = client }
+        clients = Triage.byNeed(clients, \.week)
+    }
+}

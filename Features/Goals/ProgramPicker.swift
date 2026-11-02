@@ -11,18 +11,24 @@ struct ProgramPicker: View {
     @State private var path: [Step] = []
     /// Catalog equipment ticked on "What do you have?".
     @State private var have: Set<String> = []
-    @State private var days = 3
     @State private var goal: ReadyProgram.Goal?
     @State private var lifted: Bool?
-    @State private var recent: StartingSet?
     @State private var started = false
 
-    enum Step: Hashable { case lifted, kit, kitDetail, days, recent, program }
+    /// FIT-305: the answers so far, carried by the step they lead to. A pushed screen is drawn from its step, never from
+    /// this view's state, which it can read stale: the 4-day recent set came up blank, and the reveal ignored the set.
+    struct Answers: Hashable {
+        var have: Set<String>
+        var days: Int
+        var goal: ReadyProgram.Goal?
+        var lifted: Bool?
+        var recent: StartingSet?
 
-    /// The main lift of the program the answers so far pick, which the recent set is of.
-    private var lift: String? {
-        ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted).first?.mainLift?.exercise
+        /// The program these answers pick, whose main lift the recent set is of.
+        var pick: ReadyProgram? { ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted).first }
     }
+
+    enum Step: Hashable { case lifted, kit, kitDetail, days, recent(String, Answers), program(Answers) }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -51,23 +57,26 @@ struct ProgramPicker: View {
                 case .days:
                     question("How many days a week?", "The days themselves come next.") {
                         ForEach(2...6, id: \.self) { count in
-                            option("\(count) days", next: .program) {
-                                days = count
+                            option("\(count) days") {
+                                let answers = Answers(have: have, days: count, goal: goal, lifted: lifted)
                                 // Someone who's lifted gives a recent set first, when the program has a lift to load.
-                                if lifted == true, lift != nil { path.append(.recent) } else { path.append(.program) }
+                                if lifted == true, let lift = answers.pick?.mainLift?.exercise {
+                                    path.append(.recent(lift, answers))
+                                } else {
+                                    path.append(.program(answers))
+                                }
                             }
                         }
                     }
-                case .recent:
-                    if let lift {
-                        RecentSetStep(exercise: lift, perHand: ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted)
-                            .first?.place == .dumbbells) { set in
-                            recent = set
-                            path.append(.program)
-                        }
+                case .recent(let lift, let answers):
+                    RecentSetStep(exercise: lift, perHand: answers.pick?.place == .dumbbells) { set in
+                        var answers = answers
+                        answers.recent = set
+                        path.append(.program(answers))
                     }
-                case .program:
-                    ProgramChoice(have: $have, days: days, goal: goal, lifted: lifted, recent: recent, onStart: onDone)
+                case .program(let answers):
+                    ProgramChoice(have: answers.have, days: answers.days, goal: answers.goal, lifted: answers.lifted,
+                                  recent: answers.recent, onStart: onDone)
                 }
             }
         }
@@ -79,8 +88,7 @@ struct ProgramPicker: View {
         guard !started, let profile = profiles.first, ReadyProgram.named(profile.programSlug) != nil else { return }
         started = true
         have = Set(profile.equipment)
-        days = profile.trainingDays.count
-        path = [.kitDetail, .days, .program]
+        path = [.kitDetail, .days, .program(Answers(have: have, days: profile.trainingDays.count))]
     }
 
     /// FIT-297: one tap for where they lift; the exact equipment is a quiet link away.
@@ -137,11 +145,11 @@ struct ProgramPicker: View {
     }
 
     /// A one-tap answer: it's set and the next question opens (`set` may open another itself).
-    private func option(_ title: String, detail: String? = nil, next: Step, set: @escaping () -> Void) -> some View {
+    private func option(_ title: String, detail: String? = nil, next: Step? = nil, set: @escaping () -> Void) -> some View {
         Button {
             let count = path.count
             set()
-            if path.count == count { path.append(next) }
+            if path.count == count, let next { path.append(next) }
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -209,7 +217,7 @@ private struct ProgramChoice: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [Profile]
     @Query private var templates: [Template]
-    @Binding var have: Set<String>
+    @State var have: Set<String>
     var days: Int
     var goal: ReadyProgram.Goal?
     var lifted: Bool?
