@@ -34,6 +34,17 @@ enum ExercisePhotos {
         return Map(photos: photos, missing: missing.sorted())
     }
 
+    /// FIT-318: an exercise's start and end photos on the site, none when free-exercise-db has none. Debug only:
+    /// `-exercisePhotos https://raw.githubusercontent.com/yuhonas/free-exercise-db/main` reads them from its repository
+    /// (the same exercises/ layout), to look at them before the upload.
+    static func urls(_ slug: String) -> [URL] {
+        var base = Backend.current.web
+        #if DEBUG
+        if let other = UserDefaults.standard.string(forKey: "exercisePhotos").flatMap(URL.init(string:)) { base = other }
+        #endif
+        return (bundled[slug] ?? []).map { base.appending(path: "exercises/\($0)") }
+    }
+
     /// The bundled map, slug → [start, end]; empty when it's missing.
     static let bundled: [String: [String]] = Bundle.main.url(forResource: "exercise-photos", withExtension: "json")
         .flatMap { try? JSONDecoder().decode([String: [String]].self, from: Data(contentsOf: $0)) } ?? [:]

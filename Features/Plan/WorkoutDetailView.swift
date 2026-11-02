@@ -282,6 +282,7 @@ struct WorkoutDetailView: View {
                 // FIT-75: how to do it, for exercises the model picked that you may not know.
                 ForEach(block.movements, id: \.id) { movement in
                     if !(templates.first { $0.slug == movement.exercise }?.values("instructions") ?? []).isEmpty
+                        || !ExercisePhotos.urls(movement.exercise).isEmpty
                         || ExerciseVideos.bundled[movement.exercise] != nil {
                         Button(block.isGroup ? "How to Do \(names[movement.exercise] ?? movement.exercise)" : "How to Do It",
                                systemImage: "questionmark.circle") { howTo = movement.exercise }
