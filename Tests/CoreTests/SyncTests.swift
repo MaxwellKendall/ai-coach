@@ -124,6 +124,23 @@ struct SyncTests {
         #expect(try web.fetch(FetchDescriptor<PlannedActivity>()).allSatisfy { $0.plan?.weekStart == Week.start(of: t0) })
     }
 
+    /// FIT-324: the ready-made program they follow goes with the profile, so a second phone plans it too.
+    @Test func theReadyMadeProgramSyncs() throws {
+        let phone = try store(), other = try store()
+        let profile = Profile(age: 42, weightLb: 190, now: t0)
+        profile.programSlug = "strength-waves"
+        phone.insert(profile)
+        try phone.save()
+        let body = try #require(try SyncUnits.all(in: phone)["profile"])
+        #expect(body.contains("\"programSlug\":\"strength-waves\""))
+        try SyncUnits.apply("profile", body: body, in: other)
+        try other.save()
+        #expect(try other.fetch(FetchDescriptor<Profile>()).first?.programSlug == "strength-waves")
+        // A profile from before keeps decoding, with no program.
+        let older = body.replacingOccurrences(of: ",\"programSlug\":\"strength-waves\"", with: "")
+        #expect(try SyncUnits.decode(SyncUnits.ProfileBody.self, older).programSlug == nil)
+    }
+
     // FIT-185: a tracked run's route goes with its row; a row without one encodes as it always did.
     @Test func aRunsRouteSyncsAndOtherRowsAreUnchanged() throws {
         let phone = try store(), web = try store()
