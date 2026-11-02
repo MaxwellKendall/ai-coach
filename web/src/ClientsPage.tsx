@@ -6,7 +6,7 @@ import { ProgramPage } from "./ProgramPage";
 import catalog from "./catalog.json";
 import { ImportProgram } from "./ImportProgram";
 import { SendProgram } from "./SendProgram";
-import { comments as loadComments, createClientInvite, myClients, postComment, programOffers, pullAll, removeClient, type Comment, type Offer, type Person, type Unit } from "./sync";
+import { comments as loadComments, createClientInvite, myClients, NAME_NEEDED, postComment, programOffers, pullAll, removeClient, type Comment, type Offer, type Person, type Unit } from "./sync";
 import { byNeed, triage, type Triage } from "./triage";
 
 const names = new Map(catalog.map((t) => [t.slug, t.name]));
@@ -87,13 +87,18 @@ function InviteBox({ config }: { config: Config }) {
   const [invite, setInvite] = useState<{ url: string; code: string }>();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string>();
+  // FIT-228: asked for only when the account has no name, so the invite says who it's from.
+  const [asking, setAsking] = useState(false);
+  const [name, setName] = useState("");
   const make = async () => {
     setError(undefined);
     try {
-      setInvite(await createClientInvite(config));
+      setInvite(await createClientInvite(config, asking ? name.trim() : undefined));
       setCopied(false);
+      setAsking(false);
     } catch (e) {
-      setError((e as Error).message);
+      if ((e as Error).message.includes(NAME_NEEDED)) setAsking(true);
+      else setError((e as Error).message);
     }
   };
   const copy = async () => {
@@ -118,6 +123,13 @@ function InviteBox({ config }: { config: Config }) {
           <p className="muted">Or they open Barbrabell and enter the code <strong className="code">{invite.code}</strong>.</p>
           <button className="link" onClick={make}>Make another link</button>
         </>
+      ) : asking ? (
+        <form className="form" onSubmit={(e) => { e.preventDefault(); make(); }}>
+          <label className="wide">Your name, as your client will see it
+            <input autoFocus value={name} maxLength={40} placeholder="Sam Rivera" onChange={(e) => setName(e.target.value)} />
+          </label>
+          <button className="button primary" disabled={!name.trim()}>Invite a client</button>
+        </form>
       ) : (
         <button className="button primary" onClick={make}>Invite a client</button>
       )}

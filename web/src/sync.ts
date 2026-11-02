@@ -85,8 +85,11 @@ export type Person = { uid: string; name: string | null; since: string };
 export const myClients = (config: Config) =>
   gql<{ myClients: Person[] }>(config, `query { myClients { uid name since } }`).then((d) => d.myClients);
 
-export const createClientInvite = (config: Config) =>
-  gql<{ createClientInvite: { code: string; url: string } }>(config, `mutation { createClientInvite { code url } }`).then((d) => d.createClientInvite);
+/** FIT-228: the server asks a coach with no name for one first (NAME_NEEDED); `name` is then saved as theirs. */
+export const NAME_NEEDED = "Add your name first, so your client knows who's inviting them.";
+export const createClientInvite = (config: Config, name?: string) =>
+  gql<{ createClientInvite: { code: string; url: string } }>(config, `mutation($n: String) { createClientInvite(name: $n) { code url } }`, { n: name ?? null })
+    .then((d) => d.createClientInvite);
 
 export const removeClient = (config: Config, uid: string) =>
   gql(config, `mutation($u: ID!) { removeClient(uid: $u) }`, { u: uid });

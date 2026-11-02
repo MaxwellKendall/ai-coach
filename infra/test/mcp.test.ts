@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../../shared/triage.ts";
 import { answer, callTool, CLIENT_TOOLS, hashToken, PRO_CLIENT_TOOLS, serve, who, type Account, type Store } from "../lambda/mcp.ts";
+import { NAME_NEEDED } from "../lambda/coach.ts";
 import { readProgram, readRecap, readSession, readWin } from "../lambda/sharePages.ts";
 import { addDays, checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
 
@@ -762,6 +763,12 @@ describe("FIT-194: a coach acts on a linked client", () => {
     expect(await callTool("get_context", {}, me, store, now)).not.toMatch(/They coach/);
     expect(await callTool("invite_client", {}, coach, store, now)).toMatch(/https:\/\/example\.com\/c\/ABCDEFGHJK[\s\S]*once, for 14 days/);
     expect(store.invites).toEqual(["coach"]);
+  });
+
+  it("asks for the coach's name first when their account has none (FIT-228)", async () => {
+    const { store } = setup();
+    store.invite = async () => { throw new Error(NAME_NEEDED); };
+    await expect(callTool("invite_client", {}, coach, store, now)).rejects.toThrow(/no name[\s\S]*set_profile name/);
   });
 
   it("asks which client when a name is ambiguous", async () => {
