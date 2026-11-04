@@ -361,7 +361,7 @@ export function compareRoute(path: string, served: Site): Page | undefined {
 const text = (body: string): Page => ({ status: 200, type: "text/plain; charset=utf-8", body });
 
 /** The public pages worth indexing; shared items and the dashboard aren't. */
-export const indexed = ["/", "/claude", "/compare", ...rivals.map((r) => `/compare/${r.slug}`), "/docs", "/privacy", "/terms", "/support"];
+export const indexed = ["/", "/claude", "/pro", "/compare", ...rivals.map((r) => `/compare/${r.slug}`), "/docs", "/privacy", "/terms", "/support"];
 
 function sitemap(site: Site) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -383,7 +383,7 @@ function llms(site: Site) {
 - A web dashboard shows who trained, who's slipping and who reported pain.
 - With Pro, coaches bring existing programs over by pasting a spreadsheet, CSV, PDF or screenshot into the assistant.
 - Not included: client payments, nutrition plans, video messaging, branded apps, and an Android client app.
-- Lifters training without a coach can use it free too.
+- Lifters training without a coach get the iPhone app free. Planning from Claude is free for 14 days, then needs Pro ($5.99 a month or $39.99 a year); logging from Claude stays free.
 
 ## Pages
 

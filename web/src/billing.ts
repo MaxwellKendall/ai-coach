@@ -15,20 +15,41 @@ export const startCoachPlan = (config: Config, interval: "month" | "year") =>
 export const coachBillingPortal = (config: Config) =>
   gql<{ coachBillingPortal: string | null }>(config, `mutation { coachBillingPortal }`).then((d) => d.coachBillingPortal);
 
-export const PRICES = { month: "$19.99/month", year: "$199/year" };
+/** FIT-327: lifter Pro, the connector's planning for someone training themselves. */
+const proPlan = (config: Config) =>
+  gql<{ proPlan: CoachPlan }>(config, `query { proPlan { onSale status interval renews cancelsAtEnd } }`).then((d) => d.proPlan);
+const startProPlan = (config: Config, interval: "month" | "year") =>
+  gql<{ startProPlan: string | null }>(config, `mutation($i: String!) { startProPlan(interval: $i) }`, { i: interval }).then((d) => d.startProPlan);
+const proBillingPortal = (config: Config) =>
+  gql<{ proBillingPortal: string | null }>(config, `mutation { proBillingPortal }`).then((d) => d.proBillingPortal);
+
+export type PlanKind = "coach" | "lifter";
+export const billing = {
+  coach: { plan: coachPlan, start: startCoachPlan, portal: coachBillingPortal },
+  lifter: { plan: proPlan, start: startProPlan, portal: proBillingPortal },
+};
+
+export const PRICES = {
+  coach: { month: "$19.99/month", year: "$199/year" },
+  lifter: { month: "$5.99/month", year: "$39.99/year" },
+};
 
 /** FIT-148: Stripe's statuses that still have the plan, as the server's check (coachPlan.ts HAS_PLAN). */
 export const hasPlan = (plan: CoachPlan) => ["active", "trialing", "past_due"].includes(plan.status);
 
 /** What Billing says about the plan, and which button it offers: start one, or manage the one there is. */
-export function planView(plan: CoachPlan): { title: string; detail: string; action: "start" | "manage" | "none" } {
+export function planView(plan: CoachPlan, kind: PlanKind = "coach"): { title: string; detail: string; action: "start" | "manage" | "none" } {
+  const name = kind === "coach" ? "Pro for coaches" : "Pro for your training";
+  const free = kind === "coach" ? "Coaching here is free, with any number of clients." : "The app and logging from Claude stay free.";
+  const prices = `${PRICES[kind].month} or ${PRICES[kind].year}`;
+  const adds = kind === "coach" ? "Pro lets Claude program and review your whole roster." : "Pro lets Claude plan and change your training and review your week.";
   const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
   const which = plan.interval === "year" ? "yearly" : "monthly";
   switch (plan.status) {
     case "trialing":
     case "active":
       return {
-        title: `Pro, ${which}`,
+        title: `${name}, ${which}`,
         detail: plan.cancelsAtEnd ? `Ends ${date(plan.renews)}. You can renew it from Manage billing.` : `Renews ${date(plan.renews)}.`,
         action: "manage",
       };
@@ -40,13 +61,13 @@ export function planView(plan: CoachPlan): { title: string; detail: string; acti
     case "incomplete_expired":
       return {
         title: "Your Pro has ended",
-        detail: "Coaching here stays free, with all your clients. Start Pro again to coach them from Claude.",
+        detail: kind === "coach" ? "Coaching here stays free, with all your clients. Start Pro again to coach them from Claude." : `${free} Start Pro again to plan from Claude.`,
         action: plan.onSale ? "start" : "none",
       };
     default:
       return plan.onSale
-        ? { title: "Pro", detail: `${PRICES.month} or ${PRICES.year}. Coaching here is free, with any number of clients. Pro lets Claude program and review your whole roster.`, action: "start" }
-        : { title: "Pro", detail: "Pro goes on sale soon. Coaching here is free, with any number of clients.", action: "none" };
+        ? { title: name, detail: `${prices}. ${free} ${adds}`, action: "start" }
+        : { title: name, detail: `Pro goes on sale soon. ${free}`, action: "none" };
   }
 }
 

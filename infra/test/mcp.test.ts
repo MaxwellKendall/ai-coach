@@ -2,7 +2,7 @@ import type { LambdaFunctionURLEvent } from "aws-lambda";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../../shared/triage.ts";
-import { answer, callTool, CLIENT_TOOLS, hashToken, PRO_CLIENT_TOOLS, serve, who, type Account, type Store } from "../lambda/mcp.ts";
+import { answer, callTool, CLIENT_TOOLS, hashToken, PRO_CLIENT_TOOLS, serve, trialNote, who, type Account, type Store } from "../lambda/mcp.ts";
 import { NAME_NEEDED } from "../lambda/coach.ts";
 import { readProgram, readRecap, readSession, readWin } from "../lambda/sharePages.ts";
 import { addDays, checkDay, dayOf, encode, epoch, estimated1RM, logRows, resolve, swapOptions, type PlanRow, type Profile } from "../lambda/training.ts";
@@ -19,13 +19,15 @@ const row = (template: string, sets: number, extra: Partial<PlanRow> = {}, t = a
 
 type Link = { coach: string; client: string; name: string | null };
 
-function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }>; links: Link[]; invites: string[]; threads: (Comment & { owner: string })[]; paying: Set<string> } {
+function memory(accounts: Record<string, Account>, units: Record<string, Record<string, string>>): Store & { units: Store["units"]; shared: Map<string, { uid: string; kind: string; payload: any }>; links: Link[]; invites: string[]; threads: (Comment & { owner: string })[]; paying: Set<string>; forSale: { on: boolean }; trials: Map<string, string> } {
   const extra = new Map<string, Record<string, any>>();
   const shared = new Map<string, { uid: string; kind: string; payload: any }>();
   const links: Link[] = [], invites: string[] = [];
   const threads: (Comment & { owner: string })[] = [];
   const paying = new Set(["coach"]);
   const samples = new Set<string>();
+  const forSale = { on: false };
+  const trials = new Map<string, string>();
   return {
     shared,
     links,
@@ -33,6 +35,14 @@ function memory(accounts: Record<string, Account>, units: Record<string, Record<
     threads,
     paying,
     async coachPlan(uid) { return paying.has(uid); },
+    // FIT-327: not on sale unless a test says so, so nothing is held back from the rest of this file.
+    forSale,
+    trials,
+    async access(uid, when) {
+      if (!trials.has(uid)) trials.set(uid, when.toISOString());
+      return { trialStart: trials.get(uid)!, pro: paying.has(uid) };
+    },
+    async onSale() { return forSale.on; },
     // FIT-240: as sample.ts, once per coach: the sample client's link, and a planned day so there's a week to read.
     async sample(coach, today) {
       if (samples.has(coach)) return false;
@@ -1164,5 +1174,55 @@ describe("FIT-209: apply keeps what the agent wrote, for the kept-or-edited stat
     expect(written!.fp).toContain("plank");
     await callTool("undo", { date: "2026-10-19" }, me, store, now);
     expect(await store.get("me", "written#2026-10-19")).toMatchObject({ undone: true });
+  });
+});
+
+describe("FIT-327: lifter Pro", () => {
+  const lifter = { uid: "lee", agent: "claude", tz } as Account;
+  const later = new Date(now.getTime() + 15 * 86_400_000);
+  const week = { date: "2026-10-17" };
+
+  it("lets them plan during the 14-day trial, then refuses with what's free and no price", async () => {
+    const store = memory({}, { lee: {} });
+    store.forSale.on = true;
+    store.trials.set("lee", now.toISOString());
+    await expect(callTool("get_week_review", week, lifter, store, now)).resolves.toBeTypeOf("string");
+    const refused = await callTool("get_week_review", week, lifter, store, later).catch((e) => (e as Error).message);
+    expect(refused).toContain("Barbrabell Pro");
+    expect(refused).toContain("/pro");
+    expect(refused).toMatch(/Free here: logging/);
+    expect(refused).not.toMatch(/\$|checkout/i);
+    for (const tool of ["propose_session", "propose_week", "set_program"]) {
+      await expect(callTool(tool, {}, lifter, store, later)).rejects.toThrow("Barbrabell Pro");
+    }
+  });
+
+  it("keeps logging, reading and progress free after the trial", async () => {
+    const store = memory({}, { lee: {} });
+    store.forSale.on = true;
+    store.trials.set("lee", now.toISOString());
+    await expect(callTool("get_progress", {}, lifter, store, later)).resolves.toBeTypeOf("string");
+    await expect(callTool("get_context", {}, lifter, store, later)).resolves.toBeTypeOf("string");
+  });
+
+  it("lets Pro through, and holds nothing back while it isn't on sale", async () => {
+    const paid = memory({}, { lee: {} });
+    paid.forSale.on = true;
+    paid.paying.add("lee");
+    paid.trials.set("lee", now.toISOString());
+    await expect(callTool("get_week_review", week, lifter, paid, later)).resolves.toBeTypeOf("string");
+    const unsold = memory({}, { lee: {} });
+    unsold.trials.set("lee", now.toISOString());
+    await expect(callTool("get_week_review", week, lifter, unsold, later)).resolves.toBeTypeOf("string");
+  });
+
+  it("says when the trial is nearly over, then that it's over, with no price", async () => {
+    const access = { trialStart: now.toISOString(), pro: false };
+    expect(trialNote(access, now)).toBeUndefined();
+    expect(trialNote(access, new Date(now.getTime() + 12 * 86_400_000))).toContain("2 days left");
+    const over = trialNote(access, later)!;
+    expect(over).toContain("Trial over");
+    expect(over).not.toContain("$");
+    expect(trialNote({ ...access, pro: true }, later)).toBeUndefined();
   });
 });

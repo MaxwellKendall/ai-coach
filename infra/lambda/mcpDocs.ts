@@ -82,9 +82,15 @@ export function docsPage(site: Site, mcpUrl: string, tools: Tool[], prompts: Pro
       </section>
 
       <section class="block doc">
+        <h2>Training yourself</h2>
+        <ul>
+          <li>Logging, reading your plan and progress, goals, and apply and undo are free. Planning (propose_session, propose_week, set_program) and get_week_review are free for 14 days from your first use, then need <a href="/pro">${esc(site.appName)} Pro</a>.</li>
+        </ul>
+      </section>
+      <section class="block doc">
         <h2>Coaching</h2>
         <ul>
-          <li>Coaching is free, with any number of clients, on the dashboard at <a href="/app">${esc(new URL(mcpUrl).host)}/app</a>. Connecting and training yourself are free too.</li>
+          <li>Coaching is free, with any number of clients, on the dashboard at <a href="/app">${esc(new URL(mcpUrl).host)}/app</a>. Clients' training in the app is free too.</li>
           <li>Here, reading a client, notes, listing clients and inviting are free. Planning and changing a client's training (proposals, apply and undo, their program, goals and swaps) and the roster and weekly reviews are ${esc(site.appName)} Pro, from Billing on the dashboard. A sample client takes every tool, so you can try Pro first.</li>
           <li>Invite a client with a link or code (from Claude or the dashboard). They accept in the free app; they need no AI account.</li>
           <li>You can read a client's training and plan it: their goals, profile, program, sessions, logs and notes. Logging and sharing stay theirs.</li>

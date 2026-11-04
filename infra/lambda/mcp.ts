@@ -16,6 +16,8 @@ import { clock, distanceName, goalMeters, meters, MILE, miles, OUTDOOR_RUN, pace
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
 import { comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, NAME_NEEDED, list as linked, postComment, type Person } from "./coach.ts";
+import { HAS_PLAN, onSale, planRecord } from "./coachPlan.ts";
+import { giftedUntil } from "./gifts.ts";
 import { ensureSample, isSample } from "./sample.ts";
 import { fingerprint } from "./programStats.ts";
 import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
@@ -56,6 +58,10 @@ export interface Store {
   coachPlan(uid: string): Promise<boolean>;
   /** FIT-240: makes the coach's sample client the first time (sample.ts); whether it made one now. */
   sample(coach: string, today: string): Promise<boolean>;
+  /** FIT-327: when their trial began (their first call that asks, kept), and whether they have Pro: either plan, or a gift. */
+  access(uid: string, now: Date): Promise<Access>;
+  /** FIT-327: whether lifter Pro is on sale (Stripe's keys and both prices exist); nothing is held back until it is. */
+  onSale(): Promise<boolean>;
 }
 
 export type ShareKind = "win" | "recap" | "program" | "session";
@@ -125,6 +131,16 @@ export const dynamoStore: Store = {
   async comment(coach, client, day, text) { await postComment(coach, undefined, client, day, text); },
   coachPlan: hasCoachPlan,
   sample: ensureSample,
+  async access(uid, now) {
+    // PROTRIAL, not FIT-190's TRIAL: everyone gets the 14 days, including accounts whose old trial ran out while Pro was off sale.
+    const trial = await db.send(new UpdateCommand({
+      TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROTRIAL" },
+      UpdateExpression: "SET startedAt = if_not_exists(startedAt, :n)", ExpressionAttributeValues: { ":n": now.toISOString() }, ReturnValues: "ALL_NEW",
+    }));
+    const [plan, gift, coach] = await Promise.all([planRecord(uid, "pro"), giftedUntil(uid, now), hasCoachPlan(uid)]);
+    return { trialStart: trial.Attributes!.startedAt, pro: HAS_PLAN.includes(plan?.status ?? "") || gift !== undefined || coach };
+  },
+  onSale: () => onSale("pro"),
   async unshare(uid, id) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
     if (!Item || Item.uid !== uid) return false;
@@ -894,6 +910,37 @@ async function clientOf(account: Account, said: unknown, store: Store): Promise<
   return client;
 }
 
+const agentName = (account: Account) => account.agent.charAt(0).toUpperCase() + account.agent.slice(1);
+/** FIT-241: someone who paid with another sign-in has a second, unpaid account here; name this one and the way out. */
+const signedInLine = (account: Account) => account.who ? `${agentName(account)} is signed in to Barbrabell as ${account.who}` : `This is the account ${agentName(account)} signed in to Barbrabell with`;
+
+// ---- FIT-327: lifter Pro (FIT-312, author 2026-11-04), FIT-190's gate back for someone training themselves ----
+
+export type Access = { trialStart: string; pro: boolean };
+export const TRIAL_DAYS = 14;
+/** What Pro adds to their own training (business model v2). Logging, reading, progress, goals, apply and undo stay free. */
+export const LIFTER_PRO_TOOLS = new Set(["propose_session", "propose_week", "set_program", "get_week_review"]);
+
+export const trialDaysLeft = (access: Access, now: Date) =>
+  Math.ceil((Date.parse(access.trialStart) + TRIAL_DAYS * 86_400_000 - now.getTime()) / 86_400_000);
+
+/** get_context's line about the trial, from its last 3 days on. FIT-237: no price or Checkout link, as for coaches. */
+export function trialNote(access: Access, now: Date): string | undefined {
+  if (access.pro) return undefined;
+  const left = trialDaysLeft(access, now);
+  if (left > 3) return undefined;
+  const planning = "planning, changing their plan and the week's review";
+  return left > 0
+    ? `Trial: ${left} day${left === 1 ? "" : "s"} left. After it, ${planning} need Barbrabell Pro; logging, progress and goals stay free. Mention it once, plainly. How Pro works: ${ORIGIN}/pro.`
+    : `Trial over: ${planning} need Barbrabell Pro; logging, progress and goals stay free. How Pro works: ${ORIGIN}/pro.`;
+}
+
+function lifterPaywall(tool: string, account: Account) {
+  return `${tool} is part of Barbrabell Pro, and this account's ${TRIAL_DAYS}-day trial is over. Pro lets ${agentName(account)} plan and change their training and review their week. `
+    + `Free here: logging, reading their plan and progress, goals, and apply and undo. The iPhone app stays free. ${signedInLine(account)}. If they started Pro with another sign-in, reconnect with that one, or link the two on the dashboard's Account page (${ORIGIN}/app/account). `
+    + `How Pro works: ${ORIGIN}/pro. Once it's on, this works on their next request; there's nothing to reconnect.`;
+}
+
 /**
  * FIT-286: a Pro coach tool asked for without Pro (FIT-284: coaching on the dashboard and in the app is free; the full
  * coach MCP is what Pro buys). The athlete tools stay free. FIT-237: the tools say so and point to the coach page, with
@@ -901,9 +948,8 @@ async function clientOf(account: Account, said: unknown, store: Store): Promise<
  */
 async function needsPro(tool: string, account: Account, store: Store) {
   if (await store.coachPlan(account.uid)) return;
-  // FIT-241: a coach who paid with another sign-in has a second, unpaid account here; name this one and the way out.
-  const agent = account.agent.charAt(0).toUpperCase() + account.agent.slice(1);
-  const signedIn = account.who ? `${agent} is signed in to Barbrabell as ${account.who}` : `This is the account ${agent} signed in to Barbrabell with`;
+  const agent = agentName(account);
+  const signedIn = signedInLine(account);
   throw new Error(`${tool} for a client is part of Barbrabell Pro, which this account doesn't have: Pro lets ${agent} plan, change and review every client's training. `
     + `Free here: list_clients, invite_client, and reading a client's context, days, program and progress, with notes. On the dashboard all coaching is free, with any number of clients (${ORIGIN}/app). `
     + `${signedIn}. If they started Pro with another sign-in, reconnect with that one, or link the two on the dashboard's Account page (${ORIGIN}/app/account). `
@@ -954,6 +1000,10 @@ export async function callTool(name: string, args: Args, account: Account, store
   if (args.client !== undefined && !CLIENT_TOOLS.has(name)) throw new Error(`${name} is the client's own to do, so it takes no client.`);
   const client = await clientOf(account, args.client, store);
   if (client && !isSample(client.uid) && PRO_CLIENT_TOOLS.has(name)) await needsPro(name, account, store);
+  if (!client && LIFTER_PRO_TOOLS.has(name)) {
+    const access = await store.access(account.uid, now);
+    if (!access.pro && trialDaysLeft(access, now) <= 0 && (await store.onSale())) throw new Error(lifterPaywall(name, account));
+  }
   // Whose data this call is about. A coach's changes reach the client's phone at its next sync, as the dashboard's do.
   const uid = client?.uid ?? account.uid;
   useAccountExercises(await store.units(uid)); // FIT-173: their own exercises, beside the catalog
@@ -968,7 +1018,8 @@ export async function callTool(name: string, args: Args, account: Account, store
       const clients = await store.clients(uid);
       const paid = clients.length > 0 && (await store.coachPlan(uid));
       const shown = clients.length ? `\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.${sampleNote(clients, paid)}` : "";
-      return `${text}${shown}`;
+      const note = (await store.onSale()) ? trialNote(await store.access(uid, now), now) : undefined;
+      return `${text}${shown}${note ? `\n\n${note}` : ""}`;
     }
     case "invite_client": {
       // FIT-228: an invite says who it's from, so a coach with no name gives one first.

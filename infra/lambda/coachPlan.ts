@@ -13,6 +13,8 @@ import { stripe } from "./stripe.ts";
  * FIT-190: Pro, sold to the connector's users the same way (author, 2026-10-21: $5.99/month or $39.99/year), kept in
  * USER#uid PROPLAN. Which plan a subscription is comes from its price's lookup key.
  *
+ * FIT-327: Pro is on sale again for someone training themselves, bought from Billing on the dashboard.
+ *
  * FIT-295: the consumer app's plan (FIT-281, trainer_yearly) is gone with the app; Barbrabell is free (business model v2).
  */
 
@@ -31,10 +33,10 @@ export type Interval = keyof typeof LOOKUP_KEYS;
 /** Stripe's statuses that still have the plan: a payment that failed keeps it while Stripe retries. */
 export const HAS_PLAN = ["active", "trialing", "past_due"];
 
-/** Where Checkout and the portal come back to. Pro's buyers come from Claude, so they land on the site's pages. */
+/** Where Checkout and the portal come back to. Pro's buyers come from Claude, so a purchase lands on the site's page that sends them back. */
 const returns = (kind: Kind, origin: string) => kind === "coach"
   ? { success: `${origin}/billing?started=1`, cancel: `${origin}/billing`, portal: `${origin}/billing` }
-  : { success: `${origin}/pro/thanks`, cancel: `${origin}/claude`, portal: `${origin}/claude` };
+  : { success: `${origin}/pro/thanks`, cancel: `${origin}/app/billing`, portal: `${origin}/app/billing` };
 
 export interface PlanRecord {
   customer?: string;
@@ -223,7 +225,7 @@ async function customerFor(key: string, uid: string, email: string | undefined, 
 }
 
 const already = (kind: Kind) => kind === "coach" ? "You already have the coach plan. Use Manage billing to change it."
-  : "They already have Pro: manage_subscription changes it.";
+  : "You already have Pro. Use Manage billing to change it.";
 
 /** The customer's subscription to the plan that still has it, if Stripe has one (the list leaves out canceled ones). */
 export async function activeSubscription(key: string, customer: string, kind: Kind): Promise<Subscription | undefined> {
@@ -306,6 +308,9 @@ export async function portal(uid: string, origin = process.env.APP_ORIGIN!, kind
   return session.url;
 }
 
+/** APP_ORIGIN is the dashboard (…/app); Pro's returns are written from the site's root. */
+const siteOrigin = () => new URL(process.env.APP_ORIGIN!).origin;
+
 export async function handler(event: AppSyncResolverEvent<{ interval?: string }>) {
   const identity = event.identity as AppSyncIdentityCognito | null;
   if (!identity?.sub) throw new Error("Sign in first.");
@@ -316,6 +321,12 @@ export async function handler(event: AppSyncResolverEvent<{ interval?: string }>
       return (await start(identity.sub, event.arguments.interval ?? "", identity.claims?.email as string | undefined)) ?? null;
     case "coachBillingPortal":
       return (await portal(identity.sub)) ?? null;
+    case "proPlan":
+      return shownPlan(await onSale("pro"), await planRecord(identity.sub, "pro"));
+    case "startProPlan":
+      return (await start(identity.sub, event.arguments.interval ?? "", identity.claims?.email as string | undefined, siteOrigin(), "pro")) ?? null;
+    case "proBillingPortal":
+      return (await portal(identity.sub, siteOrigin(), "pro")) ?? null;
     default:
       throw new Error(`No field ${event.info.fieldName}`);
   }

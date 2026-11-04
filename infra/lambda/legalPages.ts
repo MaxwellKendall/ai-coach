@@ -48,7 +48,7 @@ function privacyPage(site: Site) {
       <li><b>Runs you track:</b> the run's GPS route, which is your precise location along the way, and its average heart rate, which ${app} reads from Apple Health when your Watch or AirPods measure it and you allow it. We read nothing else from Apple Health.</li>
       <li><b>Sharing:</b> anything you choose to share as a link, until you stop sharing it.</li>
       <li><b>Notifications:</b> your phone's push token, if you allow notifications.</li>
-      <li><b>Billing, for coaches:</b> Stripe handles payment. We keep your Stripe customer and subscription IDs and the plan's status, never your card.</li>
+      <li><b>Billing, if you buy Pro:</b> Stripe handles payment. We keep your Stripe customer and subscription IDs and the plan's status, never your card.</li>
     </ul>
     <p>It's stored with Amazon Web Services in the United States (DynamoDB, in the us-east-1 region), and it syncs between your phone, the web dashboard and the agents you connect. Runs you track are also saved to Apple Health on your phone, with their route, which stays under your control in the Health app.</p>
     <p>We don't sell your data, show ads, or use tracking cookies. Heart rate and other data from Apple Health is used only to show you and your coach your training: never for advertising or marketing, never sold, and never shared with anyone you haven't chosen. The pages on this site count how often each kind of page is opened, without recording who opened it.</p>
@@ -80,7 +80,7 @@ function privacyPage(site: Site) {
       <li><b>To keep the service safe:</b> sign-in tokens, stopping abuse, and counting page views without knowing who opened them.</li>
     </ul>
     <p>Wherever you live, you can ask for a copy of your data (in a format you can take elsewhere), have it corrected or deleted, or object to or limit how we use it. Most of it you can see, change and delete yourself in the app. For anything else, email ${mail} and we'll answer within 30 days. If you're in the EU, the UK or Switzerland, you can also complain to your local data protection authority.</p>
-    <p>Your data is stored and processed in the United States. Amazon Web Services stores it, Apple delivers notifications, and Stripe handles coaches' billing, each under its data processing terms, which include the EU Standard Contractual Clauses.</p>
+    <p>Your data is stored and processed in the United States. Amazon Web Services stores it, Apple delivers notifications, and Stripe handles Pro's billing, each under its data processing terms, which include the EU Standard Contractual Clauses.</p>
 
     <h2>Children</h2>
     <p>${app} isn't meant for children under 13, and we don't knowingly keep their data.</p>
@@ -101,7 +101,8 @@ function termsPage(site: Site) {
     <p>You're responsible for what you do with your account. What you log is yours: you give us permission to store it and show it to you, to the coach you link with, to the agents you connect, and to whoever you share a link with, so the service works. The <a href="/privacy">privacy policy</a> says how.</p>
 
     <h2>Coaches</h2>
-    <p>Coaching is free, with any number of clients. Pro, which adds the full connector for coaching from an agent, is $19.99 a month or $199 a year, billed through Stripe and renewed until you cancel. You can cancel or change it from Billing on the dashboard; it runs to the end of the period you paid for, and coaching stays free after it. A coach invites only people who've agreed to be coached, and uses their data only to coach them. Clients use ${app} free.</p>
+    <p>The iPhone app is free. Pro for your own training, which adds planning from an agent after a 14-day trial, is $5.99 a month or $39.99 a year, billed through Stripe and renewed until you cancel from Billing on the dashboard; it runs to the end of the period you paid for.</p>
+    <p>Coaching is free, with any number of clients. Pro for coaches, which adds the full connector for coaching from an agent, is $19.99 a month or $199 a year, billed through Stripe and renewed until you cancel. You can cancel or change it from Billing on the dashboard; it runs to the end of the period you paid for, and coaching stays free after it. A coach invites only people who've agreed to be coached, and uses their data only to coach them. Clients use ${app} free.</p>
 
     <h2>Agents</h2>
     <p>The agent you connect (Claude, ChatGPT or another) is a separate service under its maker's terms. It proposes changes, and you or your coach decide what's saved. We aren't responsible for what an agent says.</p>

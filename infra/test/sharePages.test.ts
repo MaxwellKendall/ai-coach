@@ -143,16 +143,27 @@ describe("Train with Claude (FIT-152)", () => {
     expect(page.body).toContain("Set me up");
     expect((await route("/", store, withMcp)).body).toContain('href="/claude"');
     expect((await route("/claude", store, site)).status).toBe(404);
-    // FIT-214: Pro isn't sold, so no page prices or offers it; a Checkout already under way still lands somewhere.
+    // App Review 3.1.1(a), FIT-59: the iPhone app reaches /claude, so it neither prices nor offers Pro (FIT-327).
+    expect(page.body.split("<main>")[1]).not.toMatch(/\$\d|\bPro\b|trial|subscribe/);
     const thanks = await route("/pro/thanks", store, withMcp);
     expect(thanks).toMatchObject({ status: 200, noStore: true });
-    for (const p of [page, thanks]) {
-      expect(p.body.split("<main>")[1]).not.toMatch(/\$\d|\bPro\b|trial|subscribe/);
-    }
+    expect(thanks.body).toContain("You have Pro");
   });
 });
 
 describe("the coach landing page (FIT-217)", () => {
+  it("FIT-327: /pro says what's in lifter Pro, its price, and sends them to Billing; the home page links to it", async () => {
+    const withMcp = { ...site, mcpUrl: "https://example.com/mcp" };
+    const page = await route("/pro", store, withMcp);
+    expect(page.status).toBe(200);
+    expect(page.body).toContain("$5.99");
+    expect(page.body).toContain("$39.99 a year");
+    expect(page.body).toContain('href="/app/billing"');
+    expect(page.body).toContain("Free without it");
+    expect((await route("/", store, withMcp)).body).toContain('href="/pro"');
+    expect((await route("/pro", store, site)).status).toBe(404);
+  });
+
   it("is the home page: everything they pay for, free; Pro's price; and Start free to the dashboard's Clients", async () => {
     for (const path of ["/", "/coaches"]) {
       const page = await route(path, {} as Store, { ...site, mcpUrl: "https://example.com/mcp" });

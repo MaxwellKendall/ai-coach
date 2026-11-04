@@ -301,6 +301,7 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
     if (invite) return html(coachInvitePage(invite.coach, path, site));
   }
   if (path === "/claude" && site.mcpUrl) return html(claudePage(site, site.mcpUrl));
+  if (path === "/pro" && site.mcpUrl) return html(proPage(site));
   if (path === "/pro/thanks" && site.mcpUrl) return { ...html(proThanksPage(site)), noStore: true };
   if (path === "/" || path === "/coaches") return html(homePage(site));
   return { ...html(missingPage(site)), status: 404 };
@@ -670,7 +671,7 @@ function homePage(site: Site) {
       </section>
       <section class="block">
         <h2>Training yourself?</h2>
-        <p class="lede">${app} is free for you too. Connect Claude and say “Set me up”: it asks about your goals, writes your program, and logs your sessions. Sign in with Google or Apple and your account is made for you.</p>
+        <p class="lede">The iPhone app is free for you too. Or connect Claude and say “Set me up”: it asks about your goals, writes your program, and logs your sessions. Planning from Claude is free for 14 days, then needs <a href="/pro">Pro</a>; logging stays free.</p>
         <div class="actions"><a class="button" href="/claude">Connect Claude</a></div>
       </section>`,
   });
@@ -747,23 +748,55 @@ function claudePage(site: Site, mcpUrl: string) {
       <section class="block">
         <h2>Then just say it</h2>
         <ul class="says">${says.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
-        <p class="fine">Claude shows each change before it's saved, and can undo it. Training yourself? The same connector works for you, free: say “Set me up” and Claude writes your program. Other agents that speak MCP connect at the same address. Every tool, and what happens to your data, is in the <a href="/docs">documentation</a>.</p>
+        <p class="fine">Claude shows each change before it's saved, and can undo it. Training yourself? The same connector works for you: say “Set me up” and Claude writes your program. Other agents that speak MCP connect at the same address. Every tool, and what happens to your data, is in the <a href="/docs">documentation</a>.</p>
       </section>`,
   });
 }
 
 /**
- * FIT-190: where Stripe Checkout came back to once Pro was paid for. FIT-214: Pro isn't sold any more, so this only
- * catches a Checkout already under way, and doesn't name or price Pro.
+ * FIT-327: lifter Pro, where the connector's refusal points. The iPhone app and /claude don't link here (App Review
+ * 3.1.1(a), FIT-59); buying happens in Billing on the dashboard.
  */
+function proPage(site: Site) {
+  const app = esc(site.appName);
+  return layout(site, {
+    title: `${site.appName} Pro: your plan changes when your week does`,
+    description: `Your own Claude plans your training, replans it when life gets in the way, and reviews your week. ${site.appName}'s app and logging stay free.`,
+    path: "/pro",
+    body: `
+      <section class="hero">
+        <p class="eyebrow">Pro, for your own training</p>
+        <h1>Your plan changes when your week does.</h1>
+        <p class="lede">Your own Claude writes your program, replans around a bad week, a trip or a sore knee, and reviews each week from what you logged. You approve every change.</p>
+        <div class="actions"><a class="button primary" href="/app/billing">Start Pro</a><a class="button" href="/claude">Connect Claude</a></div>
+      </section>
+      <section class="block price-block">
+        <h2>Price</h2>
+        <p class="price"><b>$5.99</b><span>a month, or $39.99 a year</span></p>
+        <p class="lede">Planning from Claude is free for your first 14 days, with no card. Pro renews until you cancel, which you can do any time from Billing.</p>
+      </section>
+      <section class="block">
+        <h2>What's in it</h2>
+        <ul class="needs">
+          <li><b>With Pro</b><span>Claude writes and changes your program and sessions, and reviews your week.</span></li>
+          <li><b>Free without it</b><span>The ${app} iPhone app with its ready-made programs. From Claude: logging, your plan, progress and goals.</span></li>
+          <li><b>What you need</b><span>Your own Claude, with ${app} added as a connector, using the same sign-in as your Pro. Claude's own usage is on your Claude account.</span></li>
+          <li><b>Coaching clients?</b><span><a href="/coaches">Pro for coaches</a> programs your whole roster, and includes your own training.</span></li>
+        </ul>
+      </section>`,
+  });
+}
+
+/** FIT-190: where Stripe Checkout comes back to once Pro is paid for; they carry on in Claude. */
 function proThanksPage(site: Site) {
   return layout(site, {
-    title: "Thanks",
-    description: site.appName,
+    title: `You have ${site.appName} Pro`,
+    description: `Thanks for subscribing to ${site.appName} Pro.`,
     path: "/pro/thanks",
-    body: `<section class="hero"><h1>You're all set</h1>
-      <p class="lede">Go back to Claude and carry on, with nothing to reconnect.</p>
-      <div class="actions"><a class="button primary" href="https://claude.ai">Back to Claude</a></div></section>`,
+    body: `<section class="hero"><h1>You have Pro</h1>
+      <p class="lede">Thanks for subscribing. Go back to Claude and carry on: your next plan goes through, with nothing to reconnect.</p>
+      <div class="actions"><a class="button primary" href="https://claude.ai">Back to Claude</a></div>
+      <p class="fine">To change your card or plan, or cancel, open Billing on the dashboard.</p></section>`,
   });
 }
 

@@ -396,6 +396,9 @@ export class AICoachStack extends Stack {
     coachPlanSource.createResolver("CoachPlanGet", { typeName: "Query", fieldName: "coachPlan" });
     coachPlanSource.createResolver("CoachPlanStart", { typeName: "Mutation", fieldName: "startCoachPlan" });
     coachPlanSource.createResolver("CoachPlanPortal", { typeName: "Mutation", fieldName: "coachBillingPortal" });
+    coachPlanSource.createResolver("ProPlanGet", { typeName: "Query", fieldName: "proPlan" });
+    coachPlanSource.createResolver("ProPlanStart", { typeName: "Mutation", fieldName: "startProPlan" });
+    coachPlanSource.createResolver("ProPlanPortal", { typeName: "Mutation", fieldName: "proBillingPortal" });
 
     // ---- FIT-102: Claude for the app, with the key kept here ----
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(this, "AnthropicSecret", `aicoach/${stage}/anthropic`);

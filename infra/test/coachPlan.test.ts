@@ -113,10 +113,10 @@ describe("checkout for the coach plan", () => {
 });
 
 describe("FIT-190: Pro's checkout", () => {
-  it("comes back to the site's pages, not the dashboard's billing", () => {
+  it("comes back to the page that sends them to Claude, or to Billing if they cancel", () => {
     const params = checkoutParams("sam", "cus_1", "price_1", "https://barbrabell.com", "pro");
     expect(params.success_url).toBe("https://barbrabell.com/pro/thanks");
-    expect(params.cancel_url).toBe("https://barbrabell.com/claude");
+    expect(params.cancel_url).toBe("https://barbrabell.com/app/billing");
   });
 
   it("looks up Pro's prices and keeps its customer on PROPLAN", async () => {

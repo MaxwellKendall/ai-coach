@@ -141,6 +141,7 @@ describe("resolvers", () => {
         "Mutation.unlinkCoach", "Mutation.removeClient", "Mutation.postComment", "Query.comments", "Mutation.editComment", "Mutation.deleteComment",
         "Mutation.sendProgram", "Query.programOffers", "Mutation.answerProgram", "Mutation.linkAccount",
         "Query.coachPlan", "Mutation.startCoachPlan", "Mutation.coachBillingPortal",
+        "Query.proPlan", "Mutation.startProPlan", "Mutation.proBillingPortal",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
