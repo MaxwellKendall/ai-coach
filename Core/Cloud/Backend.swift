@@ -23,4 +23,10 @@ enum Backend: String, CaseIterable {
         nil
         #endif
     }
+
+    /// The sync state that goes with `store`. A store's state can't serve another one: an empty store under a state that
+    /// remembers units reads as having deleted them all, and the next sync pushes those deletions.
+    func syncState(_ uid: String) -> String {
+        store == nil ? "sync-\(uid).json" : "sync-\(rawValue)-\(uid).json"
+    }
 }

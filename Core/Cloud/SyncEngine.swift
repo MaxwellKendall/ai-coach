@@ -219,7 +219,7 @@ final class SyncEngine {
     // MARK: State, per account on this iPhone
 
     private static func url(_ uid: String) -> URL {
-        URL.applicationSupportDirectory.appending(path: "sync-\(uid).json")
+        URL.applicationSupportDirectory.appending(path: Backend.current.syncState(uid))
     }
 
     private static func load(_ uid: String) -> SyncState {
