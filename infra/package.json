@@ -18,6 +18,7 @@
     "sync-status": "tsx scripts/syncStatus.ts",
     "mcp-token": "tsx scripts/mcpToken.ts",
     "review-account": "tsx scripts/review-account.ts",
+    "coach-demo": "tsx scripts/coach-demo.ts",
     "program-stats": "tsx scripts/programStats.ts",
     "coach-stats": "tsx scripts/coachStats.ts"
   },

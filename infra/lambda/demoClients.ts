@@ -15,6 +15,8 @@ export type Client = {
   checkIn?: (daysAgo: number) => DailyInput | undefined;
   /** FIT-236: the program, from their first logged week, and the goals it aims at, each from where it started. */
   program: { weeks: number; goals: { goal: GoalInput; baseline: number }[] };
+  /** The profile's training days, when they aren't Mon/Wed/Fri. */
+  trainingDays?: string[];
 };
 
 const lb = (start: number, step: number, w: number) => start + step * w;
@@ -134,7 +136,7 @@ export function units(client: Client, first: number, program = false, today = ke
   const start = addDays(sunday, 7 * first + 1);
   const target = addDays(sunday, 7 * (first + client.program.weeks) - 1);
   out.set("profile", encode({
-    ...mergeProfile(undefined, { age: client.age, weight_lb: client.weight, training_days: ["Mon", "Wed", "Fri"], session_minutes: 60, style: client.style }),
+    ...mergeProfile(undefined, { age: client.age, weight_lb: client.weight, training_days: client.trainingDays ?? ["Mon", "Wed", "Fri"], session_minutes: 60, style: client.style }),
     // Noon, so the days are the same in any US time zone the account reads them in.
     ...(program ? { programStart: at(addDays(start, -1), 12), targetDate: at(target, 12) } : { programStart: at(start, 0) }),
   }));

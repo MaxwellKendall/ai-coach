@@ -10,6 +10,8 @@ xcuserdata/
 *.p8
 .env
 build-sim/
+# FIT-328: demo accounts' passwords, written by infra/scripts/coach-demo.ts
+.demo-accounts.*
 
 # FIT-237: the ChatGPT plugin ZIP, built by directories/chatgpt/build.sh
 directories/chatgpt/dist/
