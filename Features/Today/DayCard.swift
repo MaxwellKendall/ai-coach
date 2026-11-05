@@ -38,6 +38,8 @@ enum DayCard {
         var pendingRun: PlannedActivity? = nil
         /// Runs logged beside the day's saved lifting.
         var ran: [LogEntry] = []
+        /// The session's summary row, whose note says how it went; edited any time after.
+        var summary: LogEntry? = nil
     }
 
     /// Workouts only: cooking and groceries are left off Today for now (FIT-25).
@@ -99,7 +101,7 @@ enum DayCard {
                     minutes: value("duration_s").map { max(1, Int(($0 / 60).rounded())) }, sets: logged.count,
                     volume: SessionRecord(logged, groups: []).volume,
                     coach: Coach.done(lifts(Array(sets), planned: planned, context: context), missedSets: missed),
-                    note: note, feel: Feel(effort: value("effort")), planned: planned)
+                    note: note, feel: Feel(effort: value("effort")), planned: planned, summary: summary)
     }
 
     private static func runSummary(_ runs: [LogEntry], planned: [PlannedActivity]) -> Done {
