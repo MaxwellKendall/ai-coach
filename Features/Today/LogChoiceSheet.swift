@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// FIT-297: Log on Today, for training done without pressing Start: today's session (every set filled in as
-/// planned, to fix), a different workout, or a run, class or sport.
+/// planned, to fix), a different workout, or a run, class or sport. Or a run to start now, planned or not.
 struct LogChoiceSheet: View {
-    enum Choice { case today, other, run }
+    enum Choice { case today, other, track, run }
 
     var hasToday: Bool
     var onChoose: (Choice) -> Void
@@ -13,6 +13,7 @@ struct LogChoiceSheet: View {
             Text("Log a workout").font(.display(24, relativeTo: .title))
             Text("Did it without the app, or did something different? Log it so the plan keeps up.")
                 .font(.subheadline).foregroundStyle(Color.inkMuted).padding(.bottom, 6)
+            option("Start a run", "Tracked with the map and saved to Apple Health.") { onChoose(.track) }
             if hasToday { option("I did today’s workout", "Every set is filled in as planned; fix any that were different.") { onChoose(.today) } }
             option("I did a different workout", "Pick the exercises, then log the sets.") { onChoose(.other) }
             option("A run, class or sport", "Distance, time and how it felt.") { onChoose(.run) }

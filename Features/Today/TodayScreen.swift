@@ -513,13 +513,17 @@ struct TodayScreen: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Button { start(plan) } label: {
-                        Label(lifting(plan.items).isEmpty ? "Start the run" : "Start", systemImage: lifting(plan.items).isEmpty ? "figure.run" : "play.fill")
+                    // A planned run comes first: run mode tracks it and saves it to Apple Health. Lifts beside it are checked off or started below.
+                    if plan.ran.isEmpty, let run = runs(plan.items).first {
+                        startRun(run)
+                        if !lifting(plan.items).isEmpty { secondary("Start the lifts", "play.fill") { start(plan) } }
+                    } else {
+                        Button { start(plan) } label: { Label("Start", systemImage: "play.fill") }.buttonStyle(.primary)
                     }
-                    .buttonStyle(.primary)
                     pair("Move", "calendar", { sheet = .move }, "Log", "plus", { sheet = .logChoice(plan.items) })
                 }
             case .done(let done):
+                if let run = done.pendingRun { startRun(run) }
                 pair("Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned, done.start) } },
                      "Log", "plus", { sheet = .logChoice([]) })
             default:
@@ -692,6 +696,11 @@ struct TodayScreen: View {
         .buttonStyle(.plain)
     }
 
+    private func startRun(_ planned: PlannedActivity) -> some View {
+        Button { tracking = RunTarget(planned: planned) } label: { Label("Start the run", systemImage: "figure.run") }
+            .buttonStyle(.primary)
+    }
+
     /// FIT-179: a run, planned or not, logged with its distance and time.
     private func runButton(_ title: String, _ planned: PlannedActivity?) -> some View {
         pill(title, "figure.run") { tracking = RunTarget(planned: planned) }
@@ -730,6 +739,7 @@ struct TodayScreen: View {
                 }
             }
             .padding(.top, 26)
+            ForEach(done.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
             Text(done.coach).font(.body).lineSpacing(2).padding(.top, 26).fixedSize(horizontal: false, vertical: true)
             if !done.note.isEmpty {
                 Text("“\(done.note)”").font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
@@ -1139,6 +1149,7 @@ struct TodayScreen: View {
                     switch choice {
                     case .today: self.sheet = .log(items)
                     case .other: self.sheet = .ownOn(.now)
+                    case .track: self.tracking = RunTarget(planned: nil)
                     case .run: self.sheet = .run(nil)
                     }
                 }
