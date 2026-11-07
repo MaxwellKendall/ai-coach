@@ -25,6 +25,8 @@ final class Roster {
 
     private(set) var clients: [Client] = []
     private(set) var loaded = false
+    /// The coach `clients` belong to.
+    private var loadedFor: String?
     var problem: String?
 
     /// Signed out, or before the first load, none; `clients` for a preview.
@@ -42,18 +44,28 @@ final class Roster {
         if Self.sample { return }
         #endif
         guard let coach else { clients = []; loaded = true; return }
+        // Another account's list, or the signed-out one, isn't this coach's: loading, not "Invite your first client".
+        if coach != loadedFor { clients = []; loaded = false }
         do {
             let people = try await Cloud.myClients()
             if !people.isEmpty { UserDefaults.standard.set(true, forKey: Self.coachingKey) }
             let today = SyncUnits.day(.now)
-            var loaded: [Client] = []
-            for person in people {
-                let units = try await Cloud.units(of: person.uid)
-                let comments = try await Cloud.comments(of: person.uid)
-                loaded.append(Client(person: person, units: units, comments: comments,
-                                     week: Triage.week(units, comments: comments, names: names, coach: coach, today: today)))
+            // All at once: one after another, ten clients took 13 s on prod.
+            let fetched = try await withThrowingTaskGroup(of: (Int, [String: String], [Triage.Comment]).self) { group in
+                for (index, person) in people.enumerated() {
+                    group.addTask { (index, try await Cloud.units(of: person.uid), try await Cloud.comments(of: person.uid)) }
+                }
+                var fetched: [Int: ([String: String], [Triage.Comment])] = [:]
+                for try await (index, units, comments) in group { fetched[index] = (units, comments) }
+                return fetched
+            }
+            let loaded = people.enumerated().map { index, person in
+                let (units, comments) = fetched[index]!
+                return Client(person: person, units: units, comments: comments,
+                              week: Triage.week(units, comments: comments, names: names, coach: coach, today: today))
             }
             clients = Triage.byNeed(loaded, \.week)
+            loadedFor = coach
             problem = nil
         } catch {
             problem = "Couldn’t load your clients. Pull to try again."
