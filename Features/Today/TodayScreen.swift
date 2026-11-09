@@ -16,6 +16,10 @@ struct TodayScreen: View {
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
     @Query private var templates: [Template]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
+    @Environment(\.scenePhase) private var scenePhase
+    /// FIT-330: the day Today is on. It moves on when the app comes back on a new day, or at midnight while it's open,
+    /// and with it the pages and the week's planning.
+    @State private var today = Calendar.current.startOfDay(for: .now)
     @State private var day: Int?
     @State private var voice = VoiceCapture()
     /// What was said, while it's worked on (FIT-50: the progress pill shows it and `step`).
@@ -82,21 +86,21 @@ struct TodayScreen: View {
     }
 
     private var week: [Date] {
-        (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.start(of: .now))! }
+        (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.start(of: today))! }
     }
 
     private var todayIndex: Int { week.firstIndex { Calendar.current.isDateInToday($0) } ?? 0 }
 
-    /// The swiped days: this week, fixed, Sunday first and Saturday last (author, 2026-10-30).
+    /// The swiped days: last week and this week, each Sunday first and Saturday last (author, 2026-10-30; last week,
+    /// FIT-329). The strip shows the shown day's week.
     private var days: [Date] {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
         let sunday = calendar.date(byAdding: .day, value: -todayPos, to: today)!
-        return (0..<7).map { calendar.date(byAdding: .day, value: $0, to: sunday)! }
+        return (0..<14).map { calendar.date(byAdding: .day, value: $0, to: sunday)! }
     }
 
-    /// Today's place in `days` (the Gregorian weekday runs 1 = Sunday to 7 = Saturday).
-    private var todayPos: Int { Calendar.current.component(.weekday, from: .now) - 1 }
+    /// Today's place in `days`: this week's half (the Gregorian weekday runs 1 = Sunday to 7 = Saturday).
+    private var todayPos: Int { 7 + Calendar.current.component(.weekday, from: today) - 1 }
 
     /// FIT-201: coached, with no session planned from this Monday on.
     private var awaitingCoach: Bool {
@@ -158,6 +162,8 @@ struct TodayScreen: View {
         .animation(.snappy, value: working)
         .animation(.snappy, value: toast)
         .onAppear { if day == nil { day = todayPos } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { turnDay() } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in turnDay() }
         // FIT-220: a tapped notification's day; a coach's reply opens that session and its thread.
         .onChange(of: Navigator.shared.day, initial: true) { _, target in open(target) }
         #if DEBUG
@@ -214,7 +220,7 @@ struct TodayScreen: View {
             if let celebrating { CelebrationSheet(wins: celebrating) }
         }
         // A new week, or a profile that just finished onboarding, gets a plan; the coach designs it with Pro (FIT-120).
-        .task(id: "\(profiles.first?.plansItself == true) \(profiles.first?.programSlug ?? "") \(pro.active) \(pro.coaches.isEmpty)") {
+        .task(id: "\(today) \(profiles.first?.plansItself == true) \(profiles.first?.programSlug ?? "") \(pro.active) \(pro.coaches.isEmpty)") {
             guard Pilot.plansWeeks(hasProgram: profiles.first?.programStart != nil, coached: !pro.coaches.isEmpty) else { return }
             try? Planner.ensureWeek(in: context)
             // On a Sunday the swiped week (Sunday to Saturday) runs into the next plan week (Monday first): plan it now, so
@@ -223,6 +229,14 @@ struct TodayScreen: View {
             guard pro.active else { return }
             await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
         }
+    }
+
+    /// FIT-330: a new day since Today last looked goes to it.
+    private func turnDay() {
+        let now = Calendar.current.startOfDay(for: .now)
+        guard now != today else { return }
+        today = now
+        day = todayPos
     }
 
     private func open(_ target: PushTarget?) {
@@ -301,11 +315,12 @@ struct TodayScreen: View {
         .padding(.horizontal, 20).padding(.top, 4)
     }
 
-    /// The seven days from today: weekday, date, and a dot for a session (ring) or one done (filled). Today's date is in
-    /// the plate colour; the shown day is filled.
+    /// The shown day's week: weekday, date, and a dot for a session (ring) or one done (filled). Today's date is in the
+    /// plate colour; the shown day is filled.
     private func strip(_ days: [Date], cards: [DayCard], selected: Int) -> some View {
-        HStack(spacing: 0) {
-            ForEach(days.indices, id: \.self) { index in
+        let start = selected / 7 * 7
+        return HStack(spacing: 0) {
+            ForEach(start..<start + 7, id: \.self) { index in
                 let on = index == selected
                 Button { withAnimation(.snappy) { day = index } } label: {
                     VStack(spacing: 6) {
@@ -392,13 +407,15 @@ struct TodayScreen: View {
         .accessibilityHint("Weight, sleep and a note for your coach")
     }
 
-    /// "Today", "Tomorrow", then the weekday.
+    /// "Today", "Tomorrow", then the weekday; a day before this week's Sunday is "Last Monday" (FIT-329).
     static func dayName(_ day: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(day) { return "Today" }
         if calendar.isDateInTomorrow(day) { return "Tomorrow" }
         if calendar.isDateInYesterday(day) { return "Yesterday" }
-        return day.formatted(.dateTime.weekday(.wide))
+        let weekday = day.formatted(.dateTime.weekday(.wide))
+        let sunday = calendar.date(byAdding: .day, value: 1 - calendar.component(.weekday, from: .now), to: calendar.startOfDay(for: .now))!
+        return day < sunday ? "Last \(weekday)" : weekday
     }
 
     private func takeFromCoach() {
@@ -558,7 +575,7 @@ struct TodayScreen: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             Group {
-                // Another day this week, earlier or later: its session can be moved to today, or swapped with today's.
+                // Another day, earlier or later: its session can be moved to today, or swapped with today's.
                 if index == todayPos { actions(card, week: weekCards) }
                 else if index < todayPos { pastActions(card, day: day) }
                 else { laterActions(card, todayPlan: todayPlan) }
@@ -595,7 +612,7 @@ struct TodayScreen: View {
         if case .plan = card { true } else { false }
     }
 
-    /// An earlier day this week: its session logged on that day, or anything else logged there; a logged day's sets
+    /// An earlier day, this week or last: its session logged on that day, or anything else logged there; a logged day's sets
     /// can still be corrected.
     private func pastActions(_ card: DayCard, day: Date) -> some View {
         VStack(spacing: 8) {
@@ -1095,7 +1112,7 @@ struct TodayScreen: View {
     private func save(_ spoken: WorkoutDraft) {
         let saved = spoken.save(at: .now, templates: templates, in: context)
         try? context.save()
-        day = todayIndex
+        day = todayPos
         withAnimation { toast = Toast(text: "\(spoken.session) saved") { [context] in
             for entry in saved { context.delete(entry) }
             try? context.save()
