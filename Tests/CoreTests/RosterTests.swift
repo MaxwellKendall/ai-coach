@@ -26,6 +26,19 @@ struct RosterTests {
         #expect(client("New").lastLogged == nil)
     }
 
+    @Test func conversationHasEveryDayEitherOfThemWroteOnAndTheDayOpened() {
+        let note = String(decoding: try! JSONSerialization.data(withJSONObject: [
+            ["id": UUID().uuidString, "kind": "workout", "at": 1_000, "note": "Knee's sore", "measurements": []],
+        ]), as: UTF8.self)
+        let quiet = String(decoding: try! JSONSerialization.data(withJSONObject: [
+            ["id": UUID().uuidString, "kind": "workout", "at": 2_000, "template": "back-squat", "note": "Lower A", "measurements": []],
+        ]), as: UTF8.self)
+        var mike = client("Mike", units: ["log#2026-11-08": note, "log#2026-11-09": quiet])
+        mike.comments = [Triage.Comment(day: "2026-11-03", at: "2026-11-03T18:00:00Z", by: "coach", byName: "Dana", text: "Nice work")]
+        #expect(DayThread.days(mike, opened: "2026-11-10") == ["2026-11-03", "2026-11-08", "2026-11-10"])
+        #expect(DayThread.days(mike, opened: "2026-11-08") == ["2026-11-03", "2026-11-08"])
+    }
+
     @Test func agoReadsAsMessagesDatesItsRows() {
         let calendar = Calendar.current
         let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 10, hour: 12))!

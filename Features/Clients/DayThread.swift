@@ -20,32 +20,24 @@ struct DayThread: View {
     private var date: Date { (try? Date.ISO8601FormatStyle().year().month().day().parse(ref.day)).map { $0 + 12 * 3600 } ?? .now }
 
     /// Laid out as a Messages conversation (author, 2026-11-10: "the message page looks really bad"): who it's with at
-    /// the top, the day and its session as the conversation's first item, then bubbles, theirs left and yours right.
+    /// the top, then bubbles, theirs left and yours right. The author: "how can a coach see ALL messages to/from a given
+    /// client?" So it's the whole conversation, every day either of them wrote on, each under its date and session;
+    /// it opens on `ref.day`, and what's sent belongs to that day, so it shows on that day of their Today.
     var body: some View {
-        ScrollView {
-            if let client {
-                let log = ClientDay.log(client.units, ref.day)
-                let comments = client.comments.filter { $0.day == ref.day }
-                let notes = ClientDay.notes(log)
-                VStack(spacing: 0) {
-                    Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
-                        .font(.caption.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                        .padding(.bottom, 10)
-                    session(log)
-                    VStack(spacing: 4) {
-                        ForEach(notes, id: \.self) { note in bubble(note, mine: false) }
-                        ForEach(comments, id: \.at) { comment in bubble(comment.text, mine: comment.by == account.user?.uid) }
+        ScrollViewReader { reader in
+            ScrollView {
+                if let client {
+                    VStack(spacing: 28) {
+                        ForEach(Self.days(client, opened: ref.day), id: \.self) { day in
+                            dayView(client, day).id(day)
+                        }
+                        if let problem { Text(problem).font(.footnote).foregroundStyle(.red) }
                     }
-                    .padding(.top, 16)
-                    if notes.isEmpty && comments.isEmpty {
-                        Text("Write to \(first(client)) about \(date.formatted(.dateTime.weekday(.wide))). It shows on their Today and as a notification.")
-                            .font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
-                            .padding(.horizontal, 24).padding(.top, 8)
-                    }
-                    if let problem { Text(problem).font(.footnote).foregroundStyle(.red).padding(.top, 8) }
+                    .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 16)
                 }
-                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 16)
             }
+            // A day other than today opens at that day; today's is the end of the conversation.
+            .onAppear { if ref.day != SyncUnits.day(.now) { reader.scrollTo(ref.day, anchor: .top) } }
         }
         .defaultScrollAnchor(.bottom)
         .scrollDismissesKeyboard(.interactively)
@@ -69,11 +61,46 @@ struct DayThread: View {
 
     private func first(_ client: Roster.Client) -> String { client.name.split(separator: " ").first.map(String.init) ?? client.name }
 
+    /// Every day with a message from either of them, the client's own words included, oldest first, and the day it
+    /// was opened on, so there's somewhere to write about it.
+    static func days(_ client: Roster.Client, opened: String) -> [String] {
+        let noted = client.units.keys.filter { $0.hasPrefix("log#") }.map { String($0.dropFirst(4)) }
+            .filter { !ClientDay.notes(ClientDay.log(client.units, $0)).isEmpty }
+        return Set(client.comments.map(\.day) + noted + [opened]).sorted()
+    }
+
+    private func dayView(_ client: Roster.Client, _ day: String) -> some View {
+        let log = ClientDay.log(client.units, day)
+        let comments = client.comments.filter { $0.day == day }.sorted { $0.at < $1.at }
+        let notes = ClientDay.notes(log)
+        let date = Self.date(day)
+        return VStack(spacing: 0) {
+            Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                .font(.caption.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                .padding(.bottom, 10)
+            session(log, day: day)
+            VStack(spacing: 4) {
+                ForEach(notes, id: \.self) { note in bubble(note, mine: false) }
+                ForEach(comments, id: \.at) { comment in bubble(comment.text, mine: comment.by == account.user?.uid) }
+            }
+            .padding(.top, notes.isEmpty && comments.isEmpty ? 0 : 16)
+            if day == ref.day && notes.isEmpty && comments.isEmpty {
+                Text("Write to \(first(client)) about \(date.formatted(.dateTime.weekday(.wide))). It shows on their Today and as a notification.")
+                    .font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
+                    .padding(.horizontal, 24).padding(.top, 12)
+            }
+        }
+    }
+
+    private static func date(_ day: String) -> Date {
+        (try? Date.ISO8601FormatStyle().year().month().day().parse(day)).map { $0 + 12 * 3600 } ?? .now
+    }
+
     /// The day's session as a compact card, like a link shared in a conversation: its name, then a line per lift; or
     /// what was planned, or a rest day.
-    @ViewBuilder private func session(_ log: [SyncUnits.LogRow]) -> some View {
+    @ViewBuilder private func session(_ log: [SyncUnits.LogRow], day: String) -> some View {
         let lifts = ClientDay.lifts(log, names: names)
-        let plan = client.map { ClientDay.plan($0.units, ref.day).filter { $0.kind == .workout } } ?? []
+        let plan = client.map { ClientDay.plan($0.units, day).filter { $0.kind == .workout } } ?? []
         VStack(alignment: .leading, spacing: 8) {
             if !lifts.isEmpty {
                 Label(ClientDay.sessionName(log) ?? "Logged", systemImage: "checkmark.circle.fill")
@@ -86,7 +113,7 @@ struct DayThread: View {
                     }
                 }
             } else if !plan.isEmpty {
-                Label(ref.day < SyncUnits.day(.now) ? "Planned, not logged" : "Planned", systemImage: "calendar")
+                Label(day < SyncUnits.day(.now) ? "Planned, not logged" : "Planned", systemImage: "calendar")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
                 // Each exercise once, in the plan's order.
                 let slugs = plan.compactMap(\.template).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
@@ -115,7 +142,9 @@ struct DayThread: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message \(client?.name.split(separator: " ").first.map(String.init) ?? "them")", text: $text, axis: .vertical)
+            // What's sent belongs to the day it was opened on: "Message Mike about Sunday" when that isn't today.
+            TextField("Message \(client.map(first) ?? "them")" + (ref.day == SyncUnits.day(.now) ? "" : " about \(date.formatted(.dateTime.weekday(.wide)))"),
+                      text: $text, axis: .vertical)
                 .lineLimit(1...5).focused($focused)
                 .padding(.vertical, 8)
             let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

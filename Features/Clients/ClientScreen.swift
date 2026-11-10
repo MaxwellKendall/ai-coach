@@ -35,6 +35,14 @@ struct ClientScreen: View {
                             Text(client.name).font(.display(28))
                             Text(summary(client)).font(.subheadline).foregroundStyle(Color.inkMuted)
                         }
+                        Spacer(minLength: 0)
+                        // FIT-331: every message with them, all days, in one conversation.
+                        NavigationLink(value: DayThread.Ref(client: id, day: today)) {
+                            Image(systemName: "bubble.left.and.bubble.right").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
+                                .frame(width: 44, height: 44).background(Color.fill, in: .circle)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Messages with \(client.name)")
                     }
                     flags(client)
                     VStack(spacing: 12) {
