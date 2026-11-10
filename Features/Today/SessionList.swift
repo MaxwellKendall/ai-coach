@@ -235,8 +235,13 @@ struct SessionList: View {
             .accessibilityHint(onEdit != nil ? "Change this exercise" : "")
             Spacer(minLength: 8)
             loadView(movement, load: load)
-            // FIT-331: editing that shows it's there, as Hevy and Strong put ⋯ on each exercise.
-            if onEdit != nil {
+            // FIT-331: editing that shows it's there, as Hevy and Strong put ⋯ on each exercise; while a lift is open
+            // its ⋯ is Done, so there's a way out you can see (author, 2026-11-10).
+            if onEdit != nil, open == pick {
+                Button("Done") { open = nil }
+                    .font(.body.weight(.semibold)).foregroundStyle(Plate.current.mark).buttonStyle(.plain)
+                    .frame(minHeight: 44).contentShape(.rect)
+            } else if onEdit != nil {
                 Menu { actions(movement, pick: pick) } label: {
                     Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Color.inkMuted)
                         .frame(width: 32, height: 44).contentShape(.rect)
