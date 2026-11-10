@@ -331,7 +331,7 @@ struct TodayScreen: View {
             }
             .clipped()
             // FIT-332: swipe the strip for another week, as in Calendar; the pages below swipe between its days.
-            .simultaneousGesture(WeekBar.swipe { go(to: WeekBar.week($0, from: shownWeek)) })
+            .simultaneousGesture(WeekPaging.swipe { go(to: WeekPaging.week($0, from: shownWeek)) })
             if let goal = goalLine {
                 HStack(spacing: 8) {
                     Text(goal.label).font(.subheadline.weight(.semibold))

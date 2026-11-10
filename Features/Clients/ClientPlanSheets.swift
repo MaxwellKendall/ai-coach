@@ -69,3 +69,86 @@ struct PlanDaySheet: View {
         .presentationDetents([.large])
     }
 }
+
+/// FIT-336: the week shown, repeated for some weeks, with or without 5 lb more a week on the main lifts.
+struct RepeatWeekSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onRepeat: (_ weeks: Int, _ progress: Bool) -> Void
+    @State private var weeks = 3
+    @State private var progress = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Text("Repeat this week").font(.title2.weight(.bold))
+            HStack {
+                Text("\(weeks)").font(.display(34, weight: .semibold, relativeTo: .largeTitle)).monospacedDigit()
+                    + Text(weeks == 1 ? " week" : " weeks").font(.title3.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                Spacer()
+                Stepper("Weeks", value: $weeks, in: 1...12).labelsHidden()
+            }
+            Toggle("5 lb more each week on the main lifts", isOn: $progress)
+            Button("Repeat") {
+                onRepeat(weeks, progress)
+                dismiss()
+            }
+            .buttonStyle(.primary)
+        }
+        .padding(24)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .presentationDetents([.medium])
+    }
+}
+
+/// FIT-336: a ready-made program for the client (programs.json), every week of it planned from a start day.
+struct StartProgramSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onStart: (ReadyProgram, Date) -> Void
+    @State private var picked: ReadyProgram?
+    @State private var from: Date
+
+    init(from: Date, onStart: @escaping (ReadyProgram, Date) -> Void) {
+        self.onStart = onStart
+        _from = State(initialValue: from)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    DatePicker("Starts", selection: $from, in: Calendar.current.startOfDay(for: .now)..., displayedComponents: .date)
+                }
+                Section {
+                    ForEach(ReadyProgram.all) { ready in
+                        Button { picked = ready } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(ready.name).font(.headline).foregroundStyle(Color.ink)
+                                    Text("\(ready.weeks) weeks · \(ready.days.map(String.init).joined(separator: " or ")) days · \(ready.minutes) min")
+                                        .font(.subheadline).foregroundStyle(Color.inkMuted)
+                                }
+                                Spacer()
+                                if picked?.id == ready.id { Image(systemName: "checkmark").foregroundStyle(Plate.current.mark) }
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } footer: {
+                    Text("Every week is planned now, from what they've logged so far; change any day after.")
+                }
+            }
+            .navigationTitle("Start a program")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Start") {
+                        if let picked { onStart(picked, from) }
+                        dismiss()
+                    }
+                    .disabled(picked == nil)
+                }
+            }
+        }
+    }
+}

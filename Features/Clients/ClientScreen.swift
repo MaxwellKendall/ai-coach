@@ -23,7 +23,13 @@ struct ClientScreen: View {
     @State private var dated: Dated?
     @State private var clearing = false
 
+    /// FIT-336: a sheet for the week, and a change to it waiting on "Replace?" when it would overwrite planned days.
+    @State private var weekSheet: WeekSheet?
+    @State private var pending: Pending?
+
     enum Adding: String, Identifiable { case workout, run; var id: String { rawValue } }
+    enum WeekSheet: String, Identifiable { case repeating, program; var id: String { rawValue } }
+    struct Pending { var days: [String: [SyncUnits.PlanRow]]; var replacing: Int; var done: String }
     enum Dated: String, Identifiable { case move, copy; var id: String { rawValue } }
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
@@ -53,14 +59,14 @@ struct ClientScreen: View {
                     }
                     flags(client)
                     VStack(spacing: 12) {
-                        WeekBar(start: start) { go(to: $0) }
+                        WeekBar(start: start, go: { go(to: $0) }) { weekActions(client) }
                         strip(client)
                             .id(start)
                             .transition(.push(from: forward ? .trailing : .leading))
                     }
                     .clipped()
                     // Swipe the strip to the next or previous week, as in Calendar.
-                    .simultaneousGesture(WeekBar.swipe { go(to: WeekBar.week($0, from: start)) })
+                    .simultaneousGesture(WeekPaging.swipe { go(to: WeekPaging.week($0, from: start)) })
                     dayCard(client)
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
@@ -84,6 +90,34 @@ struct ClientScreen: View {
                          done: "Run added")
                 }
             }
+        }
+        .sheet(item: $weekSheet) { sheet in
+            switch sheet {
+            case .repeating:
+                RepeatWeekSheet { weeks, progress in
+                    guard let client = roster.clients.first(where: { $0.id == id }) else { return }
+                    let week = ClientWeek.days(client.units, sunday: start)
+                    propose(ClientWeek.repeated(week, weeks: weeks, progress: progress), client,
+                            done: "Repeated for \(weeks) week\(weeks == 1 ? "" : "s")")
+                }
+            case .program:
+                StartProgramSheet(from: max(Calendar.current.startOfDay(for: .now), start)) { ready, from in
+                    guard let client = roster.clients.first(where: { $0.id == id }) else { return }
+                    let profile = client.units["profile"].flatMap { try? SyncUnits.decode(SyncUnits.ProfileBody.self, $0) }
+                    let logs = client.units.keys.filter { $0.hasPrefix("log#") }.flatMap { ClientDay.log(client.units, String($0.dropFirst(4))) }
+                    propose(ClientWeek.program(ready, from: from, profile: profile, logs: logs, templates: templates), client,
+                            done: "\(ready.name) starts \(Self.dayTitle(SyncUnits.day(from)))")
+                }
+            }
+        }
+        .confirmationDialog(pending.map { "Replace \($0.replacing) planned day\($0.replacing == 1 ? "" : "s")?" } ?? "",
+                            isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible) {
+            Button("Replace", role: .destructive) {
+                if let pending, let client = roster.clients.first(where: { $0.id == id }) { sendAll(pending.days, client, done: pending.done) }
+                pending = nil
+            }
+        } message: {
+            Text("Those days already have a session; this puts the new one in its place.")
         }
         .sheet(item: $dated) { dated in
             PlanDaySheet(title: dated == .move ? "Move to" : "Copy to", from: day) { target in
@@ -291,23 +325,63 @@ struct ClientScreen: View {
         send(day, rows: editor.save(session), client)
     }
 
-    /// A day's plan as it now is, sent to their phone (none clears it); kept here at once so the change shows while
-    /// it goes. `done` is said once it's sent.
+    /// A day's plan as it now is, sent to their phone (none clears it). `done` is said once it's sent.
     private func send(_ day: String, rows: [SyncUnits.PlanRow], _ client: Roster.Client, done: String? = nil) {
+        sendAll([day: rows], client, done: done)
+    }
+
+    /// Days' plans as they now are, kept here at once so the change shows while they go, then sent to their phone one
+    /// by one.
+    private func sendAll(_ days: [String: [SyncUnits.PlanRow]], _ client: Roster.Client, done: String? = nil) {
         let coach = account.user?.uid ?? ""
-        let key = "plan#\(day)"
-        let body = rows.isEmpty ? nil : SyncUnits.encode(rows)
+        let bodies = days.map { (key: "plan#\($0.key)", body: $0.value.isEmpty ? nil : SyncUnits.encode($0.value)) }
         var changed = client
-        changed.units[key] = body
+        for unit in bodies { changed.units[unit.key] = unit.body }
         roster.update(changed, coach: coach, names: names)
         let name = client.person.name.map { $0.split(separator: " ").first.map(String.init) ?? $0 } ?? "your client"
         Task {
             do {
-                let kept = try await Cloud.push(key, body: body, client: id)
+                var kept = true
+                for unit in bodies.sorted(by: { $0.key < $1.key }) { kept = try await Cloud.push(unit.key, body: unit.body, client: id) && kept }
                 if !kept { toast = Toast(text: "\(name)’s phone had a newer copy. Pull to see it.") } else if let done { toast = Toast(text: done) }
             } catch {
                 toast = Toast(text: "Couldn’t send that to \(name). Try again.")
             }
         }
+    }
+
+    /// FIT-336: what can be done to the whole week shown, from today on.
+    @ViewBuilder private func weekActions(_ client: Roster.Client) -> some View {
+        let week = ClientWeek.days(client.units, sunday: start)
+        if !week.isEmpty {
+            Button("Copy to Next Week", systemImage: "arrow.right.square") {
+                propose(ClientWeek.repeated(week, weeks: 1, progress: false), client, done: "Copied to next week")
+            }
+            Button("Copy to Next Week, +5 lb", systemImage: "arrow.up.right.square") {
+                propose(ClientWeek.repeated(week, weeks: 1, progress: true), client, done: "Copied to next week, 5 lb heavier")
+            }
+            Button("Repeat for More Weeks…", systemImage: "repeat") { weekSheet = .repeating }
+            Button("Make It a Deload Week", systemImage: "arrow.down.right.circle") {
+                let days = week.filter { $0.key >= today }.mapValues(ClientWeek.deloaded)
+                sendAll(days, client, done: "Deload week")
+            }
+            .disabled(!week.keys.contains { $0 >= today })
+        }
+        Button("Start a Program…", systemImage: "list.bullet.rectangle") { weekSheet = .program }
+        if week.keys.contains(where: { $0 >= today }) {
+            Divider()
+            Button("Clear This Week", systemImage: "trash", role: .destructive) {
+                sendAll(week.filter { $0.key >= today }.mapValues { _ in [] }, client, done: "Week cleared")
+            }
+        }
+    }
+
+    /// New plans for days, sent at once, or after "Replace?" when some of those days already have a session.
+    private func propose(_ days: [String: [SyncUnits.PlanRow]], _ client: Roster.Client, done: String) {
+        // Only today and later: what's gone by is as it was.
+        let days = days.filter { $0.key >= today }
+        guard !days.isEmpty else { toast = Toast(text: "Those days have gone by"); return }
+        let replacing = days.keys.filter { !ClientDay.plan(client.units, $0).isEmpty }.count
+        if replacing == 0 { sendAll(days, client, done: done) } else { pending = Pending(days: days, replacing: replacing, done: done) }
     }
 }

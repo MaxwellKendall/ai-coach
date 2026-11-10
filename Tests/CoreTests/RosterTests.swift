@@ -52,7 +52,7 @@ struct RosterTests {
         let day = { (m: Int, d: Int) in calendar.date(from: DateComponents(year: 2026, month: m, day: d))! }
         let nov = day(11, 1).formatted(.dateTime.month(.abbreviated))
         let oct = day(10, 26).formatted(.dateTime.month(.abbreviated))
-        #expect(WeekBar.range(day(11, 1)) == "\(nov) 1 – 7")
-        #expect(WeekBar.range(day(10, 26)) == "\(oct) 26 – \(nov) 1")
+        #expect(WeekPaging.range(day(11, 1)) == "\(nov) 1 – 7")
+        #expect(WeekPaging.range(day(10, 26)) == "\(oct) 26 – \(nov) 1")
     }
 }

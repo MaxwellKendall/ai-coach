@@ -2,24 +2,33 @@ import SwiftUI
 
 /// FIT-331, FIT-332: the week shown, ‹ ›, and "This Week" to come back, as Calendar's week view has them. One control
 /// for any screen that pages weeks (a client's, Today), so they behave the same. `go` gets the new week's Sunday.
-struct WeekBar: View {
+struct WeekBar<Actions: View>: View {
     /// The Sunday of the week shown.
     let start: Date
     let go: (Date) -> Void
+    /// FIT-336: what can be done to the whole week, behind a ⋯ (a client's screen); none on Today.
+    @ViewBuilder var actions: Actions
 
     private var thisWeek: Bool { start == Week.start(of: .now) }
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(thisWeek ? "This week" : Self.range(start)).font(.headline).contentTransition(.numericText())
+            Text(thisWeek ? "This week" : WeekPaging.range(start)).font(.headline).contentTransition(.numericText())
             Spacer()
             if !thisWeek {
                 Button("This Week") { go(Week.start(of: .now)) }
                     .font(.subheadline.weight(.semibold)).buttonStyle(.plain).foregroundStyle(Plate.current.mark)
                     .padding(.trailing, 6)
             }
+            if Actions.self != EmptyView.self {
+                Menu { actions } label: {
+                    Image(systemName: "ellipsis").font(.subheadline.weight(.semibold)).foregroundStyle(Color.ink)
+                        .frame(width: 36, height: 36).background(Color.fill, in: .circle)
+                }
+                .accessibilityLabel("Change this week")
+            }
             ForEach([-1, 1], id: \.self) { step in
-                Button { go(Self.week(step, from: start)) } label: {
+                Button { go(WeekPaging.week(step, from: start)) } label: {
                     Image(systemName: step < 0 ? "chevron.left" : "chevron.right").font(.subheadline.weight(.semibold))
                         .frame(width: 36, height: 36).background(Color.fill, in: .circle)
                 }
@@ -28,7 +37,16 @@ struct WeekBar: View {
             }
         }
     }
+}
 
+extension WeekBar where Actions == EmptyView {
+    init(start: Date, go: @escaping (Date) -> Void) {
+        self.init(start: start, go: go) { EmptyView() }
+    }
+}
+
+/// The week bar's arithmetic and gesture, for any screen that pages weeks.
+enum WeekPaging {
     static func week(_ weeks: Int, from start: Date) -> Date {
         Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: start)!
     }
