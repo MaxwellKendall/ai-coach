@@ -22,6 +22,8 @@ struct SessionList: View {
     @State private var editing: String?
     /// The lift open for editing: its block and movement.
     @State private var open: Pick?
+    /// Whether the open lift has been changed since it opened: only then does its ✓ show (author, 2026-11-10).
+    @State private var changed = false
     @State private var picking: Picking?
 
     struct Pick: Equatable { var block: Int, movement: Int }
@@ -46,9 +48,10 @@ struct SessionList: View {
 
     /// One change to the session, saved.
     private func change(_ edit: (inout SessionPlan) -> Void) {
-        var changed = session
-        edit(&changed)
-        onEdit?(changed)
+        var edited = session
+        edit(&edited)
+        onEdit?(edited)
+        if open != nil { changed = true }
     }
 
     var body: some View {
@@ -69,6 +72,8 @@ struct SessionList: View {
         .animation(.snappy, value: warm)
         .animation(.snappy, value: editing)
         .animation(.snappy, value: open)
+        .animation(.snappy, value: changed)
+        .onChange(of: open) { changed = false }
         .sheet(item: $picking) { picking in
             let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
             switch picking {
@@ -235,12 +240,16 @@ struct SessionList: View {
             .accessibilityHint(onEdit != nil ? "Change this exercise" : "")
             Spacer(minLength: 8)
             loadView(movement, load: load)
-            // FIT-331: editing that shows it's there, as Hevy and Strong put ⋯ on each exercise; while a lift is open
-            // its ⋯ is Done, so there's a way out you can see (author, 2026-11-10).
-            if onEdit != nil, open == pick {
-                Button("Done") { open = nil }
-                    .font(.body.weight(.semibold)).foregroundStyle(Plate.current.mark).buttonStyle(.plain)
-                    .frame(minHeight: 44).contentShape(.rect)
+            // FIT-331: editing that shows it's there, as Hevy and Strong put ⋯ on each exercise. Once the open lift has
+            // been changed, its ⋯ is a small ✓ that closes it (author, 2026-11-10: subtle, and only after an edit).
+            if onEdit != nil, open == pick, changed {
+                Button { open = nil } label: {
+                    Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(Plate.current.mark)
+                        .frame(width: 32, height: 44).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Done")
+                .transition(.scale.combined(with: .opacity))
             } else if onEdit != nil {
                 Menu { actions(movement, pick: pick) } label: {
                     Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Color.inkMuted)
