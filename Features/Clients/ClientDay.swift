@@ -36,12 +36,14 @@ enum ClientDay {
         }
     }
 
-    /// The client's own words that day: the session's summary row, and the check-in's note (FIT-223).
+    /// The client's own words that day: the session's summary row, the check-in's note (FIT-223), and the weekly
+    /// check-in's answers (FIT-344).
     static func notes(_ log: [SyncUnits.LogRow]) -> [String] {
         let session = log.filter { $0.kind == .workout && $0.template == nil }.map(\.note)
         let checkIn = (log.filter { $0.kind == .sleep } + log.filter { $0.kind == .bodyweight }).map(\.note)
+        let weekly = log.filter { $0.kind == .checkin }.map(\.note)
         var seen = Set<String>()
-        return (session + checkIn.prefix(1)).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && seen.insert($0).inserted }
+        return (session + checkIn.prefix(1) + weekly).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
     /// The session's name, which each logged set carries as its note (WorkoutDraft.save).

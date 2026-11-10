@@ -15,7 +15,7 @@ export const MAX_UNITS = 25;
 export const MAX_BODY = 100_000;
 export const PAGE = 100;
 // FIT-173: template#slug is an exercise the user made (SyncUnits.TemplateBody).
-const KEY = /^((plan|log)#\d{4}-\d{2}-\d{2}|goal#[0-9A-Fa-f-]{36}|template#[a-z0-9]+(-[a-z0-9]+)*|profile)$/;
+const KEY = /^((plan|log)#\d{4}-\d{2}-\d{2}|goal#[0-9A-Fa-f-]{36}|template#[a-z0-9]+(-[a-z0-9]+)*|profile|checkin)$/;
 
 /** A unit the server will store, or why not. updatedAt in the future is taken as now, so a wrong clock can't win for good. */
 export function checked(unit: UnitInput, now: Date): UnitInput {
@@ -95,10 +95,13 @@ export async function owner(caller: string, asked: string | null | undefined) {
   throw new Error("Unauthorized: not this person's coach");
 }
 
-/** A coach changes the client's plan and (FIT-200) corrects what they logged, never their goals or their profile. */
+/**
+ * A coach changes the client's plan and (FIT-200) corrects what they logged, never their goals or their profile.
+ * FIT-344: and sets the client's weekly check-in day, the `checkin` unit ({ day }, 0 = Monday … 6 = Sunday).
+ */
 export function coachMayWrite(units: UnitInput[]) {
-  if (units.some((u) => !u.key.startsWith("plan#") && !u.key.startsWith("log#"))) {
-    throw new Error("Unauthorized: a coach changes only the plan and the logs");
+  if (units.some((u) => !u.key.startsWith("plan#") && !u.key.startsWith("log#") && u.key !== "checkin")) {
+    throw new Error("Unauthorized: a coach changes only the plan, the logs and the check-in day");
   }
 }
 

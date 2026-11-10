@@ -56,7 +56,8 @@ struct EntryEditor: View {
         Form {
             Section {
                 Picker("Kind", selection: $kind) {
-                    ForEach(ActivityKind.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+                    // FIT-344: the weekly check-in has its own sheet.
+                    ForEach(ActivityKind.allCases.filter { $0 != .checkin }, id: \.self) { Text($0.rawValue.capitalized) }
                 }
                 .onChange(of: kind) { _, kind in
                     if rows.allSatisfy({ $0.value == nil }) { rows = Self.rows(LogPresets.measurements(for: kind), blankZeros: true) }

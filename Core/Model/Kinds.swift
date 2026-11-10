@@ -12,7 +12,8 @@ enum GoalStatus: String, Codable, CaseIterable, Sendable {
 
 /// Shared by PlannedActivity and LogEntry so a log can always be matched to its plan item.
 enum ActivityKind: String, Codable, CaseIterable, Sendable {
-    case workout, meal, cook, grocery, sleep, bodyweight
+    /// FIT-344: `checkin` is the weekly check-in, its ratings as measurements (WeeklyCheckIn).
+    case workout, meal, cook, grocery, sleep, bodyweight, checkin
 }
 
 enum TemplateKind: String, Codable, CaseIterable, Sendable {

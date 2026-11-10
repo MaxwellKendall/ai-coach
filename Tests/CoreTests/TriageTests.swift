@@ -109,4 +109,33 @@ struct TriageTests {
         #expect(week(client(185, deadline: nil)).flags.isEmpty)
         #expect(week(client(185, metric: "run_5000m.time_s")).flags.isEmpty)
     }
+
+    // MARK: FIT-344, as infra/test/weeklyCheckIn.test.ts
+
+    private func weekly(_ day: String, _ energy: Double, _ stress: Double, _ soreness: Double, _ adherence: Double, note: String = "") -> (String, String) {
+        let ratings = [("energy_1to5", energy), ("stress_1to5", stress), ("soreness_1to5", soreness), ("adherence_1to5", adherence)]
+        return ("log#\(day)", json([["id": "c-\(day)", "kind": "checkin", "at": 0, "measurements": ratings.map { ["metric": $0.0, "value": $0.1, "unit": "/5"] },
+                                     "note": note]]))
+    }
+
+    @Test func lowRatingsInTheLastWeeksCheckInAreFlagged() {
+        #expect(week(units(weekly("2026-10-11", 2, 4, 3, 5))).flags == [Triage.Flag(kind: .checkin, text: "Check-in: low energy, high stress")])
+        #expect(week(units(weekly("2026-10-11", 4, 2, 2, 5))).flags.isEmpty)
+        #expect(week(units(weekly("2026-10-08", 1, 5, 5, 1))).flags.isEmpty)
+        #expect(WeeklyCheckIn.concerns(["energy_1to5": 2, "stress_1to5": 4, "soreness_1to5": 4, "adherence_1to5": 2])
+                == ["low energy", "high stress", "very sore", "off the plan"])
+    }
+
+    @Test func aMissedCheckInIsFlaggedOnceTheCoachHasChosenADay() {
+        let wednesday = ("checkin", #"{"day":2}"#)
+        #expect(week(units(wednesday)).flags == [Triage.Flag(kind: .checkin, text: "Missed Wednesday’s check-in")])
+        #expect(week(units(wednesday, weekly("2026-10-15", 4, 2, 2, 5))).flags.isEmpty)
+        #expect(week(units(("checkin", #"{"day":4}"#), weekly("2026-10-09", 4, 2, 2, 5))).flags.isEmpty)
+        #expect(week(units()).flags.isEmpty)
+    }
+
+    @Test func whatTheyWroteIsANotePainFirst() {
+        let flags = week(units(weekly("2026-10-11", 4, 2, 2, 5, note: "What went well: every session\nWhat was hard: my knee hurts on stairs"))).flags
+        #expect(flags == [Triage.Flag(kind: .pain, text: "Sunday: “What went well: every session What was hard: my knee hurts on stairs”", day: "2026-10-11")])
+    }
 }

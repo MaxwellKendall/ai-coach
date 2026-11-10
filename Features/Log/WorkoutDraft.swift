@@ -251,6 +251,7 @@ enum LogPresets {
         case .bodyweight: [("weight_lb", "lb")]
         case .grocery: [("cost_usd", "$")]
         case .cook: [("duration_h", "h")]
+        case .checkin: WeeklyCheckIn.ratings.map { ($0.metric, "/5") }
         }
         return presets.map { Measurement(metric: $0.0, value: 0, unit: $0.1) }
     }

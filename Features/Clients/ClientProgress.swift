@@ -30,6 +30,26 @@ enum ClientProgress {
         return notes
     }
 
+    /// FIT-344: one weekly check-in: its day, ratings and answers.
+    struct Weekly: Equatable {
+        var date: Date
+        var values: [String: Double]
+        var note: String
+    }
+
+    /// Their weekly check-ins, newest first.
+    static func weekly(_ units: [String: String]) -> [Weekly] {
+        logs(units).filter { $0.kind == .checkin }.sorted { $0.at > $1.at }.map { row in
+            Weekly(date: row.at, values: Dictionary(row.measurements.map { ($0.metric, $0.value) }, uniquingKeysWith: { a, _ in a }),
+                   note: row.note.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
+    /// FIT-344: the check-in day the coach chose (0 = Monday … 6 = Sunday), or Sunday.
+    static func checkInDay(_ units: [String: String]) -> Int {
+        units["checkin"].flatMap { try? SyncUnits.decode(WeeklyCheckIn.Day.self, $0).day } ?? WeeklyCheckIn.defaultDay
+    }
+
     /// Their goals still being worked on.
     static func goals(_ units: [String: String]) -> [SyncUnits.GoalBody] {
         units.filter { $0.key.hasPrefix("goal#") }.compactMap { try? SyncUnits.decode(SyncUnits.GoalBody.self, $0.value) }

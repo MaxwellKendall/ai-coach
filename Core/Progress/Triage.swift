@@ -5,7 +5,7 @@ import Foundation
 /// sync units' keys have them.
 enum Triage {
     struct Flag: Equatable, Sendable {
-        enum Kind: String, CaseIterable, Sendable { case pain, missed, hard, plateau, behind, quiet, note }
+        enum Kind: String, CaseIterable, Sendable { case pain, missed, hard, plateau, behind, checkin, quiet, note }
         var kind: Kind
         var text: String
         /// The day a note was left on, so the phone can open it to reply (not in shared/triage.ts).
@@ -160,6 +160,27 @@ enum Triage {
         return out
     }
 
+    /// FIT-344: the weekly check-in's flags: low ratings in the last 7 days' check-in, and, once the coach has chosen a
+    /// check-in day (the `checkin` unit), one missed: the latest such day before today with nothing checked in since.
+    private static func weeklyCheckIn(_ units: [String: String], today: String) -> [String] {
+        let weekAgo = add(-7, to: today)
+        let checked = units.keys.filter { $0.hasPrefix("log#") }.map { String($0.dropFirst(4)) }.sorted()
+            .filter { rows(units, "log#\($0)").contains { $0.kind == "checkin" } }
+        var out: [String] = []
+        if let latest = checked.last(where: { $0 >= weekAgo && $0 <= today }) {
+            let worries = rows(units, "log#\(latest)").filter { $0.kind == "checkin" }.flatMap { row in
+                WeeklyCheckIn.concerns(Dictionary((row.measurements ?? []).map { ($0.metric, $0.value) }, uniquingKeysWith: { a, _ in a }))
+            }
+            if !worries.isEmpty { out.append("Check-in: \(worries.joined(separator: ", "))") }
+        }
+        if let body = units["checkin"], let set = try? JSONDecoder().decode(WeeklyCheckIn.Day.self, from: Data(body.utf8)),
+           let due = (1...7).map({ add(-$0, to: today) }).first(where: { (utc.component(.weekday, from: date($0)) + 5) % 7 == set.day }),
+           !checked.contains(where: { $0 >= due && $0 <= today }) {
+            out.append("Missed \(weekday(due))’s check-in")
+        }
+        return out
+    }
+
     static func week(_ units: [String: String], comments: [Comment], names: [String: String], coach: String, today: String) -> Week {
         var planned: [String] = [], done: [String] = []
         for key in units.keys {
@@ -179,6 +200,8 @@ enum Triage {
             let log = rows(units, "log#\(day)")
             var notes = log.filter { $0.kind == "workout" && $0.template == nil }.compactMap(\.note).filter { !$0.isEmpty }
             if let note = checkInNote(log) { notes.append(note) }
+            // FIT-344: the weekly check-in's answers.
+            notes += log.filter { $0.kind == "checkin" }.compactMap { $0.note?.replacingOccurrences(of: "\n", with: " ") }.filter { !$0.isEmpty }
             var seen = Set<String>()
             let text = notes.filter { seen.insert($0).inserted }.joined(separator: " ")
             guard !text.isEmpty else { continue }
@@ -209,6 +232,7 @@ enum Triage {
         if !stalled.isEmpty { flags.append(Flag(kind: .plateau, text: "No new best on \(stalled.joined(separator: ", ")) in 3 weeks")) }
 
         flags += behind(units, names: names, today: today).map { Flag(kind: .behind, text: $0) }
+        flags += weeklyCheckIn(units, today: today).map { Flag(kind: .checkin, text: $0) }
 
         if planned.contains(where: { $0 < today }), lastSession.map({ $0 < add(-14, to: today) }) ?? true {
             flags.append(Flag(kind: .quiet, text: lastSession == nil ? "Nothing logged yet" : "Nothing logged in over two weeks"))

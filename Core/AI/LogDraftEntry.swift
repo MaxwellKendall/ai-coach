@@ -32,6 +32,7 @@ struct LogDraftEntry: Identifiable, Equatable {
         case .sleep: fields.first { $0.metric == "sleep_h" }?.value != nil
         case .bodyweight: fields.first { $0.metric == "weight_lb" }?.value != nil
         case .grocery: fields.first { $0.metric == "cost_usd" }?.value != nil
+        case .checkin: !measurements.isEmpty
         }
     }
 

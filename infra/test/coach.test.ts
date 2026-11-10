@@ -162,11 +162,11 @@ describe("a coach link (FIT-130)", () => {
 
   it("lets the coach change the plan and (FIT-200) correct the logs, never goals or the profile", () => {
     const at = "2026-10-16T12:00:00.000Z";
-    for (const key of ["plan#2026-10-16", "log#2026-10-16"]) {
+    for (const key of ["plan#2026-10-16", "log#2026-10-16", "checkin"]) {
       expect(() => coachMayWrite([{ key, updatedAt: at, deleted: false, body: "[]" }])).not.toThrow();
     }
-    for (const key of ["goal#3F2504E0-4F89-11D3-9A0C-0305E82C3301", "profile"]) {
-      expect(() => coachMayWrite([{ key, updatedAt: at, deleted: false, body: "[]" }])).toThrow(/only the plan and the logs/);
+    for (const key of ["goal#3F2504E0-4F89-11D3-9A0C-0305E82C3301", "profile", "checkin#x"]) {
+      expect(() => coachMayWrite([{ key, updatedAt: at, deleted: false, body: "[]" }])).toThrow(/only the plan, the logs and the check-in day/);
     }
   });
 

@@ -40,6 +40,8 @@ struct TodayScreen: View {
     @State private var picking = false
     /// FIT-204: today's check-in sheet.
     @State private var checkingIn: CheckInDay?
+    /// FIT-344: the weekly check-in sheet.
+    @State private var weekly = false
     @State private var review: WeekReport?
     @State private var sharing: WinItem?
     /// FIT-106: the wins there were before a workout, so the ones it earns can be celebrated when it's saved.
@@ -222,6 +224,11 @@ struct TodayScreen: View {
         .sheet(isPresented: $you) { YouScreen().tint(RootView.accent) }
         .sheet(isPresented: $conversing) { NavigationStack { CoachConversation() }.tint(RootView.accent) }
         .fullScreenCover(isPresented: $picking) { ProgramPicker { picking = false } }
+        .sheet(isPresented: $weekly) { WeeklyCheckInSheet() }
+        // FIT-344: the weekly reminder on the coach's check-in day, while coached.
+        .task(id: "\(profiles.first?.checkInDay ?? -1) \(pro.coaches.isEmpty)") {
+            await WeeklyCheckIn.remind(profiles.first?.checkInDay, coached: !pro.coaches.isEmpty)
+        }
         .sheet(item: $checkingIn) { checkIn in
             CheckInSheet(day: checkIn.day,
                          lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
@@ -351,13 +358,16 @@ struct TodayScreen: View {
                 .accessibilityElement(children: .combine)
             }
             if !pro.coaches.isEmpty {
-                HStack {
-                    // FIT-345: the shown day's check-in, today or before; a later day has none yet.
-                    if !(days[shown] > Calendar.current.startOfDay(for: .now)) { checkInButton(days[shown]) }
-                    Spacer()
-                    // FIT-340: every message with the coach, in one place.
-                    Button { conversing = true } label: { Label("Messages", systemImage: "bubble.left.and.bubble.right").font(.subheadline.weight(.medium)) }
-                        .buttonStyle(.plain)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        // FIT-345: the shown day's check-in, today or before; a later day has none yet.
+                        if !(days[shown] > Calendar.current.startOfDay(for: .now)) { checkInButton(days[shown]) }
+                        Spacer()
+                        // FIT-340: every message with the coach, in one place.
+                        Button { conversing = true } label: { Label("Messages", systemImage: "bubble.left.and.bubble.right").font(.subheadline.weight(.medium)) }
+                            .buttonStyle(.plain)
+                    }
+                    if isToday(shown) { weeklyCheckIn }
                 }
             }
         }
@@ -441,6 +451,28 @@ struct TodayScreen: View {
             if let load = set.value("load_lb") ?? set.value("load_lb_hand") { last[set.exercise] = load }
         }
         return last
+    }
+
+    /// FIT-344: the weekly check-in, from the coach's day until it's done; once done, what it said, to change.
+    @ViewBuilder private var weeklyCheckIn: some View {
+        let day = profiles.first?.checkInDay ?? WeeklyCheckIn.defaultDay
+        let start = Week.start(of: .now)
+        let done = entries.last { $0.kind == .checkin && $0.timestamp >= start }
+        if let done {
+            let values = Dictionary(done.measurements.map { ($0.metric, $0.value) }, uniquingKeysWith: { a, _ in a })
+            Button { weekly = true } label: {
+                Label("Weekly check-in · \(WeeklyCheckIn.summary(values))", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .buttonStyle(.plain)
+        } else if WeeklyCheckIn.isDue(day, today: .now, done: false) {
+            Button { weekly = true } label: {
+                Label("Weekly check-in for your coach", systemImage: "list.clipboard")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Energy, stress, soreness, how the plan went, and a few words")
+        }
     }
 
     /// A check-in sheet's day.
