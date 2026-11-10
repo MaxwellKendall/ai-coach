@@ -235,11 +235,39 @@ struct SessionList: View {
             .accessibilityHint(onEdit != nil ? "Change this exercise" : "")
             Spacer(minLength: 8)
             loadView(movement, load: load)
+            // FIT-331: editing that shows it's there, as Hevy and Strong put ⋯ on each exercise.
+            if onEdit != nil {
+                Menu { actions(movement, pick: pick) } label: {
+                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                        .frame(width: 32, height: 44).contentShape(.rect)
+                }
+                .accessibilityLabel("Change \(names[movement.exercise] ?? movement.exercise)")
+            }
         }
         .padding(.vertical, Self.rowPadding)
+        .contextMenu { if onEdit != nil { actions(movement, pick: pick) } }
         if open == pick { editor(movement, pick: pick).padding(.leading, inset).padding(.bottom, Self.rowPadding).transition(.opacity.combined(with: .move(edge: .top))) }
         }
         .overlay(alignment: .bottom) { if letter == nil || !last { Divider() } }
+    }
+
+    /// The lifts' blocks in order, for Move up and Move down.
+    private var lifts: [Int] { session.blocks.indices.filter { session.blocks[$0].rounds > 0 } }
+
+    /// FIT-331: a lift's ⋯ and long-press menu: the same changes its open editor has.
+    @ViewBuilder private func actions(_ movement: SessionPlan.Movement, pick: Pick) -> some View {
+        let place = lifts.firstIndex(of: pick.block) ?? 0
+        Button("Edit Sets", systemImage: "slider.horizontal.3") { open = pick }
+        Button("Swap", systemImage: "arrow.triangle.2.circlepath") { picking = .swap(pick, movement.exercise) }
+        Button("Move Up", systemImage: "arrow.up") { change { $0.move(block: pick.block, by: lifts[place - 1] - pick.block) } }
+            .disabled(place == 0)
+        Button("Move Down", systemImage: "arrow.down") { change { $0.move(block: pick.block, by: lifts[place + 1] - pick.block) } }
+            .disabled(place == lifts.count - 1)
+        Divider()
+        Button("Remove", systemImage: "trash", role: .destructive) {
+            open = nil
+            change { $0.remove(block: pick.block, movement: pick.movement) }
+        }
     }
 
     /// FIT-302: a lift opened for editing: its sets and reps (or seconds), then swap, move up or down, and remove.
@@ -250,7 +278,6 @@ struct SessionList: View {
         let metric = timed ? "duration_s" : "reps"
         let step: Double = timed ? 5 : 1
         let amount = working.first?.value(metric) ?? 0
-        let lifts = session.blocks.indices.filter { session.blocks[$0].rounds > 0 }
         let place = lifts.firstIndex(of: pick.block) ?? 0
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 16) {

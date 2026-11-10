@@ -13,6 +13,12 @@ final class Roster {
         var week: Triage.Week
 
         var id: String { person.uid }
+        /// When they last logged anything, from their log units' rows.
+        var lastLogged: Date? {
+            units.keys.filter { $0.hasPrefix("log#") }.max().flatMap { key in
+                ClientDay.log(units, String(key.dropFirst(4))).map(\.at).max()
+            }
+        }
         var name: String { person.name ?? "Client" }
         var initials: String {
             let words = (person.name ?? "?").split(separator: " ").prefix(2)
@@ -31,14 +37,18 @@ final class Roster {
 
     /// Signed out, or before the first load, none; `clients` for a preview.
     init(clients: [Client] = []) {
-        self.clients = Triage.byNeed(clients, \.week)
+        self.clients = Self.byName(clients)
         loaded = !clients.isEmpty
     }
 
     var needsYou: [Client] { clients.filter { $0.week.need != nil } }
-    var onTrack: [Client] { clients.filter { $0.week.need == nil } }
 
-    /// Every client, then their units and replies, then who needs the coach first.
+    /// FIT-331: A–Z, as the author asked; each row's flag still says who needs you.
+    static func byName(_ clients: [Client]) -> [Client] {
+        clients.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Every client, then their units and replies, A–Z.
     func refresh(coach: String?, names: [String: String]) async {
         #if DEBUG
         if Self.sample { return }
@@ -64,7 +74,7 @@ final class Roster {
                 return Client(person: person, units: units, comments: comments,
                               week: Triage.week(units, comments: comments, names: names, coach: coach, today: today))
             }
-            clients = Triage.byNeed(loaded, \.week)
+            clients = Self.byName(loaded)
             loadedFor = coach
             problem = nil
         } catch {
@@ -78,6 +88,6 @@ final class Roster {
         var client = client
         client.week = Triage.week(client.units, comments: client.comments, names: names, coach: coach, today: SyncUnits.day(.now))
         if let index = clients.firstIndex(where: { $0.id == client.id }) { clients[index] = client }
-        clients = Triage.byNeed(clients, \.week)
+        clients = Self.byName(clients)
     }
 }

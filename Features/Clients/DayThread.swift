@@ -75,7 +75,7 @@ struct DayThread: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Reply to \(client?.name.split(separator: " ").first.map(String.init) ?? "them")", text: $text, axis: .vertical)
+            TextField("Message \(client?.name.split(separator: " ").first.map(String.init) ?? "them")", text: $text, axis: .vertical)
                 .lineLimit(1...5).focused($focused)
                 .padding(.vertical, 8)
             let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

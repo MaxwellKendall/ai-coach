@@ -231,6 +231,7 @@ struct TodayScreen: View {
         let days = days
         guard let date = target.day, let index = days.firstIndex(where: { Calendar.current.isDate($0, inSameDayAs: date) }) else { return }
         withAnimation(.snappy) { day = index }
+        // A reply on a logged session opens it; on any other day its thread is on Today, under the day.
         if target.kind == .reply, case .done(let done) = cards(days)[index] {
             sheet = done.run.map { .ran($0) } ?? .record(done.planned, done.start)
         }
@@ -553,6 +554,9 @@ struct TodayScreen: View {
                         .padding(.horizontal, 20).padding(.vertical, Self.isList(card) && !planning ? 4 : 20)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .cardBackground()
+                    // FIT-331: a coach can write on any day, planned or rest, so its thread is here too; a logged
+                    // session's is in its record.
+                    if !planning, !Self.isDone(card) { CoachThread(date: day, prompt: "Message your coach", inset: 0) }
                 }
                 .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
             }
@@ -593,6 +597,10 @@ struct TodayScreen: View {
     /// A card that's a session's list of rows, not a message or a summary.
     static func isList(_ card: DayCard) -> Bool {
         if case .plan = card { true } else { false }
+    }
+
+    static func isDone(_ card: DayCard) -> Bool {
+        if case .done = card { true } else { false }
     }
 
     /// An earlier day this week: its session logged on that day, or anything else logged there; a logged day's sets

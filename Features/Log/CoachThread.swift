@@ -6,6 +6,9 @@ struct CoachThread: View {
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
     let date: Date
+    /// FIT-331: on Today a day may have nothing logged yet, so it asks for a message, not how it went.
+    var prompt = "Tell your coach how it went"
+    var inset: CGFloat = 16
 
     @State private var comments: [Cloud.Comment] = []
     @State private var text = ""
@@ -28,7 +31,7 @@ struct CoachThread: View {
                     }
                     if !pro.coaches.isEmpty {
                         HStack(spacing: 8) {
-                            TextField(comments.isEmpty ? "Tell your coach how it went" : "Reply", text: $text, axis: .vertical)
+                            TextField(comments.isEmpty ? prompt : "Reply", text: $text, axis: .vertical)
                                 .lineLimit(1...4)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
                                 .background(.background, in: .rect(cornerRadius: 12))
@@ -41,10 +44,10 @@ struct CoachThread: View {
                     }
                     if let failure { Text(failure).font(.footnote).foregroundStyle(.red) }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, inset)
             }
         }
-        .task(id: account.user?.uid) {
+        .task(id: "\(account.user?.uid ?? "") \(SyncUnits.day(date))") {
             guard account.user != nil else { return }
             comments = (try? await Cloud.comments(day: SyncUnits.day(date))) ?? []
         }

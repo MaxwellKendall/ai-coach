@@ -8,6 +8,8 @@ struct ClientsScreen: View {
     @Environment(Roster.self) private var roster
     @Query private var templates: [Template]
     @State private var inviting = false
+    @State private var needsOnly = false
+    @State private var query = ""
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
 
@@ -33,8 +35,15 @@ struct ClientsScreen: View {
                     } else if roster.clients.isEmpty {
                         empty
                     } else {
-                        group("Needs you", roster.needsYou)
-                        group("On track", roster.onTrack)
+                        if roster.clients.count > 8 { search }
+                        if !roster.needsYou.isEmpty {
+                            Picker("Show", selection: $needsOnly) {
+                                Text("All").tag(false)
+                                Text("Needs You (\(roster.needsYou.count))").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        list(shown)
                     }
                 }
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
@@ -49,20 +58,42 @@ struct ClientsScreen: View {
         }
     }
 
-    @ViewBuilder private func group(_ title: String, _ clients: [Roster.Client]) -> some View {
-        if !clients.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted).padding(.horizontal, 4)
-                VStack(spacing: 0) {
-                    ForEach(clients) { client in
-                        NavigationLink(value: client.id) { ClientRow(client: client) }
-                            .buttonStyle(.plain)
-                        if client.id != clients.last?.id { Divider() }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .cardBackground()
+    /// FIT-331: everyone A–Z, or only who needs you, narrowed by the search.
+    private var shown: [Roster.Client] {
+        let clients = needsOnly && !roster.needsYou.isEmpty ? roster.needsYou : roster.clients
+        let query = query.trimmingCharacters(in: .whitespaces)
+        return query.isEmpty ? clients : clients.filter { $0.name.localizedStandardContains(query) }
+    }
+
+    /// Search, as in Contacts: a grey field with the magnifying glass.
+    private var search: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Color.inkMuted)
+            TextField("Search", text: $query).autocorrectionDisabled().textInputAutocapitalization(.words)
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.inkFaint) }
+                    .buttonStyle(.plain).accessibilityLabel("Clear search")
             }
+        }
+        .padding(.horizontal, 10).frame(height: 38)
+        .background(Color.fill, in: .rect(cornerRadius: 10))
+    }
+
+    @ViewBuilder private func list(_ clients: [Roster.Client]) -> some View {
+        if clients.isEmpty {
+            Text("No one called “\(query)”").font(.subheadline).foregroundStyle(Color.inkMuted)
+                .frame(maxWidth: .infinity).padding(.top, 24)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(clients) { client in
+                    NavigationLink(value: client.id) { ClientRow(client: client) }
+                        .buttonStyle(.plain)
+                    // Inset to the names' edge, as in Messages.
+                    if client.id != clients.last?.id { Divider().padding(.leading, ClientRow.avatar + 12) }
+                }
+            }
+            .padding(.horizontal, 16)
+            .cardBackground()
         }
     }
 
@@ -80,34 +111,96 @@ struct ClientsScreen: View {
     }
 }
 
-/// A client in the list: who, and the one line that says why they need you, or how their week's going.
+/// A client in the list, laid out as a Messages row: who, when they last logged, and the one line that says why they
+/// need you or how their week's going, with the week as seven dots.
 struct ClientRow: View {
     let client: Roster.Client
+    static let avatar: CGFloat = 44
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(client.initials).font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                .frame(width: 40, height: 40).background(Color.fill, in: .circle)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(client.name).font(.headline)
+            Avatar(client: client, size: Self.avatar)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(client.name).font(.headline).lineLimit(1)
+                    Spacer(minLength: 8)
+                    if let last = client.lastLogged {
+                        Text(Self.ago(last)).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit()
+                    }
+                }
                 HStack(spacing: 6) {
                     if let flag = client.week.flags.min(by: { order($0) < order($1) }) {
                         FlagDot(kind: flag.kind)
                         Text(flag.text).lineLimit(1)
                     } else {
                         Text(client.week.planned == 0 ? "Nothing planned this week" : "\(client.week.done) of \(client.week.planned) this week")
+                            .lineLimit(1)
                     }
+                    Spacer(minLength: 8)
+                    WeekDots(units: client.units)
                 }
                 .font(.subheadline).foregroundStyle(Color.inkMuted)
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkFaint)
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
         .contentShape(.rect)
     }
 
     private func order(_ flag: Triage.Flag) -> Int { Triage.Flag.Kind.allCases.firstIndex(of: flag.kind)! }
+
+    /// "9:41 AM" today, "Yesterday", the weekday this week, else "Nov 2", as Messages dates its rows.
+    static func ago(_ date: Date, now: Date = .now) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return date.formatted(date: .omitted, time: .shortened) }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day, days < 7 {
+            return date.formatted(.dateTime.weekday(.wide))
+        }
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+}
+
+/// A client's initials on a soft tint of their own, the same each time (Contacts' monogram, in colour).
+struct Avatar: View {
+    let client: Roster.Client
+    var size: CGFloat = 44
+
+    private static let tints: [Color] = [.blue, .teal, .green, .orange, .pink, .purple, .indigo, .brown]
+    /// A stable pick: Swift's hashValue changes between launches.
+    private var tint: Color { Self.tints[client.id.unicodeScalars.reduce(0) { $0 &+ Int($1.value) } % Self.tints.count] }
+
+    var body: some View {
+        Text(client.initials).font(.system(size: size * 0.38, weight: .semibold, design: .rounded)).foregroundStyle(tint)
+            .frame(width: size, height: size).background(tint.opacity(0.16), in: .circle)
+            .accessibilityHidden(true)
+    }
+}
+
+/// This week, Sunday to Saturday: filled for a day trained, a ring for one still to come, an amber ring for one planned
+/// and missed, and a faint dot for a rest day.
+struct WeekDots: View {
+    let units: [String: String]
+
+    var body: some View {
+        let start = Week.start(of: .now)
+        let today = SyncUnits.day(.now)
+        HStack(spacing: 3) {
+            ForEach(0..<7, id: \.self) { offset in
+                let day = SyncUnits.day(Calendar.current.date(byAdding: .day, value: offset, to: start)!)
+                Group {
+                    if ClientDay.trained(units, day) {
+                        Circle().fill(Color.ink)
+                    } else if ClientDay.planned(units, day) {
+                        Circle().strokeBorder(day < today ? Color(light: 0xa35700, dark: 0xffad42) : Color.inkMuted, lineWidth: 1.5)
+                    } else {
+                        Circle().fill(Color.inkFaint).padding(2)
+                    }
+                }
+                .frame(width: 7, height: 7)
+            }
+        }
+        .accessibilityHidden(true)
+    }
 }
 
 /// Pain in red, the rest in amber: never colour alone, the flag's words are beside it.
