@@ -50,4 +50,23 @@ struct ClientDayTests {
         #expect(run.note == "long")
         #expect(run.targets.first { $0.metric == "distance_m" }?.value == (6 * Running.mile).rounded())
     }
+
+    /// FIT-347: the picker on a coach's phone uses the client's equipment and what they've planned and logged.
+    @Test func thePickerUsesTheClientsProfileAndUnits() {
+        let log = SyncUnits.LogRow(id: UUID(), kind: .workout, at: day(9) + 3600, plannedRef: nil, template: "pull-up",
+                                   measurements: [], note: "", route: nil)
+        var units = ["plan#2026-11-10": SyncUnits.encode([row("back-squat", at: day(10))]), "log#2026-11-09": SyncUnits.encode([log])]
+        let uses = ClientDay.uses(units)
+        #expect(Set(uses.map(\.slug)) == ["back-squat", "pull-up"])
+        #expect(uses.contains { $0.slug == "pull-up" && $0.at == day(9) + 3600 })
+        #expect(ClientDay.settings(units).equipment == Set(Profile.allEquipment))
+        let profile = SyncUnits.ProfileBody(
+            age: 40, weightLb: 180, targetWeightLb: nil, daysPerWeek: 3, sessionMinutes: 45, trainingDays: [1, 3, 5], workoutTime: 420,
+            equipment: ["dumbbells"], injuredAreas: [], fineAreas: [:], avoidExercises: ["goblet-squat"], maxWeeklySets: 60,
+            style: .powerbuilding, warmups: true, deloadEveryWeeks: nil, cookWindows: [], groceryDay: nil, weeklyBudgetUSD: nil,
+            programStart: nil, targetDate: nil, travelWeeks: [], starts: [], brief: nil, programSlug: nil)
+        units["profile"] = SyncUnits.encode(profile)
+        #expect(ClientDay.settings(units).equipment == ["dumbbells"])
+        #expect(ClientDay.settings(units).avoidExercises == ["goblet-squat"])
+    }
 }

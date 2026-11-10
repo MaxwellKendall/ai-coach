@@ -103,7 +103,9 @@ struct ClientScreen: View {
             let latest = { roster.clients.first { $0.id == id } }
             switch adding {
             case .workout:
-                ExercisePicker(title: "Add exercise") { slug in
+                let units = latest()?.units ?? [:]
+                ExercisePicker(title: "Add exercise", excluding: Set(ClientDay.plan(units, day).compactMap(\.template)),
+                               settings: ClientDay.settings(units), uses: ClientDay.uses(units)) { slug in
                     guard let client = latest() else { return }
                     send(day, rows: ClientDay.exercise(slug, on: date, after: ClientDay.plan(client.units, day)), client)
                 }

@@ -168,6 +168,54 @@ struct ExerciseSearchTests {
         #expect(cardio.allSatisfy { slug in catalog.first { $0.slug == slug }?.pattern == "conditioning" }, "\(cardio)")
         #expect(catalog.first { $0.slug == "air-bike" }?.pattern == "core")
     }
+
+    /// FIT-347: every movement in the catalog has an area but the olympic lifts, which are under All only.
+    @Test(arguments: [
+        ("squat", ExerciseSearch.Area.legs), ("lunge", .legs), ("hinge", .legs), ("legs", .legs), ("calves", .legs),
+        ("push", .push), ("pull", .pull), ("shoulders", .shoulders), ("arms", .arms), ("core", .core), ("carry", .core),
+        ("conditioning", .cardio),
+    ])
+    func movementsMapToAnArea(pattern: String, area: ExerciseSearch.Area) {
+        #expect(ExerciseSearch.Area.of(pattern) == area)
+    }
+
+    @Test func everyMovementButOlympicHasAnArea() {
+        #expect(ExerciseSearch.Area.of("olympic") == nil)
+        #expect(ExerciseSearch.movements.filter { ExerciseSearch.Area.of($0) == nil } == ["olympic"])
+    }
+
+    /// FIT-347: within an area, the author's cards first, then the staples, compound before isolation; not A–Z.
+    @Test func mainLiftsComeFirstWithinAnArea() {
+        let gym = settings(Set(Profile.allEquipment))
+        let legs = ExerciseSearch.suggestions(in: catalog.filter { ExerciseSearch.Area.of($0.pattern) == .legs }, names: names, settings: gym)
+        let bySlug = Dictionary(uniqueKeysWithValues: catalog.map { ($0.slug, $0) })
+        #expect(Set(legs.prefix(4)) == ["back-squat", "deadlift", "dumbbell-romanian-deadlift", "goblet-squat"])
+        let rest = legs.dropFirst(4).map { bySlug[$0]! }
+        #expect(rest.allSatisfy { $0.tags.contains("staple") })
+        let isolation = rest.firstIndex { $0.tags.contains("isolation") } ?? rest.endIndex
+        #expect(rest[isolation...].allSatisfy { $0.tags.contains("isolation") })
+        #expect(legs != legs.sorted { names[$0]! < names[$1]! })
+    }
+
+    /// FIT-347: Recent is what was used on the most days in the last 4 weeks, then the latest, at most 6, only what they can do.
+    @Test func recentIsTheMostUsedInFourWeeks() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func ago(_ days: Double) -> Date { now - days * 86_400 }
+        let uses: [(slug: String, at: Date)] = [
+            ("bench-press", ago(1)), ("bench-press", ago(1) + 60), ("bench-press", ago(1) + 120),  // three sets, one day
+            ("back-squat", ago(2)), ("back-squat", ago(9)),
+            ("pull-up", ago(3)),
+            ("deadlift", ago(40)),                                                                  // too long ago
+            ("not-in-catalog", ago(1)),
+        ]
+        let gym = settings(Set(Profile.allEquipment))
+        #expect(ExerciseSearch.recent(uses, now: now, in: catalog, settings: gym) == ["back-squat", "bench-press", "pull-up"])
+        #expect(ExerciseSearch.recent(uses, now: now, in: catalog, settings: gym, excluding: ["back-squat"]) == ["bench-press", "pull-up"])
+        // Only dumbbells: the barbell lifts aren't offered.
+        #expect(ExerciseSearch.recent(uses, now: now, in: catalog, settings: settings(["dumbbells", "pull_up_bar"])) == ["pull-up"])
+        let many = catalog.prefix(10).enumerated().map { (slug: $1.slug, at: ago(Double($0))) }
+        #expect(ExerciseSearch.recent(many, now: now, in: catalog, settings: gym).count == 6)
+    }
 }
 
 /// FIT-75: how-to steps come with the catalog, and reach exercises already in a store.

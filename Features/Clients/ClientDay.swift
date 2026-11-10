@@ -12,6 +12,26 @@ enum ClientDay {
         units["log#\(day)"].flatMap { try? SyncUnits.decode([SyncUnits.LogRow].self, $0) } ?? []
     }
 
+    /// FIT-347: what the client can do, from their profile, for the exercise picker. Everything when there's no profile yet.
+    static func settings(_ units: [String: String]) -> TrainingSettings {
+        let profile = units["profile"].flatMap { try? SyncUnits.decode(SyncUnits.ProfileBody.self, $0) }
+        return TrainingSettings(
+            age: profile?.age ?? 35, daysPerWeek: profile?.daysPerWeek ?? 3, sessionMinutes: profile?.sessionMinutes ?? 45,
+            trainingDays: Week.ordered(profile?.trainingDays ?? [0, 2, 4]), workoutTime: profile?.workoutTime ?? 420,
+            equipment: Set(profile?.equipment ?? Profile.allEquipment), injuredAreas: BodyArea.muscles(for: profile?.injuredAreas ?? []),
+            avoidExercises: Set(profile?.avoidExercises ?? []), maxWeeklySets: profile?.maxWeeklySets ?? 60)
+    }
+
+    /// FIT-347: every exercise in the client's plans and logs, with when, for the picker's Recent.
+    static func uses(_ units: [String: String]) -> [(slug: String, at: Date)] {
+        units.keys.flatMap { key -> [(slug: String, at: Date)] in
+            let day = String(key.split(separator: "#", maxSplits: 1).last ?? "")
+            if key.hasPrefix("plan#") { return plan(units, day).compactMap { row in row.template.map { ($0, row.at) } } }
+            if key.hasPrefix("log#") { return log(units, day).compactMap { row in row.template.map { ($0, row.at) } } }
+            return []
+        }
+    }
+
     static func trained(_ units: [String: String], _ day: String) -> Bool { log(units, day).contains { $0.kind == .workout } }
     static func planned(_ units: [String: String], _ day: String) -> Bool { plan(units, day).contains { $0.kind == .workout } }
 
