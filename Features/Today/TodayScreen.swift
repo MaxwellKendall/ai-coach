@@ -17,6 +17,8 @@ struct TodayScreen: View {
     @Query private var templates: [Template]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @State private var day: Int?
+    /// FIT-340: the whole conversation with the coach, open.
+    @State private var conversing = false
     /// FIT-332: the Sunday of the week shown.
     @State private var shownWeek = Week.start(of: .now)
     /// Which way the last week change went, so the strip slides the right way.
@@ -215,6 +217,7 @@ struct TodayScreen: View {
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen().tint(RootView.accent) }
+        .sheet(isPresented: $conversing) { NavigationStack { CoachConversation() }.tint(RootView.accent) }
         .fullScreenCover(isPresented: $picking) { ProgramPicker { picking = false } }
         .sheet(isPresented: $checkingIn) {
             CheckInSheet(lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
@@ -269,6 +272,9 @@ struct TodayScreen: View {
         // A reply on a logged session opens it; on any other day its thread is on Today, under the day.
         if target.kind == .reply, case .done(let done) = cards(days)[index] {
             sheet = done.run.map { .ran($0) } ?? .record(done.planned, done.start)
+        } else if target.kind == .reply {
+            // FIT-340: a reply on a day with nothing logged is read in the conversation.
+            conversing = true
         }
     }
 
@@ -340,7 +346,15 @@ struct TodayScreen: View {
                 }
                 .accessibilityElement(children: .combine)
             }
-            if !pro.coaches.isEmpty { checkInButton }
+            if !pro.coaches.isEmpty {
+                HStack {
+                    checkInButton
+                    Spacer()
+                    // FIT-340: every message with the coach, in one place.
+                    Button { conversing = true } label: { Label("Messages", systemImage: "bubble.left.and.bubble.right").font(.subheadline.weight(.medium)) }
+                        .buttonStyle(.plain)
+                }
+            }
         }
         .padding(.horizontal, 20).padding(.top, 4)
     }

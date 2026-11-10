@@ -85,3 +85,17 @@ struct UnreadTests {
         #expect(target?.day.map { SyncUnits.day($0) } == "2026-11-08")
     }
 }
+
+/// FIT-340: the client's conversation names each day as Messages does.
+@MainActor
+struct CoachConversationTests {
+    @Test func daysReadTodayYesterdayThenTheDate() {
+        let calendar = Calendar.current
+        let today = SyncUnits.day(.now)
+        let yesterday = SyncUnits.day(calendar.date(byAdding: .day, value: -1, to: .now)!)
+        let older = calendar.date(byAdding: .day, value: -9, to: .now)!
+        #expect(CoachConversation.title(today) == "Today")
+        #expect(CoachConversation.title(yesterday) == "Yesterday")
+        #expect(CoachConversation.title(SyncUnits.day(older)) == older.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+    }
+}

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// FIT-335: a run for a client's day: its kind, as the program names them, and its distance in miles.
 struct PlanRunSheet: View {
@@ -207,5 +208,88 @@ struct CorrectSetsSheet: View {
             let value = { (metrics: [String]) in set.measurements.first { metrics.contains($0.metric) }.map { Coach.number($0.value) } ?? "" }
             return (set.id, Fields(load: value(["load_lb", "load_lb_hand"]), reps: value(["reps", "duration_s"]), rpe: value(["rpe"])))
         })
+    }
+}
+
+/// FIT-340: one message to some or all clients, as Messages' new group text picks people: each gets it in their own
+/// conversation, on today.
+struct MessageClientsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(Roster.self) private var roster
+    @Environment(Account.self) private var account
+    @Query private var templates: [Template]
+    @State private var picked: Set<String> = []
+    @State private var text = ""
+    @State private var sending = false
+    @State private var problem: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    TextField("Message", text: $text, axis: .vertical).lineLimit(3...8)
+                }
+                Section {
+                    ForEach(roster.clients) { client in
+                        Button {
+                            if picked.contains(client.id) { picked.remove(client.id) } else { picked.insert(client.id) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Avatar(client: client, size: 32)
+                                Text(client.name).foregroundStyle(Color.ink)
+                                Spacer()
+                                Image(systemName: picked.contains(client.id) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(picked.contains(client.id) ? AnyShapeStyle(Plate.current.mark) : AnyShapeStyle(Color.inkFaint))
+                                    .font(.title3)
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    HStack {
+                        Text("To")
+                        Spacer()
+                        if !roster.needsYou.isEmpty {
+                            Button("Needs You") { picked = Set(roster.needsYou.map(\.id)) }.textCase(nil)
+                        }
+                        Button(picked.count == roster.clients.count ? "None" : "All") {
+                            picked = picked.count == roster.clients.count ? [] : Set(roster.clients.map(\.id))
+                        }
+                        .textCase(nil)
+                    }
+                } footer: {
+                    if let problem { Text(problem).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("Message clients")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(picked.count > 1 ? "Send to \(picked.count)" : "Send") { Task { await send() } }
+                        .disabled(sending || picked.isEmpty || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func send() async {
+        let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a })
+        let today = SyncUnits.day(.now)
+        sending = true
+        var failed: [String] = []
+        for id in picked {
+            guard var client = roster.clients.first(where: { $0.id == id }) else { continue }
+            do {
+                client.comments.append(try await Cloud.postComment(words, day: today, client: id))
+                roster.update(client, coach: account.user?.uid ?? "", names: names)
+            } catch {
+                failed.append(client.name)
+            }
+        }
+        sending = false
+        if failed.isEmpty { dismiss() } else { problem = "Couldn’t send to \(failed.joined(separator: ", ")). Try again." }
     }
 }

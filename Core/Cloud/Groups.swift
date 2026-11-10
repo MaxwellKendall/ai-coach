@@ -227,8 +227,11 @@ enum Cloud {
     }
 
     /// A logged day's thread on my account: my coach's replies and mine. `day` is "2026-10-14".
-    @MainActor static func comments(day: String) async throws -> [Comment] {
-        try await run("query($d: String) { comments(day: $d) { day at by byName text } }", ["d": day], at: "comments", query: true)
+    /// A day's thread, or (FIT-340) every day's, with no day.
+    @MainActor static func comments(day: String? = nil) async throws -> [Comment] {
+        var variables: [String: Any] = [:]
+        if let day { variables["d"] = day }
+        return try await run("query($d: String) { comments(day: $d) { day at by byName text } }", variables, at: "comments", query: true)
     }
 
     @MainActor static func postComment(day: String, text: String) async throws -> Comment {

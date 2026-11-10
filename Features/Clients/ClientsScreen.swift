@@ -9,6 +9,7 @@ struct ClientsScreen: View {
     @Query private var templates: [Template]
     @State private var inviting = false
     @State private var needsOnly = false
+    @State private var messaging = false
     @State private var query = ""
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
@@ -22,6 +23,15 @@ struct ClientsScreen: View {
                     HStack {
                         Text("Clients").font(.display(34))
                         Spacer()
+                        // FIT-340: one message to several clients.
+                        if roster.clients.count > 1 {
+                            Button { messaging = true } label: {
+                                Image(systemName: "square.and.pencil").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
+                                    .frame(width: 44, height: 44).rowBackground()
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Message clients")
+                        }
                         Button { inviting = true } label: {
                             Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
                                 .frame(width: 44, height: 44).rowBackground()
@@ -68,6 +78,7 @@ struct ClientsScreen: View {
             }
             .toolbarVisibility(.hidden, for: .navigationBar)
             .sheet(isPresented: $inviting) { InviteSheet() }
+            .sheet(isPresented: $messaging) { MessageClientsSheet() }
         }
     }
 
