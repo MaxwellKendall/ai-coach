@@ -39,7 +39,7 @@ struct TodayScreen: View {
     /// FIT-325: the picker, from a finished program's card.
     @State private var picking = false
     /// FIT-204: today's check-in sheet.
-    @State private var checkingIn = false
+    @State private var checkingIn: CheckInDay?
     @State private var review: WeekReport?
     @State private var sharing: WinItem?
     /// FIT-106: the wins there were before a workout, so the ones it earns can be celebrated when it's saved.
@@ -222,8 +222,9 @@ struct TodayScreen: View {
         .sheet(isPresented: $you) { YouScreen().tint(RootView.accent) }
         .sheet(isPresented: $conversing) { NavigationStack { CoachConversation() }.tint(RootView.accent) }
         .fullScreenCover(isPresented: $picking) { ProgramPicker { picking = false } }
-        .sheet(isPresented: $checkingIn) {
-            CheckInSheet(lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
+        .sheet(item: $checkingIn) { checkIn in
+            CheckInSheet(day: checkIn.day,
+                         lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
         }
         .sheet(item: $sharing) { ShareWinSheet(win: $0) }
         .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
@@ -351,7 +352,8 @@ struct TodayScreen: View {
             }
             if !pro.coaches.isEmpty {
                 HStack {
-                    checkInButton
+                    // FIT-345: the shown day's check-in, today or before; a later day has none yet.
+                    if !(days[shown] > Calendar.current.startOfDay(for: .now)) { checkInButton(days[shown]) }
                     Spacer()
                     // FIT-340: every message with the coach, in one place.
                     Button { conversing = true } label: { Label("Messages", systemImage: "bubble.left.and.bubble.right").font(.subheadline.weight(.medium)) }
@@ -441,11 +443,18 @@ struct TodayScreen: View {
         return last
     }
 
-    /// FIT-204: weight, sleep and a note for the coach, or what today's said.
-    private var checkInButton: some View {
-        let today = entries.filter { ($0.kind == .bodyweight || $0.kind == .sleep) && Calendar.current.isDateInToday($0.timestamp) }
-        let summary = CheckIn.summary(today)
-        return Button { checkingIn = true } label: {
+    /// A check-in sheet's day.
+    struct CheckInDay: Identifiable {
+        var day: Date
+        var id: Date { day }
+    }
+
+    /// FIT-204: weight, sleep and a note for the coach, or what the day's said. FIT-345: for the day shown, which opens
+    /// it to change.
+    private func checkInButton(_ day: Date) -> some View {
+        let rows = entries.filter { ($0.kind == .bodyweight || $0.kind == .sleep) && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }
+        let summary = CheckIn.summary(rows)
+        return Button { checkingIn = CheckInDay(day: day) } label: {
             Label(summary.map { "Checked in · \($0)" } ?? "Check in", systemImage: summary == nil ? "plus.circle" : "checkmark.circle.fill")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(summary == nil ? .primary : .secondary)
