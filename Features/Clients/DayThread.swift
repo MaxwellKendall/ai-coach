@@ -19,58 +19,98 @@ struct DayThread: View {
     private var client: Roster.Client? { roster.clients.first { $0.id == ref.client } }
     private var date: Date { (try? Date.ISO8601FormatStyle().year().month().day().parse(ref.day)).map { $0 + 12 * 3600 } ?? .now }
 
+    /// Laid out as a Messages conversation (author, 2026-11-10: "the message page looks really bad"): who it's with at
+    /// the top, the day and its session as the conversation's first item, then bubbles, theirs left and yours right.
     var body: some View {
         ScrollView {
             if let client {
                 let log = ClientDay.log(client.units, ref.day)
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(date.formatted(.dateTime.weekday(.wide))).font(.display(28))
-                        Text([client.name, ClientDay.sessionName(log)].compactMap { $0 }.joined(separator: " · "))
-                            .font(.subheadline).foregroundStyle(Color.inkMuted)
+                let comments = client.comments.filter { $0.day == ref.day }
+                let notes = ClientDay.notes(log)
+                VStack(spacing: 0) {
+                    Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                        .font(.caption.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                        .padding(.bottom, 10)
+                    session(log)
+                    VStack(spacing: 4) {
+                        ForEach(notes, id: \.self) { note in bubble(note, mine: false) }
+                        ForEach(comments, id: \.at) { comment in bubble(comment.text, mine: comment.by == account.user?.uid) }
                     }
-                    let lifts = ClientDay.lifts(log, names: names)
-                    if !lifts.isEmpty {
-                        VStack(spacing: 0) {
-                            ForEach(Array(lifts.enumerated()), id: \.offset) { index, lift in
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text(lift.name).font(.headline)
-                                    Spacer(minLength: 8)
-                                    Text(lift.sets).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit()
-                                }
-                                .padding(.vertical, 14)
-                                if index < lifts.count - 1 { Divider() }
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .cardBackground()
+                    .padding(.top, 16)
+                    if notes.isEmpty && comments.isEmpty {
+                        Text("Write to \(first(client)) about \(date.formatted(.dateTime.weekday(.wide))). It shows on their Today and as a notification.")
+                            .font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
+                            .padding(.horizontal, 24).padding(.top, 8)
                     }
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(ClientDay.notes(log), id: \.self) { note in bubble(note, by: client.name, mine: false) }
-                        ForEach(client.comments.filter { $0.day == ref.day }, id: \.at) { comment in
-                            bubble(comment.text, by: comment.by == account.user?.uid ? "You" : comment.byName ?? client.name,
-                                   mine: comment.by == account.user?.uid)
-                        }
-                    }
-                    if let problem { Text(problem).font(.subheadline).foregroundStyle(Color.inkMuted) }
+                    if let problem { Text(problem).font(.footnote).foregroundStyle(.red).padding(.top, 8) }
                 }
-                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 24)
+                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 16)
             }
         }
+        .defaultScrollAnchor(.bottom)
         .scrollDismissesKeyboard(.interactively)
         .screenBackground()
         .safeAreaBar(edge: .bottom) { composer }
+        // The conversation has the whole screen, as in Messages: the composer sits where the tab bar was, and who it's
+        // with is at the top, beside Back.
+        .toolbarVisibility(.hidden, for: .tabBar)
+        .toolbar {
+            if let client {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Avatar(client: client, size: 36)
+                        Text(client.name).font(.caption.weight(.semibold))
+                    }
+                }
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func bubble(_ text: String, by: String, mine: Bool) -> some View {
-        VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
+    private func first(_ client: Roster.Client) -> String { client.name.split(separator: " ").first.map(String.init) ?? client.name }
+
+    /// The day's session as a compact card, like a link shared in a conversation: its name, then a line per lift; or
+    /// what was planned, or a rest day.
+    @ViewBuilder private func session(_ log: [SyncUnits.LogRow]) -> some View {
+        let lifts = ClientDay.lifts(log, names: names)
+        let plan = client.map { ClientDay.plan($0.units, ref.day).filter { $0.kind == .workout } } ?? []
+        VStack(alignment: .leading, spacing: 8) {
+            if !lifts.isEmpty {
+                Label(ClientDay.sessionName(log) ?? "Logged", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                ForEach(Array(lifts.enumerated()), id: \.offset) { _, lift in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(lift.name).font(.subheadline.weight(.semibold))
+                        Spacer(minLength: 8)
+                        Text(lift.sets).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit()
+                    }
+                }
+            } else if !plan.isEmpty {
+                Label(ref.day < SyncUnits.day(.now) ? "Planned, not logged" : "Planned", systemImage: "calendar")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                // Each exercise once, in the plan's order.
+                let slugs = plan.compactMap(\.template).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+                Text(slugs.map { names[$0] ?? $0 }.joined(separator: ", ")).font(.subheadline.weight(.semibold))
+            } else {
+                Label("Rest day", systemImage: "moon").font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.surface, in: .rect(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.inkFaint.opacity(0.4), lineWidth: 0.5))
+    }
+
+    /// A Messages bubble: no wider than three quarters of the screen, theirs grey on the left, yours in the accent.
+    private func bubble(_ text: String, mine: Bool) -> some View {
+        HStack {
+            if mine { Spacer(minLength: 56) }
             Text(text).font(.body)
                 .foregroundStyle(mine ? Plate.current.onAccent : Color.ink)
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(mine ? Plate.current.accent : Color.surface, in: .rect(cornerRadius: 18))
-            Text(by).font(.footnote).foregroundStyle(Color.inkMuted).padding(.horizontal, 4)
+                .padding(.horizontal, 14).padding(.vertical, 9)
+                .background(mine ? Plate.current.accent : Color.fill, in: .rect(cornerRadius: 20))
+            if !mine { Spacer(minLength: 56) }
         }
-        .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
     }
 
     private var composer: some View {

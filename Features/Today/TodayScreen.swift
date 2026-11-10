@@ -17,6 +17,10 @@ struct TodayScreen: View {
     @Query private var templates: [Template]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @State private var day: Int?
+    /// FIT-332: the Sunday of the week shown.
+    @State private var shownWeek = Week.start(of: .now)
+    /// Which way the last week change went, so the strip slides the right way.
+    @State private var forward = true
     @State private var voice = VoiceCapture()
     /// What was said, while it's worked on (FIT-50: the progress pill shows it and `step`).
     @State private var working: String?
@@ -87,16 +91,41 @@ struct TodayScreen: View {
 
     private var todayIndex: Int { week.firstIndex { Calendar.current.isDateInToday($0) } ?? 0 }
 
-    /// The swiped days: this week, fixed, Sunday first and Saturday last (author, 2026-10-30).
-    private var days: [Date] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: .now)
-        let sunday = calendar.date(byAdding: .day, value: -todayPos, to: today)!
-        return (0..<7).map { calendar.date(byAdding: .day, value: $0, to: sunday)! }
+    /// The swiped days: the week shown, Sunday first and Saturday last. FIT-332 (author, 2026-11-10): any week, earlier
+    /// or later, in place of this week only (2026-10-30).
+    private var days: [Date] { (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: shownWeek)! } }
+
+    private var isThisWeek: Bool { shownWeek == week[0] }
+
+    /// Today's place in this week's days (the Gregorian weekday runs 1 = Sunday to 7 = Saturday).
+    private var todayPos: Int { Calendar.current.component(.weekday, from: .now) - 1 }
+
+    /// Whether a page is today: its place on this week.
+    private func isToday(_ index: Int) -> Bool { isThisWeek && index == todayPos }
+    private func isPast(_ day: Date) -> Bool { day < Calendar.current.startOfDay(for: .now) }
+
+    /// FIT-332: a later week with nothing planned in it yet: it says so, rather than seven rest days.
+    private func notPlannedYet(_ day: Date) -> Bool {
+        let start = Week.start(of: day)
+        return start > week[0] && !planned.contains { $0.kind == .workout && Week.start(of: $0.date) == start }
     }
 
-    /// Today's place in `days` (the Gregorian weekday runs 1 = Sunday to 7 = Saturday).
-    private var todayPos: Int { Calendar.current.component(.weekday, from: .now) - 1 }
+    /// To another week, on the same weekday as the day shown; back on this week, today.
+    private func go(to sunday: Date) {
+        guard sunday != shownWeek else { return }
+        let picked = day ?? todayPos
+        forward = sunday > shownWeek
+        withAnimation(.snappy) {
+            shownWeek = sunday
+            day = sunday == week[0] ? todayPos : picked
+        }
+    }
+
+    /// Back to today, from any week.
+    private func goToday() {
+        shownWeek = week[0]
+        day = todayPos
+    }
 
     /// FIT-201: coached, with no session planned from this Monday on.
     private var awaitingCoach: Bool {
@@ -105,14 +134,14 @@ struct TodayScreen: View {
 
     private var thisWeeksPlan: Plan? { plans.first { $0.weekStart == week[0] } }
     /// The coach is designing the shown week, and hasn't yet.
-    private var planning: Bool { Planner.designing.weeks.contains(week[0]) && thisWeeksPlan?.designedBy == nil }
+    private var planning: Bool { isThisWeek && Planner.designing.weeks.contains(week[0]) && thisWeeksPlan?.designedBy == nil }
 
     var body: some View {
         let weekCards = cards(week)
         let days = days
         let cards = cards(days)
         // FIT-235: another day's session comes to today; when today has a session of its own waiting, the two swap.
-        let todayPlan: DayCard.Planned? = if case .plan(let plan) = cards[todayPos] { plan } else { nil }
+        let todayPlan: DayCard.Planned? = if case .plan(let plan) = weekCards[todayPos] { plan } else { nil }
         VStack(alignment: .leading, spacing: 0) {
             header(days, cards: cards)
             // Each day a full-width page swiped sideways; the strip above follows it.
@@ -201,7 +230,7 @@ struct TodayScreen: View {
         .fullScreenCover(item: $tracking) { target in RunModeView(planned: target.planned) }
         .fullScreenCover(item: $live, onDismiss: celebrate) { draft in
             WorkoutModeView(draft: draft) {
-                day = todayPos
+                goToday()
                 saved = true
             }
             .onAppear {
@@ -219,7 +248,7 @@ struct TodayScreen: View {
             try? Planner.ensureWeek(in: context)
             // On a Sunday the swiped week (Sunday to Saturday) runs into the next plan week (Monday first): plan it now, so
             // its sessions don't show as rest days. A week planned early is replanned when it starts (ensureWeek).
-            if let last = days.last, Week.start(of: last) != week[0] { try? Planner.ensureWeek(of: last, in: context) }
+            if let last = week.last, Week.start(of: last) != week[0] { try? Planner.ensureWeek(of: last, in: context) }
             guard pro.active else { return }
             await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
         }
@@ -228,9 +257,15 @@ struct TodayScreen: View {
     private func open(_ target: PushTarget?) {
         guard let target else { return }
         Navigator.shared.day = nil
-        let days = days
-        guard let date = target.day, let index = days.firstIndex(where: { Calendar.current.isDate($0, inSameDayAs: date) }) else { return }
-        withAnimation(.snappy) { day = index }
+        // FIT-332: the day's own week, whichever it is.
+        guard let date = target.day else { return }
+        let sunday = Week.start(of: date)
+        let days = (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: sunday)! }
+        guard let index = days.firstIndex(where: { Calendar.current.isDate($0, inSameDayAs: date) }) else { return }
+        withAnimation(.snappy) {
+            shownWeek = sunday
+            day = index
+        }
         // A reply on a logged session opens it; on any other day its thread is on Today, under the day.
         if target.kind == .reply, case .done(let done) = cards(days)[index] {
             sheet = done.run.map { .ran($0) } ?? .record(done.planned, done.start)
@@ -288,7 +323,15 @@ struct TodayScreen: View {
                 }
                 .accessibilityLabel("Account and library")
             }
-            strip(days, cards: cards, selected: shown)
+            VStack(spacing: 12) {
+                WeekBar(start: shownWeek) { go(to: $0) }
+                strip(days, cards: cards, selected: shown)
+                    .id(shownWeek)
+                    .transition(.push(from: forward ? .trailing : .leading))
+            }
+            .clipped()
+            // FIT-332: swipe the strip for another week, as in Calendar; the pages below swipe between its days.
+            .simultaneousGesture(WeekBar.swipe { go(to: WeekBar.week($0, from: shownWeek)) })
             if let goal = goalLine {
                 HStack(spacing: 8) {
                     Text(goal.label).font(.subheadline.weight(.semibold))
@@ -308,13 +351,14 @@ struct TodayScreen: View {
         HStack(spacing: 0) {
             ForEach(days.indices, id: \.self) { index in
                 let on = index == selected
+                let today = isToday(index)
                 Button { withAnimation(.snappy) { day = index } } label: {
                     VStack(spacing: 6) {
                         Text(days[index].formatted(.dateTime.weekday(.narrow)))
                             .font(.caption.weight(.semibold)).foregroundStyle(Color.inkMuted)
                         Text(days[index].formatted(.dateTime.day()))
-                            .font(.body.weight(on || index == todayPos ? .semibold : .regular)).monospacedDigit()
-                            .foregroundStyle(on ? Color(.systemBackground) : index == todayPos ? Plate.current.mark : Color.ink)
+                            .font(.body.weight(on || today ? .semibold : .regular)).monospacedDigit()
+                            .foregroundStyle(on ? Color(.systemBackground) : today ? Plate.current.mark : Color.ink)
                             .frame(width: 36, height: 36)
                             .background(on ? Color.ink : .clear, in: .circle)
                         dot(cards[index])
@@ -399,6 +443,8 @@ struct TodayScreen: View {
         if calendar.isDateInToday(day) { return "Today" }
         if calendar.isDateInTomorrow(day) { return "Tomorrow" }
         if calendar.isDateInYesterday(day) { return "Yesterday" }
+        // FIT-332: outside this week a weekday alone is ambiguous: "Mon, Nov 3".
+        if Week.start(of: day) != Week.start(of: .now) { return day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) }
         return day.formatted(.dateTime.weekday(.wide))
     }
 
@@ -462,6 +508,13 @@ struct TodayScreen: View {
             }
         case .plan(let plan): planView(plan, isToday: isToday)
         case .done(let done): doneCard(done)
+        // FIT-332: a later week nobody has planned yet isn't seven rest days.
+        case .rest where notPlannedYet(day):
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Not planned yet").font(.display(28))
+                Text(pro.coaches.isEmpty ? "This week is planned when it comes." : "Your coach plans this week before it starts.")
+                    .foregroundStyle(Color.inkMuted)
+            }
         // FIT-201: a coach's client with nothing planned from this week on is waiting on the coach, not resting.
         case .rest where awaitingCoach:
             VStack(alignment: .leading, spacing: 8) {
@@ -540,17 +593,17 @@ struct TodayScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     // FIT-8: the week's review is the first thing on its last day.
-                    if index == todayPos, WeekReport.isDue() {
+                    if isToday(index), WeekReport.isDue() {
                         let report = weekReport()
                         WeekReviewCard(report: report) { review = report }
                     }
-                    if index == todayPos, let done = finishedProgram {
+                    if isToday(index), let done = finishedProgram {
                         ProgramDoneCard(finished: done, next: done.following(days: profiles.first?.trainingDays.count ?? 3),
                                         recap: { review = weekReport() }, start: { startNext(after: done) }, pick: { picking = true })
                     }
                     // A session's rows bring their own 16 pt above and below, so its card adds only 4: the text sits
                     // 20 pt from every edge, as on the other cards.
-                    dayContent(card, day: day, isToday: index == todayPos, isPast: index < todayPos)
+                    dayContent(card, day: day, isToday: isToday(index), isPast: isPast(day))
                         .padding(.horizontal, 20).padding(.vertical, Self.isList(card) && !planning ? 4 : 20)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .cardBackground()
@@ -563,9 +616,10 @@ struct TodayScreen: View {
             .scrollBounceBehavior(.basedOnSize)
             Group {
                 // Another day this week, earlier or later: its session can be moved to today, or swapped with today's.
-                if index == todayPos { actions(card, week: weekCards) }
-                else if index < todayPos { pastActions(card, day: day) }
-                else { laterActions(card, todayPlan: todayPlan) }
+                // A later week's waits for its week (FIT-332): its plan may change before then.
+                if isToday(index) { actions(card, week: weekCards) }
+                else if isPast(day) { pastActions(card, day: day) }
+                else if isThisWeek { laterActions(card, todayPlan: todayPlan) }
             }
             .padding(.horizontal, 20).padding(.bottom, 16)
         }
@@ -845,7 +899,7 @@ struct TodayScreen: View {
         try? context.save()
         let from = plan.start.formatted(.dateTime.weekday(.wide))
         withAnimation(.snappy) {
-            day = todayPos
+            goToday()
             toast = Toast(text: todays == nil ? "\(from)’s session is today" : "Swapped with \(from)") { [context] in
                 for (item, date) in was { item.date = date; item.updatedAt = .now }
                 try? context.save()

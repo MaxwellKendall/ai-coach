@@ -38,17 +38,14 @@ struct ClientScreen: View {
                     }
                     flags(client)
                     VStack(spacing: 12) {
-                        weekBar
+                        WeekBar(start: start) { go(to: $0) }
                         strip(client)
                             .id(start)
                             .transition(.push(from: forward ? .trailing : .leading))
                     }
                     .clipped()
                     // Swipe the strip to the next or previous week, as in Calendar.
-                    .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
-                        guard abs(drag.translation.width) > abs(drag.translation.height), abs(drag.translation.width) > 40 else { return }
-                        go(drag.translation.width < 0 ? 1 : -1)
-                    })
+                    .simultaneousGesture(WeekBar.swipe { go(to: WeekBar.week($0, from: start)) })
                     dayCard(client)
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
@@ -95,38 +92,6 @@ struct ClientScreen: View {
         let done = days.filter { ClientDay.trained(client.units, $0) }.count
         let planned = days.filter { ClientDay.trained(client.units, $0) || ClientDay.planned(client.units, $0) }.count
         return planned == 0 ? "Nothing planned" : "\(done) of \(planned) done"
-    }
-
-    /// The week's dates, ‹ ›, and "This Week" to come back, as Calendar's week view has them.
-    private var weekBar: some View {
-        HStack(spacing: 4) {
-            Text(thisWeek ? "This week" : Self.range(week[0], week[6])).font(.headline).contentTransition(.numericText())
-            Spacer()
-            if !thisWeek {
-                Button("This Week") { go(to: Week.start(of: .now)) }
-                    .font(.subheadline.weight(.semibold)).buttonStyle(.plain).foregroundStyle(Plate.current.mark)
-                    .padding(.trailing, 6)
-            }
-            ForEach([-1, 1], id: \.self) { step in
-                Button { go(step) } label: {
-                    Image(systemName: step < 0 ? "chevron.left" : "chevron.right").font(.subheadline.weight(.semibold))
-                        .frame(width: 36, height: 36).background(Color.fill, in: .circle)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(step < 0 ? "Previous week" : "Next week")
-            }
-        }
-    }
-
-    /// "Nov 2 – 8", or "Oct 26 – Nov 1" across a month.
-    static func range(_ first: Date, _ last: Date) -> String {
-        let sameMonth = Calendar.current.isDate(first, equalTo: last, toGranularity: .month)
-        let end = sameMonth ? last.formatted(.dateTime.day()) : last.formatted(.dateTime.month(.abbreviated).day())
-        return "\(first.formatted(.dateTime.month(.abbreviated).day())) – \(end)"
-    }
-
-    private func go(_ weeks: Int) {
-        go(to: Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: start)!)
     }
 
     /// To another week, on the same weekday as the day picked; on this week, today.
