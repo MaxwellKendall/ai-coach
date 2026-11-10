@@ -47,7 +47,9 @@ struct GoalCard: View {
             : GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now, by: dated ? due : nil)
         let forecast = dated ? GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: due) : nil
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
-                                    forecast: forecast, target: goal.target, start: start, end: due, format: option.format, dated: dated)
+                                    forecast: forecast, target: goal.target, start: start,
+                                    // A date already past when the card starts can't end the chart: that range runs backwards.
+                                    end: due > start ? due : end, format: option.format, dated: dated)
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(option.name).font(.subheadline).foregroundStyle(.secondary)
