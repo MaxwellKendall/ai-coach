@@ -5,7 +5,7 @@ import Observation
 /// the session; Clients refreshes it when it appears and on a pull.
 @MainActor @Observable
 final class Roster {
-    struct Client: Identifiable, Sendable {
+    struct Client: Codable, Identifiable, Sendable {
         var person: Cloud.Person
         /// Every unit they have, key → body (FIT-126).
         var units: [String: String]
@@ -44,6 +44,33 @@ final class Roster {
         loaded = !clients.isEmpty
     }
 
+    // MARK: The last list, shown at once while a fresh one loads
+
+    struct Saved: Codable {
+        var coach: String
+        var clients: [Client]
+        var invites: [Cloud.ClientInvite]
+    }
+
+    /// In Caches: the system may clear it, and it's only ever a head start.
+    static let savedURL = URL.cachesDirectory.appending(path: "roster.json")
+
+    /// The roster as last loaded, for the coach who loaded it; none if there's nothing saved.
+    static func restored(from url: URL = savedURL) -> Roster {
+        let roster = Roster()
+        guard let data = try? Data(contentsOf: url), let saved = try? JSONDecoder().decode(Saved.self, from: data) else { return roster }
+        roster.clients = byName(saved.clients)
+        roster.invites = saved.invites
+        roster.loadedFor = saved.coach
+        roster.loaded = true
+        return roster
+    }
+
+    private func save(to url: URL = savedURL) {
+        guard let coach = loadedFor else { return }
+        try? JSONEncoder().encode(Saved(coach: coach, clients: clients, invites: invites)).write(to: url, options: [.atomic, .completeFileProtection])
+    }
+
     var needsYou: [Client] { clients.filter { $0.week.need != nil } }
 
     // MARK: FIT-338: unread
@@ -61,11 +88,15 @@ final class Roster {
     }
 
     /// FIT-339: a client gone from the list, once the coach has removed them.
-    func remove(_ id: String) { clients.removeAll { $0.id == id } }
+    func remove(_ id: String) {
+        clients.removeAll { $0.id == id }
+        save()
+    }
 
     func cancel(_ code: String) async throws {
         try await Cloud.cancelInvite(code)
         invites.removeAll { $0.code == code }
+        save()
     }
 
     func markSeen(_ id: String, at date: Date = .now) {
@@ -103,9 +134,16 @@ final class Roster {
         #if DEBUG
         if Self.sample { return }
         #endif
-        guard let coach else { clients = []; loaded = true; return }
+        guard let coach else {
+            clients = []
+            invites = []
+            loadedFor = nil
+            loaded = true
+            try? FileManager.default.removeItem(at: Self.savedURL)
+            return
+        }
         // Another account's list, or the signed-out one, isn't this coach's: loading, not "Invite your first client".
-        if coach != loadedFor { clients = []; loaded = false }
+        if coach != loadedFor { clients = []; invites = []; loaded = false }
         do {
             let people = try await Cloud.myClients()
             if !people.isEmpty { UserDefaults.standard.set(true, forKey: Self.coachingKey) }
@@ -129,6 +167,7 @@ final class Roster {
             // A server without myInvites yet (before FIT-339's deploy) just shows none.
             invites = (try? await Cloud.myInvites()) ?? []
             for client in loaded where seen[client.id] == nil { markSeen(client.id) }
+            save()
             problem = nil
         } catch {
             problem = "Couldn’t load your clients. Pull to try again."
@@ -142,5 +181,6 @@ final class Roster {
         client.week = Triage.week(client.units, comments: client.comments, names: names, coach: coach, today: SyncUnits.day(.now))
         if let index = clients.firstIndex(where: { $0.id == client.id }) { clients[index] = client }
         clients = Self.byName(clients)
+        save()
     }
 }

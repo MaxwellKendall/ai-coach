@@ -15,6 +15,21 @@ struct RosterTests {
         #expect(sorted.map(\.name) == ["Ava Lindqvist", "Mike Torres", "sara Kim", "Tom 9", "Tom 10"])
     }
 
+    @Test func theLastListShowsAtOnceForItsCoach() throws {
+        let url = URL.temporaryDirectory.appending(path: "roster-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var sara = client("Sara")
+        sara.week.flags = [Triage.Flag(kind: .pain, text: "Knee hurts", day: "2026-11-09")]
+        let saved = Roster.Saved(coach: "coach-1", clients: [client("Tom"), sara], invites: [])
+        try JSONEncoder().encode(saved).write(to: url)
+
+        let roster = Roster.restored(from: url)
+        #expect(roster.loaded)
+        #expect(roster.clients.map(\.name) == ["Sara", "Tom"])
+        #expect(roster.needsYou.map(\.name) == ["Sara"])
+        #expect(!Roster.restored(from: url.appending(path: "missing")).loaded)
+    }
+
     @Test func lastLoggedIsTheLatestRowOfTheLatestDay() {
         func log(_ times: [Double]) -> String {
             String(decoding: try! JSONSerialization.data(withJSONObject: times.map {

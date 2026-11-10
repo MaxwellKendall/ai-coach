@@ -4,8 +4,8 @@ import Foundation
 /// FIT-132/FIT-196). A port, so the three agree: change one, change all three. Days are "yyyy-MM-dd" strings, as the
 /// sync units' keys have them.
 enum Triage {
-    struct Flag: Equatable, Sendable {
-        enum Kind: String, CaseIterable, Sendable { case pain, missed, hard, plateau, behind, quiet, note }
+    struct Flag: Codable, Equatable, Sendable {
+        enum Kind: String, CaseIterable, Codable, Sendable { case pain, missed, hard, plateau, behind, quiet, note }
         var kind: Kind
         var text: String
         /// The day a note was left on, so the phone can open it to reply (not in shared/triage.ts).
@@ -22,7 +22,7 @@ enum Triage {
     }
 
     /// One client's week: sessions done of planned (Sunday to Saturday), the last session, and the flags.
-    struct Week: Equatable, Sendable {
+    struct Week: Codable, Equatable, Sendable {
         var done: Int
         var planned: Int
         var lastSession: String?

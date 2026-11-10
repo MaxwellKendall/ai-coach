@@ -36,6 +36,8 @@ final class Account {
     }
 
     private(set) var user: User?
+    /// FIT-298: false until the first `refresh` has read the session, so "no user" isn't taken for signed out at launch.
+    private(set) var restored = false
     /// FIT-57: Release (TestFlight and the App Store) talks to AICoach-prod and bundles only its file; Debug
     /// bundles both and talks to the one `Backend.current` names.
     static let outputs = "amplify_outputs.\(Backend.current.rawValue)"
@@ -65,11 +67,13 @@ final class Account {
         guard isAvailable, (try? await Amplify.Auth.fetchAuthSession())?.isSignedIn == true,
               let current = try? await Amplify.Auth.getCurrentUser() else {
             user = nil
+            restored = true
             return
         }
         let attributes = (try? await Amplify.Auth.fetchUserAttributes()) ?? []
         let value = { (key: AuthUserAttributeKey) in attributes.first { $0.key == key }?.value }
         user = User(uid: current.userId, name: value(.name), email: value(.email), provider: Provider(username: current.username))
+        restored = true
     }
 
     /// FIT-138: Sign in with Apple's own sheet (one tap, Face ID), no web page. The app asks Apple with the hash of a

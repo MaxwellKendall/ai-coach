@@ -27,7 +27,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var joined: Cloud.GroupSummary?
     /// FIT-298: coach mode, for someone who came in as a coach or has clients.
-    @State private var roster = Roster()
+    @State private var roster = Roster.restored()
     @AppStorage(Roster.coachingKey) private var coaching = false
 
     /// FIT-297: the plate colour picked on You (design system v2); Blue 20 until one is picked.

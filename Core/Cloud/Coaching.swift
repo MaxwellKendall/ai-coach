@@ -3,7 +3,7 @@ import Foundation
 /// FIT-298: coach mode's calls, the dashboard's own (web/src/sync.ts, FIT-130/132): a coach's clients, an invite, a
 /// client's units and the replies on their days, and a changed day written back to them.
 extension Cloud {
-    struct ClientInvite: Decodable, Equatable, Sendable {
+    struct ClientInvite: Codable, Equatable, Sendable {
         var code: String
         var url: String
         /// FIT-339: when it was made, in myInvites.

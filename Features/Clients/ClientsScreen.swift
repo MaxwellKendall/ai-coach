@@ -62,8 +62,8 @@ struct ClientsScreen: View {
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
             }
             .screenBackground()
-            .refreshable { await roster.refresh(coach: account.user?.uid, names: names) }
-            .task(id: account.user?.uid) { await roster.refresh(coach: account.user?.uid, names: names) }
+            .refreshable { await reload() }
+            .task(id: "\(account.restored) \(account.user?.uid ?? "")") { await reload() }
             .navigationDestination(for: String.self) { id in ClientScreen(id: id) }
             .navigationDestination(for: DayThread.Ref.self) { ref in DayThread(ref: ref) }
             .navigationDestination(for: ClientProgressScreen.Ref.self) { ref in ClientProgressScreen(id: ref.client) }
@@ -74,7 +74,7 @@ struct ClientsScreen: View {
                 Navigator.shared.clientDay = nil
                 path = NavigationPath()
                 path.append(ClientScreen.Opening(client: client, day: target.day.map { SyncUnits.day($0) }))
-                Task { await roster.refresh(coach: account.user?.uid, names: names) }
+                Task { await reload() }
             }
             .toolbarVisibility(.hidden, for: .navigationBar)
             .sheet(isPresented: $inviting) { InviteSheet() }
@@ -164,6 +164,12 @@ struct ClientsScreen: View {
             .padding(.horizontal, 16)
             .cardBackground()
         }
+    }
+
+    /// Not before the account has read its session: at launch there's no user yet, which isn't signed out, and the
+    /// saved list stays up meanwhile.
+    private func reload() async {
+        if account.restored { await roster.refresh(coach: account.user?.uid, names: names) }
     }
 
     private var empty: some View {
