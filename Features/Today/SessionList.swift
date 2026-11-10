@@ -306,6 +306,20 @@ struct SessionList: View {
                     change { $0.set(metric, to: amount + step, block: pick.block, movement: pick.movement, set: first, remaining: true) }
                 }
             }
+            // FIT-335: the weight, so an exercise just added (which starts without one) can have it; 0 is bodyweight.
+            if !timed {
+                let hand = working.first?.value("load_lb_hand") != nil
+                let load = Self.load(movement) ?? 0
+                let weigh = { (value: Double) in
+                    change { $0.set(hand ? "load_lb_hand" : "load_lb", to: max(0, value), block: pick.block, movement: pick.movement, set: first, remaining: true) }
+                }
+                HStack(spacing: 8) {
+                    stepButton("minus", "5 lb less") { weigh(load - 5) }
+                    // Typed, as in every lifting app, for a big jump; ± for 5 lb.
+                    WeightField(load: load, label: hand ? "lb each" : "lb", commit: weigh).frame(minWidth: 52)
+                    stepButton("plus", "5 lb more") { weigh(load + 5) }
+                }
+            }
             HStack(spacing: 8) {
                 chip("Swap") { picking = .swap(pick, movement.exercise) }
                 chip("Move up", symbol: "arrow.up", disabled: place == 0) { change { $0.move(block: pick.block, by: lifts[place - 1] - pick.block) } }
@@ -383,8 +397,9 @@ struct SessionList: View {
         if checked.wrappedValue.contains(block) { checked.wrappedValue.remove(block) } else { checked.wrappedValue.insert(block) }
     }
 
+    /// The working weight; none for bodyweight, which a weight stepped down to 0 is.
     static func load(_ movement: SessionPlan.Movement) -> Double? {
-        movement.working.first.flatMap { $0.value("load_lb") ?? $0.value("load_lb_hand") }
+        movement.working.first.flatMap { $0.value("load_lb") ?? $0.value("load_lb_hand") }.flatMap { $0 > 0 ? $0 : nil }
     }
 
     /// "3 sets of 5", "3 sets of 8–12", "3 sets of 40 s".
@@ -408,5 +423,39 @@ private struct Bracket: Shape {
         path.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.maxY), control: CGPoint(x: rect.minX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         return path
+    }
+}
+
+/// FIT-335: a weight typed in place, the number pad up on a tap; empty or 0 is bodyweight. Saved when typing ends.
+private struct WeightField: View {
+    let load: Double
+    let label: String
+    let commit: (Double) -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TextField("BW", text: $text)
+                .keyboardType(.decimalPad).multilineTextAlignment(.center).focused($focused)
+                .font(.display(20, weight: .semibold, relativeTo: .title3)).monospacedDigit()
+                .toolbar {
+                    if focused {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") { focused = false }.fontWeight(.semibold)
+                        }
+                    }
+                }
+            Text(label).font(.caption).foregroundStyle(Color.inkMuted)
+        }
+        .onAppear { text = load == 0 ? "" : Coach.number(load) }
+        .onChange(of: load) { if !focused { text = load == 0 ? "" : Coach.number(load) } }
+        .onChange(of: focused) {
+            guard !focused else { return }
+            let typed = Double(text.replacingOccurrences(of: ",", with: ".")) ?? 0
+            if typed != load { commit(typed) }
+        }
+        .accessibilityLabel("Weight")
     }
 }

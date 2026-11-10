@@ -49,6 +49,51 @@ enum ClientDay {
         log.first { $0.kind == .workout && $0.template != nil && !$0.note.isEmpty }?.note
     }
 
+    // MARK: FIT-335: a coach programming a client's days
+
+    /// A day's rows at another day, at the same times of day, pinned as a coach's change is (FIT-202). `fresh` gives
+    /// them new ids, for a copy.
+    static func shifted(_ rows: [SyncUnits.PlanRow], to day: Date, fresh: Bool = false,
+                        calendar: Calendar = .current) -> [SyncUnits.PlanRow] {
+        rows.map { row in
+            var row = row
+            row.at = calendar.startOfDay(for: day) + row.at.timeIntervalSince(calendar.startOfDay(for: row.at))
+            row.pinned = true
+            if fresh { row.id = UUID() }
+            return row
+        }
+    }
+
+    /// Rows added to a day after the ones it has, a second apart so their order holds (Planner.activity's offsets).
+    static func appended(_ incoming: [SyncUnits.PlanRow], to existing: [SyncUnits.PlanRow]) -> [SyncUnits.PlanRow] {
+        guard let last = existing.map(\.at).max() else { return incoming }
+        return existing + incoming.sorted { $0.at < $1.at }.enumerated().map { index, row in
+            var row = row
+            row.at = last + TimeInterval(index + 1)
+            return row
+        }
+    }
+
+    /// A new exercise on a day, 3 × 10 as Add exercise starts one (SessionPlan.add), after what's there or at 9:00.
+    static func exercise(_ slug: String, on day: Date, after existing: [SyncUnits.PlanRow],
+                         calendar: Calendar = .current) -> [SyncUnits.PlanRow] {
+        let row = SyncUnits.PlanRow(id: UUID(), kind: .workout, at: calendar.startOfDay(for: day) + 9 * 3600, slot: nil, template: slug,
+                                    targets: [Measurement(metric: "sets", value: 3, unit: "sets"), Measurement(metric: "reps", value: 10, unit: "reps")],
+                                    note: "", adjustedReason: "edited", group: nil, main: existing.isEmpty, pinned: true)
+        return appended([row], to: existing)
+    }
+
+    /// A planned run, as the program plans one: the outdoor run with its distance, and its kind ("easy", "long", …)
+    /// as the note, which Today's running tip reads (Coach.run).
+    static func run(_ kind: String, miles: Double, on day: Date, after existing: [SyncUnits.PlanRow],
+                    calendar: Calendar = .current) -> [SyncUnits.PlanRow] {
+        let row = SyncUnits.PlanRow(id: UUID(), kind: .workout, at: calendar.startOfDay(for: day) + 7 * 3600, slot: "Run", template: Running.outdoor,
+                                    targets: [Measurement(metric: "sets", value: 1, unit: "sets"),
+                                              Measurement(metric: "distance_m", value: (miles * Running.mile).rounded(), unit: "m")],
+                                    note: kind, adjustedReason: "edited", group: nil, main: false, pinned: true)
+        return appended([row], to: existing)
+    }
+
     /// A client's day as PlannedActivity, in a store of its own that's never saved, so Planner's session and its
     /// hand edits work on it as on one's own; `rows` turns it back into the day's unit.
     @MainActor final class Editor {

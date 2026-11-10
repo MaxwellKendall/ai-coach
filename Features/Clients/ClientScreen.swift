@@ -18,6 +18,13 @@ struct ClientScreen: View {
     /// The day `editor` was made for: until it catches up with `day`, the old day's session isn't shown.
     @State private var editorDay: String?
     @State private var toast: Toast?
+    /// FIT-335: what's being added to the day, and where its session is going.
+    @State private var adding: Adding?
+    @State private var dated: Dated?
+    @State private var clearing = false
+
+    enum Adding: String, Identifiable { case workout, run; var id: String { rawValue } }
+    enum Dated: String, Identifiable { case move, copy; var id: String { rawValue } }
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
     private var client: Roster.Client? { roster.clients.first { $0.id == id } }
@@ -61,6 +68,29 @@ struct ClientScreen: View {
         }
         .screenBackground()
         .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 24) }
+        .sheet(item: $adding) { adding in
+            let date = SyncUnits.date(ofKey: "plan#\(day)") ?? .now
+            let latest = { roster.clients.first { $0.id == id } }
+            switch adding {
+            case .workout:
+                ExercisePicker(title: "Add exercise") { slug in
+                    guard let client = latest() else { return }
+                    send(day, rows: ClientDay.exercise(slug, on: date, after: ClientDay.plan(client.units, day)), client)
+                }
+            case .run:
+                PlanRunSheet(day: day) { kind, miles in
+                    guard let client = latest() else { return }
+                    send(day, rows: ClientDay.run(kind, miles: miles, on: date, after: ClientDay.plan(client.units, day)), client,
+                         done: "Run added")
+                }
+            }
+        }
+        .sheet(item: $dated) { dated in
+            PlanDaySheet(title: dated == .move ? "Move to" : "Copy to", from: day) { target in
+                guard let client = roster.clients.first(where: { $0.id == id }) else { return }
+                place(client, at: target, move: dated == .move)
+            }
+        }
         .animation(.snappy, value: toast)
         .task(id: "\(day) \(client?.units["plan#\(day)"]?.hashValue ?? 0)") {
             editor = client.map { ClientDay.Editor(ClientDay.plan($0.units, day), templates: templates) }
@@ -164,7 +194,8 @@ struct ClientScreen: View {
         } else if editorDay != day {
             Color.clear.frame(height: 80)
         } else if let session = editor?.session {
-            // A day gone by is as it was planned; today and later can change.
+            // A day gone by is as it was planned; today and later can change, and move, copy or clear (FIT-335).
+            if day >= today { dayBar(client) }
             SessionList(session: session, names: names, previous: [:], checked: nil,
                         onLoad: day >= today ? { changeLoad($0, by: $1, in: session, client) } : nil,
                         onEdit: day >= today ? { save($0, client) } : nil)
@@ -176,7 +207,58 @@ struct ClientScreen: View {
         } else {
             Text("Rest day").font(.title3.weight(.bold))
                 .padding(20).frame(maxWidth: .infinity, alignment: .leading).cardBackground()
+            // FIT-335: a coach can plan any day from today on, from nothing.
+            if day >= today {
+                HStack(spacing: 10) {
+                    Button { adding = .workout } label: { Label("Workout", systemImage: "plus").frame(maxWidth: .infinity) }.buttonStyle(.primary)
+                    Button { adding = .run } label: { Label("Run", systemImage: "figure.run").frame(maxWidth: .infinity) }.buttonStyle(.secondary)
+                }
+            }
             message(client)
+        }
+    }
+
+    /// FIT-335: what can be done to the whole day: move it, copy it, add a run, or clear it.
+    private func dayBar(_ client: Roster.Client) -> some View {
+        HStack {
+            Text(Self.dayTitle(day)).font(.headline)
+            Spacer()
+            Menu {
+                Button("Move to Another Day", systemImage: "calendar") { dated = .move }
+                Button("Copy to Another Day", systemImage: "plus.square.on.square") { dated = .copy }
+                Button("Add a Run", systemImage: "figure.run") { adding = .run }
+                Divider()
+                Button("Clear Day", systemImage: "trash", role: .destructive) { clearing = true }
+            } label: {
+                Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                    .frame(width: 44, height: 32).background(Color.fill, in: .capsule)
+            }
+            .accessibilityLabel("Change \(Self.dayTitle(day))")
+        }
+        .padding(.horizontal, 4)
+        .confirmationDialog("Clear \(Self.dayTitle(day))?", isPresented: $clearing, titleVisibility: .visible) {
+            Button("Clear Day", role: .destructive) { send(day, rows: [], client, done: "Cleared \(Self.dayTitle(day))") }
+        } message: {
+            Text("Its session comes off their plan.")
+        }
+    }
+
+    static func dayTitle(_ day: String) -> String {
+        let date = SyncUnits.date(ofKey: "plan#\(day)") ?? .now
+        return Calendar.current.isDateInToday(date) ? "Today" : date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+    }
+
+    /// Move or copy the day's session to `target`, after anything already planned there.
+    private func place(_ client: Roster.Client, at target: Date, move: Bool) {
+        let key = SyncUnits.day(target)
+        guard key != day else { return }
+        let rows = ClientDay.plan(client.units, day)
+        let landed = ClientDay.appended(ClientDay.shifted(rows, to: target, fresh: !move), to: ClientDay.plan(client.units, key))
+        let name = Self.dayTitle(key)
+        send(key, rows: landed, client, done: move ? "Moved to \(name)" : "Copied to \(name)")
+        if move {
+            // The client's latest, with the copy just made, so the second change keeps the first.
+            send(day, rows: [], roster.clients.first { $0.id == id } ?? client)
         }
     }
 
@@ -203,11 +285,16 @@ struct ClientScreen: View {
         save(changed, client)
     }
 
-    /// The day as changed, sent to their phone; kept here at once so the change shows while it goes.
+    /// The day as changed by hand, sent to their phone.
     private func save(_ session: SessionPlan, _ client: Roster.Client) {
         guard let editor else { return }
+        send(day, rows: editor.save(session), client)
+    }
+
+    /// A day's plan as it now is, sent to their phone (none clears it); kept here at once so the change shows while
+    /// it goes. `done` is said once it's sent.
+    private func send(_ day: String, rows: [SyncUnits.PlanRow], _ client: Roster.Client, done: String? = nil) {
         let coach = account.user?.uid ?? ""
-        let rows = editor.save(session)
         let key = "plan#\(day)"
         let body = rows.isEmpty ? nil : SyncUnits.encode(rows)
         var changed = client
@@ -217,7 +304,7 @@ struct ClientScreen: View {
         Task {
             do {
                 let kept = try await Cloud.push(key, body: body, client: id)
-                if !kept { toast = Toast(text: "\(name)’s phone had a newer copy. Pull to see it.") }
+                if !kept { toast = Toast(text: "\(name)’s phone had a newer copy. Pull to see it.") } else if let done { toast = Toast(text: done) }
             } catch {
                 toast = Toast(text: "Couldn’t send that to \(name). Try again.")
             }
