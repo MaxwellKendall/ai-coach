@@ -76,7 +76,7 @@ def entry(seed, photos):
     cues = (a.get('cues') or a.get('instructions') or [])[:3]
     holding = f" with {words(gear)}" if gear else ' using only body weight'
     still = (
-        f"{STYLE}\n\nSHOT: {view}, the mannequin doing a {seed['name'].lower()}{holding}, shown at the START "
+        f"{STYLE}\n\nSHOT: {view}, the figure doing a {seed['name'].lower()}{holding}, shown at the START "
         f"position of the movement with perfect form, matching the pose of the third reference image. "
         f"The {muscles} glow."
     )
@@ -86,9 +86,9 @@ def entry(seed, photos):
         f"The faceless grey training figure performs a slow, controlled {seed['name'].lower()} with perfect form, "
         f"1 full rep from the start position and back to exactly the same start position. "
         + (f"Form: {' '.join(cues)} " if cues else '')
-        + f"The {muscles} glow red-orange and pulse brighter with a hot yellow core at the hardest point of the rep. "
+        + f"The {muscles} glow orange and pulse brighter with a bright yellow core at the hardest point of the rep. "
         "Locked-off static camera, no camera movement. Dark slate studio. Keep the exact look of the start frame: "
-        "same mannequin, same equipment, same lighting, same colors. No text, no logos, no extra people, no cuts."
+        "same figure, same equipment, same lighting, same colors. No text, no logos, no extra people, no cuts."
     )
     refs = [PHOTOS_BASE + p for p in photos.get(seed['slug'], [])]
     return {
