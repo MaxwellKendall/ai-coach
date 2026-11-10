@@ -22,6 +22,9 @@ struct ProgramScreen: View {
     @State private var goalIndex = 0
     /// FIT-233: Add a goal, from Progress › Goals.
     @State private var addingGoal = false
+    /// FIT-343: a goal being updated with a test. FIT-346: a goal being changed.
+    @State private var updating: Goal?
+    @State private var changing: Goal?
     @State private var nextWeek: [PlannedWorkout] = []
     @State private var regenerating: Regenerate?
     @State private var toast: Toast?
@@ -82,6 +85,16 @@ struct ProgramScreen: View {
                 NewGoalSheet { goal in
                     goalIndex = programGoals.firstIndex { $0.goal.id == goal.id } ?? goalIndex
                     toast = Toast(text: "Added. Your coach sees it too.")
+                }
+            }
+            .sheet(item: $updating) { goal in
+                if let option = GoalOption.all.first(where: { $0.metric == goal.metric }) {
+                    GoalUpdateSheet(goal: goal, option: option) { toast = Toast(text: $0) }
+                }
+            }
+            .sheet(item: $changing) { goal in
+                if let option = GoalOption.all.first(where: { $0.metric == goal.metric }) {
+                    GoalChangeSheet(goal: goal, option: option) { drop(goal) }
                 }
             }
             // FIT-64: program changes said to the coach land here.
@@ -641,7 +654,8 @@ struct ProgramScreen: View {
                 GoalCard(goal: item.goal, option: option, weeks: program?.weeks ?? [], start: spans[position].start,
                          end: spans[position].end, current: program?.current ?? 0,
                          sets: sets, weighIns: weighIns, next: (option.exercise ?? (option.measure == .time ? Running.outdoor : nil)).flatMap(nextWorkout),
-                         setTarget: { setTarget(item.goal, $0) })
+                         setTarget: { setTarget(item.goal, $0) },
+                         update: { updating = item.goal }, change: { changing = item.goal })
             }
             .padding(.horizontal, 22)
             .padding(.top, 8)

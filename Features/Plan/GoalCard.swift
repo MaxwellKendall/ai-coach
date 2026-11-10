@@ -20,6 +20,9 @@ struct GoalCard: View {
     /// The next planned workout with the goal's exercise.
     let next: Date?
     let setTarget: (Double) -> Void
+    /// FIT-343: record a test toward it. FIT-346: change its target and date, or drop it.
+    let update: () -> Void
+    let change: () -> Void
 
     /// FIT-342: a card with a date to aim at: the program's, or the goal's own. Without one there's no pace, plan line
     /// or forecast, only now → target and the trend.
@@ -50,6 +53,14 @@ struct GoalCard: View {
                 Text(option.name).font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
                 if let pace { PaceChip(pace: pace) }
+                Menu {
+                    Button("Update", systemImage: "plus.circle", action: update)
+                    Button("Change Target or Date", systemImage: "pencil", action: change)
+                } label: {
+                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
+                        .frame(width: 36, height: 28).contentShape(.rect)
+                }
+                .accessibilityLabel("More for this goal")
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(format(now)).contentTransition(.numericText())
@@ -59,6 +70,13 @@ struct GoalCard: View {
             .font(.system(size: 34, weight: .bold, design: .rounded))
             .padding(.top, 6)
             Text(line(from: from, now: now)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+            Button(action: update) {
+                Label("Update", systemImage: "plus.circle.fill").font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .padding(.top, 12)
+            .accessibilityHint(option.measure == .body ? "Log a weigh-in" : "Record a test: a max, reps or a timed run")
             details(lines, from: from, now: now, forecast: forecast)
         }
         .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
