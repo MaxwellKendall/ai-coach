@@ -43,6 +43,45 @@ final class Roster {
 
     var needsYou: [Client] { clients.filter { $0.week.need != nil } }
 
+    // MARK: FIT-338: unread
+
+    /// When the coach last opened each client's conversation, on this phone; a client seen for the first time starts
+    /// now, so only what comes after counts.
+    private var seen: [String: Date] = (UserDefaults.standard.dictionary(forKey: "coachSeen") as? [String: Double] ?? [:])
+        .mapValues { Date(timeIntervalSince1970: $0) }
+
+    /// Clients with something new from them.
+    var unread: Int { clients.filter { unread($0) > 0 }.count }
+
+    func unread(_ client: Client) -> Int {
+        Self.unread(client.units, comments: client.comments, from: client.id, since: seen[client.id] ?? .now)
+    }
+
+    func markSeen(_ id: String, at date: Date = .now) {
+        seen[id] = date
+        UserDefaults.standard.set(seen.mapValues(\.timeIntervalSince1970), forKey: "coachSeen")
+    }
+
+    /// What a client wrote after `since`: their replies, their sessions' notes and their check-ins' notes.
+    static func unread(_ units: [String: String], comments: [Triage.Comment], from client: String, since: Date) -> Int {
+        var count = 0
+        for comment in comments where comment.by == client && date(comment.at) > since { count += 1 }
+        for key in units.keys where key.hasPrefix("log#") {
+            for row in ClientDay.log(units, String(key.dropFirst(4))) where row.at > since {
+                let said = !row.note.trimmingCharacters(in: .whitespaces).isEmpty
+                let summary = row.kind == .workout && row.template == nil
+                if said && (summary || row.kind == .bodyweight || row.kind == .sleep) { count += 1 }
+            }
+        }
+        return count
+    }
+
+    /// A reply's time, with or without fractional seconds.
+    private static func date(_ at: String) -> Date {
+        if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(at) { return date }
+        return (try? Date.ISO8601FormatStyle().parse(at)) ?? .distantPast
+    }
+
     /// FIT-331: A–Z, as the author asked; each row's flag still says who needs you.
     static func byName(_ clients: [Client]) -> [Client] {
         clients.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -76,6 +115,7 @@ final class Roster {
             }
             clients = Self.byName(loaded)
             loadedFor = coach
+            for client in loaded where seen[client.id] == nil { markSeen(client.id) }
             problem = nil
         } catch {
             problem = "Couldn’t load your clients. Pull to try again."

@@ -5,13 +5,23 @@ import SwiftData
 /// logged day shows what they did; today's or a later session is changed by hand as on Today, and goes straight to
 /// their phone.
 struct ClientScreen: View {
+    /// FIT-338: a client opened on a given day, from a coach's notification.
+    struct Opening: Hashable { var client: String; var day: String? }
+
     let id: String
     @Environment(Account.self) private var account
     @Environment(Roster.self) private var roster
     @Query private var templates: [Template]
-    @State private var day = SyncUnits.day(.now)
+    @State private var day: String
     /// FIT-331: the Sunday of the week shown; any week, earlier or later.
-    @State private var start = Week.start(of: .now)
+    @State private var start: Date
+
+    init(id: String, day: String? = nil) {
+        self.id = id
+        let opened = day ?? SyncUnits.day(.now)
+        _day = State(initialValue: opened)
+        _start = State(initialValue: Week.start(of: SyncUnits.date(ofKey: "plan#\(opened)") ?? .now))
+    }
     /// Which way the last week change went, so the strip slides the right way.
     @State private var forward = true
     @State private var editor: ClientDay.Editor?

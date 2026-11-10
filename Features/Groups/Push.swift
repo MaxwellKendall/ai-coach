@@ -55,21 +55,27 @@ struct PushTarget: Equatable, Sendable {
         case reply
         /// A program was sent: the offer.
         case offer
+        /// FIT-338, to a coach: a client logged, left a note or replied: that client's day.
+        case client
     }
 
     var kind: Kind
     /// The client's own calendar day, as the server reckoned it in the zone the device registered.
     var day: Date?
+    /// FIT-338: the client a coach's notification is about.
+    var client: String?
 
-    init(kind: Kind, day: Date?) {
+    init(kind: Kind, day: Date?, client: String? = nil) {
         self.kind = kind
         self.day = day
+        self.client = client
     }
 
     init?(_ userInfo: [AnyHashable: Any], calendar: Calendar = .current) {
         guard let raw = userInfo["kind"] as? String, let kind = Kind(rawValue: raw) else { return nil }
         let parts = (userInfo["day"] as? String)?.split(separator: "-").compactMap { Int($0) } ?? []
-        self.init(kind: kind, day: parts.count == 3 ? calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) : nil)
+        self.init(kind: kind, day: parts.count == 3 ? calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) : nil,
+                  client: userInfo["client"] as? String)
     }
 }
 
@@ -94,6 +100,8 @@ final class Navigator {
     var pushed: PushTarget?
     /// FIT-220: the day it opens on Today, handed over by the root.
     var day: PushTarget?
+    /// FIT-338: the client and day a coach's notification opens on Clients, handed over by the root.
+    var clientDay: PushTarget?
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {

@@ -12,7 +12,7 @@ vi.mock("@aws-sdk/client-secrets-manager", async (orig) => {
 });
 const sendAlerts = vi.fn(async () => new Map());
 vi.mock("../lambda/apns.ts", () => ({ sendAlerts }));
-const { handler, dayIn, firstUpcoming, offerText, replyText, weekText, WEEK_WINDOW_MS } = await import("../lambda/push.ts");
+const { handler, dayIn, firstUpcoming, offerText, replyText, weekText, WEEK_WINDOW_MS, logNews, coachText } = await import("../lambda/push.ts");
 const { marshall } = await import("@aws-sdk/util-dynamodb");
 
 const record = (eventName: string, item: Record<string, unknown>) => ({
@@ -108,5 +108,61 @@ describe("FIT-220: the coach updated your week", () => {
     expect(offerText(null, 4, "").title).toBe("Your coach sent you a 4-week program");
     expect(replyText("Sam", "2026-10-21", "Nice").title).toBe("Sam replied on Wednesday's session");
     expect(replyText(undefined, "2026-10-21", "Nice").title).toBe("Your coach replied on Wednesday's session");
+  });
+});
+
+// FIT-338: the coach hears what their client logged and said.
+describe("news for a client's coach", () => {
+  const set = (id: string) => ({ id, kind: "workout", template: "back-squat", note: "Lower A" });
+  const note = (text: string) => ({ id: "n", kind: "workout", template: null, note: text });
+
+  it("is the day's first session, not every set after it", () => {
+    expect(logNews([], [set("a")])).toEqual({ kind: "session", session: "Lower A" });
+    expect(logNews([set("a")], [set("a"), set("b")])).toBeNull();
+  });
+
+  it("is a new note, and pain before anything else", () => {
+    expect(logNews([set("a")], [set("a"), note("Felt strong")])).toEqual({ kind: "note", note: "Felt strong" });
+    expect(logNews([], [set("a"), note("Knee's sore on squats")])).toEqual({ kind: "pain", note: "Knee's sore on squats" });
+    expect(logNews([set("a"), note("Felt strong")], [set("a"), note("Felt strong")])).toBeNull();
+  });
+
+  it("isn't a check-in", () => {
+    expect(logNews([], [{ id: "w", kind: "bodyweight", note: "" }])).toBeNull();
+  });
+
+  it("reads as a line about the client", () => {
+    expect(coachText("Mike", { kind: "pain", note: "Knee's sore" }).title).toBe("Mike says something hurts");
+    expect(coachText("Mike", { kind: "session", session: "Lower A" }).title).toBe("Mike logged Lower A");
+    expect(coachText("Mike", { kind: "reply", note: "Thanks!", day: "2026-11-08" })).toEqual({ title: "Mike replied on Sunday", body: "Thanks!" });
+  });
+
+  // The table as the coach's link, name and devices; the coach is "sam", the client "ann".
+  const table = (input: any) => {
+    const pk = input.ExpressionAttributeValues?.[":pk"] ?? input.Key?.PK;
+    const prefix = input.ExpressionAttributeValues?.[":p"];
+    if (pk === "USER#ann" && prefix === "COACH#") return { Items: [{ coachUid: "sam" }] };
+    if (pk === "USER#sam" && prefix === "DEVICE#") return { Items: [{ token: "coach", PK: "USER#sam", SK: "DEVICE#coach" }] };
+    if (pk === "USER#sam" && input.Key?.SK === "CLIENT#ann") return { Item: { clientName: "Ann Lee" } };
+    return { Items: [] };
+  };
+
+  it("pushes a client's reply to their coach, opening that client's day", async () => {
+    send.mockImplementation(async (command: any) => table(command.input));
+    await handler({ Records: [record("INSERT", { ...reply, by: "ann", byName: "Ann", text: "Thanks!" })] } as never);
+    expect((sendAlerts.mock.calls[0] as unknown[]).slice(2)).toEqual([
+      ["coach"], { title: "Ann replied on Tuesday", body: "Thanks!" }, { kind: "client", client: "ann", day: "2026-10-20" },
+    ]);
+  });
+
+  it("pushes a session the client logged, but not a coach's correction", async () => {
+    send.mockImplementation(async (command: any) => table(command.input));
+    const unit = { PK: "USER#ann", SK: "SYNC#log#2026-10-20", key: "log#2026-10-20", body: JSON.stringify([set("a")]) };
+    await handler({ Records: [record("INSERT", unit)] } as never);
+    expect(sendAlerts).toHaveBeenCalledTimes(1);
+    expect((sendAlerts.mock.calls[0] as unknown[])[3]).toEqual({ title: "Ann logged Lower A", body: "Open their day to see the sets." });
+    sendAlerts.mockClear();
+    await handler({ Records: [record("INSERT", { ...unit, by: "sam" })] } as never);
+    expect(sendAlerts).not.toHaveBeenCalled();
   });
 });

@@ -153,13 +153,14 @@ describe("resolvers", () => {
 });
 
 describe("push", () => {
-  it("only runs for LIVE# items, new COMMENT# (FIT-132) and OFFER# (FIT-131) items, and plan days someone else wrote (FIT-220)", () => {
+  it("only runs for LIVE# items, new COMMENT# (FIT-132) and OFFER# (FIT-131) items, days a client logged themselves (FIT-338) and plan days someone else wrote (FIT-220)", () => {
     dev.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
       FilterCriteria: {
         Filters: [
           { Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "LIVE#" }] } } } }) },
           { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "COMMENT#" }] } } } }) },
           { Pattern: JSON.stringify({ eventName: ["INSERT"], dynamodb: { Keys: { SK: { S: [{ prefix: "OFFER#" }] } } } }) },
+          { Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "SYNC#log#" }] } }, NewImage: { by: { S: [{ exists: false }] } } } }) },
           { Pattern: JSON.stringify({ eventName: ["INSERT", "MODIFY"], dynamodb: { Keys: { SK: { S: [{ prefix: "SYNC#plan#" }] } }, NewImage: { by: { S: [{ exists: true }] } } } }) },
         ],
       },

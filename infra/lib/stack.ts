@@ -480,7 +480,7 @@ export class AICoachStack extends Stack {
             eventName: lambda.FilterRule.or("INSERT", "MODIFY"),
             dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("LIVE#") } } },
           }),
-          // FIT-132: a coach's reply on a session.
+          // FIT-132: a coach's reply on a session; FIT-338: a client's, for their coach.
           lambda.FilterCriteria.filter({
             eventName: lambda.FilterRule.isEqual("INSERT"),
             dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("COMMENT#") } } },
@@ -489,6 +489,11 @@ export class AICoachStack extends Stack {
           lambda.FilterCriteria.filter({
             eventName: lambda.FilterRule.isEqual("INSERT"),
             dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("OFFER#") } } },
+          }),
+          // FIT-338: a day the client logged themselves (no by): a session, a note or pain may be news for their coach.
+          lambda.FilterCriteria.filter({
+            eventName: lambda.FilterRule.or("INSERT", "MODIFY"),
+            dynamodb: { Keys: { SK: { S: lambda.FilterRule.beginsWith("SYNC#log#") } }, NewImage: { by: { S: lambda.FilterRule.notExists() } } },
           }),
           // FIT-220: a plan day someone else wrote (sync.ts's by): the coach changed the client's week.
           lambda.FilterCriteria.filter({

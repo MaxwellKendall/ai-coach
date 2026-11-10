@@ -38,7 +38,9 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             if coaching {
+                // FIT-338: how many clients wrote since the coach last looked.
                 Tab("Clients", systemImage: "person.2", value: AppTab.clients) { ClientsScreen() }
+                    .badge(roster.unread)
             }
             Tab("Today", systemImage: "figure.strengthtraining.traditional", value: AppTab.today) { TodayScreen() }
             Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
@@ -92,7 +94,12 @@ struct RootView: View {
             if Pilot.simple {
                 if profile.programStart == nil, !welcomed { welcoming = true }
                 #if DEBUG
-                if Roster.sample { roster = Roster(clients: Roster.samples()); coaching = true }
+                if Roster.sample {
+                    roster = Roster(clients: Roster.samples())
+                    // FIT-338: last looked at four days ago, so Mike's Sunday note is unread.
+                    for client in roster.clients { roster.markSeen(client.id, at: .now.addingTimeInterval(-4 * 86_400)) }
+                    coaching = true
+                }
                 // `-welcome YES` opens the first launch over any program, to look at it (FIT-296).
                 if UserDefaults.standard.bool(forKey: "welcome") { welcoming = true }
                 #endif
@@ -128,6 +135,10 @@ struct RootView: View {
             switch target.kind {
             case .offer:
                 Task { await checkOffers() }
+            case .client:
+                coaching = true
+                tab = .clients
+                navigator.clientDay = target
             case .plan, .nudge, .reply:
                 if target.kind == .plan { SyncEngine.shared.sync() }
                 if let day = target.day, Week.start(of: day) > Week.start(of: .now) {

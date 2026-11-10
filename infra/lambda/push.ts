@@ -4,6 +4,7 @@ import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-sec
 import { unmarshall } from "@aws-sdk/util-dynamodb";
 import type { DynamoDBStreamEvent } from "aws-lambda";
 import { sendAlerts, type ApnsKey } from "./apns.ts";
+import { hurts } from "../../shared/triage.ts";
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const secrets = new SecretsManagerClient({});
@@ -57,9 +58,55 @@ export async function notify(devices: Record<string, any>[], alert: { title: str
   await Promise.all(dead.map((d) => db.send(new DeleteCommand({ TableName: TABLE, Key: { PK: d.PK, SK: d.SK } }))));
 }
 
+type LogRow = { id: string; kind: string; template?: string | null; note?: string };
+
+/**
+ * FIT-338: what a client's log change is worth telling their coach, from the day's log before and after: a note that
+ * says something hurts first, then a new note, then the day's first session. Nothing for a set added to a session
+ * already logged, a check-in, or an edit that changes neither.
+ */
+export function logNews(before: LogRow[], after: LogRow[]): { kind: "pain" | "note" | "session"; note?: string; session?: string } | null {
+  const note = (rows: LogRow[]) => rows.find((r) => r.kind === "workout" && !r.template && (r.note ?? "").trim())?.note?.trim();
+  const said = note(after);
+  if (said && said !== note(before)) return { kind: hurts(said) ? "pain" : "note", note: said };
+  const lifted = (rows: LogRow[]) => rows.some((r) => r.kind === "workout" && !!r.template);
+  if (lifted(after) && !lifted(before)) {
+    return { kind: "session", session: after.find((r) => r.kind === "workout" && r.template && r.note)?.note };
+  }
+  return null;
+}
+
+/** FIT-338: "Mike logged Lower A", "Mike: Knee's sore on squats.", "Mike replied on Sunday's session". */
+export function coachText(client: string, news: { kind: "pain" | "note" | "session" | "reply"; note?: string; session?: string; day?: string }) {
+  const clip = (text: string) => (text.length > 180 ? `${text.slice(0, 177)}…` : text);
+  switch (news.kind) {
+    case "pain": return { title: `${client} says something hurts`, body: clip(news.note ?? "") };
+    case "note": return { title: `${client} left a note`, body: clip(news.note ?? "") };
+    case "session": return { title: `${client} logged ${news.session ?? "a session"}`, body: "Open their day to see the sets." };
+    case "reply": {
+      const [y, m, d] = (news.day ?? "").split("-").map(Number);
+      const weekday = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+      return { title: `${client} replied on ${weekday}`, body: clip(news.note ?? "") };
+    }
+  }
+}
+
+/** FIT-338: tell each of a client's coaches, on every device they have, opening that client's day. */
+async function tellCoaches(owner: string, day: string, news: Parameters<typeof coachText>[1]) {
+  const links = await query(`USER#${owner}`, "COACH#");
+  for (const link of links) {
+    const coach = link.coachUid as string;
+    const devices = await query(`USER#${coach}`, "DEVICE#");
+    if (devices.length === 0) continue;
+    const client = (await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `USER#${coach}`, SK: `CLIENT#${owner}` } }))).Item;
+    const name = ((client?.clientName as string | undefined) ?? "Your client").split(" ")[0];
+    await notify(devices, coachText(name, news), { kind: "client", client: owner, day });
+  }
+}
+
 async function replied(comment: { owner: string; by: string; byName?: string | null; day: string; text: string }) {
-  // Only a coach's reply goes to the client's phone; the client's own words are on it already.
-  if (comment.by === comment.owner) return;
+  // FIT-338: the client's own words go to their coach.
+  if (comment.by === comment.owner) return tellCoaches(comment.owner, comment.day, { kind: "reply", note: comment.text, day: comment.day });
   await notify(await query(`USER#${comment.owner}`, "DEVICE#"), replyText(comment.byName, comment.day, comment.text), { kind: "reply", day: comment.day });
 }
 
@@ -138,6 +185,17 @@ export async function handler(event: DynamoDBStreamEvent) {
       const entry = changed.get(`${owner}#${unit.by}`) ?? { owner, coach: unit.by, days: [] };
       entry.days.push(unit.key.slice("plan#".length));
       changed.set(`${owner}#${unit.by}`, entry);
+      continue;
+    }
+    if (String(image.Keys?.SK?.S ?? "").startsWith("SYNC#log#")) {
+      // FIT-338: what the client logged themselves (a coach's correction has a by) may be news for their coach.
+      const unit = unmarshall(image.NewImage as never) as { PK: string; key: string; by?: string; body?: string; deleted?: boolean };
+      const owner = unit.PK.slice("USER#".length);
+      if ((unit.by && unit.by !== owner) || unit.deleted) continue;
+      const old = image.OldImage ? (unmarshall(image.OldImage as never) as { body?: string }) : undefined;
+      const rows = (body?: string): LogRow[] => { try { return body ? JSON.parse(body) : []; } catch { return []; } };
+      const news = logNews(rows(old?.body), rows(unit.body));
+      if (news) await tellCoaches(owner, unit.key.slice("log#".length), news);
       continue;
     }
     if (String(image.Keys?.SK?.S ?? "").startsWith("COMMENT#")) {

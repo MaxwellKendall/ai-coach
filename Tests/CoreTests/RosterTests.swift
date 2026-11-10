@@ -56,3 +56,32 @@ struct RosterTests {
         #expect(WeekPaging.range(day(10, 26)) == "\(oct) 26 – \(nov) 1")
     }
 }
+
+/// FIT-338: what a client wrote since the coach last looked, and a coach's notification opening that client.
+@MainActor
+struct UnreadTests {
+    private func at(_ hour: Int) -> Date { Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 10, hour: hour))! }
+
+    @Test func countsTheClientsRepliesAndNotesAfterTheMark() {
+        let log = SyncUnits.encode([
+            SyncUnits.LogRow(id: UUID(), kind: .workout, at: at(9), plannedRef: nil, template: "back-squat", measurements: [], note: "Lower A"),
+            SyncUnits.LogRow(id: UUID(), kind: .workout, at: at(9), plannedRef: nil, template: nil, measurements: [], note: "Knee's sore"),
+            SyncUnits.LogRow(id: UUID(), kind: .bodyweight, at: at(7), plannedRef: nil, template: nil, measurements: [], note: "Slept badly"),
+        ])
+        let comments = [
+            Triage.Comment(day: "2026-11-10", at: "2026-11-10T15:00:00.000Z", by: "ann", byName: "Ann", text: "Thanks!"),
+            Triage.Comment(day: "2026-11-10", at: "2026-11-10T15:30:00Z", by: "coach", byName: "Dana", text: "Rest it"),
+        ]
+        let units = ["log#2026-11-10": log]
+        #expect(Roster.unread(units, comments: comments, from: "ann", since: at(0)) == 3)   // the reply and both notes, not the sets
+        #expect(Roster.unread(units, comments: comments, from: "ann", since: at(8)) == 2)   // the check-in was before the mark
+        #expect(Roster.unread(units, comments: comments, from: "ann", since: .distantFuture) == 0)
+    }
+
+    @Test func aCoachsNotificationNamesTheClientAndDay() {
+        let target = PushTarget(["kind": "client", "client": "ann", "day": "2026-11-08"])
+        #expect(target?.kind == .client)
+        #expect(target?.client == "ann")
+        #expect(target?.day.map { SyncUnits.day($0) } == "2026-11-08")
+    }
+}

@@ -37,7 +37,11 @@ struct DayThread: View {
                 }
             }
             // A day other than today opens at that day; today's is the end of the conversation.
-            .onAppear { if ref.day != SyncUnits.day(.now) { reader.scrollTo(ref.day, anchor: .top) } }
+            .onAppear {
+                if ref.day != SyncUnits.day(.now) { reader.scrollTo(ref.day, anchor: .top) }
+                // FIT-338: seen, so it's no longer unread.
+                roster.markSeen(ref.client)
+            }
         }
         .defaultScrollAnchor(.bottom)
         .scrollDismissesKeyboard(.interactively)

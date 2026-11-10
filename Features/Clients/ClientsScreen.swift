@@ -13,8 +13,10 @@ struct ClientsScreen: View {
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
 
+    @State private var path = NavigationPath()
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     HStack {
@@ -54,6 +56,15 @@ struct ClientsScreen: View {
             .navigationDestination(for: String.self) { id in ClientScreen(id: id) }
             .navigationDestination(for: DayThread.Ref.self) { ref in DayThread(ref: ref) }
             .navigationDestination(for: ClientProgressScreen.Ref.self) { ref in ClientProgressScreen(id: ref.client) }
+            .navigationDestination(for: ClientScreen.Opening.self) { opening in ClientScreen(id: opening.client, day: opening.day) }
+            // FIT-338: a coach's notification opens that client on that day.
+            .onChange(of: Navigator.shared.clientDay, initial: true) { _, target in
+                guard let target, let client = target.client else { return }
+                Navigator.shared.clientDay = nil
+                path = NavigationPath()
+                path.append(ClientScreen.Opening(client: client, day: target.day.map { SyncUnits.day($0) }))
+                Task { await roster.refresh(coach: account.user?.uid, names: names) }
+            }
             .toolbarVisibility(.hidden, for: .navigationBar)
             .sheet(isPresented: $inviting) { InviteSheet() }
         }
@@ -115,12 +126,21 @@ struct ClientsScreen: View {
 /// A client in the list, laid out as a Messages row: who, when they last logged, and the one line that says why they
 /// need you or how their week's going, with the week as seven dots.
 struct ClientRow: View {
+    @Environment(Roster.self) private var roster
     let client: Roster.Client
     static let avatar: CGFloat = 44
 
     var body: some View {
         HStack(spacing: 12) {
             Avatar(client: client, size: Self.avatar)
+                // FIT-338: something new from them, as Messages marks an unread conversation.
+                .overlay(alignment: .topTrailing) {
+                    if roster.unread(client) > 0 {
+                        Circle().fill(Plate.current.mark).frame(width: 12, height: 12)
+                            .overlay(Circle().stroke(Color.surface, lineWidth: 2))
+                            .accessibilityLabel("Unread")
+                    }
+                }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(client.name).font(.headline).lineLimit(1)
