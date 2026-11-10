@@ -104,7 +104,8 @@ final class Roster {
         UserDefaults.standard.set(seen.mapValues(\.timeIntervalSince1970), forKey: "coachSeen")
     }
 
-    /// What a client wrote after `since`: their replies, their sessions' notes and their check-ins' notes.
+    /// What a client wrote after `since`: their replies, their sessions' notes and their check-ins' notes. FIT-344: a
+    /// weekly check-in counts, words or not.
     static func unread(_ units: [String: String], comments: [Triage.Comment], from client: String, since: Date) -> Int {
         var count = 0
         for comment in comments where comment.by == client && date(comment.at) > since { count += 1 }
@@ -112,7 +113,7 @@ final class Roster {
             for row in ClientDay.log(units, String(key.dropFirst(4))) where row.at > since {
                 let said = !row.note.trimmingCharacters(in: .whitespaces).isEmpty
                 let summary = row.kind == .workout && row.template == nil
-                if said && (summary || row.kind == .bodyweight || row.kind == .sleep) { count += 1 }
+                if (said && (summary || row.kind == .bodyweight || row.kind == .sleep)) || row.kind == .checkin { count += 1 }
             }
         }
         return count

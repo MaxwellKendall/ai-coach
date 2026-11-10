@@ -33,6 +33,50 @@ enum CheckIn {
         try context.save()
     }
 
+    /// FIT-345: the day's check-in as the sheet now says it, on any day: a field left empty clears what was there.
+    /// Rows already there keep their ids and times, so the day's `log#` unit changes only where the check-in did.
+    static func replace(weight: Double?, sleep: Double?, note: String, on day: Date, in context: ModelContext, now: Date = .now) throws {
+        let rows = try entries(on: day, in: context)
+        let at = Calendar.current.isDate(day, inSameDayAs: now) ? now : Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: day)!
+        func set(_ kind: ActivityKind, _ measurement: Measurement?) -> LogEntry? {
+            let existing = rows.filter { $0.kind == kind }
+            guard let measurement else {
+                existing.forEach(context.delete)
+                return nil
+            }
+            existing.dropFirst().forEach(context.delete)
+            let entry = existing.first ?? {
+                let entry = LogEntry(kind: kind, timestamp: at, now: now)
+                context.insert(entry)
+                return entry
+            }()
+            entry.measurements = [measurement]
+            entry.note = ""
+            entry.updatedAt = now
+            return entry
+        }
+        let weighed = set(.bodyweight, weight.map { Measurement(metric: "weight_lb", value: $0, unit: "lb") })
+        let slept = set(.sleep, sleep.map { Measurement(metric: "sleep_h", value: $0, unit: "h") })
+        let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !note.isEmpty {
+            let holder = slept ?? weighed ?? {
+                let entry = LogEntry(kind: .bodyweight, timestamp: at, now: now)
+                context.insert(entry)
+                return entry
+            }()
+            holder.note = note
+        }
+        try context.save()
+    }
+
+    /// What the day's check-in says, to fill the sheet: its weight, sleep and note.
+    static func values(_ entries: [LogEntry]) -> (weight: Double?, sleep: Double?, note: String) {
+        let weight = entries.first { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value
+        let sleep = entries.first { $0.kind == .sleep }?.measurements.first { $0.metric == "sleep_h" }?.value
+        let note = (entries.filter { $0.kind == .sleep } + entries.filter { $0.kind == .bodyweight }).map(\.note).first { !$0.isEmpty } ?? ""
+        return (weight, sleep, note)
+    }
+
     /// The day's weight and sleep rows.
     static func entries(on day: Date, in context: ModelContext) throws -> [LogEntry] {
         let start = Calendar.current.startOfDay(for: day), end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
@@ -53,8 +97,12 @@ enum CheckIn {
 struct CheckInSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    /// FIT-345: the day it's for: today, or a past day on Today.
+    var day: Date = .now
     /// The last weight logged, as the field's hint.
     var lastWeight: Double?
+    /// Whether the day had a check-in when the sheet opened, so emptying every field can clear it.
+    @State private var existed = false
 
     @State private var weight = ""
     @State private var sleep = ""
@@ -78,15 +126,16 @@ struct CheckInSheet: View {
                         .foregroundStyle(failure == nil ? Color.secondary : Color.red)
                 }
             }
-            .navigationTitle("Check In")
+            .navigationTitle(Calendar.current.isDateInToday(day) ? "Check In" : "Check In · \(TodayScreen.dayName(day))")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(number(weight) == nil && number(sleep) == nil && note.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("Save") { save() }
+                        .disabled(!existed && number(weight) == nil && number(sleep) == nil && note.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .onAppear { focused = .weight }
+            .onAppear(perform: fill)
         }
         .presentationDetents([.medium])
     }
@@ -108,12 +157,23 @@ struct CheckInSheet: View {
         Double(text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces))
     }
 
+    /// FIT-345: an existing check-in opens with what it said, to change or clear.
+    private func fill() {
+        let rows = (try? CheckIn.entries(on: day, in: context)) ?? []
+        let values = CheckIn.values(rows)
+        existed = !rows.isEmpty
+        weight = values.weight.map(Coach.number) ?? ""
+        sleep = values.sleep.map(Coach.number) ?? ""
+        note = values.note
+        if !existed { focused = .weight }
+    }
+
     private func save() {
         let weight = number(weight), sleep = number(sleep)
         if let weight, !(50...700).contains(weight) { failure = "Weight is in pounds, between 50 and 700."; return }
         if let sleep, !(0...24).contains(sleep) { failure = "Sleep is hours, 0 to 24."; return }
         do {
-            try CheckIn.save(weight: weight, sleep: sleep, note: note, on: .now, in: context)
+            try CheckIn.replace(weight: weight, sleep: sleep, note: note, on: day, in: context)
             dismiss()
         } catch {
             failure = "Couldn’t save that. Try again."

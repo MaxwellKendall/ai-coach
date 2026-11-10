@@ -58,31 +58,70 @@ export async function notify(devices: Record<string, any>[], alert: { title: str
   await Promise.all(dead.map((d) => db.send(new DeleteCommand({ TableName: TABLE, Key: { PK: d.PK, SK: d.SK } }))));
 }
 
-type LogRow = { id: string; kind: string; template?: string | null; note?: string };
+type LogRow = { id: string; kind: string; template?: string | null; note?: string; measurements?: { metric: string; value: number }[] };
+
+/** FIT-343: a goal's test (GoalUpdate.marker in the app): a max, reps or a timed run, not a session. */
+const isTest = (r: LogRow) => r.kind === "workout" && !!r.measurements?.some((m) => m.metric === "test");
+
+/** FIT-344: the weekly check-in's ratings, as WeeklyCheckIn.ratings names them. */
+const RATINGS: [string, string][] = [["energy_1to5", "Energy"], ["stress_1to5", "Stress"], ["soreness_1to5", "Soreness"], ["adherence_1to5", "Plan"]];
+
+/** "Energy 4 · Stress 2 · Soreness 3 · Plan 5", then what they wrote. */
+export function checkInText(row: LogRow) {
+  const ratings = RATINGS.flatMap(([metric, name]) => {
+    const v = row.measurements?.find((m) => m.metric === metric)?.value;
+    return v === undefined ? [] : [`${name} ${v}`];
+  }).join(" · ");
+  return [ratings, row.note?.trim()].filter(Boolean).join("\n");
+}
+
+/** "Back squat: 315 lb × 1", "Pull-up: 12 reps", "Run: 3.1 mi in 24:10". */
+export function testText(row: LogRow) {
+  const v = (metric: string) => row.measurements?.find((m) => m.metric === metric)?.value;
+  const meters = v("distance_m"), seconds = v("duration_s"), load = v("load_lb"), reps = v("reps");
+  if (meters !== undefined && seconds !== undefined) {
+    const s = Math.round(seconds), clock = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    return `Run: ${(meters / 1609.344).toFixed(1)} mi in ${clock}`;
+  }
+  const name = (row.template ?? "").replace(/-/g, " ");
+  const lift = name.charAt(0).toUpperCase() + name.slice(1);
+  return load !== undefined ? `${lift}: ${load} lb × ${reps ?? 1}` : `${lift}: ${reps ?? 0} reps`;
+}
 
 /**
  * FIT-338: what a client's log change is worth telling their coach, from the day's log before and after: a note that
  * says something hurts first, then a new note, then the day's first session. Nothing for a set added to a session
- * already logged, a check-in, or an edit that changes neither.
+ * already logged, a daily check-in, or an edit that changes neither.
+ * FIT-344: a weekly check-in, new or changed (pain when what they wrote says something hurts). FIT-343: a goal's new
+ * test, which isn't a session.
  */
-export function logNews(before: LogRow[], after: LogRow[]): { kind: "pain" | "note" | "session"; note?: string; session?: string } | null {
+export function logNews(before: LogRow[], after: LogRow[]): { kind: "pain" | "note" | "session" | "checkin" | "test"; note?: string; session?: string } | null {
   const note = (rows: LogRow[]) => rows.find((r) => r.kind === "workout" && !r.template && (r.note ?? "").trim())?.note?.trim();
   const said = note(after);
   if (said && said !== note(before)) return { kind: hurts(said) ? "pain" : "note", note: said };
-  const lifted = (rows: LogRow[]) => rows.some((r) => r.kind === "workout" && !!r.template);
+  const weekly = (rows: LogRow[]) => rows.find((r) => r.kind === "checkin");
+  const checked = weekly(after);
+  if (checked && JSON.stringify(checked) !== JSON.stringify(weekly(before))) {
+    return { kind: hurts(checked.note ?? "") ? "pain" : "checkin", note: checkInText(checked) };
+  }
+  const tested = after.find((r) => isTest(r) && !before.some((b) => b.id === r.id));
+  if (tested) return { kind: "test", note: testText(tested) };
+  const lifted = (rows: LogRow[]) => rows.some((r) => r.kind === "workout" && !!r.template && !isTest(r));
   if (lifted(after) && !lifted(before)) {
-    return { kind: "session", session: after.find((r) => r.kind === "workout" && r.template && r.note)?.note };
+    return { kind: "session", session: after.find((r) => r.kind === "workout" && r.template && !isTest(r) && r.note)?.note };
   }
   return null;
 }
 
 /** FIT-338: "Mike logged Lower A", "Mike: Knee's sore on squats.", "Mike replied on Sunday's session". */
-export function coachText(client: string, news: { kind: "pain" | "note" | "session" | "reply"; note?: string; session?: string; day?: string }) {
+export function coachText(client: string, news: { kind: "pain" | "note" | "session" | "reply" | "checkin" | "test"; note?: string; session?: string; day?: string }) {
   const clip = (text: string) => (text.length > 180 ? `${text.slice(0, 177)}…` : text);
   switch (news.kind) {
     case "pain": return { title: `${client} says something hurts`, body: clip(news.note ?? "") };
     case "note": return { title: `${client} left a note`, body: clip(news.note ?? "") };
     case "session": return { title: `${client} logged ${news.session ?? "a session"}`, body: "Open their day to see the sets." };
+    case "checkin": return { title: `${client} checked in`, body: clip(news.note ?? "") };
+    case "test": return { title: `${client} recorded a test`, body: clip(news.note ?? "") };
     case "reply": {
       const [y, m, d] = (news.day ?? "").split("-").map(Number);
       const weekday = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });

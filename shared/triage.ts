@@ -4,11 +4,14 @@
 //
 // FIT-278: a goal that, at its rate since the program started, lands short of its target by its date.
 //
+// FIT-344: the weekly check-in (a log row of kind checkin): low ratings, or, once the coach has chosen a check-in day
+// (the `checkin` unit), a check-in missed. What it says is a note like any other.
+//
 // FIT-196: shared by the dashboard (web/src/triage.ts) and the MCP's roster tools (infra/lambda/mcp.ts), so it imports
 // nothing: units are each unit's JSON body by key, and days are YYYY-MM-DD strings.
 
 export type Comment = { day: string; at: string; by: string; byName: string | null; text: string };
-export type Flag = { kind: "pain" | "note" | "missed" | "hard" | "plateau" | "behind" | "quiet"; text: string };
+export type Flag = { kind: "pain" | "note" | "missed" | "hard" | "plateau" | "behind" | "checkin" | "quiet"; text: string };
 export type Triage = {
   done: number;
   planned: number;
@@ -49,6 +52,36 @@ export function checkIn(log: Row[]): CheckIn | undefined {
   const sleep = of("sleep").map((r) => value(r, "sleep_h")).find((v) => v !== undefined);
   const note = [...of("sleep"), ...of("bodyweight")].map((r) => r.note?.trim()).find(Boolean);
   return weight === undefined && sleep === undefined && !note ? undefined : { weight, sleep, note };
+}
+
+/** FIT-344: WeeklyCheckIn.concerns: energy or following the plan at 2 or under, stress or soreness at 4 or over. */
+export function concerns(r: Row): string[] {
+  const out: string[] = [];
+  const v = (metric: string) => value(r, metric);
+  if ((v("energy_1to5") ?? 5) <= 2) out.push("low energy");
+  if ((v("stress_1to5") ?? 1) >= 4) out.push("high stress");
+  if ((v("soreness_1to5") ?? 1) >= 4) out.push("very sore");
+  if ((v("adherence_1to5") ?? 5) <= 2) out.push("off the plan");
+  return out;
+}
+
+/** FIT-344: the weekly check-in's flags: its ratings in the last 7 days, and a missed one on the coach's day. */
+function weeklyCheckIn(units: Map<string, string>, today: string): string[] {
+  const weekAgo = addDays(today, -7);
+  const days = [...units.keys()].flatMap((k) => (k.startsWith("log#") ? [k.slice(4)] : [])).sort();
+  const checked = days.filter((d) => rows(units, `log#${d}`).some((r) => r.kind === "checkin"));
+  const out: string[] = [];
+  const latest = checked.filter((d) => d >= weekAgo && d <= today).at(-1);
+  const worries = latest ? rows(units, `log#${latest}`).filter((r) => r.kind === "checkin").flatMap(concerns) : [];
+  if (worries.length) out.push(`Check-in: ${worries.join(", ")}`);
+  const set = units.get("checkin");
+  if (set) {
+    // The latest check-in day before today (0 = Monday … 6 = Sunday), and nothing checked in since.
+    const day = (JSON.parse(set) as { day: number }).day;
+    const due = [1, 2, 3, 4, 5, 6, 7].map((n) => addDays(today, -n)).find((d) => (date(d).getUTCDay() + 6) % 7 === day);
+    if (due && !checked.some((d) => d >= due && d <= today)) out.push(`Missed ${weekday(due)}’s check-in`);
+  }
+  return out;
 }
 
 /** Days with a planned workout, and days with a logged one. */
@@ -180,7 +213,8 @@ export function triage(units: Map<string, string>, comments: Comment[], names: M
   const logged = [...units.keys()].flatMap((k) => (k.startsWith("log#") && k.slice(4) >= weekAgo ? [k.slice(4)] : []));
   for (const day of logged.sort().reverse()) {
     const log = rows(units, `log#${day}`);
-    const notes = [...log.filter((r) => r.kind === "workout" && !r.template).map((r) => r.note), checkIn(log)?.note].filter(Boolean);
+    const notes = [...log.filter((r) => r.kind === "workout" && !r.template).map((r) => r.note), checkIn(log)?.note,
+      ...log.filter((r) => r.kind === "checkin").map((r) => r.note?.replace(/\n/g, " "))].filter(Boolean);
     const text = [...new Set(notes)].join(" ");
     if (!text || replied(day)) continue;
     flags.push({ kind: hurts(text) ? "pain" : "note", text: `${weekday(day)}: “${text}”` });
@@ -210,6 +244,7 @@ export function triage(units: Map<string, string>, comments: Comment[], names: M
   if (stalled.length) flags.push({ kind: "plateau", text: `No new best on ${stalled.join(", ")} in 3 weeks` });
 
   for (const text of behind(units, names, today)) flags.push({ kind: "behind", text });
+  for (const text of weeklyCheckIn(units, today)) flags.push({ kind: "checkin", text });
 
   // Planned but nothing logged for two weeks.
   if (planned.some((d) => d < today) && (!lastSession || lastSession < addDays(today, -14))) {
@@ -227,7 +262,7 @@ export function triage(units: Map<string, string>, comments: Comment[], names: M
   };
 }
 
-const order: Flag["kind"][] = ["pain", "missed", "hard", "plateau", "behind", "quiet", "note"];
+const order: Flag["kind"][] = ["pain", "missed", "hard", "plateau", "behind", "checkin", "quiet", "note"];
 /** Clients who need the coach first: by their most pressing flag, then by how many. */
 export function byNeed<T extends { triage?: Triage }>(clients: T[]): T[] {
   const rank = (t?: Triage) => (t && t.flags.length ? Math.min(...t.flags.map((f) => order.indexOf(f.kind))) : order.length);

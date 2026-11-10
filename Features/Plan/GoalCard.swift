@@ -6,8 +6,9 @@ import Charts
 struct GoalCard: View {
     let goal: Goal
     let option: GoalOption
+    /// Empty without a program of the app's (FIT-342): a coach's client, whose card runs from the goal's own start.
     let weeks: [ProgramWeek]
-    /// The program's first day and its target date.
+    /// The program's first day and its target date, or without one the goal's own (GoalProgress.span).
     let start: Date
     let end: Date
     /// FIT-278: the goal's own date when it has one, else the program's.
@@ -19,6 +20,13 @@ struct GoalCard: View {
     /// The next planned workout with the goal's exercise.
     let next: Date?
     let setTarget: (Double) -> Void
+    /// FIT-343: record a test toward it. FIT-346: change its target and date, or drop it.
+    let update: () -> Void
+    let change: () -> Void
+
+    /// FIT-342: a card with a date to aim at: the program's, or the goal's own. Without one there's no pace, plan line
+    /// or forecast, only now → target and the trend.
+    private var dated: Bool { !weeks.isEmpty || goal.deadline != nil }
 
     var body: some View {
         ScrollView { content }
@@ -34,17 +42,27 @@ struct GoalCard: View {
         let from = goal.baseline ?? logged ?? goal.target
         let now = GoalProgress.standing(goal.metric, logged: logged, from: from)
         let trend = GoalProgress.standingTrend(goal.metric, GoalProgress.trend(goal.metric, sets: sets, weighIns: weighIns, since: start), from: from)
-        let pace = goal.deadline == nil
+        let pace: GoalProgress.Pace? = goal.deadline == nil && !weeks.isEmpty
             ? GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: current, weeks: weeks)
-            : GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now, due: due)
-        let forecast = GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: due)
+            : GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now, by: dated ? due : nil)
+        let forecast = dated ? GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: due) : nil
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
-                                    forecast: forecast, target: goal.target, start: start, end: due, format: option.format)
+                                    forecast: forecast, target: goal.target, start: start,
+                                    // A date already past when the card starts can't end the chart: that range runs backwards.
+                                    end: due > start ? due : end, format: option.format, dated: dated)
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(option.name).font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
-                PaceChip(pace: pace)
+                if let pace { PaceChip(pace: pace) }
+                Menu {
+                    Button("Update", systemImage: "plus.circle", action: update)
+                    Button("Change Target or Date", systemImage: "pencil", action: change)
+                } label: {
+                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
+                        .frame(width: 36, height: 28).contentShape(.rect)
+                }
+                .accessibilityLabel("More for this goal")
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(format(now)).contentTransition(.numericText())
@@ -54,6 +72,13 @@ struct GoalCard: View {
             .font(.system(size: 34, weight: .bold, design: .rounded))
             .padding(.top, 6)
             Text(line(from: from, now: now)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+            Button(action: update) {
+                Label("Update", systemImage: "plus.circle.fill").font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .padding(.top, 12)
+            .accessibilityHint(option.measure == .body ? "Log a weigh-in" : "Record a test: a max, reps or a timed run")
             details(lines, from: from, now: now, forecast: forecast)
         }
         .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
@@ -64,10 +89,10 @@ struct GoalCard: View {
             GoalChart(lines: lines)
                 .frame(height: 150)
                 .padding(.top, 18)
-                .accessibilityLabel("\(option.name) from \(format(from)) to \(format(now)), goal \(format(goal.target)) by \(day(due))")
+                .accessibilityLabel("\(option.name) from \(format(from)) to \(format(now)), goal \(format(goal.target))\(dated ? " by \(day(due))" : "")")
             HStack(spacing: 14) {
                 legend("Logged", StrokeStyle(lineWidth: 2), .primary)
-                legend("Plan", StrokeStyle(lineWidth: 2, dash: [3, 3]), Color(.systemGray3))
+                if !lines.plan.isEmpty { legend("Plan", StrokeStyle(lineWidth: 2, dash: [3, 3]), Color(.systemGray3)) }
                 if forecast != nil { legend("At this rate", StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]), .secondary) }
             }
             .font(.caption).foregroundStyle(.secondary)
@@ -107,8 +132,12 @@ struct GoalCard: View {
 
     /// The program's line for the goal: from where it started to the target, flat through deloads and travel, up to
     /// the goal's date.
+    /// FIT-342: without program weeks, a straight line to the goal's date, or none without a date.
     private func plan(from: Double) -> [DatedValue] {
-        [DatedValue(date: start, value: from)] + weeks.indices.map { index in
+        guard !weeks.isEmpty else {
+            return goal.deadline == nil ? [] : [DatedValue(date: start, value: from), DatedValue(date: due, value: goal.target)]
+        }
+        return [DatedValue(date: start, value: from)] + weeks.indices.map { index in
             DatedValue(date: min(ProgramPlan.monday(index + 1, start: start), end),
                        value: ProgramPlan.expected(from: from, target: goal.target, at: index, weeks: weeks))
         }.filter { $0.date <= due }
@@ -132,7 +161,7 @@ struct GoalCard: View {
         let perWeek = GoalProgress.perWeek(now: now, target: goal.target, today: .now, end: due)
         let there = GoalProgress.fraction(goal.metric, from: from, now: now, target: goal.target) >= 1
         let needed = option.measure == .time ? "\(Running.clock(abs(perWeek))) faster a week" : "\(Coach.number(abs(perWeek))) \(goal.unit) a week"
-        facts.append(("To get there", there ? "Already there" : needed))
+        if there || dated { facts.append(("To get there", there ? "Already there" : needed)) }
         if option.measure == .time {
             // FIT-179: the run behind the predicted time.
             if let run = GoalProgress.best(goal.metric, sets: sets, since: start), let meters = run.value("distance_m"), let seconds = run.value("duration_s") {
@@ -217,6 +246,8 @@ struct GoalChart: View {
         var start: Date
         var end: Date
         var format: (Double) -> String = { Coach.number($0) }
+        /// FIT-342: false for a goal with no date, whose target has no day to sit on.
+        var dated = true
     }
 
     let lines: Lines
@@ -252,12 +283,14 @@ struct GoalChart: View {
                 .annotation(position: .top, alignment: .leading, spacing: 4) {
                     Text("Goal \(lines.format(lines.target))").font(.caption2).foregroundStyle(.secondary)
                 }
-            PointMark(x: .value("Date", lines.end), y: .value("Value", lines.target))
-                .symbol {
-                    Circle().fill(Color.fill)
-                        .overlay(Circle().strokeBorder(Color.primary, lineWidth: 2))
-                        .frame(width: 9, height: 9)
-                }
+            if lines.dated {
+                PointMark(x: .value("Date", lines.end), y: .value("Value", lines.target))
+                    .symbol {
+                        Circle().fill(Color.fill)
+                            .overlay(Circle().strokeBorder(Color.primary, lineWidth: 2))
+                            .frame(width: 9, height: 9)
+                    }
+            }
         }
         .chartXScale(domain: lines.start...lines.end)
         .chartYScale(domain: domain)

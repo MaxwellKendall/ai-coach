@@ -33,4 +33,32 @@ struct CheckInTests {
         #expect(rows.count == 1 && rows[0].measurements.isEmpty && rows[0].note == "Travelling, back Monday")
         #expect(CheckIn.summary(rows) == "Note sent")
     }
+
+    /// FIT-345: a past day's check-in is saved to that day, and opened again it can be changed or cleared.
+    @Test func aPastDaysCheckInIsSavedThereAndChangedThere() throws {
+        let context = ModelContext(try AppSchema.container(inMemory: true))
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
+        try CheckIn.replace(weight: 182, sleep: 7, note: "Late night", on: yesterday, in: context, now: now)
+        #expect(try CheckIn.entries(on: now, in: context).isEmpty)
+        let rows = try CheckIn.entries(on: yesterday, in: context)
+        #expect(rows.allSatisfy { Calendar.current.component(.hour, from: $0.timestamp) == 12 })
+        let values = CheckIn.values(rows)
+        #expect(values.weight == 182 && values.sleep == 7 && values.note == "Late night")
+        #expect(CheckIn.summary(rows) == "182 lb · 7 h sleep")
+        let ids = Set(rows.map(\.id))
+
+        // Changed: the weight, the sleep cleared, the note kept; the rows left keep their ids.
+        try CheckIn.replace(weight: 181.5, sleep: nil, note: "Late night", on: yesterday, in: context, now: now + 60)
+        let changed = try CheckIn.entries(on: yesterday, in: context)
+        #expect(changed.count == 1 && changed[0].kind == .bodyweight && ids.contains(changed[0].id))
+        let after = CheckIn.values(changed)
+        #expect(after.weight == 181.5 && after.sleep == nil && after.note == "Late night")
+        let unit = try #require(try SyncUnits.all(in: context)["log#2026-10-21"])
+        #expect(try SyncUnits.decode([SyncUnits.LogRow].self, unit).map(\.kind) == [.bodyweight])
+
+        // Everything cleared: the day has no check-in, and no unit.
+        try CheckIn.replace(weight: nil, sleep: nil, note: " ", on: yesterday, in: context, now: now + 120)
+        #expect(try CheckIn.entries(on: yesterday, in: context).isEmpty)
+        #expect(try SyncUnits.all(in: context)["log#2026-10-21"] == nil)
+    }
 }

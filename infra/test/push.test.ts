@@ -131,6 +131,30 @@ describe("news for a client's coach", () => {
     expect(logNews([], [{ id: "w", kind: "bodyweight", note: "" }])).toBeNull();
   });
 
+  // FIT-343: a goal's test is news of its own, and isn't the day's session.
+  it("is a test, not a session", () => {
+    const single = { id: "t", kind: "workout", template: "back-squat", note: "", measurements: [{ metric: "load_lb", value: 315 }, { metric: "reps", value: 1 }, { metric: "test", value: 1 }] };
+    const run = { id: "r", kind: "workout", template: "trail-running-walking", note: "", measurements: [{ metric: "distance_m", value: 5000 }, { metric: "duration_s", value: 1450 }, { metric: "test", value: 1 }] };
+    expect(logNews([], [single])).toEqual({ kind: "test", note: "Back squat: 315 lb × 1" });
+    expect(logNews([], [run])).toEqual({ kind: "test", note: "Run: 3.1 mi in 24:10" });
+    expect(logNews([single], [single])).toBeNull();
+    // A session logged after a test that day is still the day's first session.
+    expect(logNews([single], [single, set("a")])).toEqual({ kind: "session", session: "Lower A" });
+    expect(coachText("Sam", { kind: "test", note: "Back squat: 315 lb × 1" })).toEqual({ title: "Sam recorded a test", body: "Back squat: 315 lb × 1" });
+  });
+
+  // FIT-344: the weekly check-in, with its ratings and what they wrote; pain when it says something hurts.
+  it("is a weekly check-in, new or changed", () => {
+    const ratings = [{ metric: "energy_1to5", value: 2 }, { metric: "stress_1to5", value: 4 }, { metric: "soreness_1to5", value: 3 }, { metric: "adherence_1to5", value: 5 }];
+    const weekly = (note: string) => ({ id: "c", kind: "checkin", note, measurements: ratings });
+    expect(logNews([], [weekly("What went well: all sessions done")])).toEqual({
+      kind: "checkin", note: "Energy 2 · Stress 4 · Soreness 3 · Plan 5\nWhat went well: all sessions done",
+    });
+    expect(logNews([weekly("x")], [weekly("x")])).toBeNull();
+    expect(logNews([], [weekly("What was hard: my knee hurts on stairs")])?.kind).toBe("pain");
+    expect(coachText("Sam", { kind: "checkin", note: "Energy 4" }).title).toBe("Sam checked in");
+  });
+
   it("reads as a line about the client", () => {
     expect(coachText("Mike", { kind: "pain", note: "Knee's sore" }).title).toBe("Mike says something hurts");
     expect(coachText("Mike", { kind: "session", session: "Lower A" }).title).toBe("Mike logged Lower A");

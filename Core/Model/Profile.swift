@@ -44,6 +44,9 @@ final class Profile {
     var starts: [StartingSet] = []
     /// FIT-95: the program brief, with what it was written for; written again when that changes (`Planner.design`).
     var brief: ProgramBrief.Stored?
+    /// FIT-344: the weekly check-in's day the coach chose (0 = Monday … 6 = Sunday), from the `checkin` unit; nil is
+    /// WeeklyCheckIn.defaultDay.
+    var checkInDay: Int?
     var createdAt: Date
     var updatedAt: Date
 

@@ -10,11 +10,14 @@ struct ClientProgressScreen: View {
 
     let id: String
     @Environment(Roster.self) private var roster
+    @Environment(Account.self) private var account
     @Environment(\.dismiss) private var dismiss
     @Query private var templates: [Template]
     /// FIT-339: removing them, asked first.
     @State private var removing = false
     @State private var problem: String?
+    /// FIT-344: why the check-in day didn't reach their phone.
+    @State private var dayProblem: String?
 
     private var client: Roster.Client? { roster.clients.first { $0.id == id } }
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
@@ -135,8 +138,29 @@ struct ClientProgressScreen: View {
     @ViewBuilder private func checkIns(_ client: Roster.Client, weighIns: [DatedValue]) -> some View {
         let sleep = ClientProgress.checkIns(client.units, "sleep_h").filter { $0.date > Date.now.addingTimeInterval(-7 * 86_400) }
         let notes = ClientProgress.notes(client.units).prefix(3)
+        let weekly = ClientProgress.weekly(client.units).first
         section("Check-ins") {
-            if weighIns.isEmpty && sleep.isEmpty && notes.isEmpty {
+            // FIT-344: the day they're asked for the weekly check-in, and reminded; Sunday until it's set.
+            Picker("Weekly check-in", selection: Binding(get: { ClientProgress.checkInDay(client.units) }, set: { setCheckInDay($0, client) })) {
+                ForEach(Week.ordered(Array(0...6)), id: \.self) { Text(Calendar.current.weekdaySymbols[Week.offset($0)]).tag($0) }
+            }
+            .font(.subheadline)
+            if let dayProblem { Text(dayProblem).font(.footnote).foregroundStyle(.red) }
+            if let weekly {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Weekly check-in").font(.headline)
+                        Spacer()
+                        Text(weekly.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                            .font(.footnote).foregroundStyle(Color.inkMuted)
+                    }
+                    Text(WeeklyCheckIn.summary(weekly.values)).font(.subheadline).monospacedDigit()
+                    let worries = WeeklyCheckIn.concerns(weekly.values)
+                    if !worries.isEmpty { Text(worries.joined(separator: ", ").capitalized(with: nil)).font(.footnote.weight(.semibold)).foregroundStyle(.orange) }
+                    if !weekly.note.isEmpty { Text(weekly.note).font(.subheadline) }
+                }
+            }
+            if weighIns.isEmpty && sleep.isEmpty && notes.isEmpty && weekly == nil {
                 Text("No check-ins yet.").font(.subheadline).foregroundStyle(Color.inkMuted)
             }
             if let last = weighIns.last {
@@ -155,6 +179,22 @@ struct ClientProgressScreen: View {
                     Text("“\(note.text)”")
                     Text(note.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).font(.footnote).foregroundStyle(Color.inkMuted)
                 }
+            }
+        }
+    }
+
+    /// FIT-344: the check-in day, kept here at once and sent to their phone as the `checkin` unit.
+    private func setCheckInDay(_ day: Int, _ client: Roster.Client) {
+        let body = SyncUnits.encode(WeeklyCheckIn.Day(day: day))
+        var changed = client
+        changed.units["checkin"] = body
+        roster.update(changed, coach: account.user?.uid ?? "", names: names)
+        dayProblem = nil
+        Task {
+            do {
+                if !(try await Cloud.push("checkin", body: body, client: client.id)) { dayProblem = "Their phone had a newer copy. Pull to see it." }
+            } catch {
+                dayProblem = "Couldn’t send that. Try again."
             }
         }
     }

@@ -48,7 +48,8 @@ enum DayCard {
                      context: Context) -> DayCard {
         let calendar = Calendar.current
         let items = planned.filter { $0.kind == .workout && calendar.isDate($0.date, inSameDayAs: day) }.sorted { $0.date < $1.date }
-        let logged = entries.filter { $0.kind == .workout && calendar.isDate($0.timestamp, inSameDayAs: day) }
+        // FIT-343: a goal's test (a max, reps, a timed run) is on the goal's card, and isn't the day's session.
+        let logged = entries.filter { $0.kind == .workout && !GoalUpdate.isTest($0.measurements) && calendar.isDate($0.timestamp, inSameDayAs: day) }
         // FIT-179: a run doesn't finish the day's lifting, nor lifting its run; a day that was only a run shows the run.
         let runs = Set(context.templates.filter { Running.runs.contains($0.slug) }.map(\.id))
         let ran = logged.filter { $0.templateRef.map(runs.contains) == true }

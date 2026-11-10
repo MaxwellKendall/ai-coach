@@ -136,6 +136,8 @@ enum SyncUnits {
         }
         if let profile = try context.fetch(FetchDescriptor<Profile>()).first {
             units["profile"] = encode(profileBody(profile))
+            // FIT-344: the coach's check-in day, a unit of its own, since a coach may write it and not the profile.
+            if let day = profile.checkInDay { units["checkin"] = encode(WeeklyCheckIn.Day(day: day)) }
         }
         for template in try context.fetch(FetchDescriptor<Template>()) where template.kind == .exercise && !bundledSlugs.contains(template.slug) {
             units["template#\(template.slug)"] = encode(TemplateBody(kind: template.kind, name: template.name, attributes: template.attributes))
@@ -286,6 +288,10 @@ enum SyncUnits {
             target.name = b.name
             target.attributes = b.attributes
             target.updatedAt = now
+        } else if key == "checkin" {
+            // FIT-344: kept on the profile; without one yet, it reads back as nothing and comes again next pull.
+            let profile = try context.fetch(FetchDescriptor<Profile>()).first
+            profile?.checkInDay = try body.map { try decode(WeeklyCheckIn.Day.self, $0).day }
         } else if key == "profile", let body {
             let b = try decode(ProfileBody.self, body)
             let p = try context.fetch(FetchDescriptor<Profile>()).first ?? {
