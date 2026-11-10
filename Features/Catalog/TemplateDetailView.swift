@@ -14,7 +14,7 @@ struct TemplateDetailView: View {
     var body: some View {
         List {
             // FIT-318: what it looks like, first.
-            if !ExercisePhotos.urls(template.slug).isEmpty {
+            if HowToPhotos.shows(template.slug) {
                 Section { HowToPhotos(slug: template.slug) }.listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
             }
             // FIT-319: a demo to watch, where there is one.
