@@ -42,9 +42,9 @@ struct GoalWithoutProgramTests {
         [squat, pullup, run].forEach(context.insert)
         let coachWrote = PlannedActivity(kind: .workout, date: date(10, 5))
         context.insert(coachWrote)
-        func set(_ template: Template, _ day: Date, planned: UUID? = nil, _ values: [(String, Double, String)]) {
+        func set(_ template: Template, _ day: Date, planned: UUID? = nil, _ values: [(String, Double)]) {
             context.insert(LogEntry(kind: .workout, timestamp: day, plannedRef: planned, templateRef: template.id,
-                                    measurements: values.map { Measurement(metric: $0.0, value: $0.1, unit: $0.2) }))
+                                    measurements: values.map { Measurement(metric: $0.0, value: $0.1, unit: "") }))
         }
         // Before the goal was set: not counted.
         set(squat, date(9, 20), [("load_lb", 245), ("reps", 3)])
