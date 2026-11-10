@@ -93,7 +93,8 @@ export const sam: Client = {
     ]),
     3: liftDay("Deadlift and pull", (w) => [
       { exercise: "Deadlift", sets: 3, reps: 5, weight_lb: lb(275, 10, w), main: true, note: "Reset each rep." },
-      { exercise: "Pull-up", sets: 3, reps: 6, main: true },
+      // A rep more each week, toward the pull-up goal.
+      { exercise: "Pull-up", sets: 3, reps: 6 + w, main: true },
       { exercise: "Bent Over Barbell Row", sets: 3, reps: 8, weight_lb: lb(135, 5, w) },
     ]),
     4: liftDay("Lower body", (w) => [
@@ -118,6 +119,9 @@ export const sam: Client = {
     { goal: { type: "lift_max", exercise: "Back Squat", target: 265 }, baseline: 231 },
     { goal: { type: "lift_max", exercise: "Deadlift", target: 365 }, baseline: 309 },
     { goal: { type: "timed_distance", distance: "5K", time: "26:00" }, baseline: 1680 },
+    // FIT-342: a reps goal and a body-weight goal too, so client@ shows every kind of goal card.
+    { goal: { type: "reps", exercise: "Pull-up", target: 12 }, baseline: 6 },
+    { goal: { type: "body_weight", target: 176 }, baseline: 179 },
   ] },
 };
 

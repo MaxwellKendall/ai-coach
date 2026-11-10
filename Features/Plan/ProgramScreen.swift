@@ -60,7 +60,9 @@ struct ProgramScreen: View {
                     case .program:
                         program(weeks, start: start, current: current, profile: profile)
                             .safeAreaInset(edge: .bottom) { if !pro.active { ProOfferBar() } }
-                    case .goals: goalList(weeks, start: start, current: current, profile: profile)
+                    case .goals:
+                        goalList(ProgramSpan(weeks: weeks, start: start, current: current,
+                                             end: profile.targetDate ?? ProgramPlan.monday(weeks.count, start: start)))
                     case .wins: WinsScreen()
                     }
                 } else if tab == .wins {
@@ -69,7 +71,8 @@ struct ProgramScreen: View {
                     // FIT-201: a coach's client, or someone logging on their own, has no program of the app's.
                     plannedWeeks
                 } else {
-                    goalsWithoutProgram
+                    // FIT-342: a coach's client gets the same goal cards, each from its own start.
+                    goalList(nil)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -563,26 +566,46 @@ struct ProgramScreen: View {
         }
     }
 
-    private func goalList(_ weeks: [ProgramWeek], start: Date, current: Int, profile: Profile) -> some View {
+    /// The app's own program, which the goal cards follow when there is one.
+    private struct ProgramSpan {
+        var weeks: [ProgramWeek]
+        var start: Date
+        var current: Int
+        var end: Date
+    }
+
+    /// The goal deck. With a program (FIT-39) every card runs over its weeks; without one (FIT-342, a coach's client)
+    /// each goal runs from the day it was set to its own date, and its progress is still worked out from their logs.
+    private func goalList(_ program: ProgramSpan?) -> some View {
         let sets = Planner.loggedSets(entries, templates: templates)
         let weighIns = entries.filter { $0.kind == .bodyweight }.compactMap { entry in
             entry.measurements.first { $0.metric == "weight_lb" }.map { DatedValue(date: entry.timestamp, value: $0.value) }
         }
-        let end = profile.targetDate ?? ProgramPlan.monday(weeks.count, start: start)
-        let paces = programGoals.map { item in
-            let from = item.goal.baseline ?? item.goal.target
-            let now = GoalProgress.standing(item.goal.metric, logged: GoalProgress.current(item.goal.metric, sets: sets, weighIns: weighIns, since: start),
-                                            from: from)
-            return GoalProgress.pace(item.goal.metric, from: from, now: now, target: item.goal.target, week: current, weeks: weeks)
-        }
         let items = programGoals
+        let spans: [(start: Date, end: Date)] = items.map { item in
+            program.map { (start: $0.start, end: $0.end) }
+                ?? GoalProgress.span(created: item.goal.createdAt, deadline: item.goal.deadline, today: .now)
+        }
+        let paces: [GoalProgress.Pace] = items.indices.compactMap { position -> GoalProgress.Pace? in
+            let goal = items[position].goal, start = spans[position].start
+            let from = goal.baseline ?? goal.target
+            let now = GoalProgress.standing(goal.metric, logged: GoalProgress.current(goal.metric, sets: sets, weighIns: weighIns, since: start),
+                                            from: from)
+            guard let program else {
+                return GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now, by: goal.deadline)
+            }
+            return GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: program.current, weeks: program.weeks)
+        }
         let index = Binding(get: { min(goalIndex, max(0, items.count - 1)) }, set: { goalIndex = $0 })
+        let status = [program.map { "Week \($0.current + 1) of \($0.weeks.count)" }, Self.summary(paces)].compactMap { $0 }
         return VStack(alignment: .leading, spacing: 0) {
             // One quiet line: where the program is and how the goals stand.
-            Text((["Week \(current + 1) of \(weeks.count)"] + [Self.summary(paces)].compactMap { $0 }).joined(separator: " · "))
-                .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                .padding(.horizontal, 22)
-                .padding(.top, 10)
+            if !status.isEmpty {
+                Text(status.joined(separator: " · "))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 10)
+            }
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {
                     HStack(spacing: 6) {
@@ -615,13 +638,23 @@ struct ProgramScreen: View {
             SwipeDeck(index: index, count: items.count) { position in
                 let item = items[position]
                 let option = GoalOption.with(id: item.option)!
-                GoalCard(goal: item.goal, option: option, weeks: weeks, start: start, end: end, current: current,
+                GoalCard(goal: item.goal, option: option, weeks: program?.weeks ?? [], start: spans[position].start,
+                         end: spans[position].end, current: program?.current ?? 0,
                          sets: sets, weighIns: weighIns, next: (option.exercise ?? (option.measure == .time ? Running.outdoor : nil)).flatMap(nextWorkout),
                          setTarget: { setTarget(item.goal, $0) })
             }
             .padding(.horizontal, 22)
             .padding(.top, 8)
             .padding(.bottom, 20)
+        }
+        .overlay {
+            if items.isEmpty {
+                ContentUnavailableView {
+                    Label("No goals yet", systemImage: "target")
+                } actions: {
+                    Button("Add a Goal") { addingGoal = true }.buttonStyle(.primary)
+                }
+            }
         }
     }
 
@@ -652,33 +685,6 @@ struct ProgramScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Add a goal")
-    }
-
-    /// Without a program of the app's (a coach's client), the goals as a list, each with its target, and Add a goal.
-    private var goalsWithoutProgram: some View {
-        let active = goals.filter { $0.status == .active }
-        return List {
-            ForEach(active) { goal in
-                let option = GoalOption.all.first { $0.metric == goal.metric }
-                HStack {
-                    Text(option?.name ?? goal.metric).font(.body.weight(.semibold))
-                    Spacer()
-                    Text("\(option?.format(goal.target) ?? Coach.number(goal.target)) \(option?.measure == .time ? "" : goal.unit)")
-                        .foregroundStyle(Color.inkMuted)
-                }
-                .swipeActions { Button("Drop", role: .destructive) { drop(goal) } }
-            }
-            Button("Add a Goal", systemImage: "plus") { addingGoal = true }
-        }
-        .overlay {
-            if active.isEmpty {
-                ContentUnavailableView {
-                    Label("No goals yet", systemImage: "target")
-                } actions: {
-                    Button("Add a Goal") { addingGoal = true }.buttonStyle(.primary)
-                }
-            }
-        }
     }
 
     /// FIT-233: they drop a goal themselves; it stays, abandoned, so the coach sees it went.

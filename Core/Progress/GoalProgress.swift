@@ -100,6 +100,18 @@ enum GoalProgress {
         return reached >= expected * 1.25 ? .ahead : .onPace
     }
 
+    /// FIT-342: without a program of the app's (a coach's client), a goal's card runs from the day it was set to its
+    /// own date. With no date it runs to today, and at least a week, so its chart has a width.
+    static func span(created: Date, deadline: Date?, today: Date, calendar: Calendar = .current) -> (start: Date, end: Date) {
+        let start = calendar.startOfDay(for: created)
+        return (start, max(deadline ?? today, calendar.date(byAdding: .day, value: 7, to: start)!))
+    }
+
+    /// FIT-342: the pace against the goal's own date, as `pace(…due:)`; nil for a goal with no date, which has none.
+    static func pace(_ metric: String, from start: Double, now: Double, target: Double, started: Date, today: Date, by due: Date?) -> Pace? {
+        due.map { pace(metric, from: start, now: now, target: target, started: started, today: today, due: $0) }
+    }
+
     /// FIT-278: how far short of the target a forecast lands, the goal's way; below zero is past it.
     static func shortfall(_ metric: String, from start: Double, lands: Double, target: Double) -> Double {
         (target - lands) * (goesDown(metric, from: start, target: target) ? -1 : 1)
