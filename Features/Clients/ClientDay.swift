@@ -16,7 +16,7 @@ enum ClientDay {
     static func planned(_ units: [String: String], _ day: String) -> Bool { plan(units, day).contains { $0.kind == .workout } }
 
     /// What they did, a line per exercise in the order done: "245 × 5, 5, 3 · RPE 9".
-    static func lifts(_ log: [SyncUnits.LogRow], names: [String: String]) -> [(name: String, sets: String)] {
+    static func lifts(_ log: [SyncUnits.LogRow], names: [String: String]) -> [(slug: String, name: String, sets: String)] {
         var order: [String] = []
         var sets: [String: [SyncUnits.LogRow]] = [:]
         for row in log.sorted(by: { $0.at < $1.at }) where row.kind == .workout {
@@ -32,7 +32,7 @@ enum ClientDay {
             let rpe = rows.compactMap { value($0, "rpe") }.max()
             var line = load.map { "\(Coach.number($0)) × \(reps)" } ?? (reps.isEmpty ? "\(rows.count) sets" : reps)
             if let rpe { line += " · RPE \(Coach.number(rpe))" }
-            return (names[slug] ?? slug, line)
+            return (slug, names[slug] ?? slug, line)
         }
     }
 
@@ -47,6 +47,34 @@ enum ClientDay {
     /// The session's name, which each logged set carries as its note (WorkoutDraft.save).
     static func sessionName(_ log: [SyncUnits.LogRow]) -> String? {
         log.first { $0.kind == .workout && $0.template != nil && !$0.note.isEmpty }?.note
+    }
+
+    // MARK: FIT-337: a coach correcting what a client logged (the dashboard's FIT-200 fixSet)
+
+    /// One logged set's weight, reps (or seconds) and RPE as typed; nil leaves a value out.
+    struct SetFix: Equatable {
+        var load: Double?
+        var reps: Double?
+        var rpe: Double?
+    }
+
+    /// The day's log with one set's numbers changed; its other measurements, and every other row, as they were.
+    static func fixed(_ log: [SyncUnits.LogRow], id: UUID, _ fix: SetFix) -> [SyncUnits.LogRow] {
+        log.map { row in
+            guard row.id == id else { return row }
+            var row = row
+            let loadMetric = row.measurements.contains { $0.metric == "load_lb_hand" } ? "load_lb_hand" : "load_lb"
+            let repsMetric = row.measurements.contains { $0.metric == "duration_s" } && !row.measurements.contains { $0.metric == "reps" }
+                ? "duration_s" : "reps"
+            func put(_ metric: String, _ value: Double?, unit: String) {
+                row.measurements.removeAll { $0.metric == metric }
+                if let value, value > 0 { row.measurements.append(Measurement(metric: metric, value: value, unit: unit)) }
+            }
+            put(repsMetric, fix.reps, unit: repsMetric == "reps" ? "reps" : "s")
+            put(loadMetric, fix.load, unit: "lb")
+            put("rpe", fix.rpe, unit: "RPE")
+            return row
+        }
     }
 
     // MARK: FIT-335: a coach programming a client's days

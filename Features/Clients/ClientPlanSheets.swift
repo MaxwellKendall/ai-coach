@@ -152,3 +152,60 @@ struct StartProgramSheet: View {
         }
     }
 }
+
+/// FIT-337: a lift's logged sets, corrected by the coach (the dashboard's FIT-200 corrections): weight, reps and RPE
+/// for each, typed; empty leaves a value out.
+struct CorrectSetsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let name: String
+    let sets: [SyncUnits.LogRow]
+    let onSave: ([UUID: ClientDay.SetFix]) -> Void
+    @State private var fields: [UUID: Fields] = [:]
+
+    struct Fields: Equatable { var load = "", reps = "", rpe = "" }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
+                    Section("Set \(index + 1)") {
+                        field("Weight", unit: "lb", \.load, set.id)
+                        field(set.measurements.contains { $0.metric == "duration_s" } ? "Seconds" : "Reps", unit: nil, \.reps, set.id)
+                        field("RPE", unit: nil, \.rpe, set.id)
+                    }
+                }
+            }
+            .navigationTitle(name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let number = { (text: String) in Double(text.replacingOccurrences(of: ",", with: ".")) }
+                        onSave(fields.mapValues { ClientDay.SetFix(load: number($0.load), reps: number($0.reps), rpe: number($0.rpe)) })
+                        dismiss()
+                    }
+                    .disabled(fields == Self.fields(sets))
+                }
+            }
+        }
+        .onAppear { fields = Self.fields(sets) }
+    }
+
+    private func field(_ label: String, unit: String?, _ path: WritableKeyPath<Fields, String>, _ id: UUID) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("–", text: Binding(get: { fields[id]?[keyPath: path] ?? "" }, set: { fields[id, default: Fields()][keyPath: path] = $0 }))
+                .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(maxWidth: 90)
+            if let unit { Text(unit).foregroundStyle(Color.inkMuted) }
+        }
+    }
+
+    static func fields(_ sets: [SyncUnits.LogRow]) -> [UUID: Fields] {
+        Dictionary(uniqueKeysWithValues: sets.map { set in
+            let value = { (metrics: [String]) in set.measurements.first { metrics.contains($0.metric) }.map { Coach.number($0.value) } ?? "" }
+            return (set.id, Fields(load: value(["load_lb", "load_lb_hand"]), reps: value(["reps", "duration_s"]), rpe: value(["rpe"])))
+        })
+    }
+}

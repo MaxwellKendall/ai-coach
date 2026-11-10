@@ -26,6 +26,10 @@ struct ClientScreen: View {
     /// FIT-336: a sheet for the week, and a change to it waiting on "Replace?" when it would overwrite planned days.
     @State private var weekSheet: WeekSheet?
     @State private var pending: Pending?
+    /// FIT-337: the logged lift being corrected.
+    @State private var correcting: Correcting?
+
+    struct Correcting: Identifiable { var slug: String; var name: String; var id: String { slug } }
 
     enum Adding: String, Identifiable { case workout, run; var id: String { rawValue } }
     enum WeekSheet: String, Identifiable { case repeating, program; var id: String { rawValue } }
@@ -49,6 +53,13 @@ struct ClientScreen: View {
                             Text(summary(client)).font(.subheadline).foregroundStyle(Color.inkMuted)
                         }
                         Spacer(minLength: 0)
+                        // FIT-337: their goals, lifts, weeks, check-ins and profile.
+                        NavigationLink(value: ClientProgressScreen.Ref(client: id)) {
+                            Image(systemName: "chart.line.uptrend.xyaxis").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
+                                .frame(width: 44, height: 44).background(Color.fill, in: .circle)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(client.name)’s progress")
                         // FIT-331: every message with them, all days, in one conversation.
                         NavigationLink(value: DayThread.Ref(client: id, day: today)) {
                             Image(systemName: "bubble.left.and.bubble.right").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
@@ -89,6 +100,15 @@ struct ClientScreen: View {
                     send(day, rows: ClientDay.run(kind, miles: miles, on: date, after: ClientDay.plan(client.units, day)), client,
                          done: "Run added")
                 }
+            }
+        }
+        .sheet(item: $correcting) { lift in
+            let log = client.map { ClientDay.log($0.units, day) } ?? []
+            CorrectSetsSheet(name: lift.name, sets: log.filter { $0.kind == .workout && $0.template == lift.slug }.sorted { $0.at < $1.at }) { fixes in
+                guard let client = roster.clients.first(where: { $0.id == id }) else { return }
+                var rows = ClientDay.log(client.units, day)
+                for (set, fix) in fixes { rows = ClientDay.fixed(rows, id: set, fix) }
+                sendLog(day, rows: rows, client)
             }
         }
         .sheet(item: $weekSheet) { sheet in
@@ -213,12 +233,18 @@ struct ClientScreen: View {
         if !lifts.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(lifts.enumerated()), id: \.offset) { index, lift in
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(lift.name).font(.headline)
-                        Spacer(minLength: 8)
-                        Text(lift.sets).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit().multilineTextAlignment(.trailing)
+                    // FIT-337: a set logged wrong is corrected here, as on the dashboard (FIT-200).
+                    Button { correcting = Correcting(slug: lift.slug, name: lift.name) } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(lift.name).font(.headline)
+                            Spacer(minLength: 8)
+                            Text(lift.sets).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit().multilineTextAlignment(.trailing)
+                            Image(systemName: "pencil").font(.footnote).foregroundStyle(Color.inkFaint)
+                        }
+                        .padding(.vertical, 14).contentShape(.rect)
                     }
-                    .padding(.vertical, 14)
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Correct what was logged")
                     if index < lifts.count - 1 { Divider() }
                 }
             }
@@ -344,6 +370,24 @@ struct ClientScreen: View {
                 var kept = true
                 for unit in bodies.sorted(by: { $0.key < $1.key }) { kept = try await Cloud.push(unit.key, body: unit.body, client: id) && kept }
                 if !kept { toast = Toast(text: "\(name)’s phone had a newer copy. Pull to see it.") } else if let done { toast = Toast(text: done) }
+            } catch {
+                toast = Toast(text: "Couldn’t send that to \(name). Try again.")
+            }
+        }
+    }
+
+    /// FIT-337: a day's log as corrected, sent to their phone.
+    private func sendLog(_ day: String, rows: [SyncUnits.LogRow], _ client: Roster.Client) {
+        let key = "log#\(day)"
+        let body = rows.isEmpty ? nil : SyncUnits.encode(rows)
+        var changed = client
+        changed.units[key] = body
+        roster.update(changed, coach: account.user?.uid ?? "", names: names)
+        let name = client.person.name.map { $0.split(separator: " ").first.map(String.init) ?? $0 } ?? "your client"
+        Task {
+            do {
+                let kept = try await Cloud.push(key, body: body, client: id)
+                toast = Toast(text: kept ? "Corrected" : "\(name)’s phone had a newer copy. Pull to see it.")
             } catch {
                 toast = Toast(text: "Couldn’t send that to \(name). Try again.")
             }

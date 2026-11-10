@@ -53,6 +53,7 @@ struct ClientsScreen: View {
             .task(id: account.user?.uid) { await roster.refresh(coach: account.user?.uid, names: names) }
             .navigationDestination(for: String.self) { id in ClientScreen(id: id) }
             .navigationDestination(for: DayThread.Ref.self) { ref in DayThread(ref: ref) }
+            .navigationDestination(for: ClientProgressScreen.Ref.self) { ref in ClientProgressScreen(id: ref.client) }
             .toolbarVisibility(.hidden, for: .navigationBar)
             .sheet(isPresented: $inviting) { InviteSheet() }
         }
