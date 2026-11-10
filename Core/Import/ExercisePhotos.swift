@@ -50,7 +50,7 @@ enum ExercisePhotos {
         .flatMap { try? JSONDecoder().decode([String: [String]].self, from: Data(contentsOf: $0)) } ?? [:]
 }
 
-/// FIT-348: our own looping demo clip of an exercise, made by the exercise-demo skill (~/dev/muscle-reel-skill) and
+/// FIT-348: our own looping demo clip of an exercise, made by the exercise-demo skill (.claude/skills) and
 /// approved by a person, on the site under exercises/demos/. Resources/Seed/exercise-demos.json lists the slugs that
 /// have one. Debug only: `-exerciseDemos <base URL>` reads them from somewhere else, to look at them before the upload.
 enum ExerciseDemos {
