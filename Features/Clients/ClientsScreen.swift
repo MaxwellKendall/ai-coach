@@ -47,6 +47,7 @@ struct ClientsScreen: View {
                         }
                         list(shown)
                     }
+                    if !roster.invites.isEmpty { invited }
                 }
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
             }
@@ -75,6 +76,51 @@ struct ClientsScreen: View {
         let clients = needsOnly && !roster.needsYou.isEmpty ? roster.needsYou : roster.clients
         let query = query.trimmingCharacters(in: .whitespaces)
         return query.isEmpty ? clients : clients.filter { $0.name.localizedStandardContains(query) }
+    }
+
+    /// FIT-339: invites not used yet: when each was sent, to share again or take back.
+    private var invited: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Invited").font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted).padding(.horizontal, 4)
+            VStack(spacing: 0) {
+                ForEach(roster.invites, id: \.code) { invite in
+                    HStack(spacing: 12) {
+                        Image(systemName: "envelope").foregroundStyle(Color.inkMuted).frame(width: ClientRow.avatar)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(invite.code).font(.headline.monospaced())
+                            Text(Self.sent(invite.createdAt)).font(.subheadline).foregroundStyle(Color.inkMuted)
+                        }
+                        Spacer()
+                        if let url = URL(string: invite.url) {
+                            ShareLink(item: url, message: Text("Train with me in Barbrabell. Your code is \(invite.code).")) {
+                                Image(systemName: "square.and.arrow.up").font(.body.weight(.semibold))
+                            }
+                            .accessibilityLabel("Share invite \(invite.code)")
+                        }
+                        Menu {
+                            Button("Cancel Invite", systemImage: "xmark", role: .destructive) {
+                                Task { try? await roster.cancel(invite.code) }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis").foregroundStyle(Color.inkMuted).frame(width: 32, height: 44)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    if invite.code != roster.invites.last?.code { Divider().padding(.leading, ClientRow.avatar + 12) }
+                }
+            }
+            .padding(.horizontal, 16)
+            .cardBackground()
+        }
+    }
+
+    /// "Sent today", "Sent yesterday", "Sent Nov 2".
+    static func sent(_ at: String?) -> String {
+        guard let at, let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(at)
+                ?? Date.ISO8601FormatStyle().parse(at) else { return "Not joined yet" }
+        if Calendar.current.isDateInToday(date) { return "Sent today" }
+        if Calendar.current.isDateInYesterday(date) { return "Sent yesterday" }
+        return "Sent \(date.formatted(.dateTime.month(.abbreviated).day()))"
     }
 
     /// Search, as in Contacts: a grey field with the magnifying glass.

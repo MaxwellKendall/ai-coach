@@ -10,7 +10,11 @@ struct ClientProgressScreen: View {
 
     let id: String
     @Environment(Roster.self) private var roster
+    @Environment(\.dismiss) private var dismiss
     @Query private var templates: [Template]
+    /// FIT-339: removing them, asked first.
+    @State private var removing = false
+    @State private var problem: String?
 
     private var client: Roster.Client? { roster.clients.first { $0.id == id } }
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
@@ -27,6 +31,7 @@ struct ClientProgressScreen: View {
                     weeks(client)
                     checkIns(client, weighIns: weighIns)
                     profile(client)
+                    remove(client)
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
             }
@@ -165,6 +170,33 @@ struct ClientProgressScreen: View {
                     : profile.equipment.map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: ", "))
                 if !profile.injuredAreas.isEmpty { row("Injuries", profile.injuredAreas.joined(separator: ", ")) }
             }
+        }
+    }
+
+    /// FIT-339: ending the link, at the bottom as Contacts puts Delete; asked first, and they're told on their phone.
+    private func remove(_ client: Roster.Client) -> some View {
+        VStack(spacing: 8) {
+            Button { removing = true } label: {
+                Text("Remove from Your Clients").foregroundStyle(.red).frame(maxWidth: .infinity).padding(.vertical, 14).contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .cardBackground()
+            if let problem { Text(problem).font(.footnote).foregroundStyle(.red) }
+        }
+        .confirmationDialog("Remove \(client.name)?", isPresented: $removing, titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                Task {
+                    do {
+                        try await Cloud.removeClient(client.id)
+                        roster.remove(client.id)
+                        dismiss()
+                    } catch {
+                        problem = "Couldn’t remove them. Try again."
+                    }
+                }
+            }
+        } message: {
+            Text("You’ll no longer see or change their training. They keep everything they’ve logged.")
         }
     }
 

@@ -10,6 +10,7 @@ struct ClientScreen: View {
 
     let id: String
     @Environment(Account.self) private var account
+    @Environment(\.dismiss) private var dismiss
     @Environment(Roster.self) private var roster
     @Query private var templates: [Template]
     @State private var day: String
@@ -95,6 +96,8 @@ struct ClientScreen: View {
         }
         .screenBackground()
         .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 24) }
+        // FIT-339: removed (from their progress screen): back to the list.
+        .onChange(of: client == nil) { _, gone in if gone && roster.loaded { dismiss() } }
         .sheet(item: $adding) { adding in
             let date = SyncUnits.date(ofKey: "plan#\(day)") ?? .now
             let latest = { roster.clients.first { $0.id == id } }

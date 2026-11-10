@@ -6,6 +6,8 @@ extension Cloud {
     struct ClientInvite: Decodable, Equatable, Sendable {
         var code: String
         var url: String
+        /// FIT-339: when it was made, in myInvites.
+        var createdAt: String?
     }
 
     private struct ClientUnit: Decodable, Sendable {
@@ -27,6 +29,20 @@ extension Cloud {
 
     @MainActor static func myClients() async throws -> [Person] {
         try await run("query { myClients { uid name since } }", at: "myClients", query: true)
+    }
+
+    /// FIT-339: invites not used yet, newest first.
+    @MainActor static func myInvites() async throws -> [ClientInvite] {
+        try await run("query { myInvites { code url createdAt } }", at: "myInvites", query: true)
+    }
+
+    @MainActor static func cancelInvite(_ code: String) async throws {
+        _ = try await run("mutation($c: String!) { cancelInvite(code: $c) }", ["c": code], at: "cancelInvite", as: Bool?.self)
+    }
+
+    /// FIT-339: the coach ends the link; their access to the client's training ends at once.
+    @MainActor static func removeClient(_ uid: String) async throws {
+        _ = try await run("mutation($u: ID!) { removeClient(uid: $u) }", ["u": uid], at: "removeClient", as: Bool?.self)
     }
 
     /// FIT-228: the server's answer to a coach with no name; `name` is then saved as theirs and put on the invite.

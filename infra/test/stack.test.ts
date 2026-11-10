@@ -138,7 +138,7 @@ describe("resolvers", () => {
         "Mutation.endLiveSession", "Mutation.postFeed", "Mutation.removeMember", "Mutation.rotateInvite", "Mutation.registerDevice", "Mutation.deleteAccount", "Mutation.aiMessages", "Mutation.importProgram", "Mutation.applyImport", "Mutation.publishWeek", "Mutation.clearWeek", "Mutation.createShare", "Mutation.shareImageUpload", "Mutation.deleteShare",
         "Mutation.redeemGift", "Query.giftedPro", "Mutation.syncPush", "Query.syncPull", "Subscription.onSync",
         "Mutation.createClientInvite", "Query.coachInvite", "Mutation.acceptCoach", "Query.myCoaches", "Query.myClients",
-        "Mutation.unlinkCoach", "Mutation.removeClient", "Mutation.postComment", "Query.comments", "Mutation.editComment", "Mutation.deleteComment",
+        "Mutation.unlinkCoach", "Mutation.removeClient", "Query.myInvites", "Mutation.cancelInvite", "Mutation.postComment", "Query.comments", "Mutation.editComment", "Mutation.deleteComment",
         "Mutation.sendProgram", "Query.programOffers", "Mutation.answerProgram", "Mutation.linkAccount",
         "Query.coachPlan", "Mutation.startCoachPlan", "Mutation.coachBillingPortal",
         "Query.proPlan", "Mutation.startProPlan", "Mutation.proBillingPortal",

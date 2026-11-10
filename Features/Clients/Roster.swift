@@ -30,13 +30,16 @@ final class Roster {
     static let coachingKey = "coaching"
 
     private(set) var clients: [Client] = []
+    /// FIT-339: invites sent and not used yet.
+    private(set) var invites: [Cloud.ClientInvite] = []
     private(set) var loaded = false
     /// The coach `clients` belong to.
     private var loadedFor: String?
     var problem: String?
 
     /// Signed out, or before the first load, none; `clients` for a preview.
-    init(clients: [Client] = []) {
+    init(clients: [Client] = [], invites: [Cloud.ClientInvite] = []) {
+        self.invites = invites
         self.clients = Self.byName(clients)
         loaded = !clients.isEmpty
     }
@@ -55,6 +58,14 @@ final class Roster {
 
     func unread(_ client: Client) -> Int {
         Self.unread(client.units, comments: client.comments, from: client.id, since: seen[client.id] ?? .now)
+    }
+
+    /// FIT-339: a client gone from the list, once the coach has removed them.
+    func remove(_ id: String) { clients.removeAll { $0.id == id } }
+
+    func cancel(_ code: String) async throws {
+        try await Cloud.cancelInvite(code)
+        invites.removeAll { $0.code == code }
     }
 
     func markSeen(_ id: String, at date: Date = .now) {
@@ -115,6 +126,8 @@ final class Roster {
             }
             clients = Self.byName(loaded)
             loadedFor = coach
+            // A server without myInvites yet (before FIT-339's deploy) just shows none.
+            invites = (try? await Cloud.myInvites()) ?? []
             for client in loaded where seen[client.id] == nil { markSeen(client.id) }
             problem = nil
         } catch {

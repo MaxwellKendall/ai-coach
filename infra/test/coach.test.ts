@@ -124,6 +124,24 @@ describe("coach invites (FIT-130)", () => {
     await expect(coach.accept("sam", code, undefined, now)).rejects.toThrow(/your own invite/);
     expect(await coach.inviteName("not-a-code", now)).toBeNull();
   });
+  // FIT-339
+  it("are listed for their coach until used, cancelled or expired", async () => {
+    const first = await coach.createInvite("sam", undefined, now);
+    const second = await coach.createInvite("sam", undefined, later(1));
+    expect((await coach.myInvites("sam", later(1))).map((i: { code: string }) => i.code)).toEqual([second.code, first.code]);
+    await coach.accept("ann", first.code, undefined, later(1));
+    expect((await coach.myInvites("sam", later(1))).map((i: { code: string }) => i.code)).toEqual([second.code]);
+    expect(await coach.myInvites("sam", later(16))).toEqual([]);
+    await coach.cancelInvite("sam", second.code);
+    expect(await coach.myInvites("sam", later(1))).toEqual([]);
+    expect(await coach.inviteName(second.code, later(1))).toBeNull();
+  });
+
+  it("are cancelled only by their coach", async () => {
+    const { code } = await coach.createInvite("sam", undefined, now);
+    await expect(coach.cancelInvite("bob", code)).rejects.toThrow(/isn't your invite/);
+    expect(await coach.inviteName(code, now)).toBe("Sam Coach");
+  });
 });
 
 describe("a coach link (FIT-130)", () => {

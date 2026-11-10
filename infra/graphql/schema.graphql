@@ -174,6 +174,8 @@ type ProgramOffer {
 type ClientInvite {
   code: String!
   url: String!
+  "FIT-339: when it was made; in myInvites only."
+  createdAt: AWSDateTime
 }
 
 type SyncPage {
@@ -201,6 +203,8 @@ type Query {
   "FIT-130: who coaches me, and whom I coach."
   myCoaches: [Person!]!
   myClients: [Person!]!
+  "FIT-339: my client invites not used yet, newest first."
+  myInvites: [ClientInvite!]!
   "FIT-132: replies on logged sessions: a day's thread, or all of them; mine, or a client's (uid) for their coach."
   comments(uid: ID, day: String): [Comment!]!
   "FIT-131: programs sent to me, or (uid) the ones I sent a client, newest first."
@@ -238,6 +242,8 @@ type Mutation {
   "FIT-130: end a link, as the client (unlinkCoach) or the coach (removeClient)."
   unlinkCoach(uid: ID!): Boolean
   removeClient(uid: ID!): Boolean
+  "FIT-339: take back an invite of mine before it's used."
+  cancelInvite(code: String!): Boolean
   "FIT-132: reply on a logged session (day YYYY-MM-DD): my own, or a client's (uid) as their coach."
   postComment(uid: ID, day: String!, text: String!): Comment
   "FIT-200: change or delete a reply I wrote (day and at as postComment returned them), in my thread or a client's (uid)."

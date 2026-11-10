@@ -95,7 +95,8 @@ struct RootView: View {
                 if profile.programStart == nil, !welcomed { welcoming = true }
                 #if DEBUG
                 if Roster.sample {
-                    roster = Roster(clients: Roster.samples())
+                    roster = Roster(clients: Roster.samples(), invites: [Cloud.ClientInvite(
+                        code: "K7Q2MX", url: "https://join.barbrabell.com/K7Q2MX", createdAt: Date.now.addingTimeInterval(-86_400).ISO8601Format())])
                     // FIT-338: last looked at four days ago, so Mike's Sunday note is unread.
                     for client in roster.clients { roster.markSeen(client.id, at: .now.addingTimeInterval(-4 * 86_400)) }
                     coaching = true

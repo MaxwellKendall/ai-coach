@@ -111,9 +111,41 @@ export async function createInvite(coach: string, claims: Record<string, unknown
         },
         ConditionExpression: "attribute_not_exists(PK)",
       },
+    }, {
+      // FIT-339: the coach's own copy, so their open invites can be listed (myInvites); it goes when the invite does.
+      Put: {
+        TableName: TABLE(),
+        Item: {
+          PK: `USER#${coach}`, SK: `INVITE#${code}`, code, createdAt: now.toISOString(),
+          expiresAt: Math.floor(now.getTime() / 1000) + INVITE_DAYS * 86_400,
+        },
+      },
     }],
   }));
   return { code, url: `${process.env.SHARE_ORIGIN}/c/${code}` };
+}
+
+/** FIT-339: a coach's invites not yet used, newest first; expired ones are left out (TTL deletes them late). */
+export async function myInvites(coach: string, now = new Date()) {
+  const { Items } = await db.send(new QueryCommand({
+    TableName: TABLE(),
+    KeyConditionExpression: "PK = :pk AND begins_with(SK, :p)",
+    ExpressionAttributeValues: { ":pk": `USER#${coach}`, ":p": "INVITE#" },
+  }));
+  return (Items ?? []).filter((i) => i.expiresAt > now.getTime() / 1000)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .map((i) => ({ code: i.code as string, url: `${process.env.SHARE_ORIGIN}/c/${i.code}`, createdAt: i.createdAt as string }));
+}
+
+/** FIT-339: a coach takes back an invite of theirs before it's used. */
+export async function cancelInvite(coach: string, code: string) {
+  const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `COACHINVITE#${code}`, SK: "META" } }));
+  if (Item && Item.coachUid !== coach) throw new CoachError("That isn't your invite.");
+  await Promise.all([
+    db.send(new DeleteCommand({ TableName: TABLE(), Key: { PK: `COACHINVITE#${code}`, SK: "META" } })),
+    db.send(new DeleteCommand({ TableName: TABLE(), Key: { PK: `USER#${coach}`, SK: `INVITE#${code}` } })),
+  ]);
+  return true;
 }
 
 async function invite(code: string, now: Date) {
@@ -148,6 +180,8 @@ export async function accept(client: string, input: string, claims: Record<strin
       { Put: { TableName: TABLE(), Item: { PK: `USER#${coach}`, SK: `CLIENT#${client}`, clientUid: client, clientName: await nameOf(client, claims), since } } },
       // Single use: the link is for one client.
       { Delete: { TableName: TABLE(), Key: { PK: `COACHINVITE#${code}`, SK: "META" }, ConditionExpression: "attribute_exists(PK)" } },
+      // FIT-339: and off the coach's open invites.
+      { Delete: { TableName: TABLE(), Key: { PK: `USER#${coach}`, SK: `INVITE#${code}` } } },
     ],
   }));
   return { uid: coach, name: coachName, since };
@@ -223,6 +257,8 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
       case "myClients": return await myClients(me);
       case "unlinkCoach": return await unlink(args.uid, me);
       case "removeClient": return await unlink(me, args.uid);
+      case "myInvites": return await myInvites(me);
+      case "cancelInvite": return await cancelInvite(me, args.code);
       case "postComment": return await postComment(me, identity.claims, args.uid, args.day, args.text);
       case "comments": return await comments(me, args.uid, args.day);
       default: throw new Error(`Unknown field ${event.info.fieldName}`);

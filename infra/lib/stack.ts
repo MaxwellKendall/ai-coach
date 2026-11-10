@@ -443,7 +443,7 @@ export class AICoachStack extends Stack {
     const coachSource = api.addLambdaDataSource("CoachSource", coach);
     for (const [typeName, fieldName] of [["Mutation", "createClientInvite"], ["Query", "coachInvite"], ["Mutation", "acceptCoach"],
       ["Query", "myCoaches"], ["Query", "myClients"], ["Mutation", "unlinkCoach"], ["Mutation", "removeClient"],
-      ["Mutation", "postComment"], ["Query", "comments"]]) {
+      ["Mutation", "postComment"], ["Query", "comments"], ["Query", "myInvites"], ["Mutation", "cancelInvite"]]) {
       coachSource.createResolver(`Coach${fieldName}`, { typeName, fieldName });
     }
     // FIT-131: programs a coach sends; starting one writes the client's synced plan.
