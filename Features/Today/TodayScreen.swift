@@ -16,6 +16,10 @@ struct TodayScreen: View {
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
     @Query private var templates: [Template]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
+    @Environment(\.scenePhase) private var scenePhase
+    /// FIT-330: the day Today is on. It moves on when the app comes back on a new day, or at midnight while it's open,
+    /// and with it the pages and the week's planning.
+    @State private var today = Calendar.current.startOfDay(for: .now)
     @State private var day: Int?
     /// FIT-340: the whole conversation with the coach, open.
     @State private var conversing = false
@@ -93,7 +97,7 @@ struct TodayScreen: View {
     }
 
     private var week: [Date] {
-        (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.start(of: .now))! }
+        (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: Week.start(of: today))! }
     }
 
     private var todayIndex: Int { week.firstIndex { Calendar.current.isDateInToday($0) } ?? 0 }
@@ -194,6 +198,8 @@ struct TodayScreen: View {
         .animation(.snappy, value: working)
         .animation(.snappy, value: toast)
         .onAppear { if day == nil { day = todayPos } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { turnDay() } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in turnDay() }
         // FIT-220: a tapped notification's day; a coach's reply opens that session and its thread.
         .onChange(of: Navigator.shared.day, initial: true) { _, target in open(target) }
         #if DEBUG
@@ -257,7 +263,7 @@ struct TodayScreen: View {
             if let celebrating { CelebrationSheet(wins: celebrating) }
         }
         // A new week, or a profile that just finished onboarding, gets a plan; the coach designs it with Pro (FIT-120).
-        .task(id: "\(profiles.first?.plansItself == true) \(profiles.first?.programSlug ?? "") \(pro.active) \(pro.coaches.isEmpty)") {
+        .task(id: "\(today) \(profiles.first?.plansItself == true) \(profiles.first?.programSlug ?? "") \(pro.active) \(pro.coaches.isEmpty)") {
             guard Pilot.plansWeeks(hasProgram: profiles.first?.programStart != nil, coached: !pro.coaches.isEmpty) else { return }
             try? Planner.ensureWeek(in: context)
             // On a Sunday the swiped week (Sunday to Saturday) runs into the next plan week (Monday first): plan it now, so
@@ -266,6 +272,14 @@ struct TodayScreen: View {
             guard pro.active else { return }
             await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
         }
+    }
+
+    /// FIT-330: a new day since Today last looked goes to it.
+    private func turnDay() {
+        let now = Calendar.current.startOfDay(for: .now)
+        guard now != today else { return }
+        today = now
+        goToday()
     }
 
     private func open(_ target: PushTarget?) {

@@ -63,9 +63,13 @@ struct SessionList: View {
                 addButton("Warm-up") { picking = .warmup }.overlay(alignment: .bottom) { Divider() }
             }
             // FIT-300: the written warm-up's blocks are in the warm-up row, not among the lifts; indices stay the session's.
-            ForEach(session.blocks.indices.filter { session.blocks[$0].rounds > 0 }, id: \.self) { index in
+            let lifts = session.blocks.indices.filter { session.blocks[$0].rounds > 0 }
+            ForEach(lifts, id: \.self) { index in
                 let block = session.blocks[index]
-                if block.isGroup { superset(block, index: index) } else if let movement = block.movements.first { row(movement, block: index) }
+                // The last lift has no rule under it unless Add exercise follows.
+                let ruled = onEdit != nil || index != lifts.last
+                if block.isGroup { superset(block, index: index, ruled: ruled) }
+                else if let movement = block.movements.first { row(movement, block: index, ruled: ruled) }
             }
             if onEdit != nil { addButton("Exercise") { picking = .add } }
         }
@@ -180,7 +184,7 @@ struct SessionList: View {
         .overlay(alignment: .bottom) { Divider() }
     }
 
-    private func superset(_ block: SessionPlan.Block, index blockIndex: Int) -> some View {
+    private func superset(_ block: SessionPlan.Block, index blockIndex: Int, ruled: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             (Text("SUPERSET").font(.caption.weight(.bold)).tracking(0.6) + Text(" · alternate, rest after both").font(.caption))
                 .foregroundStyle(Color.inkMuted).padding(.top, 12)
@@ -194,10 +198,10 @@ struct SessionList: View {
                     .frame(width: 10).padding(.vertical, 24).padding(.leading, 4)
             }
         }
-        .overlay(alignment: .bottom) { Divider() }
+        .overlay(alignment: .bottom) { if ruled { Divider() } }
     }
 
-    private func row(_ movement: SessionPlan.Movement, block: Int, letter: String? = nil, last: Bool = true) -> some View {
+    private func row(_ movement: SessionPlan.Movement, block: Int, letter: String? = nil, last: Bool = true, ruled: Bool = true) -> some View {
         let done = checked?.wrappedValue.contains(block) == true
         let load = Self.load(movement)
         // FIT-277: why the program changed it from last time, which says the + itself.
@@ -262,7 +266,7 @@ struct SessionList: View {
         .contextMenu { if onEdit != nil { actions(movement, pick: pick) } }
         if open == pick { editor(movement, pick: pick).padding(.leading, inset).padding(.bottom, Self.rowPadding).transition(.opacity.combined(with: .move(edge: .top))) }
         }
-        .overlay(alignment: .bottom) { if letter == nil || !last { Divider() } }
+        .overlay(alignment: .bottom) { if ruled && (letter == nil || !last) { Divider() } }
     }
 
     /// The lifts' blocks in order, for Move up and Move down.
