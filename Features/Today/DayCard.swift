@@ -34,6 +34,12 @@ enum DayCard {
         var route: [Polyline.Point]? = nil
         /// FIT-188: the run a run-only day opens to.
         var run: LogEntry? = nil
+        /// The day's lifting is saved and its planned run isn't done yet (a warm-up before an easy run, say).
+        var pendingRun: PlannedActivity? = nil
+        /// Runs logged beside the day's saved lifting.
+        var ran: [LogEntry] = []
+        /// The session's summary row, whose note says how it went; edited any time after.
+        var summary: LogEntry? = nil
     }
 
     /// Workouts only: cooking and groceries are left off Today for now (FIT-25).
@@ -43,12 +49,17 @@ enum DayCard {
         let calendar = Calendar.current
         let items = planned.filter { $0.kind == .workout && calendar.isDate($0.date, inSameDayAs: day) }.sorted { $0.date < $1.date }
         let logged = entries.filter { $0.kind == .workout && calendar.isDate($0.timestamp, inSameDayAs: day) }
-        // FIT-179: a run doesn't finish the day's lifting; a day that was only a run shows the run.
+        // FIT-179: a run doesn't finish the day's lifting, nor lifting its run; a day that was only a run shows the run.
         let runs = Set(context.templates.filter { Running.runs.contains($0.slug) }.map(\.id))
         let ran = logged.filter { $0.templateRef.map(runs.contains) == true }
         let lifted = logged.filter { $0.templateRef.map(runs.contains) != true }
         let liftsPlanned = items.contains { $0.templateRef.map(runs.contains) != true }
-        if !lifted.isEmpty { return .done(summary(lifted, planned: items, context: context)) }
+        if !lifted.isEmpty {
+            var done = summary(lifted, planned: items, context: context)
+            done.ran = ran
+            done.pendingRun = ran.isEmpty ? items.first { $0.templateRef.map(runs.contains) == true } : nil
+            return .done(done)
+        }
         if !ran.isEmpty && !liftsPlanned { return .done(runSummary(ran, planned: items)) }
         guard let first = items.first else { return .rest(Coach.rest(next: next, from: day)) }
         let reasons = items.compactMap(\.adjustedReason)
@@ -90,7 +101,7 @@ enum DayCard {
                     minutes: value("duration_s").map { max(1, Int(($0 / 60).rounded())) }, sets: logged.count,
                     volume: SessionRecord(logged, groups: []).volume,
                     coach: Coach.done(lifts(Array(sets), planned: planned, context: context), missedSets: missed),
-                    note: note, feel: Feel(effort: value("effort")), planned: planned)
+                    note: note, feel: Feel(effort: value("effort")), planned: planned, summary: summary)
     }
 
     private static func runSummary(_ runs: [LogEntry], planned: [PlannedActivity]) -> Done {

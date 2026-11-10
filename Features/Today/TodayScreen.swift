@@ -58,12 +58,15 @@ struct TodayScreen: View {
         case move, logChoice([PlannedActivity])
         /// FIT-235: a workout of their own on a past day: pick the exercises, then log the sets on that day.
         case ownOn(Date), logOwn(WorkoutDraft, Date)
+        /// A note on a saved workout: its summary row and the note as shown.
+        case note(LogEntry, String)
         var id: String {
             switch self {
             case .own: "own"
             case .ownOn(let day): "own \(day)"
             case .logOwn(let draft, let day): "log own \(day) \(draft.id)"
             case .ran(let entry): "ran \(entry.id)"
+            case .note(let entry, _): "note \(entry.id)"
             case .run(let item): "run \(item?.id.uuidString ?? "")"
             case .details(let items): "details \(items.map(\.id))"
             case .record(let items, let day): "record \(items.map(\.id)) \(day)"
@@ -581,13 +584,17 @@ struct TodayScreen: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Button { start(plan) } label: {
-                        Label(lifting(plan.items).isEmpty ? "Start the run" : "Start", systemImage: lifting(plan.items).isEmpty ? "figure.run" : "play.fill")
+                    // A planned run comes first: run mode tracks it and saves it to Apple Health. Lifts beside it are checked off or started below.
+                    if plan.ran.isEmpty, let run = runs(plan.items).first {
+                        startRun(run)
+                        if !lifting(plan.items).isEmpty { secondary("Start the lifts", "play.fill") { start(plan) } }
+                    } else {
+                        Button { start(plan) } label: { Label("Start", systemImage: "play.fill") }.buttonStyle(.primary)
                     }
-                    .buttonStyle(.primary)
                     pair("Move", "calendar", { sheet = .move }, "Log", "plus", { sheet = .logChoice(plan.items) })
                 }
             case .done(let done):
+                if let run = done.pendingRun { startRun(run) }
                 pair("Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned, done.start) } },
                      "Log", "plus", { sheet = .logChoice([]) })
             default:
@@ -768,6 +775,11 @@ struct TodayScreen: View {
         .buttonStyle(.plain)
     }
 
+    private func startRun(_ planned: PlannedActivity) -> some View {
+        Button { tracking = RunTarget(planned: planned) } label: { Label("Start the run", systemImage: "figure.run") }
+            .buttonStyle(.primary)
+    }
+
     /// FIT-179: a run, planned or not, logged with its distance and time.
     private func runButton(_ title: String, _ planned: PlannedActivity?) -> some View {
         pill(title, "figure.run") { tracking = RunTarget(planned: planned) }
@@ -806,8 +818,19 @@ struct TodayScreen: View {
                 }
             }
             .padding(.top, 26)
+            ForEach(done.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
             Text(done.coach).font(.body).lineSpacing(2).padding(.top, 26).fixedSize(horizontal: false, vertical: true)
-            if !done.note.isEmpty {
+            // How it went, added or changed any time after; a tap on the note edits it.
+            if let summary = done.summary {
+                Button { sheet = .note(summary, done.note) } label: {
+                    if done.note.isEmpty {
+                        Label("Add a note", systemImage: "square.and.pencil").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
+                    } else {
+                        Text("“\(done.note)”").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                    }
+                }
+                .buttonStyle(.plain).padding(.top, 12)
+            } else if !done.note.isEmpty {
                 Text("“\(done.note)”").font(.subheadline).foregroundStyle(.secondary).padding(.top, 12)
             }
             Spacer(minLength: 12)
@@ -1186,6 +1209,7 @@ struct TodayScreen: View {
             }
         case .record(let items, let day): NavigationStack { SessionRecordView(planned: items, day: day) }
         case .ran(let entry): NavigationStack { RunDetailView(run: entry) }
+        case .note(let entry, let note): NavigationStack { WorkoutNoteSheet(summary: entry, note: note) }
         case .own:
             NavigationStack {
                 WorkoutDetailView(items: [], session: SessionPlan(blocks: []), startTitle: "Start", onStartOwn: startOwn)
@@ -1215,6 +1239,7 @@ struct TodayScreen: View {
                     switch choice {
                     case .today: self.sheet = .log(items)
                     case .other: self.sheet = .ownOn(.now)
+                    case .track: self.tracking = RunTarget(planned: nil)
                     case .run: self.sheet = .run(nil)
                     }
                 }

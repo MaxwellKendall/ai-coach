@@ -32,6 +32,17 @@ struct SyncTests {
         #expect(state.pending.isEmpty)
     }
 
+    /// Switching a Debug build to prod opens an empty store: under dev's state, or one left by an older build, its units
+    /// would read as deleted and be pushed as tombstones. A fresh state pulls them instead.
+    @Test func eachStoreKeepsItsOwnSyncState() {
+        #expect(Backend.dev.syncState("u") == "sync-u.json")
+        #expect(Backend.prod.syncState("u") == "sync-prod-u.json")
+        var fresh = SyncState()
+        fresh.notice([:], now: t0)
+        #expect(fresh.outgoing([:]).isEmpty)
+        #expect(!fresh.pulledOnce)
+    }
+
     @Test func aRemovedUnitIsPushedAsATombstone() {
         var state = SyncState(synced: ["log#2026-10-16": SyncUnits.hash("[1]")])
         state.notice([:], now: t0)
