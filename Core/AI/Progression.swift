@@ -26,6 +26,8 @@ enum Progression {
         var aim: Double?
         /// This week's reps for main lifts, from the program brief's phase; nil keeps the last reps.
         var reps: Double? = nil
+        /// FIT-426: nothing at all was logged in the week before, a whole week off rather than one session skipped.
+        var weekOff = false
 
         /// Behind its goal's line by more than 2.5%.
         var behind: Bool {
@@ -65,6 +67,8 @@ enum Progression {
         let cutoff = afterLight ? calendar.date(byAdding: .day, value: -7, to: request.monday)! : request.monday
         let past = request.history.filter { $0.date < cutoff }
         let since = calendar.date(byAdding: .day, value: -56, to: request.monday)!
+        let weekBefore = calendar.date(byAdding: .day, value: -7, to: request.monday)!
+        let weekOff = !request.history.contains { $0.date >= weekBefore && $0.date < request.monday }
         let lastWeek = afterLight ? [] : request.lastWeek
         let mains = request.lastWeek.filter { $0.main && $0.note != TrainingGenerator.warmupNote }.map(\.exercise)
         let slugs = (mains + request.goalLifts.filter { $0.measure == "1rm_lb" }.map(\.exercise))
@@ -86,7 +90,8 @@ enum Progression {
                         plannedLoad: planned.flatMap { $0.target("load_lb") ?? $0.target("load_lb_hand") }, plannedReps: planned?.target("reps"),
                         sessions: sessions, daysOff: calendar.dateComponents([.day], from: last, to: cutoff).day,
                         now: goal.flatMap { _ in GoalProgress.current("\(slug).1rm_lb", sets: past, weighIns: [], since: since) } ?? goal?.start,
-                        aim: aim, reps: request.brief.map { Double($0.mainReps) })
+                        aim: aim, reps: request.brief.map { Double($0.mainReps) },
+                        weekOff: weekOff)
         }
     }
 
@@ -184,10 +189,11 @@ enum Progression {
 
         func step(_ lift: Lift) -> Step {
             if let off = lift.daysOff, off > 28 { return .backOff }
-            // FIT-426: a week or more without it (each main lift is trained every week) holds it, as the generator's
-            // "missed week means prove it first" (TrainingGenerator.nextLoad). The week evals' judge called going up after
-            // a missed week "a big jump after no training".
-            if let off = lift.daysOff, off > 7 { return .hold }
+            // FIT-426: a whole week off holds it, as the generator's "missed week means prove it first"
+            // (TrainingGenerator.nextLoad); the week evals' judge called going up after one "a big jump after no
+            // training". One session skipped isn't a week off: holding then cost the program probe's squat goal 6–10%.
+            if lift.weekOff { return .hold }
+            if let off = lift.daysOff, off > 14 { return .hold }
             guard let last = lift.sessions.first, !last.isEmpty else { return .hold }
             if Progression.short(last, planned: lift.plannedReps) {
                 let before = lift.sessions.dropFirst().first

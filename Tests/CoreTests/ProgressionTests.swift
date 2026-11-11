@@ -42,8 +42,11 @@ struct ProgressionTests {
         #expect(rules.step(lift([sets(6, reps: [5, 5, 4]), sets(13, reps: [5, 4, 4])])) == .backOff)
         // Time off: more than 2 weeks holds, more than 4 backs off.
         #expect(rules.step(lift([sets(20, reps: [5, 5, 5])], daysOff: 20)) == .hold)
-        // FIT-426: a missed week holds it too.
-        #expect(rules.step(lift([sets(10, reps: [5, 5, 5])], daysOff: 10)) == .hold)
+        // FIT-426: a whole week off holds it too; one session skipped, 10 days since this lift, doesn't.
+        var off = lift([sets(10, reps: [5, 5, 5])], daysOff: 10)
+        #expect(rules.step(off) != .hold)
+        off.weekOff = true
+        #expect(rules.step(off) == .hold)
         #expect(rules.step(lift([sets(35, reps: [5, 5, 5])], daysOff: 35)) == .backOff)
         // Nothing to go on: hold.
         #expect(rules.step(lift([])) == .hold)
