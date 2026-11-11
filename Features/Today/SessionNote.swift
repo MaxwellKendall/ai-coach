@@ -17,7 +17,7 @@ struct SessionNote: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(Color.fill, in: .rect(cornerRadius: 14))
+        .background(Color.fill, in: .rect(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(by.map { "Note from \($0): \(text)" } ?? "Note: \(text)")
     }
