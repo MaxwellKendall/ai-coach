@@ -34,6 +34,9 @@ struct ClientScreen: View {
     @State private var adding: Adding?
     @State private var dated: Dated?
     @State private var clearing = false
+    /// FIT-377: the note on the day's session, being written.
+    @State private var noting = false
+    @State private var noteText = ""
 
     /// FIT-336: a sheet for the week, and a change to it waiting on "Replace?" when it would overwrite planned days.
     @State private var weekSheet: WeekSheet?
@@ -315,6 +318,7 @@ struct ClientScreen: View {
         } else if let session = editor?.session {
             // A day gone by is as it was planned; today and later can change, and move, copy or clear (FIT-335).
             if day >= today { dayBar(client) }
+            if let note = ClientDay.sessionNote(ClientDay.plan(client.units, day)) { SessionNote(text: note) }
             SessionList(session: session, names: names, previous: [:], checked: nil,
                         onLoad: day >= today ? { changeLoad($0, by: $1, in: session, client) } : nil,
                         onEdit: day >= today ? { save($0, client) } : nil)
@@ -344,6 +348,12 @@ struct ClientScreen: View {
                 Button("Move to Another Day", systemImage: "calendar") { dated = .move }
                 Button("Copy to Another Day", systemImage: "plus.square.on.square") { dated = .copy }
                 Button("Add a Run", systemImage: "figure.run") { adding = .run }
+                // FIT-377: one short instruction they see with the session.
+                let note = ClientDay.sessionNote(ClientDay.plan(client.units, day))
+                Button(note == nil ? "Add a Note for \(first)" : "Change the Note", systemImage: "text.quote") {
+                    noteText = note ?? ""
+                    noting = true
+                }
                 Divider()
                 Button("Clear Day", systemImage: "trash", role: .destructive) { clearing = true }
                 // FIT-363: the week's actions here too, so there's one ⋯.
@@ -359,6 +369,17 @@ struct ClientScreen: View {
             Button("Clear Day", role: .destructive) { send(day, rows: [], client, done: "Cleared \(Self.dayTitle(day))") }
         } message: {
             Text("Its session comes off their plan.")
+        }
+        .alert("Note on \(Self.dayTitle(day))", isPresented: $noting) {
+            TextField("Keep the bar speed up", text: $noteText)
+            Button("Send") {
+                guard let latest = roster.clients.first(where: { $0.id == id }) else { return }
+                let said = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+                send(day, rows: ClientDay.noted(ClientDay.plan(latest.units, day), said), latest, done: said.isEmpty ? "Note removed" : "Note sent")
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(first) sees it with the session on Today and when they start it.")
         }
     }
 

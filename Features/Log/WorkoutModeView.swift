@@ -10,6 +10,7 @@ struct WorkoutModeView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(Account.self) private var account
+    @Environment(Pro.self) private var pro
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
     @Query private var profiles: [Profile]
@@ -63,6 +64,10 @@ struct WorkoutModeView: View {
         VStack(spacing: 0) {
             topBar
             segments.padding(.horizontal, 22).padding(.top, 8)
+            // FIT-377: the coach's note on the session, as it starts.
+            if page == 0 && warmStep == 0, let note = sessionNote {
+                SessionNote(text: note, by: pro.coaches.first?.name ?? "Your coach").padding(.horizontal, 22).padding(.top, 12)
+            }
             Group {
                 if warming {
                     warmupCard(draft.warmups[warmStep], names: names)
@@ -450,6 +455,12 @@ struct WorkoutModeView: View {
         guard let line else { return page < cards.count && !warming ? "Last one" : nil }
         let rows = line.map { draft.rows[$0] }
         return "Next: \(Self.names(rows, names)) · \(Self.dose(rows))"
+    }
+
+    /// FIT-377: the note on the session these sets were planned in.
+    private var sessionNote: String? {
+        let ids = Set(draft.rows.compactMap(\.plannedRef))
+        return PlannedActivity.sessionNote(planned.filter { ids.contains($0.id) })
     }
 
     /// FIT-202: what the coach wrote on these sets' exercises (tempo, rest, AMRAP…), where the set is logged.

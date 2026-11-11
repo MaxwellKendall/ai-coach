@@ -73,6 +73,21 @@ enum ClientDay {
         return (session + checkIn.prefix(1) + weekly).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
+    /// FIT-377: the coach's note on the day's session, from whichever workout row still carries it.
+    static func sessionNote(_ plan: [SyncUnits.PlanRow]) -> String? {
+        plan.lazy.filter { $0.kind == .workout }.compactMap(\.sessionNote).first { !$0.isEmpty }
+    }
+
+    /// The day's rows with `note` on every workout row, cut to one short line; an empty note takes it off.
+    static func noted(_ plan: [SyncUnits.PlanRow], _ note: String) -> [SyncUnits.PlanRow] {
+        let said = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(PlannedActivity.sessionNoteLimit))
+        return plan.map { row in
+            var row = row
+            if row.kind == .workout { row.sessionNote = said.isEmpty ? nil : said }
+            return row
+        }
+    }
+
     /// The session's name, which each logged set carries as its note (WorkoutDraft.save).
     static func sessionName(_ log: [SyncUnits.LogRow]) -> String? {
         log.first { $0.kind == .workout && $0.template != nil && !$0.note.isEmpty }?.note
@@ -172,6 +187,7 @@ enum ClientDay {
                 item.group = row.group
                 item.main = row.main
                 item.pinned = row.pinned
+                item.sessionNote = row.sessionNote
                 context.insert(item)
             }
         }

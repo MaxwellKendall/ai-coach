@@ -646,6 +646,10 @@ struct TodayScreen: View {
                 // The card adds only 4 pt, expecting a row's own 16 above: the title brings that 16 itself (FIT-368).
                 Text(plan.title).font(.display(30)).fixedSize(horizontal: false, vertical: true).padding(.top, 16).padding(.bottom, 10)
             }
+            // FIT-377: the coach's note on the session, over it.
+            if let note = PlannedActivity.sessionNote(plan.items) {
+                SessionNote(text: note, by: pro.coaches.first?.name ?? "Your coach").padding(.top, 16)
+            }
             // A later day is read-only: its week may be replanned before it starts, which would undo a change made now.
             SessionList(session: plan.session, names: names, previous: previousLoads,
                         checked: lifts.isEmpty || !isToday ? nil : $checked,

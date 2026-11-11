@@ -36,6 +36,8 @@ enum SyncUnits {
         var group: Int?
         var main: Bool
         var pinned: Bool
+        /// FIT-377: left out when nil, so a day with no note is the same bytes.
+        var sessionNote: String?
     }
 
     struct LogRow: Codable, Equatable {
@@ -160,7 +162,7 @@ enum SyncUnits {
     static func planRow(_ item: PlannedActivity, _ slugs: [UUID: String]) -> PlanRow {
         PlanRow(id: item.id, kind: item.kind, at: item.date, slot: item.slot, template: item.templateRef.flatMap { slugs[$0] },
                 targets: item.targets, note: item.note, adjustedReason: item.adjustedReason, group: item.group, main: item.main,
-                pinned: item.pinned)
+                pinned: item.pinned, sessionNote: item.sessionNote)
     }
 
     static func logRow(_ entry: LogEntry, _ slugs: [UUID: String]) -> LogRow {
@@ -216,6 +218,7 @@ enum SyncUnits {
                 item.group = row.group
                 item.main = row.main
                 item.pinned = row.pinned
+                item.sessionNote = row.sessionNote
                 item.updatedAt = now
                 let week = Week.start(of: row.at, calendar: calendar)
                 if item.plan?.weekStart != week {

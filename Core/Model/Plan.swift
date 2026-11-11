@@ -41,6 +41,9 @@ final class PlannedActivity {
     var main = false
     /// Kept when the week is regenerated (FIT-40).
     var pinned = false
+    /// FIT-377: the coach's one note on the day's session, kept on each of its workout items so an edit that removes
+    /// one keeps it. `PlannedActivity.sessionNote(_:)` reads it.
+    var sessionNote: String?
     var plan: Plan?
     var createdAt: Date
     var updatedAt: Date
@@ -60,5 +63,15 @@ final class PlannedActivity {
         self.main = main
         self.createdAt = now
         self.updatedAt = now
+    }
+}
+
+extension PlannedActivity {
+    /// FIT-377: a session note is one short line, as the MCP keeps it.
+    static let sessionNoteLimit = 140
+
+    /// The day's session note, from whichever workout item still carries it.
+    static func sessionNote(_ items: [PlannedActivity]) -> String? {
+        items.lazy.filter { $0.kind == .workout }.compactMap(\.sessionNote).first { !$0.isEmpty }
     }
 }

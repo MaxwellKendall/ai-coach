@@ -8,7 +8,7 @@ import { docsPage } from "./mcpDocs.ts";
 import { MAX_UNITS, push } from "./sync.ts";
 import {
   addDays, AREAS, isHardRun, isRun, checkLoads, runTime, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
-  exactly, maxOf, nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, type ExerciseInput, type GoalInput, type PlanRow,
+  exactly, maxOf, nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, withSessionNote, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
 import * as progress from "./progress.ts";
@@ -336,6 +336,7 @@ export const tools = [
       date: DATE,
       title: { type: "string", description: "The session's name, e.g. \"Upper · chest first\"." },
       reason: { type: "string", description: "One sentence on why, shown to them in the app." },
+      note: { type: "string", maxLength: 140, description: "A coach's one short instruction on the whole session (\"keep the bar speed up\", \"stop at RPE 8\"), shown with it on their Today and at the start of workout mode. Optional." },
       exercises: SESSION,
     }, required: ["title", "reason", "exercises"] },
   },
@@ -348,6 +349,7 @@ export const tools = [
       reason: { type: "string", description: "One sentence on the week's aim, shown to them in the app." },
       days: { type: "array", minItems: 1, maxItems: 42, items: { type: "object", properties: {
         date: { type: "string", description: "YYYY-MM-DD" }, title: { type: "string" }, exercises: { ...SESSION, minItems: 0 },
+        note: { type: "string", maxLength: 140, description: "The coach's one short note on that day's session, as in propose_session." },
       }, required: ["date", "exercises"] } },
     }, required: ["reason", "days"] },
   },
@@ -756,7 +758,7 @@ function startOf(units: Units, day: string, tz: string) {
   return first ? Math.floor(first.at / 60) * 60 : epoch(day, profileOf(units)?.workoutTime ?? 7 * 60, tz);
 }
 
-export type DayInput = { date: string; title?: string; exercises: ExerciseInput[] };
+export type DayInput = { date: string; title?: string; exercises: ExerciseInput[]; note?: string };
 
 /** One or more days' new sessions, checked by the plan rules, stored for apply. */
 export async function propose(uid: string, caller: string, tz: string, today: string, days: DayInput[], reason: string, store: Store) {
@@ -786,7 +788,9 @@ export async function propose(uid: string, caller: string, tz: string, today: st
     if (d.date < today) throw new Error(`${d.date} is past; plan today or later.`);
     if (logOf(units, d.date).some((r) => r.kind === "workout")) throw new Error(`${d.date} is already logged, so its plan stays as it was done: leave it out and propose the other days.`);
     const before = planOf(units, d.date);
-    const after = d.exercises.length ? sessionRows(before, d.title ?? "Workout", d.exercises, startOf(units, d.date, tz), reason) : before.filter((r) => r.kind !== "workout");
+    const rows = d.exercises.length ? sessionRows(before, d.title ?? "Workout", d.exercises, startOf(units, d.date, tz), reason) : before.filter((r) => r.kind !== "workout");
+    // FIT-377: the coach's note on the session, shown with it on their Today and in workout mode.
+    const after = d.note === undefined ? rows : withSessionNote(rows, d.note);
     next.set(d.date, after);
     out.push({ day: d.date, rows: encode(after) });
     const week = programWeekOf(profile, d.date, tz);
@@ -1179,7 +1183,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       return propose(uid, account.uid, tz, today, [{ date: day, exercises: [] }], String(args.reason), store);
     }
     case "propose_session":
-      return propose(uid, account.uid, tz, today, [{ date: day, title: args.title, exercises: args.exercises }], String(args.reason), store);
+      return propose(uid, account.uid, tz, today, [{ date: day, title: args.title, exercises: args.exercises, note: args.note }], String(args.reason), store);
     case "propose_week":
       return propose(uid, account.uid, tz, today, args.days as DayInput[], String(args.reason), store);
     case "apply": {

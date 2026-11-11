@@ -243,6 +243,19 @@ describe("mcp", () => {
     await expect(callTool("undo", { date: "2026-10-17" }, me, store, now)).rejects.toThrow(/Nothing to undo/);
   });
 
+  it("FIT-377: a coach's note on the session rides on its rows and shows in get_day", async () => {
+    const units = data();
+    const store = memory({}, units);
+    const proposed = await callTool("propose_session", {
+      title: "Lower", reason: "Strength.", note: "  Keep the bar speed up; stop at RPE 8.  ",
+      exercises: [{ exercise: "Back Squat", sets: 3, reps: 5, weight_lb: 205 }, { exercise: "Romanian Deadlift", sets: 3, reps: 8, weight_lb: 135 }],
+    }, me, store, now);
+    await callTool("apply", { proposal_id: proposed.match(/Proposal (\S+)/)![1] }, me, store, now);
+    const applied = JSON.parse(units.me["plan#2026-10-17"]) as PlanRow[];
+    expect(applied.map((r) => r.sessionNote)).toEqual(["Keep the bar speed up; stop at RPE 8.", "Keep the bar speed up; stop at RPE 8."]);
+    expect(await callTool("get_day", { date: "2026-10-17" }, me, store, now)).toMatch(/Coach's note: “Keep the bar speed up; stop at RPE 8.”/);
+  });
+
   it("FIT-300: writes a session's warm-up, shown first and kept out of the lifts", async () => {
     const units = data();
     const store = memory({}, units);

@@ -12,7 +12,25 @@ export type Measurement = { metric: string; value: number; unit: string };
 export type PlanRow = {
   id: string; kind: string; at: number; slot?: string; template?: string; targets: Measurement[]; note: string;
   adjustedReason?: string; group?: number; main: boolean; pinned: boolean;
+  /** FIT-377: the coach's one note on the day's session, on each of its workout rows. */
+  sessionNote?: string;
 };
+
+/** FIT-377: the day's session note, from whichever workout row still carries it. */
+export const sessionNoteOf = (plan: PlanRow[]) => plan.find((r) => r.kind === "workout" && r.sessionNote)?.sessionNote;
+
+/** FIT-377: a session note is one short line. */
+export const SESSION_NOTE_MAX = 140;
+
+/** The day's rows with `note` on every workout row; an empty note takes it off. */
+export function withSessionNote(plan: PlanRow[], note: string | undefined) {
+  const said = note?.trim().slice(0, SESSION_NOTE_MAX);
+  return plan.map((r) => {
+    if (r.kind !== "workout") return r;
+    const { sessionNote: _, ...rest } = r;
+    return said ? { ...rest, sessionNote: said } : rest;
+  });
+}
 export type LogRow = { id: string; kind: string; at: number; plannedRef?: string; template?: string; measurements: Measurement[]; note: string };
 export type Goal = { kind: string; metric: string; target: number; unit: string; deadline?: number; baseline?: number; status: string };
 export type Profile = {
@@ -259,7 +277,8 @@ export function describeSession(plan: PlanRow[]) {
     ...warmupLines(plan).map((l) => `Warm-up · ${nameOf(l.slug)} (${l.slug}): ${describeTargets(l.sets, l.targets)}`),
     ...sessionLines(plan).map((l) => `${l.main ? "★ " : ""}${nameOf(l.slug)} (${l.slug}): ${line(l)}${l.group ? ` [superset ${l.group}]` : ""}`),
   ];
-  return { title, lines };
+  const note = sessionNoteOf(plan);
+  return { title, lines: note ? [`Coach's note: “${note}”`, ...lines] : lines };
 }
 
 /**
