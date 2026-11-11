@@ -124,6 +124,27 @@ struct WeekKeepingTests {
         #expect(notes[1].hasSuffix("Back Squat: knee sore at the bottom"))
     }
 
+    /// FIT-427: a coach's week is never planned over, and once coaching ends the app plans again from the next week.
+    @Test func endingCoachingHandsPlanningBackTheFollowingWeek() throws {
+        let context = try store()
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let coached = try #require(try Planner.generate(weekOf: date(10, 4), in: context, calendar: calendar))
+        for item in coached.items where item.kind == .workout { item.adjustedReason = "From Sam" }
+        coached.updatedAt = date(10, 1)
+        try context.save()
+        let written = Planner.workouts(coached, templates: templates)
+
+        // Coaching ended on Wednesday: this week stays the coach's.
+        try Planner.keepWeeks(now: date(10, 7, hour: 9), in: context, calendar: calendar)
+        #expect(Planner.workouts(coached, templates: templates) == written)
+        #expect(try Planner.plan(weekOf: date(10, 11), in: context, calendar: calendar) == nil)
+        // The next week is the app's again.
+        try Planner.keepWeeks(now: date(10, 11, hour: 8), in: context, calendar: calendar)
+        let next = try #require(try Planner.plan(weekOf: date(10, 11), in: context, calendar: calendar))
+        #expect(next.items.contains { $0.kind == .workout } && !Planner.isCoached(next))
+        #expect(Planner.workouts(coached, templates: templates) == written)
+    }
+
     @Test func eachChangeSaysHowAndSinceWhen() {
         let monday = date(10, 12, hour: 17)
         func row(_ exercise: String, _ load: Double) -> PlannedWorkout {

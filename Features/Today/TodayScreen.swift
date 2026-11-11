@@ -623,12 +623,17 @@ struct TodayScreen: View {
                 Text(pro.coaches.isEmpty ? "This week is planned when it comes." : "Your coach plans this week before it starts.")
                     .foregroundStyle(Color.inkMuted)
             }
-        // FIT-201: a coach's client with nothing planned from this week on is waiting on the coach, not resting.
+        // FIT-201, FIT-427: a coach's client with nothing planned from this week on is waiting on the coach, not resting:
+        // it says who, and a message to them is a tap away. The app plans nothing over a coach's weeks.
         case .rest where awaitingCoach:
+            let coach = pro.coaches.first
             VStack(alignment: .leading, spacing: 8) {
-                Text(planned.contains { $0.kind == .workout } ? "Your coach is writing this week" : "Your coach is writing your first week")
+                Text("\(coach?.title ?? "Your coach") hasn’t written \(planned.contains { $0.kind == .workout } ? "this week" : "your first week") yet")
                     .font(.display(28))
                 Text("It shows up here as soon as it’s ready.").foregroundStyle(Color.inkMuted)
+                Button { conversing = true } label: { Label("Message \(coach?.name ?? "your coach")", systemImage: "bubble.left") }
+                    .buttonStyle(.secondary)
+                    .padding(.top, 8)
             }
         case .rest(let coach):
             VStack(alignment: .leading, spacing: 8) {
