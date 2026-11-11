@@ -25,8 +25,10 @@ enum GoalUpdate {
 
     /// Saves the test as a log row for the goal's exercise (a run on Running.outdoor), or as the day's weigh-in.
     @MainActor
-    static func save(_ option: GoalOption, _ result: Result, note: String, on day: Date = .now, in context: ModelContext,
+    static func save(_ option: GoalOption, _ result: Result, note: String, on day: Date? = nil, in context: ModelContext,
                      now: Date = .now) throws {
+        // FIT-365: the day defaults to `now`'s, not the real date's, so a pinned `now` (tests) stays on its own day.
+        let day = day ?? now
         let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let slug: String
         let measurements: [Measurement]
