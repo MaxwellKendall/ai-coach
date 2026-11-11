@@ -214,9 +214,8 @@ struct SessionList: View {
     private func row(_ movement: SessionPlan.Movement, block: Int, letter: String? = nil, last: Bool = true, ruled: Bool = true) -> some View {
         let done = checked?.wrappedValue.contains(block) == true
         let load = Self.load(movement)
-        // FIT-277: why the program changed it from last time, which says the + itself.
-        let why = movement.working.first?.adjustedReason.flatMap { ReadyProgram.Why.explains($0) ? $0 : nil }
-        let up = why != nil ? nil : load.flatMap { load in previous[movement.exercise].map { load - $0 } }.flatMap { $0 > 0 ? $0 : nil }
+        // Simplicity pass (2026-11-11): the "+5 lb" chip alone says it went up; FIT-277's line saying why is gone.
+        let up = load.flatMap { load in previous[movement.exercise].map { load - $0 } }.flatMap { $0 > 0 ? $0 : nil }
         let pick = Pick(block: block, movement: session.blocks[block].movements.firstIndex { $0.id == movement.id } ?? 0)
         return VStack(alignment: .leading, spacing: 0) {
         HStack(alignment: .center, spacing: Self.gap) {
@@ -244,7 +243,6 @@ struct SessionList: View {
                     }
                 }
                 Text(Self.dose(movement)).font(.footnote).foregroundStyle(Color.inkMuted)
-                if let why { Text(why).font(.footnote).foregroundStyle(Color.inkMuted) }
             }
             .contentShape(.rect)
             .onTapGesture {

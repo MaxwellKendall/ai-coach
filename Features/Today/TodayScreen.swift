@@ -358,7 +358,15 @@ struct TodayScreen: View {
                 .accessibilityLabel("Account and library")
             }
             VStack(spacing: 12) {
-                WeekBar(start: shownWeek) { go(to: $0) }
+                // Simplicity pass: this week needs no header; swipe the strip for another, which then says which and
+                // offers the way back.
+                if shownWeek != Week.start(of: .now) {
+                    HStack {
+                        Text(WeekPaging.range(shownWeek)).font(.headline)
+                        Spacer()
+                        Button("This Week") { goToday() }.font(.subheadline.weight(.semibold)).buttonStyle(.plain).foregroundStyle(Plate.current.mark)
+                    }
+                }
                 strip(days, cards: cards, selected: shown)
                     .id(shownWeek)
                     .transition(.push(from: forward ? .trailing : .leading))
@@ -638,10 +646,21 @@ struct TodayScreen: View {
                     if plan.ran.isEmpty, let run = runs(plan.items).first {
                         startRun(run)
                         if !lifting(plan.items).isEmpty { secondary("Start the lifts", "play.fill") { start(plan) } }
+                        pair("Move", "calendar", { sheet = .move }, "Log", "plus", { sheet = .logChoice(plan.items) })
                     } else {
-                        Button { start(plan) } label: { Label("Start", systemImage: "play.fill") }.buttonStyle(.primary)
+                        // Simplicity pass: one button; Move and Log behind the ⋯ beside it.
+                        HStack(spacing: 8) {
+                            Button { start(plan) } label: { Label("Start", systemImage: "play.fill") }.buttonStyle(.primary)
+                            Menu {
+                                Button("Log It Without Starting", systemImage: "plus") { sheet = .logChoice(plan.items) }
+                                Button("Move to Another Day", systemImage: "calendar") { sheet = .move }
+                            } label: {
+                                Image(systemName: "ellipsis").font(.title3.weight(.semibold)).foregroundStyle(Color.ink)
+                                    .frame(width: 56, height: 56).background(Color.surface, in: .rect(cornerRadius: 16))
+                            }
+                            .accessibilityLabel("More")
+                        }
                     }
-                    pair("Move", "calendar", { sheet = .move }, "Log", "plus", { sheet = .logChoice(plan.items) })
                 }
             case .done(let done):
                 if let run = done.pendingRun { startRun(run) }
@@ -680,7 +699,7 @@ struct TodayScreen: View {
                         .cardBackground()
                     // FIT-331: a coach can write on any day, planned or rest, so its thread is here too; a logged
                     // session's is in its record.
-                    if !planning, !Self.isDone(card) { CoachThread(date: day, prompt: "Message your coach", inset: 0) }
+                    // Simplicity pass: the coach's messages are behind Messages, not under each day too.
                 }
                 .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
             }
