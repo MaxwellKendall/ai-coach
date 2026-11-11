@@ -1,6 +1,6 @@
 # Spoken log evals
 
-**121/123 runs pass (98%)** · 41 cases × 3 runs · 1.2 s per run
+**120/123 runs pass (97%)** · 41 cases × 3 runs · 1.3 s per run
 
 | Pass | Said / why it failed |
 |---|---|
@@ -8,7 +8,7 @@
 | ✅ 3/3 | Breakfast was oatmeal with blueberries |
 | ✅ 3/3 | Chicken and rice for lunch |
 | 🟡 2/3 | For dinner I had salmon, potatoes and broccoli |
-|  | run 2: extra meal "potatoes"; extra meal "broccoli" — `meal salmon, meal potatoes, meal broccoli` |
+|  | run 1: extra meal "potatoes"; extra meal "broccoli" — `meal salmon, meal potatoes, meal broccoli` |
 | ✅ 3/3 | Protein shake |
 | ✅ 3/3 | Had a protein shake with 40 grams of protein |
 | ✅ 3/3 | Ate a burrito bowl, about 750 calories |
@@ -27,10 +27,11 @@
 | ✅ 3/3 | Slept 8 hours, felt great |
 | ✅ 3/3 | Rough night, maybe 5 hours |
 | 🟡 2/3 | Slept 7.5 hours, quality was a 4 out of 5 |
-|  | run 1: sleep quality none, wanted 4 — `sleep` |
+|  | run 3: sleep quality none, wanted 4 — `sleep` |
 | ✅ 3/3 | Only 4 hours of sleep last night |
 | ✅ 3/3 | Weighed 203.4 |
-| ✅ 3/3 | Weight this morning was 198 |
+| 🟡 2/3 | Weight this morning was 198 |
+|  | run 2: extra meal "Weight this morning was 198" — `meal Weight this morning was 198, weight` |
 | ✅ 3/3 | I'm 201.6 pounds today |
 | ✅ 3/3 | Scale said one ninety-five |
 | ✅ 3/3 | Weighed in at 187 point 2 |
