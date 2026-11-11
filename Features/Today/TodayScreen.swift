@@ -631,7 +631,8 @@ struct TodayScreen: View {
         return VStack(alignment: .leading, spacing: 0) {
             // The lifts are the session; only a run, with no list to show, gets a title (author, 2026-10-30).
             if lifts.isEmpty {
-                Text(plan.title).font(.display(30)).fixedSize(horizontal: false, vertical: true).padding(.bottom, 10)
+                // The card adds only 4 pt, expecting a row's own 16 above: the title brings that 16 itself (FIT-368).
+                Text(plan.title).font(.display(30)).fixedSize(horizontal: false, vertical: true).padding(.top, 16).padding(.bottom, 10)
             }
             // A later day is read-only: its week may be replanned before it starts, which would undo a change made now.
             SessionList(session: plan.session, names: names, previous: previousLoads,
