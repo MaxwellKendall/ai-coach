@@ -20,6 +20,10 @@ struct YouScreen: View {
         NavigationStack {
             List {
                 Section {
+                    // FIT-355: training days, equipment, what hurts, age and weight, after onboarding too.
+                    if let profile = profiles.first {
+                        NavigationLink { ProfileEditor(profile: profile, isNew: false) } label: { Label("Profile", systemImage: "person.text.rectangle") }
+                    }
                     NavigationLink { CatalogScreen() } label: { Label("Library", systemImage: "books.vertical") }
                     // FIT-297: the app's colour, after the competition bumper plates.
                     Picker(selection: $plate) {

@@ -3,7 +3,7 @@ import SwiftData
 
 /// Onboarding and later edits of the athlete's settings.
 struct ProfileEditor: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @Bindable var profile: Profile
     @FocusState private var typing: Bool
     let isNew: Bool
@@ -35,49 +35,65 @@ struct ProfileEditor: View {
                     Toggle(OnboardingAnswers.equipmentNames[item] ?? item, isOn: contains(item, in: $profile.equipment))
                 }
             }
-            Section {
-                TextField("Injured areas, e.g. lower_back", text: list($profile.injuredAreas))
-                    .textInputAutocapitalization(.never)
-                TextField("Exercises to avoid, e.g. deadlift", text: list($profile.avoidExercises))
-                    .textInputAutocapitalization(.never)
-                Stepper("Max \(profile.maxWeeklySets) sets a week", value: $profile.maxWeeklySets, in: 20...150, step: 5)
-            } header: {
-                Text("Constraints")
-            } footer: {
-                Text("Separate with commas. Exercises loading an injured area are left out of every plan.")
-            }
-            Section("Style") {
-                Picker("Training style", selection: $profile.style) {
-                    ForEach(TrainingStyle.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+            if Pilot.simple {
+                // FIT-355: what hurts, by body area as onboarding asks it, not typed slugs.
+                Section {
+                    ForEach(hurtAreas, id: \.self) { area in
+                        Toggle(area.prefix(1).uppercased() + area.dropFirst(), isOn: contains(area, in: $profile.injuredAreas))
+                    }
+                } header: {
+                    Text("Anything that hurts")
+                } footer: {
+                    Text("Plans the app makes leave out exercises that load these. Your coach sees them too.")
                 }
-                Toggle("Warm-up sets in the plan", isOn: $profile.warmups)
-                Picker("Deload", selection: $profile.deloadEveryWeeks) {
-                    Text("Every \(AgeTier.of(age: profile.age).deloadEveryWeeks) weeks (your age tier)").tag(Int?.none)
-                    ForEach(4...8, id: \.self) { Text("Every \($0) weeks").tag(Int?.some($0)) }
+            } else {
+                Section {
+                    TextField("Injured areas, e.g. lower_back", text: list($profile.injuredAreas))
+                        .textInputAutocapitalization(.never)
+                    TextField("Exercises to avoid, e.g. deadlift", text: list($profile.avoidExercises))
+                        .textInputAutocapitalization(.never)
+                    Stepper("Max \(profile.maxWeeklySets) sets a week", value: $profile.maxWeeklySets, in: 20...150, step: 5)
+                } header: {
+                    Text("Constraints")
+                } footer: {
+                    Text("Separate with commas. Exercises loading an injured area are left out of every plan.")
                 }
             }
-            Section("Kitchen") {
-                ForEach($profile.cookWindows, id: \.self) { $window in
-                    HStack {
-                        Picker("", selection: $window.day) {
-                            ForEach(Week.order, id: \.self) { Text(Self.weekdays[$0]).tag($0) }
-                        }
-                        .labelsHidden()
-                        TextField("Label", text: $window.label)
-                        Stepper("\(window.hours.formatted()) h", value: $window.hours, in: 0.5...6, step: 0.5).fixedSize()
+            // The pilot's athlete app is simple (FIT-215): no style, deload or kitchen settings.
+            if !Pilot.simple {
+                Section("Style") {
+                    Picker("Training style", selection: $profile.style) {
+                        ForEach(TrainingStyle.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+                    }
+                    Toggle("Warm-up sets in the plan", isOn: $profile.warmups)
+                    Picker("Deload", selection: $profile.deloadEveryWeeks) {
+                        Text("Every \(AgeTier.of(age: profile.age).deloadEveryWeeks) weeks (your age tier)").tag(Int?.none)
+                        ForEach(4...8, id: \.self) { Text("Every \($0) weeks").tag(Int?.some($0)) }
                     }
                 }
-                .onDelete { profile.cookWindows.remove(atOffsets: $0) }
-                Button("Add cook window", systemImage: "plus") {
-                    profile.cookWindows.append(CookWindow(day: 5, hours: 2, label: "Cook"))
-                }
-                Picker("Grocery day", selection: $profile.groceryDay) {
-                    Text("None").tag(Int?.none)
-                    ForEach(Week.order, id: \.self) { Text(Self.weekdays[$0]).tag(Int?.some($0)) }
-                }
-                LabeledContent("Weekly grocery budget ($)") {
-                    TextField("Optional", value: $profile.weeklyBudgetUSD, format: .number).keyboardType(.decimalPad).focused($typing)
-                        .multilineTextAlignment(.trailing)
+                Section("Kitchen") {
+                    ForEach($profile.cookWindows, id: \.self) { $window in
+                        HStack {
+                            Picker("", selection: $window.day) {
+                                ForEach(Week.order, id: \.self) { Text(Self.weekdays[$0]).tag($0) }
+                            }
+                            .labelsHidden()
+                            TextField("Label", text: $window.label)
+                            Stepper("\(window.hours.formatted()) h", value: $window.hours, in: 0.5...6, step: 0.5).fixedSize()
+                        }
+                    }
+                    .onDelete { profile.cookWindows.remove(atOffsets: $0) }
+                    Button("Add cook window", systemImage: "plus") {
+                        profile.cookWindows.append(CookWindow(day: 5, hours: 2, label: "Cook"))
+                    }
+                    Picker("Grocery day", selection: $profile.groceryDay) {
+                        Text("None").tag(Int?.none)
+                        ForEach(Week.order, id: \.self) { Text(Self.weekdays[$0]).tag(Int?.some($0)) }
+                    }
+                    LabeledContent("Weekly grocery budget ($)") {
+                        TextField("Optional", value: $profile.weeklyBudgetUSD, format: .number).keyboardType(.decimalPad).focused($typing)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
             }
         }
@@ -90,22 +106,32 @@ struct ProfileEditor: View {
                     Button("Done") { typing = false }
                 }
             }
-            if !isNew {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { save() } }
-            } else {
+            if isNew {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Next") { save() }.disabled(!profile.isComplete)
                 }
             }
         }
+        // FIT-355: pushed from You, with its back button: what changed is saved on the way out.
+        .onDisappear {
+            guard !isNew, context.hasChanges else { return }
+            profile.updatedAt = .now
+            try? context.save()
+        }
+    }
+
+    /// Every body area, as onboarding names them ("lower back"), then any other already saved.
+    private var hurtAreas: [String] {
+        let all = BodyArea.muscles.keys.map { $0.replacingOccurrences(of: "_", with: " ") }.sorted()
+        return all + profile.injuredAreas.filter { !all.contains($0) }.sorted()
     }
 
     static let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
     private func save() {
         profile.updatedAt = .now
+        try? context.save()
         onSave()
-        if !isNew { dismiss() }
     }
 
     private func time(_ minutes: Binding<Int>) -> Binding<Date> {
