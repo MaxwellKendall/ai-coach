@@ -365,9 +365,12 @@ struct ProgramScreen: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint(done(day.date) ? "Shows what you logged" : "Opens the session to change it")
+                    .accessibilityHint(done(day.date) ? "Shows what you logged" : missed(day.date) ? "Opens the day on Today, to log it" : "Opens the session to change it")
                     if done(day.date) {
                         Image(systemName: "checkmark").font(.footnote.weight(.bold)).accessibilityLabel("Done")
+                    } else if missed(day.date) {
+                        // FIT-357: a past day with nothing logged says so.
+                        Text("Missed").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkMuted)
                     } else if pinnable, day.date >= Calendar.current.startOfDay(for: .now) {
                         let items = dayItems(day.date)
                         let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
@@ -402,6 +405,9 @@ struct ProgramScreen: View {
         }.grouped()
     }
 
+    /// FIT-357: planned, before today, and nothing logged.
+    private func missed(_ date: Date) -> Bool { date < Calendar.current.startOfDay(for: .now) && !done(date) }
+
     private func dayItems(_ date: Date) -> [PlannedActivity] {
         planned.filter { $0.kind == .workout && Calendar.current.isDate($0.date, inSameDayAs: date) }
     }
@@ -416,6 +422,8 @@ struct ProgramScreen: View {
     private func open(_ date: Date, monday: Date) {
         // FIT-120: the program can be looked through without Pro; running it is Pro.
         guard pro.active else { return pro.paywall = true }
+        // FIT-357: a missed day is logged where past days are, on Today, not changed as a plan.
+        if missed(date) { return Navigator.shared.pushed = PushTarget(kind: .nudge, day: Calendar.current.startOfDay(for: date)) }
         if dayItems(in: monday).isEmpty, Pilot.plansWeeks(hasProgram: true, coached: !pro.coaches.isEmpty) {
             try? Planner.generate(weekOf: monday, in: context)
         }
