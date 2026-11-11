@@ -24,7 +24,7 @@ struct YouScreen: View {
                     if let profile = profiles.first {
                         NavigationLink { ProfileEditor(profile: profile, isNew: false) } label: { Label("Profile", systemImage: "person.text.rectangle") }
                     }
-                    NavigationLink { CatalogScreen() } label: { Label("Library", systemImage: "books.vertical") }
+                    NavigationLink { CatalogScreen() } label: { Label(Pilot.simple ? "Exercises" : "Library", systemImage: "books.vertical") }
                     // FIT-297: the app's colour, after the competition bumper plates.
                     Picker(selection: $plate) {
                         ForEach(Plate.allCases) { plate in Text(plate.name).tag(plate.rawValue) }
@@ -66,8 +66,6 @@ struct YouScreen: View {
                         Button { signingIn = true } label: {
                             Label("Sign In", systemImage: "person.crop.circle")
                         }
-                    } footer: {
-                        Text("Back up your program and see it on the web.")
                     }
                 }
                 // FIT-130: who coaches me, and the way to stop.

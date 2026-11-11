@@ -81,7 +81,8 @@ struct ClientScreen: View {
                     }
                     flags(client)
                     VStack(spacing: 12) {
-                        WeekBar(start: start, go: { go(to: $0) }) { weekActions(client) }
+                        // FIT-363: the week's actions are in the day's ⋯, so the bar shows only for another week.
+                        if start != Week.start(of: .now) { WeekBar(start: start, go: { go(to: $0) }) }
                         strip(client)
                             .id(start)
                             .transition(.push(from: forward ? .trailing : .leading))
@@ -333,6 +334,8 @@ struct ClientScreen: View {
                 Button("Add a Run", systemImage: "figure.run") { adding = .run }
                 Divider()
                 Button("Clear Day", systemImage: "trash", role: .destructive) { clearing = true }
+                // FIT-363: the week's actions here too, so there's one ⋯.
+                Section("This Week") { weekActions(client) }
             } label: {
                 Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Color.inkMuted)
                     .frame(width: 44, height: 32).background(Color.fill, in: .capsule)

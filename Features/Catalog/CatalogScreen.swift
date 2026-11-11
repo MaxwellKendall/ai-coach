@@ -17,14 +17,17 @@ struct CatalogScreen: View {
             }
         }
         .safeAreaInset(edge: .top) {
-            Picker("Section", selection: $section) {
-                ForEach(Section.allCases, id: \.self) { Text($0.rawValue) }
+            // FIT-363: the pilot has no meals (FIT-215), so its Library is exercises only, with no tabs.
+            if !Pilot.simple {
+                Picker("Section", selection: $section) {
+                    ForEach(Section.allCases, id: \.self) { Text($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
         }
         .searchable(text: $search)
-        .navigationTitle("Catalog")
+        .navigationTitle(Pilot.simple ? "Exercises" : "Catalog")
         .toolbar {
             if section != .pantry {
                 Button("Add", systemImage: "plus") { adding = section == .exercises ? .exercise : .recipe }

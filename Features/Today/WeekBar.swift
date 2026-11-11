@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// FIT-331, FIT-332: the week shown, ‹ ›, and "This Week" to come back, as Calendar's week view has them. One control
+/// FIT-331, FIT-332: another week's dates and "This Week" to come back (the strip swipes, FIT-363). One control
 /// for any screen that pages weeks (a client's, Today), so they behave the same. `go` gets the new week's Sunday.
 struct WeekBar<Actions: View>: View {
     /// The Sunday of the week shown.
@@ -12,8 +12,9 @@ struct WeekBar<Actions: View>: View {
     private var thisWeek: Bool { start == Week.start(of: .now) }
 
     var body: some View {
+        // FIT-363: this week needs no label and the strip swipes, so no arrows; another week says which, with the way back.
         HStack(spacing: 4) {
-            Text(thisWeek ? "This week" : WeekPaging.range(start)).font(.headline).contentTransition(.numericText())
+            if !thisWeek { Text(WeekPaging.range(start)).font(.headline).contentTransition(.numericText()) }
             Spacer()
             if !thisWeek {
                 Button("This Week") { go(Week.start(of: .now)) }
@@ -26,14 +27,6 @@ struct WeekBar<Actions: View>: View {
                         .frame(width: 36, height: 36).background(Color.fill, in: .circle)
                 }
                 .accessibilityLabel("Change this week")
-            }
-            ForEach([-1, 1], id: \.self) { step in
-                Button { go(WeekPaging.week(step, from: start)) } label: {
-                    Image(systemName: step < 0 ? "chevron.left" : "chevron.right").font(.subheadline.weight(.semibold))
-                        .frame(width: 36, height: 36).background(Color.fill, in: .circle)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(step < 0 ? "Previous week" : "Next week")
             }
         }
     }
