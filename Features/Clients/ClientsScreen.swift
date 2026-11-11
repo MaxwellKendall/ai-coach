@@ -8,6 +8,8 @@ struct ClientsScreen: View {
     @Environment(Roster.self) private var roster
     @Query private var templates: [Template]
     @State private var inviting = false
+    /// FIT-381: You, from here too: a coach who doesn't train has no Today to reach it from.
+    @State private var you = false
     @State private var needsOnly = false
     @State private var messaging = false
     @State private var query = ""
@@ -56,6 +58,10 @@ struct ClientsScreen: View {
                     Button { inviting = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Invite a client")
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { you = true } label: { Image(systemName: "person.crop.circle") }
+                        .accessibilityLabel("Account and library")
+                }
             }
             .modifier(Searching(on: roster.clients.count > 8, query: $query))
             .refreshable { await reload() }
@@ -73,6 +79,7 @@ struct ClientsScreen: View {
                 Task { await reload() }
             }
             .sheet(isPresented: $inviting) { InviteSheet() }
+            .sheet(isPresented: $you) { YouScreen().tint(RootView.accent) }
             .sheet(isPresented: $messaging) { MessageClientsSheet() }
         }
     }

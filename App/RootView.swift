@@ -4,6 +4,13 @@ import SwiftData
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query private var profiles: [Profile]
+    /// FIT-381: anything planned at all, one row is enough.
+    @Query(RootView.anyPlanned) private var planned: [PlannedActivity]
+    static var anyPlanned: FetchDescriptor<PlannedActivity> {
+        var descriptor = FetchDescriptor<PlannedActivity>()
+        descriptor.fetchLimit = 1
+        return descriptor
+    }
     /// Set while onboarding; presenting by item hands the profile straight to the cover.
     @State private var onboarding: Profile?
     /// FIT-201: the pilot's first launch, sign in and join your coach, in place of onboarding.
@@ -36,6 +43,12 @@ struct RootView: View {
         return account.user.map { $0.uid == coachUID } ?? false
     }
 
+    /// FIT-381: a coach who doesn't train sees Clients alone; Today, Program and Progress come with a program of their
+    /// own ("Train on my own too", or Program on You), a planned day, or a coach of their own.
+    private var athlete: Bool {
+        !coaching || profiles.first?.programStart != nil || !planned.isEmpty || !pro.coaches.isEmpty
+    }
+
     /// FIT-297: the plate colour picked on You (design system v2); Blue 20 until one is picked.
     static var accent: Color { Plate.current.accent }
     @AppStorage(Plate.key) private var plate = Plate.blue.rawValue
@@ -48,9 +61,11 @@ struct RootView: View {
                 Tab("Clients", systemImage: "person.2", value: AppTab.clients) { ClientsScreen() }
                     .badge(roster.unread)
             }
-            Tab("Today", systemImage: "figure.strengthtraining.traditional", value: AppTab.today) { TodayScreen() }
-            Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
-            Tab("Progress", systemImage: "chart.bar", value: AppTab.progress) { ProgramScreen(tabs: [.goals, .wins, .history]) }
+            if athlete {
+                Tab("Today", systemImage: "figure.strengthtraining.traditional", value: AppTab.today) { TodayScreen() }
+                Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
+                Tab("Progress", systemImage: "chart.bar", value: AppTab.progress) { ProgramScreen(tabs: [.goals, .wins, .history]) }
+            }
             if Pilot.groups, account.isAvailable {
                 Tab(groupsTab.title, systemImage: "person.2", value: AppTab.groups) { NavigationStack { GroupsScreen() } }
                     .badge(groupsTab.live ? Text("Live") : nil)
