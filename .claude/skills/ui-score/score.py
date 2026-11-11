@@ -98,7 +98,8 @@ def reduce_motion(path, text):
     # Spatial motion becomes a fade when Reduce Motion is on.
     motion = lines_with(r"repeatForever|\.transition\([^\n]*\.(move|slide|scale|offset|push|asymmetric)\b", text)
     if not motion:
-        return None
+        # Theme's motionTransition fades with Reduce Motion on.
+        return [] if "motionTransition(" in text else None
     return [] if "accessibilityReduceMotion" in text else motion
 
 
