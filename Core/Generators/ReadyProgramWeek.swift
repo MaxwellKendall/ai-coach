@@ -116,12 +116,20 @@ extension ReadyProgram {
         let low = Double(range.first!), high = Double(range.last!)
         let sets = light ? max(1, Int((Double(item.sets) * TrainingGenerator.deloadSets).rounded())) : item.sets
 
+        // FIT-425: a lift in two items (Push/Pull/Legs' 4 × 5 press and its 3 × 8) progresses each from its own
+        // sessions: the ones whose reps look like this item's range, so a set of 8 isn't read as a missed 4 × 5.
+        let ownSessions = { (slug: String) in
+            Self.sessions(of: slug, history, calendar: calendar).filter { session in
+                let reps = session.compactMap { $0.value("reps") }
+                return item.seconds != nil || reps.isEmpty || (reps.max()! >= low - 2 && reps.max()! <= high + 2)
+            }
+        }
         // A ladder carries on from its most recent rung, and climbs one once the top of the range is done on every set.
-        var last = Self.sessions(of: slug, history, calendar: calendar).last ?? []
+        var last = ownSessions(slug).last ?? []
         var climbed = false
         if item.ladder != nil {
             if let latest = history.last(where: { choices.contains($0.exercise) })?.exercise { slug = latest }
-            last = Self.sessions(of: slug, history, calendar: calendar).last ?? []
+            last = ownSessions(slug).last ?? []
             if Self.done(last, metric: "reps", value: high, sets: item.sets),
                let rung = choices.firstIndex(of: slug), choices.indices.contains(rung + 1) {
                 slug = choices[rung + 1]
@@ -153,7 +161,7 @@ extension ReadyProgram {
                     if Self.done(last, metric: "reps", value: low, sets: item.sets) {
                         load = load.map { $0 + step }
                         if load != nil, !light { why = .hitEveryRep(step: step, unit: unit) }
-                    } else if let lastLoad, let previous = Self.sessions(of: slug, history, calendar: calendar).dropLast().last,
+                    } else if let lastLoad, let previous = ownSessions(slug).dropLast().last,
                               !Self.done(previous, metric: "reps", value: low, sets: item.sets),
                               (previous.compactMap { $0.value("load_lb") ?? $0.value("load_lb_hand") }.max() ?? 0) >= lastLoad {
                         // Two misses in a row: back off 10% and build again.

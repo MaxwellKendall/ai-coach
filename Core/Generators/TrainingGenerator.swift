@@ -507,9 +507,17 @@ enum TrainingGenerator {
 
     static func roundTo5(_ value: Double) -> Double { (value / 5).rounded() * 5 }
 
+    /// The session a lift's next load builds on: the last one, unless it was a deload's (done at the deload's effort or
+    /// easier) and a heavier one came in the two weeks before it. FIT-425: building on the deload's lighter sets took
+    /// the author's squat from 170 to 155 over twelve weeks of every set done.
     private static func lastSession(of slug: String, _ history: [LoggedSet], calendar: Calendar) -> [LoggedSet] {
         let sets = history.filter { $0.exercise == slug }
-        guard let day = sets.map(\.date).max().map(calendar.startOfDay) else { return [] }
-        return sets.filter { calendar.startOfDay(for: $0.date) == day }
+        let days = Dictionary(grouping: sets) { calendar.startOfDay(for: $0.date) }.sorted { $0.key < $1.key }
+        guard let last = days.last else { return [] }
+        func top(_ sets: [LoggedSet]) -> Double { sets.compactMap { $0.value("load_lb") ?? $0.value("load_lb_hand") }.max() ?? 0 }
+        let light = last.value.compactMap { $0.value("rpe") }.max().map { $0 <= deloadRPE } ?? false
+        guard light, let since = calendar.date(byAdding: .day, value: -14, to: last.key),
+              let heavier = days.dropLast().last(where: { $0.key >= since && top($0.value) > top(last.value) }) else { return last.value }
+        return heavier.value
     }
 }
