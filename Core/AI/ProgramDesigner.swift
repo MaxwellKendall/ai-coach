@@ -129,6 +129,9 @@ enum ProgramDesigner {
     // MARK: The week
 
     static func week(_ request: Request, model: any AIModel = OnDeviceModel()) async -> Result {
+        // FIT-426: a lift that hurt isn't held to its decided top set; the designer holds or eases it and says why.
+        var request = request
+        request.progression = request.progression.filter { !sore($0.exercise, request) }
         let clock = ContinuousClock.now
         var settings = request.settings
         if request.program?.travel == true { settings.equipment.formIntersection(ProgramPlan.travelEquipment) }
@@ -179,6 +182,17 @@ enum ProgramDesigner {
                           why: why)
         } catch {
             return fallback("\(error)", calls: log.calls.withLock { $0 })
+        }
+    }
+
+    static let painWords = ["sore", "pain", "hurt", "tweak", "ache", "twinge", "injur"]
+
+    /// FIT-426: one of their notes on this lift ("Thu Jul 16, Back Squat: knee sore at the bottom") reports pain.
+    static func sore(_ exercise: String, _ request: Request) -> Bool {
+        guard let name = request.names[exercise]?.lowercased() else { return false }
+        return request.notes.contains { note in
+            let parts = note.lowercased().split(separator: ":", maxSplits: 1)
+            return parts.count == 2 && parts[0].hasSuffix(name) && painWords.contains { parts[1].contains($0) }
         }
     }
 

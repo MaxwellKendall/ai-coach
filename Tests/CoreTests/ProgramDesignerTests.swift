@@ -77,6 +77,17 @@ struct ProgramDesignerTests {
         #expect(Coach.plan(deload: false, reasons: ["edited", bench!.adjustedReason!]) == "Bench held at 185: two sets short Tuesday.")
     }
 
+    /// FIT-426: a lift whose own note reports pain isn't held to a decided top set; a note on another lift, or without
+    /// pain, doesn't change that.
+    @Test func aLiftThatHurtIsLeftToTheDesigner() {
+        var request = request()
+        request.notes = ["Thu Jul 16, Back Squat: knee sore at the bottom", "Wed Jul 15, Bench Press: felt easy",
+                         "Sat Jul 18, check-in: shoulder pain on deadlifts"]
+        #expect(ProgramDesigner.sore("back-squat", request))
+        #expect(!ProgramDesigner.sore("bench-press", request))
+        #expect(!ProgramDesigner.sore("deadlift", request))
+    }
+
     /// FIT-426: a load the guard brought down says what it is now, not the model's old number.
     @Test func aRepairedLoadSaysWhatItIsNow() {
         let row = PlannedWorkout(date: monday, session: "A", exercise: "bench-press",
