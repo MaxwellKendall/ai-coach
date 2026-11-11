@@ -1,4 +1,7 @@
 import SwiftUI
+// ui-score: allow-file dynamic-type: rendered to a fixed-size image for sharing, in its own light or dark style
+// ui-score: allow-file color-tokens: rendered to a fixed-size image for sharing, in its own light or dark style
+// ui-score: allow-file radius-scale: rendered to a fixed-size image for sharing, in its own light or dark style
 
 /// FIT-15: the image a win is shared as. Fixed colors, so it looks the same however it's rendered.
 enum CardStyle: String, CaseIterable, Identifiable {

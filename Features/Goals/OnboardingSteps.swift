@@ -275,7 +275,7 @@ struct OnboardingStepView: View {
         let picked = answers.goals.compactMap(GoalOption.with(id:))
         return VStack(alignment: .leading, spacing: 0) {
             Eyebrow("Check it").padding(.top, 18)
-            Text("Your program").font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
+            Text("Your program").font(.display(30, weight: .bold)).tracking(-0.4).padding(.top, 4)
             if !answers.unconfirmed.isEmpty || picked.contains(where: { answers.targets[$0.id] == nil }) || !(firstLoads ?? []).isEmpty {
                 Text("Underlined values are what I heard or suggested. Tap one to change it.")
                     .font(.subheadline).foregroundStyle(.secondary).padding(.top, 6)

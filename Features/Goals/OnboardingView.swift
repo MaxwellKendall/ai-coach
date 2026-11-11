@@ -289,7 +289,7 @@ struct OnboardingView: View {
 
     private func header(_ index: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(Self.steps[index].0).font(.system(size: 30, weight: .bold)).tracking(-0.4)
+            Text(Self.steps[index].0).font(.display(30, weight: .bold)).tracking(-0.4)
             Text(Self.steps[index].1).font(.subheadline).foregroundStyle(.secondary)
         }
         .padding(.top, 18)

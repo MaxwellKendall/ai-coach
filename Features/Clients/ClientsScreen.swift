@@ -151,7 +151,7 @@ struct ClientsScreen: View {
             }
         }
         .padding(.horizontal, 10).frame(height: 38)
-        .background(Color.fill, in: .rect(cornerRadius: 10))
+        .background(Color.fill, in: .rect(cornerRadius: 8))
     }
 
     @ViewBuilder private func list(_ clients: [Roster.Client]) -> some View {
@@ -260,7 +260,7 @@ struct Avatar: View {
     private var tint: Color { Self.tints[client.id.unicodeScalars.reduce(0) { $0 &+ Int($1.value) } % Self.tints.count] }
 
     var body: some View {
-        Text(client.initials).font(.system(size: size * 0.38, weight: .semibold, design: .rounded)).foregroundStyle(tint)
+        Text(client.initials).font(.system(size: size * 0.38, weight: .semibold, design: .rounded)).foregroundStyle(tint) // ui-score: allow dynamic-type: glyph sized to its fixed frame
             .frame(width: size, height: size).background(tint.opacity(0.16), in: .circle)
             .accessibilityHidden(true)
     }
@@ -281,7 +281,7 @@ struct WeekDots: View {
                     if ClientDay.trained(units, day) {
                         Circle().fill(Color.ink)
                     } else if ClientDay.planned(units, day) {
-                        Circle().strokeBorder(day < today ? Color(light: 0xa35700, dark: 0xffad42) : Color.inkMuted, lineWidth: 1.5)
+                        Circle().strokeBorder(day < today ? Color.warn : Color.inkMuted, lineWidth: 1.5)
                     } else {
                         Circle().fill(Color.inkFaint).padding(2)
                     }
@@ -297,7 +297,7 @@ struct WeekDots: View {
 struct FlagDot: View {
     let kind: Triage.Flag.Kind
     var body: some View {
-        Circle().fill(kind == .pain ? Color(light: 0xc01b2a, dark: 0xff6b70) : Color(light: 0xa35700, dark: 0xffad42))
+        Circle().fill(kind == .pain ? Color.pain : Color.warn)
             .frame(width: 8, height: 8)
             .accessibilityHidden(true)
     }
@@ -323,7 +323,7 @@ struct InviteSheet: View {
                 .font(.body).foregroundStyle(Color.inkMuted).padding(.top, 8)
             VStack(spacing: 6) {
                 if let invite {
-                    Text(invite.code).font(.system(size: 34, weight: .medium, design: .monospaced)).tracking(6)
+                    Text(invite.code).font(.display(34, weight: .medium, design: .monospaced)).tracking(6)
                         .textSelection(.enabled)
                     Text(invite.url.replacingOccurrences(of: "https://", with: "")).font(.subheadline).foregroundStyle(Color.inkMuted)
                 } else if asking {
@@ -344,7 +344,7 @@ struct InviteSheet: View {
             }
             .frame(maxWidth: .infinity, minHeight: 96)
             .padding(16)
-            .background(Color.fill, in: .rect(cornerRadius: 16))
+            .background(Color.fill, in: .rect(cornerRadius: 18))
             .padding(.top, 24)
             if asking {
                 Button("Make the Invite") { Task { await make() } }

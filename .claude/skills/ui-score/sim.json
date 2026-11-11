@@ -1,0 +1,19 @@
+{"date": "2026-11-11", "commit": "047ecfa", "device": "iPhone 17 Pro, iOS 26.5", "items": [
+  {"id": "today-light", "max": 2, "points": 2, "note": "rest day and planned day both clean"},
+  {"id": "today-dark", "max": 2, "points": 2, "note": "clean"},
+  {"id": "today-xl", "max": 2, "points": 1, "note": "day strip and stacked rows hold; rows scroll under the floating Start bar with a hard cut"},
+  {"id": "program-light", "max": 2, "points": 2, "note": "clean"},
+  {"id": "program-dark", "max": 2, "points": 2, "note": "clean"},
+  {"id": "program-xl", "max": 2, "points": 2, "note": "days stack over their lifts, card scrolls"},
+  {"id": "progress-light", "max": 2, "points": 2, "note": "segmented control full width, aligned with the cards"},
+  {"id": "progress-dark", "max": 2, "points": 2, "note": "clean"},
+  {"id": "progress-xl", "max": 2, "points": 2, "note": "pace chip one line; card scrolls; segmented text stays system size"},
+  {"id": "you-light", "max": 2, "points": 2, "note": "clean"},
+  {"id": "you-dark", "max": 2, "points": 2, "note": "clean"},
+  {"id": "you-xl", "max": 2, "points": 2, "note": "Form rows stack natively"},
+  {"id": "welcome-light", "max": 2, "points": 2, "note": "clean"},
+  {"id": "welcome-dark", "max": 2, "points": 2, "note": "clean"},
+  {"id": "welcome-xl", "max": 2, "points": 1, "note": "scrolls, doors grow; Back Squat and 225 → 250 lb wrap into two awkward columns"},
+  {"id": "taps-to-log", "max": 5, "points": 5, "note": "2 taps: tick the lift, Save workout"},
+  {"id": "sheet-keyboard", "max": 5, "points": 5, "note": "Add exercise search: field and close stay visible over the keyboard, closes cleanly"}
+]}

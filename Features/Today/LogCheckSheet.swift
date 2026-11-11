@@ -81,7 +81,7 @@ struct LogCheckSheet: View {
             }
         }
         .padding(14)
-        .background(.background, in: .rect(cornerRadius: 16))
+        .background(.background, in: .rect(cornerRadius: 18))
     }
 
     static func icon(_ kind: ActivityKind) -> String {

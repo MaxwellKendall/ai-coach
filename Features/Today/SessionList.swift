@@ -7,6 +7,7 @@ import SwiftUI
 /// presets): tap a lift's name for its sets, reps, swap, order and remove; the warm-up opens to its items; Add exercise
 /// at the end. Each change is saved as it's made. Prototype: https://claude.ai/artifact/QBzBgYEd35faydgEk8Qo3f
 struct SessionList: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let session: SessionPlan
     let names: [String: String]
     /// The last working load logged for each exercise, for "+5 lb".
@@ -188,7 +189,7 @@ struct SessionList: View {
                 }
                 .font(.subheadline)
                 .padding(.leading, inset).padding(.bottom, Self.rowPadding)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .motionTransition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .overlay(alignment: .bottom) { Divider() }
@@ -196,7 +197,7 @@ struct SessionList: View {
 
     private func superset(_ block: SessionPlan.Block, index blockIndex: Int, ruled: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            (Text("SUPERSET").font(.caption.weight(.bold)).tracking(0.6) + Text(" · alternate, rest after both").font(.caption))
+            Text("\(Text("SUPERSET").font(.caption.weight(.bold)).tracking(0.6)) · alternate, rest after both")
                 .foregroundStyle(Color.inkMuted).padding(.top, 12)
             ForEach(Array(block.movements.enumerated()), id: \.element.id) { index, movement in
                 row(movement, block: blockIndex, letter: String(UnicodeScalar(UInt8(65 + index))), last: index == block.movements.count - 1)
@@ -234,7 +235,9 @@ struct SessionList: View {
                     .overlay { Circle().stroke(Color.inkFaint, lineWidth: 2) }
             }
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+                // Accessibility sizes stack the row's parts so a lift's name never breaks mid-word.
+                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 6))
+                layout {
                     Text(names[movement.exercise] ?? movement.exercise).font(.body.weight(.semibold))
                         .foregroundStyle(done ? Color.inkMuted : Color.ink)
                     if let up {
@@ -243,6 +246,7 @@ struct SessionList: View {
                     }
                 }
                 Text(Self.dose(movement)).font(.footnote).foregroundStyle(Color.inkMuted)
+                if typeSize.isAccessibilitySize { loadView(movement, load: load) }
             }
             .contentShape(.rect)
             .onTapGesture {
@@ -251,7 +255,7 @@ struct SessionList: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(onEdit != nil ? "Change this exercise" : "")
             Spacer(minLength: 8)
-            loadView(movement, load: load)
+            if !typeSize.isAccessibilitySize { loadView(movement, load: load) }
             // FIT-331: editing that shows it's there, as Hevy and Strong put ⋯ on each exercise. Once the open lift has
             // been changed, its ⋯ is a small ✓ that closes it (author, 2026-11-10: subtle, and only after an edit).
             if onEdit != nil, open == pick, changed {
@@ -261,7 +265,7 @@ struct SessionList: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Done")
-                .transition(.scale.combined(with: .opacity))
+                .motionTransition(.scale.combined(with: .opacity))
             } else if onEdit != nil {
                 Menu { actions(movement, pick: pick) } label: {
                     Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Color.inkMuted)
@@ -272,7 +276,7 @@ struct SessionList: View {
         }
         .padding(.vertical, Self.rowPadding)
         .contextMenu { if onEdit != nil { actions(movement, pick: pick) } }
-        if open == pick { editor(movement, pick: pick).padding(.leading, inset).padding(.bottom, Self.rowPadding).transition(.opacity.combined(with: .move(edge: .top))) }
+        if open == pick { editor(movement, pick: pick).padding(.leading, inset).padding(.bottom, Self.rowPadding).motionTransition(.opacity.combined(with: .move(edge: .top))) }
         }
         .overlay(alignment: .bottom) { if ruled && (letter == nil || !last) { Divider() } }
     }
@@ -350,7 +354,7 @@ struct SessionList: View {
             }
         }
         .padding(14)
-        .background(Color.fill.opacity(0.6), in: .rect(cornerRadius: 16))
+        .background(Color.fill.opacity(0.6), in: .rect(cornerRadius: 18))
     }
 
     private func counter(_ label: String, _ value: String, less: @escaping () -> Void, more: @escaping () -> Void) -> some View {

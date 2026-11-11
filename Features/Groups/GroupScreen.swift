@@ -404,7 +404,7 @@ private struct MemberRow: View {
                     .accessibilityLabel("\(Int(pct)) percent")
             }
             if let pace = progress?.onPace {
-                Text(pace ? "On pace" : "Behind").font(.caption).foregroundStyle(pace ? Color.secondary : Color.orange)
+                Text(pace ? "On pace" : "Behind").font(.caption).foregroundStyle(pace ? Color.secondary : Color.warn)
             } else if progress == nil {
                 Text(goal?.metric == "weight_lb" ? "No weigh-in yet" : "Nothing logged yet").font(.caption).foregroundStyle(.secondary)
             }

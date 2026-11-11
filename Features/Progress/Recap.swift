@@ -1,4 +1,5 @@
 import SwiftUI
+// ui-score: allow-file dynamic-type: RecapCard is rendered to a fixed-size image for sharing
 
 /// FIT-108: a week of the program as a card to share, and on the last week the whole program's recap. Built from
 /// the weekly review's numbers; the page (infra/lambda/sharePages.ts, /r/{id}) shows what the card shows.
@@ -120,8 +121,8 @@ struct RecapCard: View {
         .padding(EdgeInsets(top: 24, leading: 24, bottom: 20, trailing: 24))
         .frame(width: ShareCard.size.width, height: ShareCard.size.height, alignment: .topLeading)
         .background(style.background)
-        .clipShape(.rect(cornerRadius: 20))
-        .overlay { if style == .paper { RoundedRectangle(cornerRadius: 20).strokeBorder(style.track) } }
+        .clipShape(.rect(cornerRadius: 24))
+        .overlay { if style == .paper { RoundedRectangle(cornerRadius: 24).strokeBorder(style.track) } }
         .environment(\.colorScheme, style == .dark ? .dark : .light)
     }
 
@@ -166,7 +167,7 @@ struct RecapShareSheet: View {
             RecapCard(recap: recap, style: style, showNumbers: showNumbers)
                 .shadow(color: .black.opacity(0.14), radius: 15, y: 8)
                 .id("\(style.rawValue)\(showNumbers)")
-                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .motionTransition(.opacity.combined(with: .scale(scale: 0.97)))
                 .padding(.top, 8)
             VStack(spacing: 12) {
                 Picker("Style", selection: $style.animation(.snappy)) {
@@ -183,7 +184,7 @@ struct RecapShareSheet: View {
                     }
                     .tint(.primary)
                     .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
                 }
             }
             .padding(.horizontal, 24).padding(.top, 20)

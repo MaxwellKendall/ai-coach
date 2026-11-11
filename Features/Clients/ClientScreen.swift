@@ -85,7 +85,7 @@ struct ClientScreen: View {
                         if start != Week.start(of: .now) { WeekBar(start: start, go: { go(to: $0) }) }
                         strip(client)
                             .id(start)
-                            .transition(.push(from: forward ? .trailing : .leading))
+                            .motionTransition(.push(from: forward ? .trailing : .leading))
                     }
                     .clipped()
                     // Swipe the strip to the next or previous week, as in Calendar.

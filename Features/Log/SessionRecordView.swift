@@ -76,12 +76,12 @@ struct SessionRecordView: View {
         return HStack(spacing: 8) {
             ForEach(items, id: \.0) { title, text in
                 VStack(spacing: 2) {
-                    Text(text).font(.system(size: 22, weight: .bold).monospacedDigit())
+                    Text(text).font(.display(22, weight: .bold, relativeTo: .title2).monospacedDigit())
                         .lineLimit(1).minimumScaleFactor(0.6)
                     Text(title.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 64)
-                .background(.background, in: .rect(cornerRadius: 16))
+                .background(.background, in: .rect(cornerRadius: 18))
             }
         }
         .padding(.horizontal, 16)
@@ -92,7 +92,7 @@ struct SessionRecordView: View {
             ForEach(record.blocks.indices, id: \.self) { index in
                 Button { withAnimation(.snappy) { page = index } } label: {
                     Text(SessionPlan.letter(index))
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.display(18, weight: .bold, relativeTo: .headline))
                         .frame(maxWidth: .infinity, minHeight: 40)
                         .background(index == page ? Color.primary : Color.surface, in: .rect(cornerRadius: 12))
                         .foregroundStyle(index == page ? Color(.systemBackground) : .primary)

@@ -76,7 +76,7 @@ struct WorkoutModeView: View {
                 }
             }
             .id("\(warming ? warmStep : -1) \(page)")
-            .transition(.asymmetric(insertion: .move(edge: backward ? .leading : .trailing).combined(with: .opacity), removal: .opacity))
+            .motionTransition(.asymmetric(insertion: .move(edge: backward ? .leading : .trailing).combined(with: .opacity), removal: .opacity))
             .offset(x: dragX)
             .rotationEffect(.degrees(Double(dragX) / 40))
             .gesture(swipe(cards: cards))
@@ -588,7 +588,7 @@ struct WorkoutModeView: View {
         func makeBody(configuration: Configuration) -> some View {
             configuration.label.font(.headline)
                 .frame(maxWidth: .infinity, minHeight: 50)
-                .background(configuration.isPressed ? Color.fillStrong : Color.fill, in: .rect(cornerRadius: 14))
+                .background(configuration.isPressed ? Color.fillStrong : Color.fill, in: .rect(cornerRadius: 18))
         }
     }
 
@@ -659,7 +659,7 @@ struct WorkoutModeView: View {
         return VStack(alignment: .leading, spacing: 0) {
             Text("Finish").font(.subheadline).foregroundStyle(.secondary)
             Text(done == total ? "All \(total) sets" : "\(done) of \(total) sets")
-                .font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 4)
+                .font(.display(30, weight: .bold)).tracking(-0.4).padding(.top, 4)
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 HStack(alignment: .top, spacing: 8) {
                     stat("\(max(1, Int((context.date.timeIntervalSince(startedAt) / 60).rounded())))", "min")
@@ -703,7 +703,7 @@ struct WorkoutModeView: View {
 
     private func stat(_ value: String, _ unit: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(value).font(.system(size: 28, weight: .semibold, design: .rounded)).tracking(-0.4)
+            Text(value).font(.display(28, weight: .semibold, design: .rounded)).tracking(-0.4)
             Text(unit).font(.footnote).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

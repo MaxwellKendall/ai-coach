@@ -42,7 +42,7 @@ struct ValueRow<Editor: View>: View {
             if open {
                 editor()
                     .padding(.bottom, 14)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .motionTransition(.opacity.combined(with: .move(edge: .top)))
             }
             Divider()
         }
@@ -219,10 +219,10 @@ struct PhaseBars: View {
                     VStack(spacing: 2) {
                         ZStack {
                             if index == current { Circle().fill(.secondary).frame(width: 4, height: 4) }
-                            else { Text(week.travel ? "✈︎" : " ").font(.system(size: 9)).foregroundStyle(.secondary) }
+                            else { Text(week.travel ? "✈︎" : " ").font(.system(size: 9)).foregroundStyle(.secondary) } // ui-score: allow dynamic-type: glyph sized to its fixed frame
                         }
                         .frame(height: 11)
-                        RoundedRectangle(cornerRadius: 3)
+                        RoundedRectangle(cornerRadius: 3) // ui-score: allow radius-scale: a bar in a small bar chart
                             .fill(color(index))
                             .frame(height: Self.height(week))
                     }

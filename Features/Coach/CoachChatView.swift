@@ -115,8 +115,8 @@ struct CoachChatView: View {
             .padding(.top, 4)
         }
         .padding(16)
-        .background(.background, in: .rect(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color(.separator)))
+        .background(.background, in: .rect(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color(.separator)))
     }
 
     private var inputBar: some View {
@@ -128,7 +128,7 @@ struct CoachChatView: View {
                     .submitLabel(.send)
                     .onSubmit { send(text) }
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(Color.fill, in: .rect(cornerRadius: 20))
+                    .background(Color.fill, in: .rect(cornerRadius: 18))
                 if text.isEmpty {
                     MicButton(voice: voice, compact: true) { send($0) }
                 } else {

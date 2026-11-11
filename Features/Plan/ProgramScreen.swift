@@ -10,6 +10,7 @@ struct ProgramScreen: View {
     @Environment(Account.self) private var account
     @Environment(CoachInbox.self) private var coach
     @Environment(Pro.self) private var pro
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Query private var profiles: [Profile]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
@@ -170,7 +171,6 @@ struct ProgramScreen: View {
                     ForEach(tabs, id: \.self) { Text($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: CGFloat(tabs.count) * 100)
             }
         }
         .padding(.horizontal, 22).padding(.top, 4).padding(.bottom, 4)
@@ -178,7 +178,7 @@ struct ProgramScreen: View {
 
     private func headerButton(_ label: String, _ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 44, height: 44)
+            Image(systemName: icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(Color.ink).frame(width: 44, height: 44) // ui-score: allow dynamic-type: glyph sized to its fixed frame
         }
         .accessibilityLabel(label)
     }
@@ -300,6 +300,7 @@ struct ProgramScreen: View {
             }
         }
         .padding(22)
+        .scrollsWhenTall()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .cardBackground()
     }
@@ -353,13 +354,16 @@ struct ProgramScreen: View {
             ForEach(days) { day in
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
                     Button { open(day.date, monday: monday) } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 14) {
+                        // Accessibility sizes put the day over its lifts, so the lifts get the width.
+                        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 14))
+                        layout {
                             Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
                                 .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
                                 .lineLimit(1).fixedSize()
                                 .frame(minWidth: 36, alignment: .leading)
                             // The lifts name the session, as on Today; the sets are one tap away.
-                            Text(day.title).font(.body.weight(.semibold)).lineLimit(2)
+                            Text(day.title).font(.body.weight(.semibold)).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .contentShape(.rect)

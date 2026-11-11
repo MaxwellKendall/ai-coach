@@ -56,6 +56,10 @@ extension Color {
     /// Chevrons and empty rings only.
     static let inkFaint = Color(light: 0x80858d, dark: 0x6f747c)
     static let good = Color(light: 0x0f7d43, dark: 0x4fd68a)
+    /// Behind, missed or worth a look: amber.
+    static let warn = Color(light: 0xa35700, dark: 0xffad42)
+    /// Pain reported.
+    static let pain = Color(light: 0xc01b2a, dark: 0xff6b70)
 
     init(light: UInt32, dark: UInt32) {
         func ui(_ hex: UInt32) -> UIColor {
@@ -68,8 +72,9 @@ extension Color {
 extension Font {
     /// Titles (bold) and big numbers (semibold), in sentence case at normal width: the author dropped the condensed
     /// caps after using them (2026-10-30). Scales with Dynamic Type.
-    static func display(_ size: CGFloat, weight: Font.Weight = .bold, relativeTo style: Font.TextStyle = .largeTitle) -> Font {
-        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size), weight: weight)
+    static func display(_ size: CGFloat, weight: Font.Weight = .bold, design: Font.Design = .default,
+                        relativeTo style: Font.TextStyle = .largeTitle) -> Font {
+        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size), weight: weight, design: design)
     }
 }
 
@@ -97,10 +102,30 @@ extension View {
         background { RoundedRectangle(cornerRadius: 18).fill(Color.surface).shadow(color: .black.opacity(0.04), radius: 10, y: 4) }
     }
 
+    /// A card's content that scrolls only when it's taller than its card, at large text sizes (FIT-364).
+    func scrollsWhenTall() -> some View {
+        ViewThatFits(in: .vertical) {
+            self
+            ScrollView { self }.scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
     /// A List or Form on the canvas, its sections as white cards.
     func themedList() -> some View {
         scrollContentBackground(.hidden).background(Color.canvas.ignoresSafeArea())
     }
+}
+
+/// Spatial motion becomes a fade with Reduce Motion on (the Appllama design skill's motion laws).
+private struct MotionTransition: ViewModifier {
+    let transition: AnyTransition
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View { content.transition(reduceMotion ? .opacity : transition) }
+}
+
+extension View {
+    func motionTransition(_ transition: AnyTransition) -> some View { modifier(MotionTransition(transition: transition)) }
 }
 
 /// The one plate-coloured action on a screen.

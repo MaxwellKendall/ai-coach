@@ -11,7 +11,7 @@ struct ProposalSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("“\(proposal.said)”").font(.subheadline).foregroundStyle(.secondary)
-                    Text(proposal.title).font(.system(size: 26, weight: .bold)).tracking(-0.3).padding(.top, 6)
+                    Text(proposal.title).font(.display(26, weight: .bold, relativeTo: .title2)).tracking(-0.3).padding(.top, 6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     VStack(spacing: 0) {
                         ForEach(proposal.lines) { line in
@@ -69,7 +69,7 @@ struct SpokenCheckSheet: View {
         let asPlanned = draft.rows.count - changed.count
         VStack(alignment: .leading, spacing: 0) {
             Text("“\(said)”").font(.subheadline).foregroundStyle(.secondary)
-            Text(title).font(.system(size: 26, weight: .bold)).tracking(-0.3).padding(.top, 6)
+            Text(title).font(.display(26, weight: .bold, relativeTo: .title2)).tracking(-0.3).padding(.top, 6)
             Text(changed.isEmpty ? "All \(draft.rows.count) sets as planned."
                  : "\(asPlanned) \(asPlanned == 1 ? "set" : "sets") as planned, and \(changed.count == 1 ? "one change" : "\(changed.count) changes"):")
                 .font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
@@ -131,7 +131,7 @@ struct SpokenCheckSheet: View {
         return HStack(spacing: 4) {
             round("minus", load ? "5 lb less" : "Fewer") { draft.adjust([index], load: load, by: -1); draft.rows[index].heard = true }
             (Text(Coach.number((load ? row.load : row.value) ?? 0))
-                .font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit()
+                .font(.display(22, weight: .semibold, design: .rounded, relativeTo: .title2)).monospacedDigit()
                 + Text(load ? " lb" : row.metric == "reps" ? " reps" : " " + (SetRow.units[row.metric] ?? ""))
                 .font(.footnote).foregroundStyle(.secondary))
                 .contentTransition(.numericText())

@@ -54,7 +54,7 @@ struct RunModeView: View {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 VStack(spacing: 18) {
                     Text(Running.clock(recorder.track.elapsed(at: timeline.date)))
-                        .font(.system(size: 64, weight: .semibold, design: .rounded)).monospacedDigit()
+                        .font(.display(64, weight: .semibold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(recorder.phase == .paused ? .secondary : .primary)
                     HStack {
                         stat(RunTrack.miles(recorder.track.meters), "mi")
@@ -72,7 +72,7 @@ struct RunModeView: View {
         }
         .overlay {
             if let countdown {
-                Text("\(countdown)").font(.system(size: 120, weight: .bold, design: .rounded))
+                Text("\(countdown)").font(.display(120, weight: .bold, design: .rounded))
                     .frame(maxWidth: .infinity, maxHeight: .infinity).background(.regularMaterial)
                     .contentTransition(.numericText(countsDown: true))
             }
@@ -146,7 +146,7 @@ struct RunModeView: View {
     private func map(follow: Bool) -> some View {
         Map(position: follow ? $camera : .constant(.automatic)) {
             if follow { UserAnnotation() }
-            if route.count > 1 { MapPolyline(coordinates: route).stroke(.blue, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)) }
+            if route.count > 1 { MapPolyline(coordinates: route).stroke(Plate.current.mark, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)) }
         }
         .mapControls { if follow { MapUserLocationButton() } }
     }
@@ -224,9 +224,9 @@ struct RouteMap: View {
         let coordinates = points.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
         Map(initialPosition: .automatic, interactionModes: interactive ? .all : []) {
             if coordinates.count > 1 {
-                MapPolyline(coordinates: coordinates).stroke(.blue, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                MapPolyline(coordinates: coordinates).stroke(Plate.current.mark, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
             }
-            if let first = coordinates.first { Annotation("Start", coordinate: first) { Circle().fill(.green).frame(width: 10, height: 10) }.annotationTitles(.hidden) }
+            if let first = coordinates.first { Annotation("Start", coordinate: first) { Circle().fill(Color.good).frame(width: 10, height: 10) }.annotationTitles(.hidden) }
             if let last = coordinates.last, coordinates.count > 1 { Annotation("End", coordinate: last) { Circle().fill(.red).frame(width: 10, height: 10) }.annotationTitles(.hidden) }
         }
     }
