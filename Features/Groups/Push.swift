@@ -98,6 +98,12 @@ final class Navigator {
     var offer: Cloud.ProgramOffer?
     /// FIT-220: a coaching notification tapped, until the root has opened it.
     var pushed: PushTarget?
+    /// FIT-373: a coaching notification that came in while the app was open, each one distinct.
+    struct Arrival: Equatable {
+        let id = UUID()
+        var target: PushTarget
+    }
+    var arrived: Arrival?
     /// FIT-220: the day it opens on Today, handed over by the root.
     var day: PushTarget?
     /// FIT-338: the client and day a coach's notification opens on Clients, handed over by the root.
@@ -128,9 +134,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification)
         async -> UNNotificationPresentationOptions {
         // FIT-220: the coach changed the week while the app is open: the change is on the server, so fetch it now.
-        if PushTarget(notification.request.content.userInfo)?.kind == .plan {
+        let target = PushTarget(notification.request.content.userInfo)
+        if target?.kind == .plan {
             await MainActor.run { SyncEngine.shared.sync() }
         }
+        // FIT-373: a reply shows in a conversation that's open, and puts the dot on Today's Messages (FIT-372).
+        if target?.kind == .reply { await CoachMessages.shared.refresh() }
+        // To a coach: an open conversation with that client fetches it.
+        if let target, target.kind == .client { await MainActor.run { Navigator.shared.arrived = Navigator.Arrival(target: target) } }
         return [.banner, .sound]
     }
 

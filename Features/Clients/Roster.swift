@@ -177,6 +177,15 @@ final class Roster {
         self.loaded = true
     }
 
+    /// FIT-373: one client's units and replies fetched again, without fetching everyone; throws when it couldn't.
+    func reload(_ id: String, coach: String, names: [String: String]) async throws {
+        guard var client = clients.first(where: { $0.id == id }) else { return }
+        async let units = Cloud.units(of: id)
+        async let comments = Cloud.comments(of: id)
+        (client.units, client.comments) = try await (units, comments)
+        update(client, coach: coach, names: names)
+    }
+
     /// A client as just changed here (a reply, an edited day), without fetching everyone again.
     func update(_ client: Client, coach: String, names: [String: String]) {
         var client = client

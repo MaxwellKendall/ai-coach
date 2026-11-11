@@ -200,6 +200,10 @@ struct TodayScreen: View {
         .animation(.snappy, value: toast)
         .onAppear { if day == nil { day = todayPos } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { turnDay() } }
+        // FIT-372: what the coach wrote, for Messages' dot, on opening and on coming back to the front.
+        .task(id: scenePhase == .active && !pro.coaches.isEmpty) {
+            if scenePhase == .active && !pro.coaches.isEmpty { await CoachMessages.shared.refresh() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in turnDay() }
         // FIT-220: a tapped notification's day; a coach's reply opens that session and its thread.
         .onChange(of: Navigator.shared.day, initial: true) { _, target in open(target) }
@@ -357,11 +361,19 @@ struct TodayScreen: View {
                 Spacer()
                 // FIT-367: every message with the coach, beside the account, as a toolbar's buttons are.
                 if !pro.coaches.isEmpty {
+                    // FIT-372: a dot while the coach has written something not yet read on this phone.
+                    let unread = CoachMessages.shared.unread(me: account.user?.uid)
                     Button { conversing = true } label: {
                         Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 22)).foregroundStyle(Color.inkMuted) // ui-score: allow dynamic-type: glyph sized to its fixed frame
                             .frame(width: 44, height: 44)
+                            .overlay(alignment: .topTrailing) {
+                                if unread {
+                                    Circle().fill(Plate.current.accent).frame(width: 10, height: 10).offset(x: -6, y: 8)
+                                }
+                            }
                     }
                     .accessibilityLabel("Messages with \(pro.coaches[0].name ?? "your coach")")
+                    .accessibilityValue(unread ? "Unread" : "")
                 }
                 Button { you = true } label: {
                     Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(Color.inkMuted) // ui-score: allow dynamic-type: glyph sized to its fixed frame

@@ -15,6 +15,7 @@ struct DayThread: View {
     @State private var problem: String?
     @FocusState private var focused: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.scenePhase) private var scenePhase
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
     private var client: Roster.Client? { roster.clients.first { $0.id == ref.client } }
@@ -48,6 +49,12 @@ struct DayThread: View {
         .scrollDismissesKeyboard(.interactively)
         .screenBackground()
         .safeAreaBar(edge: .bottom) { composer }
+        // FIT-373: a reply that comes in while it's open shows: pulled, on coming back to the front, or on its push.
+        .refreshable { await reload() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await reload() } } }
+        .onChange(of: Navigator.shared.arrived) { _, arrival in
+            if arrival?.target.client == ref.client { Task { await reload() } }
+        }
         // The conversation has the whole screen, as in Messages: the composer sits where the tab bar was, and who it's
         // with is at the top, beside Back.
         .toolbarVisibility(.hidden, for: .tabBar)
@@ -168,6 +175,17 @@ struct DayThread: View {
         .background(Color.surface, in: .rect(cornerRadius: 24))
         .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
         .padding(.horizontal, 16).padding(.bottom, 8)
+    }
+
+    private func reload() async {
+        guard let coach = account.user?.uid else { return }
+        do {
+            try await roster.reload(ref.client, coach: coach, names: names)
+            roster.markSeen(ref.client)
+            problem = nil
+        } catch {
+            problem = "Couldn’t check for new messages. Pull to try again."
+        }
     }
 
     private func send() {

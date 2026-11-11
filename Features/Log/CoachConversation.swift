@@ -6,8 +6,9 @@ import SwiftUI
 struct CoachConversation: View {
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
-    @State private var comments: [Cloud.Comment] = []
-    @State private var loaded = false
+    @Environment(\.scenePhase) private var scenePhase
+    private var messages: CoachMessages { .shared }
+    private var comments: [Cloud.Comment] { messages.comments }
     @State private var text = ""
     @State private var sending = false
     @State private var problem: String?
@@ -18,7 +19,19 @@ struct CoachConversation: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
-                if loaded && comments.isEmpty {
+                // FIT-373: a failed load isn't an empty conversation.
+                if messages.failed && comments.isEmpty {
+                    ContentUnavailableView {
+                        Label("Couldn’t load your messages", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text("Check your connection and try again.")
+                    } actions: {
+                        Button("Retry") { Task { await messages.refresh() } }.buttonStyle(.bordered)
+                    }
+                    .padding(.top, 40)
+                } else if !messages.loaded && comments.isEmpty {
+                    ProgressView().padding(.top, 40)
+                } else if comments.isEmpty {
                     Text("Ask \(coachName) anything: a lift that felt off, a week that won’t fit, how a session went.")
                         .font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center).padding(.top, 40)
                 }
@@ -30,6 +43,9 @@ struct CoachConversation: View {
                         }
                     }
                 }
+                if messages.failed && !comments.isEmpty {
+                    Text("Couldn’t check for new messages. Pull to try again.").font(.footnote).foregroundStyle(Color.inkMuted)
+                }
                 if let problem { Text(problem).font(.footnote).foregroundStyle(.red) }
             }
             .padding(.horizontal, 16).padding(.vertical, 16)
@@ -40,10 +56,11 @@ struct CoachConversation: View {
         .safeAreaBar(edge: .bottom) { composer }
         .navigationTitle(coachName)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            comments = (try? await Cloud.comments()) ?? []
-            loaded = true
-        }
+        .refreshable { await messages.refresh() }
+        .task { await messages.refresh() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await messages.refresh() } } }
+        // FIT-372: what's on screen has been read, a reply that arrives while it's open too (FIT-373: Push refreshes).
+        .onChange(of: comments.count, initial: true) { messages.markRead() }
     }
 
     private func bubble(_ text: String, mine: Bool) -> some View {
@@ -81,7 +98,7 @@ struct CoachConversation: View {
         sending = true
         Task {
             do {
-                comments.append(try await Cloud.postComment(day: SyncUnits.day(.now), text: words))
+                messages.append(try await Cloud.postComment(day: SyncUnits.day(.now), text: words))
                 text = ""
                 problem = nil
             } catch {
