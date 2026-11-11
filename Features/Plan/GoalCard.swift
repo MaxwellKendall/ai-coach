@@ -39,6 +39,21 @@ struct GoalCard: View {
             .accessibilityElement(children: .contain)
     }
 
+    /// Where the goal started, where it stands and its pace, as the card shows them; Progress's overview (FIT-370) uses
+    /// the same, so the two never disagree.
+    static func standing(_ goal: Goal, weeks: [ProgramWeek], start: Date, end: Date, current: Int, sets: [LoggedSet],
+                         weighIns: [DatedValue]) -> (from: Double, now: Double, pace: GoalProgress.Pace?) {
+        let logged = GoalProgress.current(goal.metric, sets: sets, weighIns: weighIns, since: start)
+        let from = goal.baseline ?? logged ?? goal.target
+        let now = GoalProgress.standing(goal.metric, logged: logged, from: from)
+        let dated = !weeks.isEmpty || goal.deadline != nil
+        let pace: GoalProgress.Pace? = goal.deadline == nil && !weeks.isEmpty
+            ? GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: current, weeks: weeks)
+            : GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now,
+                                by: dated ? goal.deadline ?? end : nil)
+        return (from, now, pace)
+    }
+
     private var more: some View {
         Menu {
             Button("Update", systemImage: "plus.circle", action: update)
@@ -51,13 +66,8 @@ struct GoalCard: View {
     }
 
     var content: some View {
-        let logged = GoalProgress.current(goal.metric, sets: sets, weighIns: weighIns, since: start)
-        let from = goal.baseline ?? logged ?? goal.target
-        let now = GoalProgress.standing(goal.metric, logged: logged, from: from)
+        let (from, now, pace) = Self.standing(goal, weeks: weeks, start: start, end: end, current: current, sets: sets, weighIns: weighIns)
         let trend = GoalProgress.standingTrend(goal.metric, GoalProgress.trend(goal.metric, sets: sets, weighIns: weighIns, since: start), from: from)
-        let pace: GoalProgress.Pace? = goal.deadline == nil && !weeks.isEmpty
-            ? GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: current, weeks: weeks)
-            : GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now, by: dated ? due : nil)
         let forecast = dated ? GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: due) : nil
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
                                     forecast: forecast, target: goal.target, start: start,
