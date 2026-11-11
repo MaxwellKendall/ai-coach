@@ -182,6 +182,16 @@ struct ClientScreen: View {
                     } else {
                         row
                     }
+                    // FIT-362: from what hurts to the session it changes.
+                    if flag.kind == .pain, let next = ClientDay.nextSession(client.units, from: today) {
+                        Button { open(next) } label: {
+                            Label("Change \(Self.weekday(next)) session", systemImage: "slider.horizontal.3")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 22).padding(.bottom, 14)
+                    }
                     if index < client.week.flags.count - 1 { Divider() }
                 }
             }
@@ -199,6 +209,25 @@ struct ClientScreen: View {
         let done = days.filter { ClientDay.trained(client.units, $0) }.count
         let planned = days.filter { ClientDay.trained(client.units, $0) || ClientDay.planned(client.units, $0) }.count
         return planned == 0 ? "Nothing planned" : "\(done) of \(planned) done"
+    }
+
+    /// FIT-362: a day in any week, opened as if picked on its strip.
+    private func open(_ key: String) {
+        guard let date = SyncUnits.date(ofKey: "plan#\(key)") else { return }
+        let sunday = Week.start(of: date)
+        forward = sunday >= start
+        withAnimation(.snappy) {
+            start = sunday
+            day = key
+        }
+    }
+
+    /// "Thursday", or "today" / "tomorrow".
+    private static func weekday(_ key: String) -> String {
+        guard let date = SyncUnits.date(ofKey: "plan#\(key)") else { return "next" }
+        if Calendar.current.isDateInToday(date) { return "today's" }
+        if Calendar.current.isDateInTomorrow(date) { return "tomorrow's" }
+        return date.formatted(.dateTime.weekday(.wide)) + "’s"
     }
 
     /// To another week, on the same weekday as the day picked; on this week, today.

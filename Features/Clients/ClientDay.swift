@@ -35,6 +35,13 @@ enum ClientDay {
     static func trained(_ units: [String: String], _ day: String) -> Bool { log(units, day).contains { $0.kind == .workout } }
     static func planned(_ units: [String: String], _ day: String) -> Bool { plan(units, day).contains { $0.kind == .workout } }
 
+    /// FIT-362: the first planned session from `today` on that isn't logged yet, as its day key: where a coach goes from a
+    /// pain note to change what comes next.
+    static func nextSession(_ units: [String: String], from today: String) -> String? {
+        units.keys.filter { $0.hasPrefix("plan#") }.map { String($0.dropFirst(5)) }.sorted()
+            .first { $0 >= today && planned(units, $0) && !trained(units, $0) }
+    }
+
     /// What they did, a line per exercise in the order done: "245 × 5, 5, 3 · RPE 9".
     static func lifts(_ log: [SyncUnits.LogRow], names: [String: String]) -> [(slug: String, name: String, sets: String)] {
         var order: [String] = []

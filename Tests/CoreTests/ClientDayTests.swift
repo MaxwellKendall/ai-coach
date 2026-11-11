@@ -24,6 +24,18 @@ struct ClientDayTests {
         #expect(!copied.contains { ids.contains($0.id) })
     }
 
+    /// FIT-362: from a pain note to the next session not yet done, today or after.
+    @Test func theNextSessionIsTheFirstPlannedAndNotLoggedFromToday() {
+        let logged = SyncUnits.LogRow(id: UUID(), kind: .workout, at: day(10) + 3600, plannedRef: nil, template: "back-squat",
+                                      measurements: [], note: "", route: nil)
+        let units = ["plan#2026-11-08": SyncUnits.encode([row("deadlift", at: day(8))]),
+                     "plan#2026-11-10": SyncUnits.encode([row("back-squat", at: day(10))]), "log#2026-11-10": SyncUnits.encode([logged]),
+                     "plan#2026-11-12": SyncUnits.encode([row("bench-press", at: day(12))]),
+                     "plan#2026-11-14": SyncUnits.encode([row("deadlift", at: day(14))])]
+        #expect(ClientDay.nextSession(units, from: "2026-11-10") == "2026-11-12")
+        #expect(ClientDay.nextSession(units, from: "2026-11-15") == nil)
+    }
+
     @Test func appendedGoesAfterWhatsThereInOrder() {
         let there = [row("bench-press", at: day(12) + 9 * 3600)]
         let coming = [row("back-squat", at: day(12) + 7 * 3600 + 1), row("deadlift", at: day(12) + 7 * 3600)]
