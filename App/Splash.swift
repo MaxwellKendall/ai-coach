@@ -10,6 +10,8 @@ struct Splash: View {
     var first = false
     /// False holds the first frame, for a splash that another one will play over (the Welcome cover's).
     var plays = true
+    /// Called as the mark starts to lift, for what's under it to start arriving (Welcome's promise, FIT-414).
+    var lifting: () -> Void = {}
     let done: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -55,6 +57,7 @@ struct Splash: View {
             // splash rather than squashing it.
             if reduceMotion {
                 // A short crossfade, nothing moving.
+                lifting()
                 await animate(.tap) { lifted = true; gone = true }
             } else if first {
                 for bar in 1...Self.heights.count {
@@ -66,10 +69,12 @@ struct Splash: View {
                     }
                 }
                 landed = true
+                lifting()
                 await animate(.out) { lifted = true }
                 await animate(.out) { gone = true }
             } else {
                 // Returning: the mark takes the Plate as it lifts away.
+                lifting()
                 await animate(.out) { filled = Self.heights.count; lifted = true }
                 await animate(.out) { gone = true }
             }

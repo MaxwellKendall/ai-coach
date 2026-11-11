@@ -58,3 +58,20 @@ struct Pressed: ViewModifier {
             .animation(pressed ? .tap : .release, value: pressed)
     }
 }
+
+/// A field shaking its head at what was typed (an invite code that isn't one). Still with Reduce Motion on, where the
+/// message and the error haptic say it.
+struct Shake: ViewModifier {
+    let trigger: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.keyframeAnimator(initialValue: 0.0, trigger: trigger) { content, x in
+            content.offset(x: reduceMotion ? 0 : x)
+        } keyframes: { _ in
+            KeyframeTrack {
+                for x in [-10.0, 9, -6, 4, 0] { SpringKeyframe(x, duration: 0.07) }
+            }
+        }
+    }
+}

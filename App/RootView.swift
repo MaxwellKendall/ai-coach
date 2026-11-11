@@ -20,6 +20,8 @@ struct RootView: View {
     @State private var splash = true
     /// The first launch's splash plays on the Welcome cover, over this one held at its first frame.
     @State private var welcomeSplash = false
+    /// FIT-414: Welcome's promise rises in as that splash's mark lifts.
+    @State private var welcomeRevealed = false
     @Bindable private var navigator = Navigator.shared
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
@@ -268,13 +270,13 @@ struct RootView: View {
             .tint(Self.accent)
         }
         .fullScreenCover(isPresented: $welcoming) {
-            WelcomeView {
+            WelcomeView(revealed: !welcomeSplash || welcomeRevealed) {
                 welcomed = true
                 welcoming = false
                 splash = false
             }
             .overlay {
-                if welcomeSplash { Splash(first: true) { welcomeSplash = false } }
+                if welcomeSplash { Splash(first: true, lifting: { welcomeRevealed = true }) { welcomeSplash = false } }
             }
             .interactiveDismissDisabled()
             .tint(Self.accent)
