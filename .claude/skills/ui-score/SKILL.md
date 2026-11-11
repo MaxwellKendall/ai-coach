@@ -101,7 +101,7 @@ python3 .claude/skills/ui-score/score.py --screens --findings # plus each screen
 2. Fix the cause, not the detector: a missing token goes into Theme.swift once and every file uses it; a fixed size
    becomes `Font.display`; a transition gets a Reduce Motion fallback. Keep the look (design system v2, FIT-297) and
    the author's rules: fewest taps, no new settings, nothing added that isn't needed to fix a finding.
-3. After each slice: build **AICoach and Liftplan**, run the tests (CLAUDE.md §7), look at the changed screens in the
+3. After each slice: build **AICoach**, run the tests (CLAUDE.md §7), look at the changed screens in the
    simulator, and commit (`FIT-364: …`).
 4. Re-run the score. Repeat until it's where it was asked to be; then rerun the full simulator pass once more on
    the final commit, and comment the score and its parts on the Linear issue.
