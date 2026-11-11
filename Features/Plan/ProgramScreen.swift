@@ -214,7 +214,7 @@ struct ProgramScreen: View {
         let this = Week.start(of: .now)
         let mondays = plannedMondays(through: this)
         if mondays.isEmpty {
-            ContentUnavailableView(coached ? "Your coach writes your program" : "No program", systemImage: "calendar",
+            ContentUnavailableView(coached ? "\(pro.coaches[0].title) writes your program" : "No program", systemImage: "calendar",
                                    description: Text(coached ? "Each week shows here once it’s written." : "Log your workouts from Today."))
         } else {
             let current = mondays.firstIndex(of: this) ?? 0
@@ -247,7 +247,13 @@ struct ProgramScreen: View {
         }
         return VStack(alignment: .leading, spacing: 0) {
             weekLine(eyebrow, monday: monday, sunday: sunday)
-            sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
+            // FIT-427: a week the coach hasn't written says so, never a blank card.
+            if weeks >= 0, coached, dayItems(in: monday).isEmpty {
+                Text("\(pro.coaches[0].title) hasn’t written this week yet").font(.display(24)).padding(.top, 8)
+                Text("It shows up here as soon as it’s ready.").foregroundStyle(Color.inkMuted).padding(.top, 4)
+            } else {
+                sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
+            }
             Color.clear.frame(height: 12)
         }
         .padding(22)
