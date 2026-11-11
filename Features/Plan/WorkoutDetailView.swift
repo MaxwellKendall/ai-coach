@@ -109,15 +109,15 @@ struct WorkoutDetailView: View {
             switch picking {
             case .swap(let block, let movement, let exercise):
                 ExercisePicker(title: "Swap \(names[exercise] ?? exercise)", replacing: exercise, excluding: inSession) { slug in
-                    withAnimation(.snappy) { session.swap(block: block, movement: movement, to: slug) }
+                    withAnimation(.settle) { session.swap(block: block, movement: movement, to: slug) }
                 }
             case .add:
                 ExercisePicker(title: "Add exercise", excluding: inSession) { slug in
-                    withAnimation(.snappy) { session.add(slug) }
+                    withAnimation(.settle) { session.add(slug) }
                 }
             case .addWarmup:
                 ExercisePicker(title: "Add to the warm-up", excluding: inSession, warmup: true) { slug in
-                    withAnimation(.snappy) { session.addWarmup(slug) }
+                    withAnimation(.settle) { session.addWarmup(slug) }
                 }
             }
         }
@@ -181,7 +181,7 @@ struct WorkoutDetailView: View {
         let open = !collapsed.contains(block.id)
         return VStack(alignment: .leading, spacing: 12) {
             Button {
-                withAnimation(.snappy) { if open { collapsed.insert(block.id) } else { collapsed.remove(block.id) } }
+                withAnimation(.tap) { if open { collapsed.insert(block.id) } else { collapsed.remove(block.id) } }
             } label: {
                 HStack(spacing: 12) {
                     BlockBadge(letter: letter)
@@ -237,7 +237,7 @@ struct WorkoutDetailView: View {
                 .foregroundStyle(set.isWarmup ? .tertiary : .secondary)
             ForEach(metrics, id: \.self) { metric in
                 let isSelected = selected == cell(metric)
-                Button { withAnimation(.snappy) { selected = isSelected ? nil : cell(metric) } } label: {
+                Button { withAnimation(.tap) { selected = isSelected ? nil : cell(metric) } } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(Self.number(set.value(metric) ?? 0)).font(.title3.weight(.bold).monospacedDigit())
                         Text(SetRow.units[metric] ?? metric).font(.caption).foregroundStyle(.secondary)
@@ -252,7 +252,7 @@ struct WorkoutDetailView: View {
             if metrics.count == 1 {
                 // FIT-81: tap to add a load ("bodyweight" until one's set; back to 0 is bodyweight again).
                 let isSelected = selected == cell(load)
-                Button { withAnimation(.snappy) { selected = isSelected ? nil : cell(load) } } label: {
+                Button { withAnimation(.tap) { selected = isSelected ? nil : cell(load) } } label: {
                     Text(isSelected ? "0 \(SetRow.units[load] ?? "lb")" : weighted ? "add weight" : "bodyweight").font(.subheadline).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(isSelected ? Color.primary.opacity(0.12) : .clear, in: .rect(cornerRadius: 12))
@@ -279,20 +279,20 @@ struct WorkoutDetailView: View {
             Spacer(minLength: 0)
             Menu {
                 if index + 1 < session.blocks.count {
-                    Button("Superset with \(SessionPlan.letter(index + 1))", systemImage: "link") { withAnimation(.snappy) { session.group(index) } }
+                    Button("Superset with \(SessionPlan.letter(index + 1))", systemImage: "link") { withAnimation(.settle) { session.group(index) } }
                 }
                 if block.isGroup {
-                    Button("Ungroup", systemImage: "square.split.1x2") { withAnimation(.snappy) { session.ungroup(index) } }
+                    Button("Ungroup", systemImage: "square.split.1x2") { withAnimation(.settle) { session.ungroup(index) } }
                 }
                 if index > 0 {
-                    Button("Move up", systemImage: "arrow.up") { withAnimation(.snappy) { selected = nil; session.move(block: index, by: -1) } }
+                    Button("Move up", systemImage: "arrow.up") { withAnimation(.settle) { selected = nil; session.move(block: index, by: -1) } }
                 }
                 if index + 1 < session.blocks.count {
-                    Button("Move down", systemImage: "arrow.down") { withAnimation(.snappy) { selected = nil; session.move(block: index, by: 1) } }
+                    Button("Move down", systemImage: "arrow.down") { withAnimation(.settle) { selected = nil; session.move(block: index, by: 1) } }
                 }
                 if block.rounds > 1 {
                     Button(block.isGroup ? "Remove last round" : "Remove last set", systemImage: "minus") {
-                        withAnimation(.snappy) { selected = nil; session.removeSet(block: index) }
+                        withAnimation(.settle) { selected = nil; session.removeSet(block: index) }
                     }
                 }
                 // FIT-75: how to do it, for exercises the model picked that you may not know.
@@ -307,7 +307,7 @@ struct WorkoutDetailView: View {
                 Divider()
                 ForEach(Array(block.movements.enumerated()), id: \.element.id) { m, movement in
                     Button("Remove \(names[movement.exercise] ?? movement.exercise)", systemImage: "trash", role: .destructive) {
-                        withAnimation(.snappy) { selected = nil; session.remove(block: index, movement: m) }
+                        withAnimation(.settle) { selected = nil; session.remove(block: index, movement: m) }
                     }
                 }
             } label: {
@@ -328,7 +328,7 @@ struct WorkoutDetailView: View {
                     .buttonStyle(.plain)
             }
             Button {
-                withAnimation(.snappy) { session.addSet(block: index) }
+                withAnimation(.settle) { session.addSet(block: index) }
             } label: {
                 Text(block.isGroup ? "+ Round" : "+ Set").font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(height: 36)
                     .background(Color.fill, in: .capsule)
@@ -357,21 +357,21 @@ struct WorkoutDetailView: View {
                     Text("\(names[movement.exercise] ?? movement.exercise) · \(set.isWarmup ? "warm-up" : "set \(number)") · \(Self.label(cell.metric).lowercased())")
                         .font(.subheadline.weight(.semibold)).lineLimit(1)
                     Spacer()
-                    Button("Done") { withAnimation(.snappy) { selected = nil } }.fontWeight(.semibold)
+                    Button("Done") { withAnimation(.tap) { selected = nil } }.fontWeight(.semibold)
                 }
                 HStack(spacing: 16) {
                     stepButton("minus", cell, -Self.step(cell.metric))
                     VStack(spacing: 0) {
                         Text(Self.number(set.value(cell.metric) ?? 0))
                             .font(.display(48, weight: .bold).monospacedDigit())
-                            .contentTransition(.numericText())
+                            .contentTransition(.numericText(value: set.value(cell.metric) ?? 0))
                         Text(SetRow.units[cell.metric] ?? "").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
                     stepButton("plus", cell, Self.step(cell.metric))
                 }
                 Button {
-                    withAnimation(.snappy) {
+                    withAnimation(.settle) {
                         session.set(cell.metric, to: set.value(cell.metric) ?? 0, block: cell.block, movement: cell.movement,
                                     set: cell.set, remaining: true)
                         selected = nil
@@ -411,7 +411,7 @@ struct WorkoutDetailView: View {
     private func stepButton(_ symbol: String, _ cell: Cell, _ delta: Double) -> some View {
         Button {
             let current = session.blocks[cell.block].movements[cell.movement].sets[cell.set].value(cell.metric) ?? 0
-            withAnimation(.snappy) {
+            withAnimation(.settle) {
                 session.set(cell.metric, to: max(0, current + delta), block: cell.block, movement: cell.movement,
                             set: cell.set, remaining: false)
             }
@@ -420,7 +420,7 @@ struct WorkoutDetailView: View {
                 .background(Color.fill, in: .circle)
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: session.blocks[cell.block].movements[cell.movement].sets[cell.set].value(cell.metric))
+        .sensoryFeedback(.tick, trigger: session.blocks[cell.block].movements[cell.movement].sets[cell.set].value(cell.metric))
     }
 
     @discardableResult

@@ -86,7 +86,7 @@ struct RegenerateSheet: View {
             if changing > 0 {
                 Button("Try another") {
                     if designed != nil { Task { await design(differentFrom: designed!.values.flatMap { $0 }) } }
-                    else { withAnimation(.snappy) { variant += 1 } }
+                    else { withAnimation(.settle) { variant += 1 } }
                 }
                     .foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 44).padding(.top, 6)
             }
@@ -109,7 +109,7 @@ struct RegenerateSheet: View {
         let result = await ProgramDesigner.week(request, model: model)
         guard result.source == .model else { return }
         let calendar = Calendar.current
-        withAnimation(.snappy) {
+        withAnimation(.settle) {
             designed = Dictionary(grouping: result.week.workouts) { calendar.startOfDay(for: $0.date) }
             aims = Dictionary(result.why.compactMap { line -> (String, String)? in
                 guard let colon = line.firstIndex(of: ":") else { return nil }

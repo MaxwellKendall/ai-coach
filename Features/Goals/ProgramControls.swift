@@ -16,7 +16,7 @@ struct ValueRow<Editor: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Button { withAnimation(.snappy) { open.toggle() } } label: {
+            Button { withAnimation(.tap) { open.toggle() } } label: {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(name).font(.body)
@@ -82,7 +82,7 @@ struct Nudge: View {
                         }
                 } else {
                     Text(label)
-                        .contentTransition(.numericText())
+                        .contentTransition(.numericText(value: value ?? 0))
                         .onTapGesture {
                             guard value != nil, set != nil else { return }
                             // Empty, the value as its placeholder: what's typed replaces it, and nothing typed keeps it.
@@ -104,13 +104,13 @@ struct Nudge: View {
 
     private func commit() {
         if let number = Double(text.replacingOccurrences(of: ",", with: ".")), number >= 0 {
-            withAnimation(.snappy) { set?(number) }
+            withAnimation(.tap) { set?(number) }
         }
         typing = false
     }
 
     private func button(_ symbol: String, _ label: String, _ action: @escaping () -> Void) -> some View {
-        Button { withAnimation(.snappy) { action() } } label: {
+        Button { withAnimation(.tap) { action() } } label: {
             Image(systemName: symbol).font(.body.weight(.semibold))
                 .frame(width: 44, height: 44)
                 .background(Color.surface, in: .circle)
@@ -130,7 +130,7 @@ struct Chip: View {
     let toggle: () -> Void
 
     var body: some View {
-        Button { withAnimation(.snappy) { toggle() } } label: {
+        Button { withAnimation(.tap) { toggle() } } label: {
             Text(title)
                 .font(.subheadline)
                 .padding(.horizontal, 15)
@@ -307,7 +307,7 @@ struct DayCircles: View {
             ForEach(Week.order, id: \.self) { day in
                 let on = days.contains(day)
                 Button {
-                    withAnimation(.snappy) {
+                    withAnimation(.settle) {
                         if on { if days.count > minimum { days.removeAll { $0 == day } } } else { days = Week.ordered(days + [day]) }
                     }
                 } label: {

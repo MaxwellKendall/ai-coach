@@ -66,7 +66,7 @@ struct ClientProgressScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
         .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 24) }
-        .animation(.snappy, value: toast)
+        .animation(.settle, value: toast)
         .sheet(item: $editing, onDismiss: sendEdits) { editing in
             Group {
                 switch editing.kind {

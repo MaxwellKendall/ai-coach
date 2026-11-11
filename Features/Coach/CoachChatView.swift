@@ -44,8 +44,8 @@ struct CoachChatView: View {
                     .padding(.vertical, 12)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: messages) { withAnimation(.snappy) { scroll.scrollTo("end", anchor: .bottom) } }
-                .onChange(of: draft) { withAnimation(.snappy) { scroll.scrollTo("end", anchor: .bottom) } }
+                .onChange(of: messages) { withAnimation(.settle) { scroll.scrollTo("end", anchor: .bottom) } }
+                .onChange(of: draft) { withAnimation(.settle) { scroll.scrollTo("end", anchor: .bottom) } }
             }
             inputBar
         }
@@ -53,9 +53,9 @@ struct CoachChatView: View {
         .overlay {
             if voice.listening { ListeningVeil(voice: voice, working: nil, prompt: suggestionsList.first.map { "“\($0)”" } ?? "") { typing = true } }
         }
-        .animation(.snappy, value: messages)
-        .animation(.snappy, value: draft)
-        .animation(.snappy, value: working)
+        .animation(.settle, value: messages)
+        .animation(.settle, value: draft)
+        .animation(.settle, value: working)
     }
 
     private var intro: String {

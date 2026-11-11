@@ -52,7 +52,7 @@ struct SignInButtons: View {
                 }
             }
             if withEmail { emailForm } else {
-                Button("Sign in with email") { withAnimation(.snappy) { withEmail = true } }
+                Button("Sign in with email") { withAnimation(.settle) { withEmail = true } }
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .disabled(working != nil)

@@ -91,11 +91,12 @@ struct GoalCard: View {
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(format(now)).contentTransition(.numericText())
-                Text("→ \(format(goal.target))").foregroundStyle(.secondary).contentTransition(.numericText())
+                Text(format(now)).contentTransition(.numericText(value: now))
+                Text("→ \(format(goal.target))").foregroundStyle(.secondary).contentTransition(.numericText(value: goal.target))
                 if !option.shownUnit.isEmpty { Text(option.shownUnit).font(.title3).foregroundStyle(.secondary) }
             }
             .font(.display(34, weight: .bold, design: .rounded))
+            .monospacedDigit()
             .padding(.top, 6)
             Text(line(from: from, now: now)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
             // FIT-376: a goal the coach set says so, until it's changed here.

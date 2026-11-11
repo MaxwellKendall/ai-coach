@@ -80,10 +80,10 @@ struct SessionList: View {
             }
             if onEdit != nil { addButton("Exercise") { picking = .add } }
         }
-        .animation(.snappy, value: warm)
-        .animation(.snappy, value: editing)
-        .animation(.snappy, value: open)
-        .animation(.snappy, value: changed)
+        .animation(.settle, value: warm)
+        .animation(.settle, value: editing)
+        .animation(.settle, value: open)
+        .animation(.settle, value: changed)
         .onChange(of: open) { changed = false }
         .sheet(item: Binding(get: { looking.map(HowToID.init) }, set: { looking = $0?.id })) { item in
             let template = templates.first { $0.slug == item.id }

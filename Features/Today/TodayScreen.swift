@@ -130,7 +130,7 @@ struct TodayScreen: View {
         guard sunday != shownWeek else { return }
         let picked = day ?? todayPos
         forward = sunday > shownWeek
-        withAnimation(.snappy) {
+        withAnimation(.settle) {
             shownWeek = sunday
             day = sunday == week[0] ? todayPos : picked
         }
@@ -198,9 +198,9 @@ struct TodayScreen: View {
         // FIT-64: what's said to the coach about today lands here and is done in place.
         .onChange(of: coach.request) { takeFromCoach() }
         .onAppear { takeFromCoach() }
-        .animation(.snappy, value: voice.listening)
-        .animation(.snappy, value: working)
-        .animation(.snappy, value: toast)
+        .animation(.settle, value: voice.listening)
+        .animation(.settle, value: working)
+        .animation(.settle, value: toast)
         .onAppear { if day == nil { day = todayPos } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { turnDay() } }
         // FIT-383: the coach removed them while the app was open: Messages, check-ins and their name go.
@@ -308,7 +308,7 @@ struct TodayScreen: View {
         let sunday = Week.start(of: date)
         let days = (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: sunday)! }
         guard let index = days.firstIndex(where: { Calendar.current.isDate($0, inSameDayAs: date) }) else { return }
-        withAnimation(.snappy) {
+        withAnimation(.settle) {
             shownWeek = sunday
             day = index
         }
@@ -364,7 +364,7 @@ struct TodayScreen: View {
         return VStack(alignment: .leading, spacing: 24) {
             HStack(alignment: .firstTextBaseline) {
                 Text(Self.dayName(days[shown])).font(.display(34)).contentTransition(.opacity)
-                    .animation(.snappy, value: shown)
+                    .animation(.settle, value: shown)
                 Spacer()
                 // FIT-367: every message with the coach, beside the account, as a toolbar's buttons are.
                 if !pro.coaches.isEmpty {
@@ -416,7 +416,7 @@ struct TodayScreen: View {
             ForEach(days.indices, id: \.self) { index in
                 let on = index == selected
                 let today = isToday(index)
-                Button { withAnimation(.snappy) { day = index } } label: {
+                Button { withAnimation(.settle) { day = index } } label: {
                     VStack(spacing: 6) {
                         Text(days[index].formatted(.dateTime.weekday(.narrow)))
                             .font(.caption.weight(.semibold)).foregroundStyle(Color.inkMuted)
@@ -1053,7 +1053,7 @@ struct TodayScreen: View {
         if let todays { move(todays.items, to: other) }
         try? context.save()
         let from = plan.start.formatted(.dateTime.weekday(.wide))
-        withAnimation(.snappy) {
+        withAnimation(.settle) {
             goToday()
             toast = Toast(text: todays == nil ? "\(from)’s session is today" : "Swapped with \(from)") { [context] in
                 for (item, date) in was { item.date = date; item.updatedAt = .now }
@@ -1243,13 +1243,13 @@ struct TodayScreen: View {
                 added.templates.append(template)
             }
             let shown = Set(Planner.workouts(plan, templates: base + added.templates).filter { calendar.isDateInToday($0.date) }.map(\.exercise))
-            try withAnimation(.snappy) {
+            try withAnimation(.settle) {
                 fresh.formUnion(Set(rows.map(\.exercise)).subtracting(shown))
                 try Planner.apply((others + rows).sorted { $0.date < $1.date }, to: plan, templates: base + added.templates, in: context)
             }
         }
         func restore() {
-            withAnimation(.snappy) {
+            withAnimation(.settle) {
                 try? Planner.apply(all, to: plan, templates: base, in: context)
                 for template in added.templates { context.delete(template) }
                 try? context.save()
@@ -1283,7 +1283,7 @@ struct TodayScreen: View {
         } }
         Task {
             try? await Task.sleep(for: .seconds(2.5))
-            withAnimation(.easeOut(duration: 0.6)) { fresh = [] }
+            withAnimation(.reveal) { fresh = [] }
         }
     }
 

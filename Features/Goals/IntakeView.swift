@@ -41,7 +41,7 @@ struct IntakeView: View {
                     .padding(.bottom, 14)
                     OnboardingStepView(index: page, answers: $answers, open: $open, catalog: catalog, names: names,
                                        history: Planner.loggedSets(entries, templates: templates), loads: $loads, forCoach: true,
-                                       go: { index in withAnimation(.snappy) { page = index } })
+                                       go: { index in withAnimation(.settle) { page = index } })
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 24)
@@ -50,7 +50,7 @@ struct IntakeView: View {
             .scrollIndicators(.hidden)
             HStack(spacing: 12) {
                 Button(page == 0 ? "Skip All" : "Back") {
-                    if page == 0 { onDone() } else { withAnimation(.snappy) { page -= 1; open = nil } }
+                    if page == 0 { onDone() } else { withAnimation(.settle) { page -= 1; open = nil } }
                 }
                 .frame(maxWidth: .infinity, minHeight: 54)
                 Button(page == Self.steps.count - 1 ? "Done" : "Next") { next() }
@@ -68,7 +68,7 @@ struct IntakeView: View {
 
     private func next() {
         save()
-        if page == Self.steps.count - 1 { onDone() } else { withAnimation(.snappy) { page += 1; open = nil } }
+        if page == Self.steps.count - 1 { onDone() } else { withAnimation(.settle) { page += 1; open = nil } }
     }
 
     /// What the account already has, set on another phone or by the coach.

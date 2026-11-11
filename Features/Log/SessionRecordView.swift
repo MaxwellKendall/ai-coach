@@ -90,7 +90,7 @@ struct SessionRecordView: View {
     private func tabs(_ record: SessionRecord) -> some View {
         HStack(spacing: 6) {
             ForEach(record.blocks.indices, id: \.self) { index in
-                Button { withAnimation(.snappy) { page = index } } label: {
+                Button { withAnimation(.settle) { page = index } } label: {
                     Text(SessionPlan.letter(index))
                         .font(.display(18, weight: .bold, relativeTo: .headline))
                         .frame(maxWidth: .infinity, minHeight: 40)

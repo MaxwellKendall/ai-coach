@@ -69,7 +69,7 @@ struct NewGoalSheet: View {
         start = NewGoal.baseline(option, sets: Planner.loggedSets(entries, templates: templates), weighIns: weighIns,
                                  starts: profile?.starts ?? [], weight: profile?.weightLb, since: since)
         target = NewGoal.suggested(option, from: start)
-        withAnimation(.snappy) { picked = option }
+        withAnimation(.tap) { picked = option }
     }
 
     private func save(_ option: GoalOption) {

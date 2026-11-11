@@ -28,7 +28,6 @@ struct SwipeDeck<Card: View>: View {
     @State private var target: Int?
 
     private let gap: CGFloat = 60
-    private let spring = Animation.spring(response: 0.36, dampingFraction: 0.86)
 
     var body: some View {
         GeometryReader { proxy in
@@ -56,10 +55,10 @@ struct SwipeDeck<Card: View>: View {
             }
             .contentShape(.rect)
             .simultaneousGesture(gesture(size))
-            .sensoryFeedback(.selection, trigger: index)
-            .sensoryFeedback(.impact(weight: .light), trigger: shown != nil && progress >= 1) { _, armed in armed && !throwing }
-            .accessibilityAction(named: "Next") { if index < count - 1 { withAnimation(spring) { advance(.next) } } }
-            .accessibilityAction(named: "Previous") { if index > 0 { withAnimation(spring) { advance(.back) } } }
+            .sensoryFeedback(.tick, trigger: index)
+            .sensoryFeedback(.thud, trigger: shown != nil && progress >= 1) { _, armed in armed && !throwing }
+            .accessibilityAction(named: "Next") { if index < count - 1 { withMotion(.throw) { advance(.next) } } }
+            .accessibilityAction(named: "Previous") { if index > 0 { withMotion(.throw) { advance(.back) } } }
         }
     }
 
@@ -126,7 +125,7 @@ struct SwipeDeck<Card: View>: View {
     }
 
     private func settle() {
-        withAnimation(spring) {
+        withMotion(.throw) {
             drag = .zero
             travel = .zero
         }
@@ -152,7 +151,7 @@ struct SwipeDeck<Card: View>: View {
     private func fling(to end: CGSize, _ swipe: CardSwipe) {
         throwing = true
         target = destination(swipe)
-        withAnimation(spring) { drag = end } completion: {
+        withAnimation(.throw) { drag = end } completion: {
             var quiet = Transaction()
             quiet.disablesAnimations = true
             withTransaction(quiet) {
@@ -226,7 +225,7 @@ private struct HintOverlay: View {
             .scaleEffect(armed ? 1 : 0.94)
             .padding(18)
         }
-        .animation(.snappy(duration: 0.18), value: armed)
+        .animation(.tap, value: armed)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

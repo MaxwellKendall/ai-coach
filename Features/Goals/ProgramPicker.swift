@@ -189,7 +189,7 @@ private struct KitList: View {
     }
 
     private func row(_ title: String, on: Bool, set: @escaping (Bool) -> Void) -> some View {
-        Button { withAnimation(.snappy) { set(!on) } } label: {
+        Button { withAnimation(.tap) { set(!on) } } label: {
             HStack {
                 Text(title).font(.headline)
                 Spacer()
@@ -269,7 +269,7 @@ private struct ProgramChoice: View {
             select(current ?? matches.first, days: current != nil ? profile?.trainingDays : nil)
         }
         // Equipment changed here: the best program for it, as the questions would have picked.
-        .onChange(of: have) { withAnimation(.snappy) { select(matches.first) } }
+        .onChange(of: have) { withAnimation(.settle) { select(matches.first) } }
     }
 
     /// FIT-297: the outcome first: the plan's promise from their own set and the line to it, then the program.
@@ -333,7 +333,7 @@ private struct ProgramChoice: View {
             if showsAll {
                 ForEach(rest) { row($0, scroll: scroll) }
             } else if !rest.isEmpty {
-                Button("All Programs") { withAnimation(.snappy) { showsAll = true } }
+                Button("All Programs") { withAnimation(.settle) { showsAll = true } }
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
@@ -341,7 +341,7 @@ private struct ProgramChoice: View {
 
     private func row(_ other: ReadyProgram, scroll: ScrollViewProxy) -> some View {
         Button {
-            withAnimation(.snappy) {
+            withAnimation(.settle) {
                 select(other)
                 scroll.scrollTo("top", anchor: .top)
             }
@@ -533,7 +533,7 @@ private struct EquipmentList: View {
     }
 
     private func row(_ title: String, on: Bool, set: @escaping (Bool) -> Void) -> some View {
-        Button { withAnimation(.snappy) { set(!on) } } label: {
+        Button { withAnimation(.tap) { set(!on) } } label: {
             HStack {
                 Text(title).font(.body.weight(.semibold))
                 Spacer()

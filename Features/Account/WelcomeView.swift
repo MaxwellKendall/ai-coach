@@ -61,9 +61,9 @@ struct WelcomeView: View {
                 .scrollBounceBehavior(.basedOnSize)
         }
         .screenBackground()
-        .animation(.snappy, value: account.user)
-        .animation(.snappy, value: code)
-        .animation(.snappy, value: door)
+        .animation(.settle, value: account.user)
+        .animation(.settle, value: code)
+        .animation(.settle, value: door)
     }
 
     private var welcomeContent: some View {
@@ -82,7 +82,7 @@ struct WelcomeView: View {
             }
             Spacer(minLength: 24)
             if door != nil && code == nil {
-                Button("Back") { withAnimation(.snappy) { door = nil } }
+                Button("Back") { withAnimation(.settle) { door = nil } }
                     .font(.subheadline).foregroundStyle(Color.inkMuted).frame(maxWidth: .infinity).padding(.bottom, 8)
             }
             #if DEBUG
@@ -131,14 +131,14 @@ struct WelcomeView: View {
             .accessibilityLabel("For example, Back Squat from 225 to 250 pounds")
             VStack(spacing: 10) {
                 doorButton("Train on my own", "Your number, by your date", primary: true) {
-                    if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
+                    if profiles.first?.programStart == nil { withAnimation(.settle) { picking = true } } else { onDone() }
                 }
                 doorButton("I’m a coach", "More clients, not more hours") { door = .coach }
             }
             .padding(.top, 28)
             // FIT-382 (author): joining a coach is the quiet way in, a link under the doors; most clients come by the
             // coach's invite link, which skips this screen.
-            Button { withAnimation(.snappy) { door = .athlete } } label: {
+            Button { withAnimation(.settle) { door = .athlete } } label: {
                 Text("Have a coach? \(Text("Join them").foregroundStyle(Plate.current.mark).fontWeight(.semibold))")
                     .font(.subheadline).foregroundStyle(Color.inkMuted)
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -150,7 +150,7 @@ struct WelcomeView: View {
     }
 
     private func doorButton(_ title: String, _ detail: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
-        Button { withAnimation(.snappy, action) } label: {
+        Button { withAnimation(.settle, action) } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.headline)
@@ -189,7 +189,7 @@ struct WelcomeView: View {
                 }
                 Button("Train on my own too") {
                     UserDefaults.standard.set(account.user?.uid, forKey: Roster.coachingKey)
-                    if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
+                    if profiles.first?.programStart == nil { withAnimation(.settle) { picking = true } } else { onDone() }
                 }
                 .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
             }
@@ -281,13 +281,13 @@ struct WelcomeView: View {
             Button {
                 Task {
                     await Push.request()
-                    withAnimation(.snappy) { askingPush = nil }
+                    withAnimation(.settle) { askingPush = nil }
                 }
             } label: {
                 Text("Turn On Notifications").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
             }
             .buttonStyle(.primary)
-            Button("Not Now") { withAnimation(.snappy) { askingPush = nil } }
+            Button("Not Now") { withAnimation(.settle) { askingPush = nil } }
                 .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
         }
         .padding(.horizontal, 24)
@@ -330,7 +330,7 @@ struct WelcomeView: View {
                 let person = try await Cloud.acceptCoach(code)
                 pro.setCoaches(pro.coaches.filter { $0.uid != person.uid } + [person])
                 let ask = await Push.undecided()
-                withAnimation(.snappy) {
+                withAnimation(.settle) {
                     intake = true
                     if ask { askingPush = person.name ?? coach?.name ?? "your coach" }
                 }
