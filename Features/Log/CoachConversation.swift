@@ -52,7 +52,7 @@ struct CoachConversation: View {
             Text(text).font(.body)
                 .foregroundStyle(mine ? Plate.current.onAccent : Color.ink)
                 .padding(.horizontal, 14).padding(.vertical, 9)
-                .background(mine ? Plate.current.accent : Color.fill, in: .rect(cornerRadius: 20))
+                .background(mine ? Plate.current.accent : Color.fill, in: .rect(cornerRadius: 18))
             if !mine { Spacer(minLength: 56) }
         }
     }

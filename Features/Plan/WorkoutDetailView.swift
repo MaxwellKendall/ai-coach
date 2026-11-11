@@ -172,7 +172,7 @@ struct WorkoutDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background, in: .rect(cornerRadius: 20))
+        .background(.background, in: .rect(cornerRadius: 24))
     }
 
     // MARK: Blocks
@@ -215,7 +215,7 @@ struct WorkoutDetailView: View {
             }
         }
         .padding(14)
-        .background(.background, in: .rect(cornerRadius: 20))
+        .background(.background, in: .rect(cornerRadius: 24))
     }
 
     /// The load a bodyweight exercise takes when one's added: each dumbbell or kettlebell, else pounds on the body.
@@ -363,7 +363,7 @@ struct WorkoutDetailView: View {
                     stepButton("minus", cell, -Self.step(cell.metric))
                     VStack(spacing: 0) {
                         Text(Self.number(set.value(cell.metric) ?? 0))
-                            .font(.system(size: 48, weight: .bold).monospacedDigit())
+                            .font(.display(48, weight: .bold).monospacedDigit())
                             .contentTransition(.numericText())
                         Text(SetRow.units[cell.metric] ?? "").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     }
@@ -384,7 +384,7 @@ struct WorkoutDetailView: View {
             }
             .padding(16)
             .background(.bar)
-            .transition(.move(edge: .bottom))
+            .motionTransition(.move(edge: .bottom))
         } else if let startTitle {
             Button {
                 if let onStartOwn {
@@ -484,10 +484,10 @@ struct BlockBadge: View {
 
     var body: some View {
         Text(letter)
-            .font(.system(size: size * 0.55, weight: .bold))
-            .foregroundStyle(Color.primary)
+            .font(.system(size: size * 0.55, weight: .bold)) // ui-score: allow dynamic-type: glyph sized to its fixed frame
+            .foregroundStyle(Color.canvas)
             .frame(width: size, height: size)
-            .background(Color(red: 0.08, green: 0.09, blue: 0.11), in: .rect(cornerRadius: size * 0.3))
+            .background(Color.ink, in: .rect(cornerRadius: size * 0.3))
     }
 }
 

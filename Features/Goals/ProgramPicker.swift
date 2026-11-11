@@ -447,7 +447,7 @@ private struct RecentSetStep: View {
         let one = exercises.count == 1
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(one ? "Your best recent \(name(exercises[0]))" : "Your best recent sets").font(.system(size: 32, weight: .bold)).tracking(-0.4)
+                Text(one ? "Your best recent \(name(exercises[0]))" : "Your best recent sets").font(.display(32, weight: .bold)).tracking(-0.4)
                 Text(one ? "A hard set from the last few months, 1 to 12 reps. Your plan starts a little under it."
                          : "A hard set of each from the last few months, 1 to 12 reps. Leave any you don’t know.")
                     .font(.body).foregroundStyle(.secondary).padding(.top, 8).padding(.bottom, 28)
@@ -491,7 +491,7 @@ private struct RecentSetStep: View {
     private func field(_ text: Binding<String>, _ unit: String, _ which: Field, keyboard: UIKeyboardType) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             TextField("0", text: text)
-                .font(.system(size: 28, weight: .semibold)).monospacedDigit()
+                .font(.display(28, weight: .semibold)).monospacedDigit()
                 .keyboardType(keyboard)
                 .focused($focus, equals: which)
             Text(unit).font(.subheadline).foregroundStyle(.secondary).fixedSize()
@@ -541,7 +541,7 @@ private struct EquipmentList: View {
                     .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.inkFaint))
             }
             .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 50)
-            .background(Color.fill, in: .rect(cornerRadius: 14))
+            .background(Color.fill, in: .rect(cornerRadius: 12))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)

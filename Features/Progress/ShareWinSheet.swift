@@ -27,7 +27,7 @@ struct ShareWinSheet: View {
             ShareCard(win: win, style: style, showNumbers: showNumbers)
                 .shadow(color: .black.opacity(0.14), radius: 15, y: 8)
                 .id("\(style.rawValue)\(showNumbers)")
-                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                .motionTransition(.opacity.combined(with: .scale(scale: 0.97)))
                 .padding(.top, 8)
             VStack(spacing: 12) {
                 Picker("Style", selection: $style.animation(.snappy)) {
@@ -44,7 +44,7 @@ struct ShareWinSheet: View {
                     }
                     .tint(.primary)
                     .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
                 }
             }
             .padding(.horizontal, 24).padding(.top, 20)

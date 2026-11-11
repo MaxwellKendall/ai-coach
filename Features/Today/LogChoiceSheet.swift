@@ -32,7 +32,7 @@ struct LogChoiceSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(Color.fill, in: .rect(cornerRadius: 14))
+            .background(Color.fill, in: .rect(cornerRadius: 12))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)

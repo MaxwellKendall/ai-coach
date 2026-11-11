@@ -81,7 +81,7 @@ struct WinsScreen: View {
                     }
                 }
                 .padding(.leading, 70).padding(.trailing, 16).padding(.bottom, 16)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .motionTransition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

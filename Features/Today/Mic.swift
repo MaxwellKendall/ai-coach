@@ -15,7 +15,7 @@ struct MicButton: View {
 
     var body: some View {
         Image(systemName: compact ? (voice.listening ? "mic.fill" : "mic") : "mic")
-            .font(.system(size: compact ? 17 : 24, weight: .medium))
+            .font(.system(size: compact ? 17 : 24, weight: .medium)) // ui-score: allow dynamic-type: glyph sized to its fixed frame
             .frame(width: compact ? 36 : 68, height: compact ? 36 : 68)
             .foregroundStyle(compact ? Color.primary : Color(.systemBackground))
             .background(compact ? Color.clear : Color.primary, in: .circle)
@@ -77,7 +77,7 @@ struct ListeningVeil: View {
                     .font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.tertiary)
                 if voice.editing, working == nil {
                     TextField("", text: $draft, axis: .vertical)
-                        .font(.system(size: 30, weight: .semibold)).tracking(-0.3)
+                        .font(.display(30, weight: .semibold)).tracking(-0.3)
                         .lineLimit(1...6)
                         .focused($focused)
                     Button("Send", systemImage: "arrow.up", action: send)
@@ -87,7 +87,7 @@ struct ListeningVeil: View {
                 } else {
                     let said = working ?? voice.transcript
                     Text(said.isEmpty ? prompt : said)
-                        .font(.system(size: 30, weight: .semibold)).tracking(-0.3)
+                        .font(.display(30, weight: .semibold)).tracking(-0.3)
                         .foregroundStyle(said.isEmpty || working != nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
                         .contentTransition(.interpolate)
                         .animation(.snappy, value: said)
@@ -128,7 +128,7 @@ struct ListeningVeil: View {
             VStack(spacing: 10) {
                 Button(action: send) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold)) // ui-score: allow dynamic-type: glyph sized to its fixed frame
                         .foregroundStyle(Color(.systemBackground))
                         .frame(width: 68, height: 68)
                         .background(Color.primary, in: .circle)
@@ -212,7 +212,7 @@ struct EdgeGlow: View {
     var body: some View {
         TimelineView(.animation) { context in
             let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 4) / 4
-            RoundedRectangle(cornerRadius: 58, style: .continuous)
+            RoundedRectangle(cornerRadius: 58, style: .continuous) // ui-score: allow radius-scale: concentric with the display's own corner
                 .strokeBorder(AngularGradient(colors: [.blue, .purple, .pink, .orange, .yellow, .blue],
                                               center: .center, angle: .degrees(turn * 360)), lineWidth: 10)
                 .blur(radius: 14)
@@ -250,7 +250,7 @@ struct ToastView: View {
             .foregroundStyle(Color(.systemBackground))
             .background(Color.primary, in: .capsule)
             .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .motionTransition(.move(edge: .bottom).combined(with: .opacity))
             .task(id: current.id) {
                 try? await Task.sleep(for: .seconds(current.undo == nil ? 3 : 6))
                 if toast?.id == current.id { withAnimation { toast = nil } }

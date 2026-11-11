@@ -75,7 +75,7 @@ struct WeeklyReviewScreen: View {
     private var top: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(caption).font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
-            Text("Your week").font(.system(size: 30, weight: .bold)).tracking(-0.4).padding(.top, 2)
+            Text("Your week").font(.display(30, weight: .bold)).tracking(-0.4).padding(.top, 2)
             if writing {
                 Text("Writing a short summary of this week from the numbers below, on this iPhone, in two or three lines.")
                     .font(.body).redacted(reason: .placeholder).padding(.top, 10)
@@ -140,7 +140,7 @@ struct WeeklyReviewScreen: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(Color.fill, in: .rect(cornerRadius: 16))
+                .background(Color.fill, in: .rect(cornerRadius: 18))
                 .accessibilityElement(children: .combine)
             }
         }
@@ -159,7 +159,7 @@ struct WeeklyReviewScreen: View {
                             PaceChip(pace: row.week.pace)
                         }
                         Text(delta == 0 ? "No change" : (delta > 0 ? "+" : "−") + report.format(abs(delta), row.option) + " " + row.goal.unit)
-                            .font(.system(size: 26, weight: .bold, design: .rounded)).padding(.top, 6)
+                            .font(.display(26, weight: .bold, design: .rounded, relativeTo: .title2)).padding(.top, 6)
                         Text((delta == 0 ? "" : "\(report.format(row.week.from, row.option)) → ")
                              + "\(report.format(row.week.to, row.option)) \(row.goal.unit) · goal \(report.format(row.goal.target, row.option))")
                             .font(.footnote).foregroundStyle(.secondary).padding(.top, 2)
@@ -295,7 +295,7 @@ struct WeekReviewCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(Color(.systemBackground))
             .padding(18)
-            .background(Color.primary, in: .rect(cornerRadius: 22))
+            .background(Color.primary, in: .rect(cornerRadius: 24))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)

@@ -94,7 +94,7 @@ struct ProgressCharts<CheckInsTop: View>: View {
                     }
                     Text(WeeklyCheckIn.summary(weekly.values)).font(.subheadline).monospacedDigit()
                     let worries = WeeklyCheckIn.concerns(weekly.values)
-                    if !worries.isEmpty { Text(worries.joined(separator: ", ").capitalized(with: nil)).font(.footnote.weight(.semibold)).foregroundStyle(.orange) }
+                    if !worries.isEmpty { Text(worries.joined(separator: ", ").capitalized(with: nil)).font(.footnote.weight(.semibold)).foregroundStyle(Color.warn) }
                     if !weekly.note.isEmpty { Text(weekly.note).font(.subheadline) }
                 }
             }

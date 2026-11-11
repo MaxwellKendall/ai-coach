@@ -34,7 +34,7 @@ struct IntakeView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("\(page + 1) of \(Self.steps.count) · for your coach")
                             .font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-                        Text(Self.steps[page].0).font(.system(size: 30, weight: .bold)).tracking(-0.4)
+                        Text(Self.steps[page].0).font(.display(30, weight: .bold)).tracking(-0.4)
                         Text(Self.steps[page].1).font(.subheadline).foregroundStyle(.secondary)
                     }
                     .padding(.top, 18)

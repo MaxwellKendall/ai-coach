@@ -1,4 +1,5 @@
 import SwiftUI
+// ui-score: allow-file dynamic-type: rendered to a fixed-size image for link previews
 
 /// FIT-113/111: a shared session or program as a card, the win card's size and look, uploaded with the share so
 /// link previews (iMessage) show it.
@@ -38,7 +39,7 @@ struct PlanCard: View {
         .padding(EdgeInsets(top: 24, leading: 24, bottom: 20, trailing: 24))
         .frame(width: ShareCard.size.width, height: ShareCard.size.height, alignment: .topLeading)
         .background(style.background)
-        .clipShape(.rect(cornerRadius: 20))
+        .clipShape(.rect(cornerRadius: 24))
         .environment(\.colorScheme, .dark)
     }
 

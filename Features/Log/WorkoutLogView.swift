@@ -63,6 +63,8 @@ struct WorkoutLogView: View {
                     .foregroundStyle(row.wrappedValue.done ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Done")
+            .accessibilityAddTraits(row.wrappedValue.done ? .isSelected : [])
             field(row.value, unit: SetRow.units[row.wrappedValue.metric] ?? "")
             if row.wrappedValue.loadMetric != nil { field(row.load, unit: SetRow.units[row.wrappedValue.loadMetric!] ?? "") }
             field(row.rpe, unit: "RPE")

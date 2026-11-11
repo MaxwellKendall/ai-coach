@@ -69,7 +69,7 @@ struct GoalCard: View {
                 Text("→ \(format(goal.target))").foregroundStyle(.secondary).contentTransition(.numericText())
                 if !option.shownUnit.isEmpty { Text(option.shownUnit).font(.title3).foregroundStyle(.secondary) }
             }
-            .font(.system(size: 34, weight: .bold, design: .rounded))
+            .font(.display(34, weight: .bold, design: .rounded))
             .padding(.top, 6)
             Text(line(from: from, now: now)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
             Button(action: update) {
@@ -215,6 +215,7 @@ struct PaceChip: View {
     var body: some View {
         Text(label)
             .font(.footnote.weight(.semibold))
+            .lineLimit(1).fixedSize()
             .padding(.horizontal, 9).padding(.vertical, 3)
             .foregroundStyle(pace == .behind ? Color(.systemBackground) : .primary)
             .background {

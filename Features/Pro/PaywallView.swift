@@ -54,7 +54,7 @@ struct PaywallView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("YOUR PROGRAM IS READY").font(.footnote.weight(.semibold)).tracking(0.4).foregroundStyle(.secondary)
                 // The first goal is the headline; the rest under it.
-                Text(lines[0]).font(.system(size: 30, weight: .bold)).tracking(-0.4)
+                Text(lines[0]).font(.display(30, weight: .bold)).tracking(-0.4)
                 if lines.count > 1 {
                     Text(lines.dropFirst().joined(separator: " · ")).font(.headline)
                 }
@@ -63,7 +63,7 @@ struct PaywallView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Barbrabell Pro").font(.system(size: 34, weight: .bold)).tracking(-0.4)
+                Text("Barbrabell Pro").font(.display(34, weight: .bold)).tracking(-0.4)
                 Text("A coach who plans every week of your program.").font(.title3).foregroundStyle(.secondary)
             }
         }
@@ -80,7 +80,7 @@ struct PaywallView: View {
             }
         }
         .padding(16)
-        .background(Color.fill, in: .rect(cornerRadius: 16))
+        .background(Color.fill, in: .rect(cornerRadius: 18))
     }
 
     /// What happens on each day of the annual plan's free trial.

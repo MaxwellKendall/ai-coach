@@ -52,7 +52,19 @@ struct WelcomeView: View {
         #endif
     }
 
+    /// Scrolls when large text needs more than the screen (FIT-364); fills it, centred, otherwise.
     private var welcome: some View {
+        GeometryReader { proxy in
+            ScrollView { welcomeContent.frame(minHeight: proxy.size.height) }
+                .scrollBounceBehavior(.basedOnSize)
+        }
+        .screenBackground()
+        .animation(.snappy, value: account.user)
+        .animation(.snappy, value: code)
+        .animation(.snappy, value: door)
+    }
+
+    private var welcomeContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 24)
             if door == nil && code == nil {
@@ -77,10 +89,6 @@ struct WelcomeView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .screenBackground()
-        .animation(.snappy, value: account.user)
-        .animation(.snappy, value: code)
-        .animation(.snappy, value: door)
         // Taken from the navigator, so the app's own invite sheet doesn't answer it too.
         .onChange(of: navigator.coachInvite, initial: true) { _, link in
             guard let link else { return }
@@ -115,7 +123,7 @@ struct WelcomeView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Back Squat").font(.subheadline).foregroundStyle(Color.inkMuted)
                 Spacer()
-                (Text("225 → ") + Text("250 lb").foregroundStyle(Plate.current.mark)).font(.display(24, weight: .semibold, relativeTo: .title2))
+                Text("225 → \(Text("250 lb").foregroundStyle(Plate.current.mark))").font(.display(24, weight: .semibold, relativeTo: .title2))
             }
             .padding(16).background(Color.fill, in: .rect(cornerRadius: 18)).padding(.top, 22)
             .accessibilityLabel("For example, Back Squat from 225 to 250 pounds")
@@ -142,8 +150,8 @@ struct WelcomeView: View {
                 Image(systemName: "chevron.right").font(.footnote.weight(.bold)).opacity(0.7)
             }
             .foregroundStyle(primary ? AnyShapeStyle(Plate.current.onAccent) : AnyShapeStyle(Color.ink))
-            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 66)
-            .background(primary ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.fill), in: .rect(cornerRadius: 16))
+            .padding(.horizontal, 18).padding(.vertical, 12).frame(maxWidth: .infinity, minHeight: 66)
+            .background(primary ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.fill), in: .rect(cornerRadius: 18))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -166,7 +174,7 @@ struct WelcomeView: View {
                     onDone()
                 } label: {
                     Text("Go to My Clients").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
-                        .foregroundStyle(Plate.current.onAccent).background(.tint, in: .rect(cornerRadius: 16))
+                        .foregroundStyle(Plate.current.onAccent).background(.tint, in: .rect(cornerRadius: 18))
                 }
                 Button("Train on my own too") {
                     UserDefaults.standard.set(account.user?.uid, forKey: Roster.coachingKey)
@@ -246,7 +254,7 @@ struct WelcomeView: View {
     private func notifications(_ coach: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 24)
-            Image(systemName: "bell.badge").font(.system(size: 40)).padding(.bottom, 20)
+            Image(systemName: "bell.badge").font(.display(40, weight: .regular)).padding(.bottom, 20)
             title("Hear from \(coach)",
                   "A notification when \(coach) changes your week or replies to a session, and a reminder in the evening of a day you haven’t logged. Turn the reminder off any time on You.")
             Spacer(minLength: 24)

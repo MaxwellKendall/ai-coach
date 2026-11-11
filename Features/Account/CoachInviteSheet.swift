@@ -18,7 +18,7 @@ struct CoachInviteSheet: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: askingPush ? "bell.badge" : accepted == nil ? "person.2" : "checkmark.circle")
-                .font(.system(size: 44))
+                .font(.display(44, weight: .regular))
                 .padding(.top, 8)
             if let accepted, askingPush {
                 Text("Hear from \(accepted.mention)").font(.title2.bold()).multilineTextAlignment(.center)

@@ -174,7 +174,7 @@ struct WholeProgramSheet: View {
         let week = weeks[index]
         return Button { go(index) } label: {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: 3) // ui-score: allow radius-scale: a bar in a small bar chart
                     .fill(index == current ? Color.primary : week.kind == .deload ? Color(.quaternaryLabel) : Color(.tertiaryLabel))
                     .frame(width: 14, height: PhaseBars.height(week))
                     .frame(width: 22, height: 30, alignment: .bottom)

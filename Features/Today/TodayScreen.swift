@@ -188,7 +188,7 @@ struct TodayScreen: View {
                 if let said = working {
                     WorkingPill(said: said, step: step) { job?.cancel() }
                         .padding(.bottom, 26)
-                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                        .motionTransition(.scale(scale: 0.9).combined(with: .opacity))
                 }
             }
             .padding(.bottom, 4)
@@ -352,7 +352,7 @@ struct TodayScreen: View {
                     .animation(.snappy, value: shown)
                 Spacer()
                 Button { you = true } label: {
-                    Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(Color.inkMuted)
+                    Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(Color.inkMuted) // ui-score: allow dynamic-type: glyph sized to its fixed frame
                         .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("Account and library")
@@ -369,7 +369,7 @@ struct TodayScreen: View {
                 }
                 strip(days, cards: cards, selected: shown)
                     .id(shownWeek)
-                    .transition(.push(from: forward ? .trailing : .leading))
+                    .motionTransition(.push(from: forward ? .trailing : .leading))
             }
             .clipped()
             // FIT-332: swipe the strip for another week, as in Calendar; the pages below swipe between its days.
@@ -407,6 +407,8 @@ struct TodayScreen: View {
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
+        // Seven dates across the width: past the largest standard size they'd truncate, as Calendar's strip caps them.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     @ViewBuilder private func dot(_ card: DayCard) -> some View {
@@ -656,7 +658,7 @@ struct TodayScreen: View {
                                 Button("Move to Another Day", systemImage: "calendar") { sheet = .move }
                             } label: {
                                 Image(systemName: "ellipsis").font(.title3.weight(.semibold)).foregroundStyle(Color.ink)
-                                    .frame(width: 56, height: 56).background(Color.surface, in: .rect(cornerRadius: 16))
+                                    .frame(width: 56, height: 56).background(Color.surface, in: .rect(cornerRadius: 18))
                             }
                             .accessibilityLabel("More")
                         }
@@ -871,7 +873,7 @@ struct TodayScreen: View {
                 .font(.headline).foregroundStyle(Color.good)
             Text(doneTitle(done)).font(.display(30)).padding(.top, 6).fixedSize(horizontal: false, vertical: true)
             if let route = done.route {
-                RouteMap(points: route).frame(height: 170).clipShape(.rect(cornerRadius: 16)).padding(.top, 18)
+                RouteMap(points: route).frame(height: 170).clipShape(.rect(cornerRadius: 18)).padding(.top, 18)
             }
             HStack(alignment: .top, spacing: 8) {
                 if let meters = done.runMeters {

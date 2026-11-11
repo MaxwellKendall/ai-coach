@@ -192,8 +192,9 @@ private struct BrandButtonStyle: ButtonStyle {
         let (fill, text, stroke): (Color, Color, Color?) = switch provider {
         case .apple: dark ? (.white, .black, nil) : (.black, .white, nil)
         case .google: dark
+            // ui-score: allow color-tokens: Google's sign-in button colours, required by its branding guidelines
             ? (Color(hex: 0x131314), Color(hex: 0xE3E3E3), Color(hex: 0x8E918F))
-            : (.white, Color(hex: 0x1F1F1F), Color(hex: 0x747775))
+            : (.white, Color(hex: 0x1F1F1F), Color(hex: 0x747775)) // ui-score: allow color-tokens: Google's branding
         }
         return configuration.label
             .foregroundStyle(text)
