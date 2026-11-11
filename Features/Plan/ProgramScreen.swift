@@ -87,7 +87,7 @@ struct ProgramScreen: View {
             .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 14) }
             .sheet(isPresented: $addingGoal) {
                 NewGoalSheet { goal in
-                    goalIndex = programGoals.firstIndex { $0.goal.id == goal.id } ?? goalIndex
+                    goalIndex = programGoals.firstIndex { $0.goal.id == goal.id }.map { $0 + 1 } ?? goalIndex
                     toast = Toast(text: "Added. Your coach sees it too.")
                 }
             }
@@ -631,32 +631,23 @@ struct ProgramScreen: View {
             program.map { (start: $0.start, end: $0.end) }
                 ?? GoalProgress.span(created: item.goal.createdAt, deadline: item.goal.deadline, today: .now)
         }
-        let paces: [GoalProgress.Pace] = items.indices.compactMap { position -> GoalProgress.Pace? in
-            let goal = items[position].goal, start = spans[position].start
-            let from = goal.baseline ?? goal.target
-            let now = GoalProgress.standing(goal.metric, logged: GoalProgress.current(goal.metric, sets: sets, weighIns: weighIns, since: start),
-                                            from: from)
-            guard let program else {
-                return GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now, by: goal.deadline)
-            }
-            return GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: program.current, weeks: program.weeks)
+        let standings: [(now: Double?, pace: GoalProgress.Pace?)] = items.indices.map { position in
+            let standing = GoalCard.standing(items[position].goal, weeks: program?.weeks ?? [], start: spans[position].start,
+                                             end: spans[position].end, current: program?.current ?? 0, sets: sets, weighIns: weighIns)
+            return (standing.now, standing.pace)
         }
-        let index = Binding(get: { min(goalIndex, max(0, items.count - 1)) }, set: { goalIndex = $0 })
-        let status = [program.map { "Week \($0.current + 1) of \($0.weeks.count)" }, Self.summary(paces)].compactMap { $0 }
+        // FIT-370: the deck's first card is the overview; goal n is card n + 1.
+        let index = Binding(get: { min(goalIndex, items.count) }, set: { goalIndex = $0 })
         return VStack(alignment: .leading, spacing: 0) {
-            // One quiet line: where the program is and how the goals stand.
-            if !status.isEmpty {
-                Text(status.joined(separator: " · "))
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 10)
-            }
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {
                     HStack(spacing: 6) {
-                        ForEach(items.indices, id: \.self) { position in
+                        chip("Overview", on: index.wrappedValue == 0) { withAnimation(.snappy) { index.wrappedValue = 0 } }
+                            .id(0)
+                        ForEach(items.indices, id: \.self) { item in
+                            let position = item + 1
                             let on = position == index.wrappedValue
-                            let option = GoalOption.with(id: items[position].option)!
+                            let option = GoalOption.with(id: items[item].option)!
                             Button { withAnimation(.snappy) { index.wrappedValue = position } } label: {
                                 Text(WeekReport.short(option)).font(.subheadline.weight(.semibold))
                                     .foregroundStyle(on ? Color(.systemBackground) : .secondary)
@@ -669,7 +660,7 @@ struct ProgramScreen: View {
                             .accessibilityLabel(option.name)
                             .accessibilityAddTraits(on ? .isSelected : [])
                             .contextMenu {
-                                Button("Drop This Goal", systemImage: "trash", role: .destructive) { drop(items[position].goal) }
+                                Button("Drop This Goal", systemImage: "trash", role: .destructive) { drop(items[item].goal) }
                             }
                         }
                         addGoalChip
@@ -680,14 +671,18 @@ struct ProgramScreen: View {
                 .onChange(of: index.wrappedValue) { _, position in withAnimation(.snappy) { reader.scrollTo(position, anchor: .center) } }
             }
             .padding(.top, 10)
-            SwipeDeck(index: index, count: items.count) { position in
-                let item = items[position]
+            SwipeDeck(index: index, count: items.isEmpty ? 0 : items.count + 1) { position in
+                if position == 0 {
+                    overview(items, standings: standings, program: program) { item in withAnimation(.snappy) { index.wrappedValue = item + 1 } }
+                } else {
+                let item = items[position - 1]
                 let option = GoalOption.with(id: item.option)!
-                GoalCard(goal: item.goal, option: option, weeks: program?.weeks ?? [], start: spans[position].start,
-                         end: spans[position].end, current: program?.current ?? 0,
+                GoalCard(goal: item.goal, option: option, weeks: program?.weeks ?? [], start: spans[position - 1].start,
+                         end: spans[position - 1].end, current: program?.current ?? 0,
                          sets: sets, weighIns: weighIns, next: (option.exercise ?? (option.measure == .time ? Running.outdoor : nil)).flatMap(nextWorkout),
                          setTarget: { setTarget(item.goal, $0) },
                          update: { updating = item.goal }, change: { changing = item.goal })
+                }
             }
             .padding(.horizontal, 22)
             .padding(.top, 8)
@@ -704,9 +699,57 @@ struct ProgramScreen: View {
         }
     }
 
-    /// "1 ahead, 2 on pace, 1 behind".
+    private func chip(_ title: String, on: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.subheadline.weight(.semibold))
+                .foregroundStyle(on ? Color(.systemBackground) : .secondary)
+                .padding(.horizontal, 14).frame(minHeight: 34)
+                .background(on ? Color.primary : Color.surface, in: .capsule)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// FIT-370: the goals at a glance, as the deck's first card rather than a line over every goal: where the program
+    /// is, how they stand together, then a row per goal (now → target and its pace) that opens its card.
+    private func overview(_ items: [(goal: Goal, option: String)], standings: [(now: Double?, pace: GoalProgress.Pace?)],
+                          program: ProgramSpan?, open: @escaping (Int) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let program {
+                Text("Week \(program.current + 1) of \(program.weeks.count)").font(.subheadline).foregroundStyle(.secondary)
+            }
+            Text(Self.summary(standings.compactMap(\.pace)) ?? "Your goals").font(.display(28, weight: .bold, relativeTo: .title))
+                .fixedSize(horizontal: false, vertical: true).padding(.top, 4).padding(.bottom, 8)
+            ForEach(items.indices, id: \.self) { item in
+                let option = GoalOption.with(id: items[item].option)!
+                let goal = items[item].goal
+                Button { open(item) } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.name).font(.headline)
+                            Text("\(standings[item].now.map(option.format) ?? "–") → \(option.format(goal.target)) \(option.shownUnit)")
+                                .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
+                        }
+                        Spacer(minLength: 8)
+                        if let pace = standings[item].pace { PaceChip(pace: pace) }
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkFaint)
+                    }
+                    .padding(.vertical, 12).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                if item < items.count - 1 { Divider() }
+            }
+        }
+        .padding(24)
+        .scrollsWhenTall()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .cardBackground()
+    }
+
+    /// "1 ahead, 2 on pace, 1 behind, 2 starting" (FIT-370: the overview counts every goal).
     static func summary(_ paces: [GoalProgress.Pace]) -> String? {
-        let parts = [(GoalProgress.Pace.ahead, "ahead"), (.onPace, "on pace"), (.behind, "behind")].compactMap { pace, word in
+        let parts = [(GoalProgress.Pace.ahead, "ahead"), (.onPace, "on pace"), (.behind, "behind"), (.starting, "starting")].compactMap { pace, word in
             let count = paces.filter { $0 == pace }.count
             return count > 0 ? "\(count) \(word)" : nil
         }

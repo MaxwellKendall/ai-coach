@@ -9,6 +9,8 @@ struct AICoachApp: App {
     /// FIT-83: whether this Apple ID has Pro.
     @State private var pro = Pro()
     @Environment(\.scenePhase) private var scenePhase
+    /// FIT-369: You's Appearance.
+    @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
 
     init() {
         // FIT-304: a workout ends with the app; its Live Activity shouldn't outlive it.
@@ -38,6 +40,7 @@ struct AICoachApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .onChange(of: appearance, initial: true) { _, raw in Appearance.apply(raw) }
                 .environment(account)
                 .environment(pro)
                 .task { await account.refresh() }

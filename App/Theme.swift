@@ -3,6 +3,33 @@ import UIKit
 
 /// FIT-297: design system v2 (https://claude.ai/artifact/VwER3yUGiQf7xJF6hxVcQL). Steel neutrals, one plate colour
 /// per theme (competition bumper plates).
+/// FIT-369: light or dark whatever the iPhone says, or as it says (System, the default). Set on the windows, so sheets
+/// follow and System gives the choice back to iOS at once.
+enum Appearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    static let key = "appearance"
+
+    var id: String { rawValue }
+    var name: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    @MainActor static func apply(_ raw: String) {
+        let style: UIUserInterfaceStyle = switch Appearance(rawValue: raw) ?? .system {
+        case .system: .unspecified
+        case .light: .light
+        case .dark: .dark
+        }
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            for window in scene.windows { window.overrideUserInterfaceStyle = style }
+        }
+    }
+}
+
 enum Plate: String, CaseIterable, Identifiable {
     case blue, red, yellow, green
     static let key = "plate"
