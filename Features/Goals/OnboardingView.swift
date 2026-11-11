@@ -70,7 +70,7 @@ struct OnboardingView: View {
                         OnboardingStepView(index: index, answers: $answers, open: $open, catalog: catalog, names: names,
                                            history: history, firstLoads: firstWeek.map { FirstLoads.items($0.week.workouts) },
                                            designing: designing, brief: brief, loads: $loads,
-                                           go: { index in withAnimation(.snappy) { page = index } })
+                                           go: { index in withAnimation(.settle) { page = index } })
                         if index == 0, Pilot.groups, account.isAvailable { inviteRow.padding(.top, 28) }
                         #if DEBUG
                         if index == 0 { BackendPicker().font(.subheadline).foregroundStyle(.secondary).padding(.top, 20) }
@@ -92,7 +92,7 @@ struct OnboardingView: View {
                 ListeningVeil(voice: voice, working: working, prompt: Self.prompts[min(page, 3)])
             }
         }
-        .animation(.snappy, value: voice.listening || working != nil)
+        .animation(.settle, value: voice.listening || working != nil)
         .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") {}
         } message: { Text(message ?? "") }
@@ -121,7 +121,7 @@ struct OnboardingView: View {
         .sheet(item: $invite) { invite in
             NavigationStack {
                 JoinGroupSheet(code: invite.code) { group in
-                    withAnimation(.snappy) { joined = group }
+                    withAnimation(.settle) { joined = group }
                     self.invite = nil
                 }
             }
@@ -184,13 +184,13 @@ struct OnboardingView: View {
         // FIT-113: a friend's session; it's offered once onboarding is done.
         if let session = pasted.lazy.compactMap(InviteLink.session(pasted:)).first {
             Navigator.shared.session = session
-            withAnimation(.snappy) { sessionWaiting = true }
+            withAnimation(.settle) { sessionWaiting = true }
             return
         }
         // FIT-111: a friend's program; it's offered once onboarding is done.
         if let program = pasted.lazy.compactMap(InviteLink.program(pasted:)).first {
             Navigator.shared.program = program
-            withAnimation(.snappy) { sessionWaiting = true }
+            withAnimation(.settle) { sessionWaiting = true }
             return
         }
         guard let code = pasted.lazy.compactMap(InviteLink.code(pasted:)).first else {
@@ -230,7 +230,7 @@ struct OnboardingView: View {
             guard design?.key == key else { return }
             designing = false
             guard let done else { return }
-            withAnimation(.snappy) {
+            withAnimation(.settle) {
                 firstWeek = done.result.source == .model ? done.result : nil
                 // Loads the user set stay for the exercises still in the week.
                 let kept = Set(done.result.week.workouts.map(\.exercise))
@@ -275,7 +275,7 @@ struct OnboardingView: View {
     private var dots: some View {
         HStack(spacing: 6) {
             ForEach(0..<4, id: \.self) { index in
-                Button { withAnimation(.snappy) { page = index } } label: {
+                Button { withAnimation(.settle) { page = index } } label: {
                     Capsule().fill(index <= page ? Color.primary : Color(.separator)).frame(height: 4)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .contentShape(.rect)
@@ -300,7 +300,7 @@ struct OnboardingView: View {
         if page == 4 {
             let ready = answers.age != nil && answers.weight != nil && !answers.days.isEmpty
             Button(!ready ? "Add your age and weight" : pro.active ? "Start program" : ProOfferBar.title(trialEligible: pro.trialEligible)) {
-                if ready { start() } else { withAnimation(.snappy) { page = 2; open = answers.age == nil ? "age" : "weight" } }
+                if ready { start() } else { withAnimation(.settle) { page = 2; open = answers.age == nil ? "age" : "weight" } }
             }
             .font(.headline)
             .frame(maxWidth: .infinity, minHeight: 54)
@@ -330,7 +330,7 @@ struct OnboardingView: View {
             var copy = answers
             do {
                 try await OnboardingSpeech.hear(said, on: step, into: &copy, catalog: catalog, names: names)
-                withAnimation(.snappy) { answers = copy }
+                withAnimation(.settle) { answers = copy }
             } catch {
                 message = "Couldn’t understand that. Try again, or tap to pick."
             }

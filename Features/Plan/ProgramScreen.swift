@@ -109,8 +109,8 @@ struct ProgramScreen: View {
                     ListeningVeil(voice: voice, working: working, prompt: "“I’m traveling November 9 to 20, hotel gym with dumbbells”")
                 }
             }
-            .animation(.snappy, value: toast)
-            .animation(.snappy, value: voice.listening || working != nil)
+            .animation(.settle, value: toast)
+            .animation(.settle, value: voice.listening || working != nil)
             .navigationDestination(item: $opened, destination: session)
             .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK") {}
@@ -167,7 +167,7 @@ struct ProgramScreen: View {
                 }
             }
             if tabs.count > 1 {
-                Picker("Show", selection: $tab.animation(.snappy)) {
+                Picker("Show", selection: $tab.animation(.settle)) {
                     ForEach(tabs, id: \.self) { Text($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
@@ -193,7 +193,7 @@ struct ProgramScreen: View {
         let index = Binding(get: { min(selected ?? current, weeks.count - 1) }, set: { selected = $0 })
         return VStack(spacing: 0) {
             PhaseBars(weeks: weeks, current: current, selected: index.wrappedValue, tap: { week in
-                withAnimation(.snappy) { selected = week }
+                withAnimation(.settle) { selected = week }
             }, phases: profile.programSlug == nil)
             .padding(.horizontal, 22)
             .padding(.top, 12)
@@ -397,7 +397,7 @@ struct ProgramScreen: View {
                         let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
                         Button {
                             // Pinned sessions stay open on Today without Pro (FIT-120), so pinning is Pro too.
-                            pro.gate { withAnimation(.snappy) { for item in items { item.pinned = !pinned; item.updatedAt = .now } } }
+                            pro.gate { withAnimation(.settle) { for item in items { item.pinned = !pinned; item.updatedAt = .now } } }
                         } label: {
                             Image(systemName: pinned ? "pin.fill" : "pin")
                                 .font(.subheadline)
@@ -594,7 +594,7 @@ struct ProgramScreen: View {
         profile.travelWeeks = travel
         profile.updatedAt = .now
         try? context.save()
-        if let first = travel.first(where: { !before.contains($0) }) { withAnimation(.snappy) { selected = first } }
+        if let first = travel.first(where: { !before.contains($0) }) { withAnimation(.settle) { selected = first } }
         toast = Toast(text: "Program changed") {
             profile.travelWeeks = before
             profile.updatedAt = .now
@@ -642,13 +642,13 @@ struct ProgramScreen: View {
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {
                     HStack(spacing: 6) {
-                        chip("Overview", on: index.wrappedValue == 0) { withAnimation(.snappy) { index.wrappedValue = 0 } }
+                        chip("Overview", on: index.wrappedValue == 0) { withAnimation(.settle) { index.wrappedValue = 0 } }
                             .id(0)
                         ForEach(items.indices, id: \.self) { item in
                             let position = item + 1
                             let on = position == index.wrappedValue
                             let option = GoalOption.with(id: items[item].option)!
-                            Button { withAnimation(.snappy) { index.wrappedValue = position } } label: {
+                            Button { withAnimation(.settle) { index.wrappedValue = position } } label: {
                                 Text(WeekReport.short(option)).font(.subheadline.weight(.semibold))
                                     .foregroundStyle(on ? Color(.systemBackground) : .secondary)
                                     .padding(.horizontal, 14).frame(minHeight: 34)
@@ -668,12 +668,12 @@ struct ProgramScreen: View {
                     .padding(.horizontal, 22)
                 }
                 .scrollIndicators(.hidden)
-                .onChange(of: index.wrappedValue) { _, position in withAnimation(.snappy) { reader.scrollTo(position, anchor: .center) } }
+                .onChange(of: index.wrappedValue) { _, position in withAnimation(.settle) { reader.scrollTo(position, anchor: .center) } }
             }
             .padding(.top, 10)
             SwipeDeck(index: index, count: items.isEmpty ? 0 : items.count + 1) { position in
                 if position == 0 {
-                    overview(items, standings: standings, program: program) { item in withAnimation(.snappy) { index.wrappedValue = item + 1 } }
+                    overview(items, standings: standings, program: program) { item in withAnimation(.settle) { index.wrappedValue = item + 1 } }
                 } else {
                 let item = items[position - 1]
                 let option = GoalOption.with(id: item.option)!

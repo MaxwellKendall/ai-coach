@@ -45,7 +45,7 @@ struct OnboardingStepView: View {
             ForEach(GoalOption.all) { option in
                 let on = answers.goals.contains(option.id)
                 Button {
-                    withAnimation(.snappy) {
+                    withAnimation(.settle) {
                         if on { answers.goals.removeAll { $0 == option.id } } else { answers.goals.append(option.id) }
                         touch("goals")
                     }
@@ -164,7 +164,7 @@ struct OnboardingStepView: View {
                 startEditor(row)
                 if row.measure != .age && row.measure != .body {
                     Button("I don’t know") {
-                        withAnimation(.snappy) { answers.starts[row.id] = nil; open = nil }
+                        withAnimation(.settle) { answers.starts[row.id] = nil; open = nil }
                     }
                     .font(.subheadline).foregroundStyle(.secondary)
                     .frame(minHeight: 44)

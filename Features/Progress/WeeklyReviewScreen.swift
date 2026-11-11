@@ -31,9 +31,9 @@ struct WeeklyReviewScreen: View {
                 }
             }
             .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 8) }
-            .animation(.snappy, value: toast)
-            .animation(.snappy, value: picked)
-            .animation(.easeOut, value: writing)
+            .animation(.settle, value: toast)
+            .animation(.settle, value: picked)
+            .animation(.reveal, value: writing)
         }
         // FIT-83: the coach's paragraph is Pro; the numbers below it stay free.
         .task(id: pro.active) {

@@ -16,6 +16,10 @@ struct RootView: View {
     /// FIT-201: the pilot's first launch, sign in and join your coach, in place of onboarding.
     @State private var welcoming = false
     @AppStorage("welcomed") private var welcomed = false
+    /// FIT-413: the launch splash, once per cold launch; resuming from the background keeps this view and its state.
+    @State private var splash = true
+    /// The first launch's splash plays on the Welcome cover, over this one held at its first frame.
+    @State private var welcomeSplash = false
     @Bindable private var navigator = Navigator.shared
     @Environment(Account.self) private var account
     @Environment(Pro.self) private var pro
@@ -53,31 +57,11 @@ struct RootView: View {
     static var accent: Color { Plate.current.accent }
     @AppStorage(Plate.key) private var plate = Plate.blue.rawValue
 
-    /// FIT-64: the app's places as tabs, and the coach in the slot iOS 26 keeps for Search.
     var body: some View {
-        TabView(selection: $tab) {
-            if coaching {
-                // FIT-338: how many clients wrote since the coach last looked.
-                Tab("Clients", systemImage: "person.2", value: AppTab.clients) { ClientsScreen() }
-                    .badge(roster.unread)
-            }
-            if athlete {
-                Tab("Today", systemImage: "figure.strengthtraining.traditional", value: AppTab.today) { TodayScreen() }
-                Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
-                Tab("Progress", systemImage: "chart.bar", value: AppTab.progress) { ProgramScreen(tabs: [.goals, .wins, .history]) }
-            }
-            if Pilot.groups, account.isAvailable {
-                Tab(groupsTab.title, systemImage: "person.2", value: AppTab.groups) { NavigationStack { GroupsScreen() } }
-                    .badge(groupsTab.live ? Text("Live") : nil)
-            }
-            // Principle 5: without Apple Intelligence there's no coach; every manual path stays.
-            if LanguageModel.isAvailable {
-                Tab("Coach", systemImage: "sparkles", value: AppTab.coach, role: .search) {
-                    CoachScreen(from: lastTab) { said, target in
-                        coach.request = CoachInbox.Request(said: said, target: target)
-                        tab = target
-                    }
-                }
+        tabs
+        .overlay {
+            if splash {
+                Splash(plays: !welcomesAtLaunch) { splash = false }.transition(.opacity)
             }
         }
         .environment(coach)
@@ -113,7 +97,13 @@ struct RootView: View {
                 return profile
             }()
             if Pilot.simple {
-                if profile.programStart == nil, !welcomed { welcoming = true }
+                if welcomesAtLaunch {
+                    // At once rather than sliding up, so its splash takes over from this one without a seam.
+                    welcomeSplash = splash
+                    var instant = Transaction()
+                    instant.disablesAnimations = true
+                    withTransaction(instant) { welcoming = true }
+                }
                 #if DEBUG
                 if Roster.sample {
                     roster = Roster(clients: Roster.samples(), invites: [Cloud.ClientInvite(
@@ -121,8 +111,6 @@ struct RootView: View {
                     // FIT-338: last looked at four days ago, so Mike's Sunday note is unread.
                     for client in roster.clients { roster.markSeen(client.id, at: .now.addingTimeInterval(-4 * 86_400)) }
                 }
-                // `-welcome YES` opens the first launch over any program, to look at it (FIT-296).
-                if UserDefaults.standard.bool(forKey: "welcome") { welcoming = true }
                 #endif
             } else if !profile.isComplete || profile.programStart == nil {
                 onboarding = profile
@@ -153,6 +141,8 @@ struct RootView: View {
         .onChange(of: navigator.pushed, initial: true) { _, target in
             guard let target else { return }
             navigator.pushed = nil
+            // FIT-413: a tapped notification goes straight to what it's about.
+            withAnimation(.tap) { splash = false }
             switch target.kind {
             case .ended:
                 Task { await pro.refreshCoaches(signedIn: account.user != nil) }
@@ -183,6 +173,7 @@ struct RootView: View {
         }
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).
         .onOpenURL { url in
+            withAnimation(.tap) { splash = false }
             guard account.isAvailable else { return }
             // FIT-122: a gift's link opens Redeem with its code; Redeem asks to sign in.
             if Pilot.gifts, let gift = InviteLink.gift(from: url) {
@@ -280,6 +271,10 @@ struct RootView: View {
             WelcomeView {
                 welcomed = true
                 welcoming = false
+                splash = false
+            }
+            .overlay {
+                if welcomeSplash { Splash(first: true) { welcomeSplash = false } }
             }
             .interactiveDismissDisabled()
             .tint(Self.accent)
@@ -293,6 +288,45 @@ struct RootView: View {
                 .interactiveDismissDisabled()
                 .tint(Self.accent)
         }
+    }
+
+    /// FIT-64: the app's places as tabs, and the coach in the slot iOS 26 keeps for Search.
+    private var tabs: some View {
+        TabView(selection: $tab) {
+            if coaching {
+                // FIT-338: how many clients wrote since the coach last looked.
+                Tab("Clients", systemImage: "person.2", value: AppTab.clients) { ClientsScreen() }
+                    .badge(roster.unread)
+            }
+            if athlete {
+                Tab("Today", systemImage: "figure.strengthtraining.traditional", value: AppTab.today) { TodayScreen() }
+                Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
+                Tab("Progress", systemImage: "chart.bar", value: AppTab.progress) { ProgramScreen(tabs: [.goals, .wins, .history]) }
+            }
+            if Pilot.groups, account.isAvailable {
+                Tab(groupsTab.title, systemImage: "person.2", value: AppTab.groups) { NavigationStack { GroupsScreen() } }
+                    .badge(groupsTab.live ? Text("Live") : nil)
+            }
+            // Principle 5: without Apple Intelligence there's no coach; every manual path stays.
+            if LanguageModel.isAvailable {
+                Tab("Coach", systemImage: "sparkles", value: AppTab.coach, role: .search) {
+                    CoachScreen(from: lastTab) { said, target in
+                        coach.request = CoachInbox.Request(said: said, target: target)
+                        tab = target
+                    }
+                }
+            }
+        }
+    }
+
+    /// FIT-201: the pilot's first launch opens on Welcome, until there's a program or it's been through once.
+    private var welcomesAtLaunch: Bool {
+        guard Pilot.simple else { return false }
+        #if DEBUG
+        // `-welcome YES` opens the first launch over any program, to look at it (FIT-296).
+        if UserDefaults.standard.bool(forKey: "welcome") { return true }
+        #endif
+        return profiles.first?.programStart == nil && !welcomed
     }
 
     /// FIT-131: the oldest program a coach sent that hasn't been answered, if any.

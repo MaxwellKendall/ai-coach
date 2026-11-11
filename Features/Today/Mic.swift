@@ -21,7 +21,7 @@ struct MicButton: View {
             .background(compact ? Color.clear : Color.primary, in: .circle)
             .scaleEffect(voice.listening && !compact ? 1.12 : 1)
             .shadow(color: .black.opacity(voice.listening || compact ? 0 : 0.16), radius: 10, y: 6)
-            .animation(.snappy, value: voice.listening)
+            .animation(.settle, value: voice.listening)
             .contentShape(.circle)
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { _ in
@@ -90,7 +90,7 @@ struct ListeningVeil: View {
                         .font(.display(30, weight: .semibold)).tracking(-0.3)
                         .foregroundStyle(said.isEmpty || working != nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
                         .contentTransition(.interpolate)
-                        .animation(.snappy, value: said)
+                        .animation(.settle, value: said)
                         .onTapGesture {
                             guard working == nil, !voice.transcript.isEmpty else { return }
                             draft = voice.transcript
@@ -187,7 +187,7 @@ struct WorkingPill: View {
                 Text("“\(said)”").font(.caption).foregroundStyle(Color(.systemBackground).opacity(0.7))
                 Text(step).font(.subheadline.weight(.semibold)).foregroundStyle(Color(.systemBackground))
                     .contentTransition(.opacity)
-                    .animation(.snappy, value: step)
+                    .animation(.settle, value: step)
             }
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)

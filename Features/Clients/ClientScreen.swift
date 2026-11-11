@@ -179,7 +179,7 @@ struct ClientScreen: View {
                 place(client, at: target, move: dated == .move)
             }
         }
-        .animation(.snappy, value: toast)
+        .animation(.settle, value: toast)
         .task(id: "\(day) \(client?.units["plan#\(day)"]?.hashValue ?? 0)") {
             editor = client.map { ClientDay.Editor(ClientDay.plan($0.units, day), templates: templates) }
             editorDay = day
@@ -240,7 +240,7 @@ struct ClientScreen: View {
         guard let date = SyncUnits.date(ofKey: "plan#\(key)") else { return }
         let sunday = Week.start(of: date)
         forward = sunday >= start
-        withAnimation(.snappy) {
+        withAnimation(.settle) {
             start = sunday
             day = key
         }
@@ -259,7 +259,7 @@ struct ClientScreen: View {
         guard sunday != start else { return }
         let picked = week.firstIndex { SyncUnits.day($0) == day } ?? 0
         forward = sunday > start
-        withAnimation(.snappy) {
+        withAnimation(.settle) {
             start = sunday
             day = sunday == Week.start(of: .now) ? today : SyncUnits.day(Calendar.current.date(byAdding: .day, value: picked, to: sunday)!)
         }
@@ -270,7 +270,7 @@ struct ClientScreen: View {
         HStack(spacing: 0) {
             ForEach(week, id: \.self) { date in
                 let key = SyncUnits.day(date)
-                Button { withAnimation(.snappy) { day = key } } label: {
+                Button { withAnimation(.tap) { day = key } } label: {
                     VStack(spacing: 6) {
                         Text(date.formatted(.dateTime.weekday(.narrow))).font(.caption).foregroundStyle(Color.inkMuted)
                         Text(date.formatted(.dateTime.day())).font(.body.weight(key == day ? .semibold : .regular)).monospacedDigit()

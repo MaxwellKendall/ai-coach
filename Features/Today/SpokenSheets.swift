@@ -134,7 +134,7 @@ struct SpokenCheckSheet: View {
                 .font(.display(22, weight: .semibold, design: .rounded, relativeTo: .title2)).monospacedDigit()
                 + Text(load ? " lb" : row.metric == "reps" ? " reps" : " " + (SetRow.units[row.metric] ?? ""))
                 .font(.footnote).foregroundStyle(.secondary))
-                .contentTransition(.numericText())
+                .contentTransition(.numericText(value: (load ? row.load : row.value) ?? 0))
                 .frame(minWidth: 54)
                 .overlay(alignment: .bottom) {
                     Line().stroke(style: StrokeStyle(lineWidth: 1.5, dash: [3, 3])).foregroundStyle(.tertiary)
@@ -145,7 +145,7 @@ struct SpokenCheckSheet: View {
     }
 
     private func round(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button { withAnimation(.snappy, action) } label: {
+        Button { withAnimation(.tap, action) } label: {
             Image(systemName: symbol).font(.body.weight(.medium)).frame(width: 36, height: 36)
                 .background(Color.fill, in: .circle)
         }

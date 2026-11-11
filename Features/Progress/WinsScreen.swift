@@ -47,7 +47,7 @@ struct WinsScreen: View {
         let words = WinWords(win)
         let isOpen = open == win.key
         return VStack(alignment: .leading, spacing: 0) {
-            Button { withAnimation(.snappy) { open = isOpen ? nil : win.key } } label: {
+            Button { withAnimation(.tap) { open = isOpen ? nil : win.key } } label: {
                 HStack(spacing: 14) {
                     Image(systemName: symbol(win.kind)).font(.body.weight(.semibold))
                         .frame(width: 40, height: 40).background(Color.fill, in: .circle)

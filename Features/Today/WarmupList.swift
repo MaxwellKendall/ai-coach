@@ -35,7 +35,7 @@ struct WarmupList: View {
             button("plus", timed ? "A minute more" : "One more") {
                 session.set(metric, to: value + step, block: index, movement: m, set: 0, remaining: true)
             }
-            button("xmark", "Remove \(name)") { withAnimation(.snappy) { session.remove(block: index, movement: m) } }
+            button("xmark", "Remove \(name)") { withAnimation(.settle) { session.remove(block: index, movement: m) } }
         }
         .padding(.vertical, 8)
     }

@@ -30,12 +30,12 @@ struct ShareWinSheet: View {
                 .motionTransition(.opacity.combined(with: .scale(scale: 0.97)))
                 .padding(.top, 8)
             VStack(spacing: 12) {
-                Picker("Style", selection: $style.animation(.snappy)) {
+                Picker("Style", selection: $style.animation(.tap)) {
                     ForEach(CardStyle.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 if win.kind != .streak {
-                    Toggle(isOn: $showNumbers.animation(.snappy)) {
+                    Toggle(isOn: $showNumbers.animation(.tap)) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Show weights")
                             Text(showNumbers ? "Lifts and weights appear on the card" : "Only changes and percents appear")

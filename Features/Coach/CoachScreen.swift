@@ -109,7 +109,7 @@ struct CoachScreen: View {
                 Task { await voice.start(onDone: submit) }
             }
             .onDisappear { if voice.listening { _ = voice.stop() } }
-            .animation(.snappy, value: voice.listening)
+            .animation(.settle, value: voice.listening)
             .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK") {}
             } message: { Text(message ?? "") }

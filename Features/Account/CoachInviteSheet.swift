@@ -30,13 +30,13 @@ struct CoachInviteSheet: View {
                     Button {
                         Task {
                             await Push.request()
-                            withAnimation(.snappy) { askingPush = false }
+                            withAnimation(.settle) { askingPush = false }
                         }
                     } label: {
                         Text("Turn On Notifications").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.primary)
-                    Button("Not Now") { withAnimation(.snappy) { askingPush = false } }.controlSize(.large)
+                    Button("Not Now") { withAnimation(.settle) { askingPush = false } }.controlSize(.large)
                 }
             } else if let accepted {
                 Text(accepted.name.map { "\($0) is your coach" } ?? "You've joined your coach").font(.title2.bold()).multilineTextAlignment(.center)

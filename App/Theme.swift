@@ -143,18 +143,6 @@ extension View {
     }
 }
 
-/// Spatial motion becomes a fade with Reduce Motion on (the Appllama design skill's motion laws).
-private struct MotionTransition: ViewModifier {
-    let transition: AnyTransition
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View { content.transition(reduceMotion ? .opacity : transition) }
-}
-
-extension View {
-    func motionTransition(_ transition: AnyTransition) -> some View { modifier(MotionTransition(transition: transition)) }
-}
-
 /// The one plate-coloured action on a screen.
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { Filled(configuration: configuration) }
@@ -170,6 +158,7 @@ struct PrimaryButtonStyle: ButtonStyle {
                 .foregroundStyle(Plate.current.onAccent)
                 .background(.tint, in: .rect(cornerRadius: 18))
                 .opacity(enabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)
+                .modifier(Pressed(pressed: configuration.isPressed))
         }
     }
 }
@@ -182,6 +171,7 @@ struct SecondaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 56)
             .foregroundStyle(Color.ink)
             .background(configuration.isPressed ? Color.fillStrong : Color.surface, in: .rect(cornerRadius: 18))
+            .modifier(Pressed(pressed: configuration.isPressed))
     }
 }
 

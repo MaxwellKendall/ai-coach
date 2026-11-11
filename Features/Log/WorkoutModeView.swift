@@ -24,6 +24,8 @@ struct WorkoutModeView: View {
     @State private var warmStep = 0
     /// A card being dragged sideways, and whether the last move was back (the next card comes in from the left).
     @State private var dragX: CGFloat = 0
+    /// Which way the last − or + went, so the big number rolls that way.
+    @State private var countsDown = false
     @State private var backward = false
     @State private var rest: Rest?
     @State private var restsFinished = 0
@@ -91,8 +93,8 @@ struct WorkoutModeView: View {
                 .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 8)
             if Pilot.inAppAI { micArea(onFinish: page == cards.count).frame(height: 104) }
         }
-        .animation(.snappy, value: page)
-        .animation(.snappy, value: warmStep)
+        .animation(.settle, value: page)
+        .animation(.settle, value: warmStep)
         .screenBackground()
         .onChange(of: page) {
             live?.update(draft.live(at: page, names: names))
@@ -106,21 +108,21 @@ struct WorkoutModeView: View {
             }
         }
         .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 116) }
-        .animation(.snappy, value: voice.listening || working != nil)
-        .animation(.snappy, value: toast)
+        .animation(.settle, value: voice.listening || working != nil)
+        .animation(.settle, value: toast)
         .alert("Couldn’t do that", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK") {}
         } message: { Text(message ?? "") }
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sensoryFeedback(.success, trigger: restsFinished)
-        .sensoryFeedback(.impact(weight: .light), trigger: draft.rows.filter(\.done).count)
+        .sensoryFeedback(.tap, trigger: draft.rows.filter(\.done).count)
         .task(id: rest?.ends) {
             guard let ends = rest?.ends, let on = rest?.page else { return }
             try? await Task.sleep(for: .seconds(max(0, ends.timeIntervalSinceNow)))
             guard !Task.isCancelled else { return }
             restsFinished += 1
             // Rest's over: on to the next set.
-            withAnimation(.snappy) {
+            withAnimation(.settle) {
                 rest = nil
                 if page == on { page = on + 1 }
             }
@@ -168,7 +170,7 @@ struct WorkoutModeView: View {
                             Button {
                                 peeking = false
                                 if let index = cards.firstIndex(of: .set(line)) {
-                                    withAnimation(.snappy) { warmStep = draft.warmups.count; page = index }
+                                    withAnimation(.settle) { warmStep = draft.warmups.count; page = index }
                                 }
                             } label: {
                                 HStack {
@@ -244,7 +246,7 @@ struct WorkoutModeView: View {
             }
         }
         .padding(.vertical, 5)
-        .animation(.snappy, value: draft.rows.filter(\.done).count)
+        .animation(.settle, value: draft.rows.filter(\.done).count)
         .accessibilityHidden(true)
     }
 
@@ -361,11 +363,11 @@ struct WorkoutModeView: View {
     private func stepper(_ value: String, unit: String, less: String, more: String, by step: @escaping (Double) -> Void) -> some View {
         VStack(spacing: 10) {
             Text(value).font(.display(value.count > 4 ? 52 : 76, weight: .semibold)).monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.5).contentTransition(.numericText())
+                .lineLimit(1).minimumScaleFactor(0.5).contentTransition(.numericText(countsDown: countsDown))
             Text(unit).font(.subheadline).foregroundStyle(Color.inkMuted)
             HStack(spacing: 10) {
-                round("minus", less) { step(-1) }
-                round("plus", more) { step(1) }
+                round("minus", less) { countsDown = true; step(-1) }
+                round("plus", more) { countsDown = false; step(1) }
             }
             .padding(.top, 4)
         }
@@ -412,17 +414,17 @@ struct WorkoutModeView: View {
     /// rest starts, a rest is skipped. The finish card stays (Save is its own button).
     private func forward(cards: [WorkoutDraft.Card]) {
         backward = false
-        if warmStep < draft.warmups.count { withAnimation(.snappy) { warmStep += 1 }; return }
+        if warmStep < draft.warmups.count { withAnimation(.settle) { warmStep += 1 }; return }
         guard cards.indices.contains(page) else { return }
         _ = swiped(from: page, .next, cards: cards)
-        withAnimation(.snappy) { page += 1 }
+        withAnimation(.settle) { page += 1 }
     }
 
     /// A swipe to the right: the card before, the last warm-up step before the first set. A rest still running keeps
     /// running, and nothing is unlogged.
     private func back() {
         backward = true
-        withAnimation(.snappy) {
+        withAnimation(.settle) {
             if warmStep < draft.warmups.count { warmStep = max(0, warmStep - 1) }
             else if page > 0 { page -= 1 }
             else if !draft.warmups.isEmpty { warmStep = draft.warmups.count - 1 }
@@ -438,7 +440,7 @@ struct WorkoutModeView: View {
             }
             .onEnded { value in
                 let distance = value.predictedEndTranslation.width
-                withAnimation(.snappy) { dragX = 0 }
+                withAnimation(.settle) { dragX = 0 }
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 if distance < -120 { forward(cards: cards) } else if distance > 120 { back() }
             }
@@ -496,7 +498,7 @@ struct WorkoutModeView: View {
 
     private func unlog(_ line: [Int]) {
         let before = draft
-        withAnimation(.snappy) { draft.untick(line) }
+        withAnimation(.settle) { draft.untick(line) }
         withAnimation { toast = Toast(text: "Set \(draft.rows[line[0]].round + 1) unlogged") { draft = before } }
     }
 
@@ -508,7 +510,7 @@ struct WorkoutModeView: View {
     }
 
     private func round(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button { withAnimation(.snappy, action) } label: {
+        Button { withAnimation(.tap, action) } label: {
             Image(systemName: symbol).font(.title3.weight(.semibold)).frame(width: 52, height: 52)
                 .background(Color.fill, in: .circle)
         }
@@ -530,7 +532,7 @@ struct WorkoutModeView: View {
     /// It runs when the set is done; a rest arrived at from the list is shown, not started, until +30 s.
     private func restCard(index: Int, seconds: TimeInterval, cards: [WorkoutDraft.Card], names: [String: String]) -> some View {
         let active = rest?.page == index ? rest : nil
-        let skip = { withAnimation(.snappy) { rest = nil; page = index + 1 } }
+        let skip = { withAnimation(.settle) { rest = nil; page = index + 1 } }
         return VStack(spacing: 0) {
             Text("Rest").font(.headline).foregroundStyle(Color.inkMuted)
             TimelineView(.periodic(from: .now, by: 0.25)) { context in
@@ -647,7 +649,7 @@ struct WorkoutModeView: View {
                 }
                 withAnimation { toast = Toast(text: text) { draft = before } }
                 if onSet {
-                    withAnimation(.snappy) {
+                    withAnimation(.settle) {
                         if cards.indices.contains(position + 1), case .rest(let seconds) = cards[position + 1] {
                             rest = Rest(ends: .now + seconds, total: seconds, page: position + 1)
                         }
@@ -715,7 +717,7 @@ struct WorkoutModeView: View {
         let perHand = exercise.map { !$0.equipment.isDisjoint(with: ["dumbbells", "kettlebells"]) && !$0.equipment.contains("barbell") } ?? false
         let loadMetric: String? = exercise?.isLoaded == false ? nil : (last?.metric ?? (perHand ? "load_lb_hand" : "load_lb"))
         let logged = draft.rows.filter { $0.block == target.block && $0.exercise == target.exercise && $0.done }.count
-        withAnimation(.snappy) {
+        withAnimation(.settle) {
             draft.swap(block: target.block, from: target.exercise, to: slug, loadMetric: loadMetric, load: last?.value)
         }
         // Today's plan: the day's rows, as Today edits them.

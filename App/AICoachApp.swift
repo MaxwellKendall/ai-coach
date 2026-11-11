@@ -17,7 +17,7 @@ struct AICoachApp: App {
         WorkoutActivity.endAll()
         do {
             container = AppSchema.shared
-            try Seeder.seed(container.mainContext)
+            try Seeder.seed(container.mainContext, remembering: .standard)
             // FIT-82: plans made when weeks began on Monday.
             try Planner.rekeyWeeks(in: container.mainContext)
             #if DEBUG
