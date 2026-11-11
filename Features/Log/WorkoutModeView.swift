@@ -681,21 +681,8 @@ struct WorkoutModeView: View {
             .padding(.top, 22)
             Text(Coach.done(lifts, missedSets: total - done)).padding(.top, 20).fixedSize(horizontal: false, vertical: true)
             Text("How did it feel?").font(.subheadline).foregroundStyle(.secondary).padding(.top, 24)
-            HStack(spacing: 6) {
-                ForEach(Feel.allCases) { feel in
-                    let on = draft.feel == feel
-                    Button { draft.feel = on ? nil : feel } label: {
-                        Text(feel.label).font(.subheadline.weight(on ? .semibold : .regular))
-                            .frame(maxWidth: .infinity, minHeight: 40)
-                            .foregroundStyle(on ? Color(.systemBackground) : .primary)
-                            .background(on ? Color.primary : .clear, in: .capsule)
-                            .overlay { if !on { Capsule().strokeBorder(Color(.tertiaryLabel)) } }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
-            }
-            .padding(.top, 10)
+            FeelChoices(selected: draft.feel) { draft.feel = draft.feel == $0 ? nil : $0 }
+                .padding(.top, 10)
             if !draft.note.isEmpty {
                 HStack(alignment: .top) {
                     Text("“\(draft.note)”")

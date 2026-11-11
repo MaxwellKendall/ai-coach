@@ -67,8 +67,11 @@ struct TodayScreen: View {
         case ownOn(Date), logOwn(WorkoutDraft, Date)
         /// A note on a saved workout: its summary row and the note as shown.
         case note(LogEntry, String)
+        /// FIT-378: how ticked-off lifts felt, asked as they're saved.
+        case feel(DayCard.Planned)
         var id: String {
             switch self {
+            case .feel: "feel"
             case .own: "own"
             case .ownOn(let day): "own \(day)"
             case .logOwn(let draft, let day): "log own \(day) \(draft.id)"
@@ -665,7 +668,7 @@ struct TodayScreen: View {
             switch card {
             case .plan(let plan) where !planning:
                 if !checked.isEmpty {
-                    Button { saveChecked(plan) } label: {
+                    Button { sheet = .feel(plan) } label: {
                         HStack {
                             Text("\(checked.count) of \(plan.session.blocks.count) done").font(.headline)
                             Spacer()
@@ -849,9 +852,11 @@ struct TodayScreen: View {
     }
 
     /// FIT-297 (L3): the checked-off lifts saved as planned, with Undo; wins they earn are celebrated.
-    private func saveChecked(_ plan: DayCard.Planned) {
+    /// FIT-378: with how it felt, as workout mode saves it: the session's effort and the RPE of its sets.
+    private func saveChecked(_ plan: DayCard.Planned, feel: Feel?) {
         var draft = WorkoutDraft(session: plan.title, plan: plan.session)
         for index in draft.rows.indices where checked.contains(draft.rows[index].block) { draft.rows[index].done = true }
+        draft.feel = feel
         winsBefore = Set(allWins.map(\.key))
         let saved = draft.save(at: .now, templates: templates, in: context)
         try? context.save()
@@ -1319,6 +1324,11 @@ struct TodayScreen: View {
         case .record(let items, let day): NavigationStack { SessionRecordView(planned: items, day: day) }
         case .ran(let entry): NavigationStack { RunDetailView(run: entry) }
         case .note(let entry, let note): NavigationStack { WorkoutNoteSheet(summary: entry, note: note) }
+        case .feel(let plan):
+            FeelSheet { feel in
+                self.sheet = nil
+                saveChecked(plan, feel: feel)
+            }
         case .own:
             NavigationStack {
                 WorkoutDetailView(items: [], session: SessionPlan(blocks: []), startTitle: "Start", onStartOwn: startOwn)
