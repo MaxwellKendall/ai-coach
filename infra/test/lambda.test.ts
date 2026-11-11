@@ -98,3 +98,19 @@ describe("shareStats (FIT-110)", () => {
     expect(counted("USER#u1", "PROFILE")).toBeUndefined();
   });
 });
+
+describe("diagnostics (FIT-384)", () => {
+  it("logs a report with who sent it, parsed when it's whole", async () => {
+    const { line } = await import("../lambda/diagnostics.ts");
+    expect(JSON.parse(line("u1", "1.0 (42)", '{"crashDiagnostics":[]}'))).toEqual({
+      diagnostic: 1, uid: "u1", app: "1.0 (42)", truncated: false, report: { crashDiagnostics: [] },
+    });
+  });
+
+  it("keeps the start of one too big for a log line", async () => {
+    const { line } = await import("../lambda/diagnostics.ts");
+    const out = JSON.parse(line("u1", "1.0", "x".repeat(300_000)));
+    expect(out.truncated).toBe(true);
+    expect(out.report.length).toBe(200_000);
+  });
+});

@@ -368,6 +368,13 @@ export class AICoachStack extends Stack {
       fieldName: "deleteAccount",
     });
 
+    // FIT-384: MetricKit's crash and hang reports, one log line each, read in CloudWatch Logs Insights.
+    const diagnostics = fn("diagnostics", {});
+    api.addLambdaDataSource("DiagnosticsSource", diagnostics).createResolver("ReportDiagnostic", {
+      typeName: "Mutation",
+      fieldName: "reportDiagnostic",
+    });
+
     // ---- FIT-122: gifts of Pro, sold on the web through Stripe; the author creates the secret ----
     const stripeSecret = secretsmanager.Secret.fromSecretNameV2(this, "StripeSecret", `aicoach/${stage}/stripe`);
     const giftEnv = { STRIPE_SECRET: stripeSecret.secretName, GIFT_PRICE_CENTS: "3999" };

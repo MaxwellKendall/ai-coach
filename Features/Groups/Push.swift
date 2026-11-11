@@ -116,6 +116,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // FIT-384: crash and hang reports.
+        Diagnostics.shared.start()
         #if DEBUG
         // `-push reply:2026-10-19`: open as if that coaching notification had been tapped (FIT-220).
         if let raw = UserDefaults.standard.string(forKey: "push") {

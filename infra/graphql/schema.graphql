@@ -295,6 +295,8 @@ type Mutation {
   # FIT-220: tz (IANA, e.g. "America/New_York") times the evening nudge; nudges: false turns it off. Without tz, no nudge.
   registerDevice(token: String!, platform: String!, tz: String, nudges: Boolean): Boolean
   deleteAccount: Boolean
+  # FIT-384: a MetricKit crash or hang report (MXDiagnosticPayload's JSON), written to the diagnostics Lambda's log.
+  reportDiagnostic(payload: String!, app: String!): Boolean
   # FIT-102: one Messages API request to Claude, sent on by the aiProxy Lambda with the key. Signed-in users only.
   # FIT-123: entitlement is the app's Pro transaction as Apple signed it (a JWS); without it, a few requests for good.
   aiMessages(request: AWSJSON!, entitlement: String): AWSJSON

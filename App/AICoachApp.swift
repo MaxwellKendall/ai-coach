@@ -49,6 +49,8 @@ struct AICoachApp: App {
                 .onChange(of: account.user?.uid, initial: true) { _, uid in
                     if let uid {
                         SyncEngine.shared.start(uid: uid, context: container.mainContext)
+                        // FIT-384: reports kept while signed out or offline.
+                        Task { await Diagnostics.send() }
                     } else {
                         SyncEngine.shared.stop()
                     }
