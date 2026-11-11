@@ -69,6 +69,24 @@ enum CheckIn {
         try context.save()
     }
 
+    /// FIT-351: the day's note on its own, from Today's Note: on the check-in row (sleep, else weight), else a weight row
+    /// with no weight. Empty clears it, and a row left with nothing in it goes.
+    static func setNote(_ note: String, on day: Date, in context: ModelContext, now: Date = .now) throws {
+        let rows = try entries(on: day, in: context)
+        let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let holder = rows.first { $0.kind == .sleep && !$0.note.isEmpty } ?? rows.first { $0.kind == .bodyweight && !$0.note.isEmpty }
+            ?? rows.first { $0.kind == .sleep } ?? rows.first { $0.kind == .bodyweight }
+        if let holder {
+            if note.isEmpty && holder.measurements.isEmpty { context.delete(holder) } else { holder.note = note; holder.updatedAt = now }
+        } else if !note.isEmpty {
+            let at = Calendar.current.isDate(day, inSameDayAs: now) ? now : Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: day)!
+            let entry = LogEntry(kind: .bodyweight, timestamp: at, now: now)
+            entry.note = note
+            context.insert(entry)
+        }
+        try context.save()
+    }
+
     /// What the day's check-in says, to fill the sheet: its weight, sleep and note.
     static func values(_ entries: [LogEntry]) -> (weight: Double?, sleep: Double?, note: String) {
         let weight = entries.first { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value
@@ -89,8 +107,8 @@ enum CheckIn {
         let weight = entries.first { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value
         let sleep = entries.first { $0.kind == .sleep }?.measurements.first { $0.metric == "sleep_h" }?.value
         let parts = [weight.map { "\(Coach.number($0)) lb" }, sleep.map { "\(Coach.number($0)) h sleep" }].compactMap { $0 }
-        if !parts.isEmpty { return parts.joined(separator: " · ") }
-        return entries.contains { !$0.note.isEmpty } ? "Note sent" : nil
+        // FIT-351: a note on its own is Today's Note, not a check-in.
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 
@@ -101,7 +119,8 @@ struct CheckInSheet: View {
     var day: Date = .now
     /// The last weight logged, as the field's hint.
     var lastWeight: Double?
-    /// Whether the day had a check-in when the sheet opened, so emptying every field can clear it.
+    /// Whether the day had a check-in when the sheet opened, so emptying every field can clear it. FIT-351: the day's
+    /// note is written from Today's Note, and kept as it was here.
     @State private var existed = false
 
     @State private var weight = ""
@@ -110,7 +129,7 @@ struct CheckInSheet: View {
     @State private var failure: String?
     @FocusState private var focused: Field?
 
-    enum Field { case weight, sleep, note }
+    enum Field { case weight, sleep }
 
     var body: some View {
         NavigationStack {
@@ -118,9 +137,6 @@ struct CheckInSheet: View {
                 Section {
                     row("Weight", "lb", text: $weight, hint: lastWeight.map(Coach.number) ?? "180", field: .weight)
                     row("Sleep", "hours", text: $sleep, hint: "7.5", field: .sleep)
-                    TextField("How are you feeling? Anything sore?", text: $note, axis: .vertical)
-                        .lineLimit(2...4)
-                        .focused($focused, equals: .note)
                 } footer: {
                     Text(failure ?? "Your coach sees this with your training. Leave out anything you like.")
                         .foregroundStyle(failure == nil ? Color.secondary : Color.red)
@@ -132,7 +148,7 @@ struct CheckInSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(!existed && number(weight) == nil && number(sleep) == nil && note.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(!existed && number(weight) == nil && number(sleep) == nil)
                 }
             }
             .onAppear(perform: fill)
@@ -161,7 +177,7 @@ struct CheckInSheet: View {
     private func fill() {
         let rows = (try? CheckIn.entries(on: day, in: context)) ?? []
         let values = CheckIn.values(rows)
-        existed = !rows.isEmpty
+        existed = rows.contains { !$0.measurements.isEmpty }
         weight = values.weight.map(Coach.number) ?? ""
         sleep = values.sleep.map(Coach.number) ?? ""
         note = values.note
@@ -174,6 +190,50 @@ struct CheckInSheet: View {
         if let sleep, !(0...24).contains(sleep) { failure = "Sleep is hours, 0 to 24."; return }
         do {
             try CheckIn.replace(weight: weight, sleep: sleep, note: note, on: day, in: context)
+            dismiss()
+        } catch {
+            failure = "Couldn’t save that. Try again."
+        }
+    }
+}
+
+/// FIT-351: a note for the day, any day up to today, about anything ("knee felt off on the stairs", "travelling
+/// Thursday"). Your coach sees it with the day, and a note that says something hurts is flagged for them.
+struct DayNoteSheet: View {
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var typing: Bool
+    var day: Date
+    var coached: Bool
+    @State private var note = ""
+    @State private var failure: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Anything about today", text: $note, axis: .vertical).lineLimit(4...12).focused($typing)
+                } footer: {
+                    if let failure { Text(failure).foregroundStyle(.red) } else if coached { Text("Your coach sees this with your training.") }
+                }
+            }
+            .navigationTitle(Calendar.current.isDateInToday(day) ? "Note" : "Note · \(TodayScreen.dayName(day))")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() } }
+            }
+            .onAppear {
+                note = CheckIn.values((try? CheckIn.entries(on: day, in: context)) ?? []).note
+                typing = true
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func save() {
+        do {
+            try CheckIn.setNote(note, on: day, in: context)
             dismiss()
         } catch {
             failure = "Couldn’t save that. Try again."

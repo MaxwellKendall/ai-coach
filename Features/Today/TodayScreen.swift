@@ -44,6 +44,8 @@ struct TodayScreen: View {
     @State private var picking = false
     /// FIT-204: today's check-in sheet.
     @State private var checkingIn: CheckInDay?
+    /// FIT-351: the day a note is being written for.
+    @State private var noting: CheckInDay?
     /// FIT-344: the weekly check-in sheet.
     @State private var weekly = false
     @State private var review: WeekReport?
@@ -239,6 +241,7 @@ struct TodayScreen: View {
             CheckInSheet(day: checkIn.day,
                          lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
         }
+        .sheet(item: $noting) { DayNoteSheet(day: $0.day, coached: !pro.coaches.isEmpty) }
         .sheet(item: $sharing) { ShareWinSheet(win: $0) }
         .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
             if let review {
@@ -340,7 +343,7 @@ struct TodayScreen: View {
     // MARK: Header and strip
 
     /// The day shown as the title ("Today", "Tomorrow", "Monday"), the week strip to jump between days (FIT-27's strip,
-    /// brought back), and the goal line. One header for every page.
+    /// brought back), and a coached client's actions. One header for every page.
     private func header(_ days: [Date], cards: [DayCard]) -> some View {
         let shown = min(day ?? todayPos, days.count - 1)
         return VStack(alignment: .leading, spacing: 24) {
@@ -363,27 +366,9 @@ struct TodayScreen: View {
             .clipped()
             // FIT-332: swipe the strip for another week, as in Calendar; the pages below swipe between its days.
             .simultaneousGesture(WeekPaging.swipe { go(to: WeekPaging.week($0, from: shownWeek)) })
-            if let goal = goalLine {
-                HStack(spacing: 8) {
-                    Text(goal.label).font(.subheadline.weight(.semibold))
-                    ProgressView(value: goal.fraction).tint(Plate.current.mark).scaleEffect(y: 1.4)
-                    Text(goal.end.formatted(.dateTime.month(.abbreviated).day())).font(.subheadline.weight(.bold)).foregroundStyle(Plate.current.mark)
-                }
-                .accessibilityElement(children: .combine)
-            }
-            if !pro.coaches.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        // FIT-345: the shown day's check-in, today or before; a later day has none yet.
-                        if !(days[shown] > Calendar.current.startOfDay(for: .now)) { checkInButton(days[shown]) }
-                        Spacer()
-                        // FIT-340: every message with the coach, in one place.
-                        Button { conversing = true } label: { Label("Messages", systemImage: "bubble.left.and.bubble.right").font(.subheadline.weight(.medium)) }
-                            .buttonStyle(.plain)
-                    }
-                    if isToday(shown) { weeklyCheckIn }
-                }
-            }
+            // FIT-353: one row, Check in · Note · Messages, so the session stays first. The goal bar is gone: goals are
+            // on Progress.
+            if !pro.coaches.isEmpty { actionRow(days[shown], today: isToday(shown)) }
         }
         .padding(.horizontal, 20).padding(.top, 4)
     }
@@ -424,16 +409,6 @@ struct TodayScreen: View {
         }
     }
 
-    /// FIT-297: the first active goal, "Back squat 250 lb", and how far along its dates today is.
-    private var goalLine: (label: String, end: Date, fraction: Double)? {
-        guard let goal = goals.first(where: { $0.status == .active }), let option = GoalOption.all.first(where: { $0.metric == goal.metric }),
-              let end = goal.deadline.flatMap({ $0 > .now ? $0 : nil }) ?? profiles.first?.targetDate ?? goal.deadline else { return nil }
-        let start = profiles.first?.programStart ?? goal.createdAt
-        let fraction = min(1, max(0.02, Date.now.timeIntervalSince(start) / max(1, end.timeIntervalSince(start))))
-        let label = ["lb", "reps"].contains(goal.unit) ? "\(option.liftName) \(Coach.number(goal.target)) \(goal.unit)" : option.liftName
-        return (label, end, fraction)
-    }
-
     /// FIT-297: "Squat, bench press, row": a session named by its lifts, not "Day A".
     static func title(_ session: SessionPlan, names: [String: String], fallback: String) -> String {
         // The warm-up (blocks with no working sets) isn't what the session is called.
@@ -467,26 +442,46 @@ struct TodayScreen: View {
         return last
     }
 
-    /// FIT-344: the weekly check-in, from the coach's day until it's done; once done, what it said, to change.
-    @ViewBuilder private var weeklyCheckIn: some View {
-        let day = profiles.first?.checkInDay ?? WeeklyCheckIn.defaultDay
-        let start = Week.start(of: .now)
-        let done = entries.last { $0.kind == .checkin && $0.timestamp >= start }
-        if let done {
-            let values = Dictionary(done.measurements.map { ($0.metric, $0.value) }, uniquingKeysWith: { a, _ in a })
-            Button { weekly = true } label: {
-                Label("Weekly check-in · \(WeeklyCheckIn.summary(values))", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+    /// FIT-344: the weekly check-in is due: the coach's day or after, this week, and not done yet.
+    private var weeklyDue: Bool {
+        let done = entries.contains { $0.kind == .checkin && $0.timestamp >= Week.start(of: .now) }
+        return WeeklyCheckIn.isDue(profiles.first?.checkInDay ?? WeeklyCheckIn.defaultDay, today: .now, done: done)
+    }
+
+    /// FIT-353: the coached client's actions for the day shown. On the coach's day the weekly check-in takes Check in's
+    /// place until it's done; a later day has neither a check-in nor a note yet.
+    private func actionRow(_ day: Date, today: Bool) -> some View {
+        HStack(spacing: 22) {
+            if day <= Calendar.current.startOfDay(for: .now) {
+                if today && weeklyDue {
+                    // "Weekly check-in" doesn't fit beside Note and Messages: Check in, in the plate colour, and its clipboard.
+                    Button { weekly = true } label: {
+                        Label("Check in", systemImage: "list.clipboard").foregroundStyle(Plate.current.mark)
+                    }
+                    .accessibilityLabel("Weekly check-in")
+                    .accessibilityHint("Energy, stress, soreness, how the plan went, and a few words")
+                } else {
+                    checkInButton(day)
+                }
+                noteButton(day)
             }
-            .buttonStyle(.plain)
-        } else if WeeklyCheckIn.isDue(day, today: .now, done: false) {
-            Button { weekly = true } label: {
-                Label("Weekly check-in for your coach", systemImage: "list.clipboard")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Energy, stress, soreness, how the plan went, and a few words")
+            Spacer(minLength: 0)
+            // FIT-340: every message with the coach, in one place.
+            Button { conversing = true } label: { Label("Messages", systemImage: "bubble.left.and.bubble.right") }
         }
+        .font(.subheadline.weight(.medium))
+        .buttonStyle(.plain)
+        .lineLimit(1)
+    }
+
+    /// FIT-351: a note for the day, about anything; filled in once there is one.
+    private func noteButton(_ day: Date) -> some View {
+        let noted = !CheckIn.values(entries.filter { ($0.kind == .bodyweight || $0.kind == .sleep) && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }).note.isEmpty
+        return Button { noting = CheckInDay(day: day) } label: {
+            Label(noted ? "Noted" : "Note", systemImage: noted ? "checkmark.circle.fill" : "square.and.pencil")
+                .foregroundStyle(noted ? .secondary : .primary)
+        }
+        .accessibilityHint("A note for your coach about this day")
     }
 
     /// A check-in sheet's day.
@@ -501,12 +496,11 @@ struct TodayScreen: View {
         let rows = entries.filter { ($0.kind == .bodyweight || $0.kind == .sleep) && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }
         let summary = CheckIn.summary(rows)
         return Button { checkingIn = CheckInDay(day: day) } label: {
-            Label(summary.map { "Checked in · \($0)" } ?? "Check in", systemImage: summary == nil ? "plus.circle" : "checkmark.circle.fill")
-                .font(.subheadline.weight(.medium))
+            Label(summary == nil ? "Check in" : "Checked in", systemImage: summary == nil ? "plus.circle" : "checkmark.circle.fill")
                 .foregroundStyle(summary == nil ? .primary : .secondary)
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("Weight, sleep and a note for your coach")
+        .accessibilityValue(summary ?? "")
+        .accessibilityHint("Weight and sleep for your coach")
     }
 
     /// "Today", "Tomorrow", then the weekday.

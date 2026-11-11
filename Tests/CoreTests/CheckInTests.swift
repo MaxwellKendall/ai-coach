@@ -31,7 +31,30 @@ struct CheckInTests {
         try CheckIn.save(weight: nil, sleep: nil, note: "Travelling, back Monday", on: now, in: context, now: now)
         let rows = try CheckIn.entries(on: now, in: context)
         #expect(rows.count == 1 && rows[0].measurements.isEmpty && rows[0].note == "Travelling, back Monday")
-        #expect(CheckIn.summary(rows) == "Note sent")
+        #expect(CheckIn.summary(rows) == nil)
+    }
+
+    /// FIT-351: Today's Note writes the day's note where the check-in keeps it, changes it, and clears it.
+    @Test func theDaysNoteIsSetChangedAndCleared() throws {
+        let context = ModelContext(try AppSchema.container(inMemory: true))
+        try CheckIn.setNote(" Knee felt off on the stairs ", on: now, in: context, now: now)
+        var rows = try CheckIn.entries(on: now, in: context)
+        #expect(rows.count == 1 && rows[0].kind == .bodyweight && rows[0].measurements.isEmpty)
+        #expect(CheckIn.values(rows).note == "Knee felt off on the stairs")
+
+        // A check-in after keeps the note, and the note moves to nothing new.
+        try CheckIn.replace(weight: 182, sleep: 7, note: CheckIn.values(rows).note, on: now, in: context, now: now + 60)
+        try CheckIn.setNote("Travelling Thursday", on: now, in: context, now: now + 120)
+        rows = try CheckIn.entries(on: now, in: context)
+        #expect(rows.count == 2 && CheckIn.values(rows).note == "Travelling Thursday" && CheckIn.values(rows).weight == 182)
+
+        // Cleared: the weight and sleep stay; with no check-in, the empty row goes.
+        try CheckIn.setNote("", on: now, in: context, now: now + 180)
+        #expect(try CheckIn.entries(on: now, in: context).count == 2)
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now)!
+        try CheckIn.setNote("Rest", on: tomorrow, in: context, now: now)
+        try CheckIn.setNote(" ", on: tomorrow, in: context, now: now)
+        #expect(try CheckIn.entries(on: tomorrow, in: context).isEmpty)
     }
 
     /// FIT-345: a past day's check-in is saved to that day, and opened again it can be changed or cleared.

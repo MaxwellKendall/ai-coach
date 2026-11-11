@@ -131,6 +131,14 @@ describe("news for a client's coach", () => {
     expect(logNews([], [{ id: "w", kind: "bodyweight", note: "" }])).toBeNull();
   });
 
+  // FIT-351: a note of the day, with no workout, rides on the weight row.
+  it("is the day's note", () => {
+    const day = (text: string) => ({ id: "w", kind: "bodyweight", note: text });
+    expect(logNews([], [day("Travelling Thursday")])).toEqual({ kind: "note", note: "Travelling Thursday" });
+    expect(logNews([day("Travelling")], [day("Knee hurts on the stairs")])).toEqual({ kind: "pain", note: "Knee hurts on the stairs" });
+    expect(logNews([day("Travelling")], [day("Travelling")])).toBeNull();
+  });
+
   // FIT-343: a goal's test is news of its own, and isn't the day's session.
   it("is a test, not a session", () => {
     const single = { id: "t", kind: "workout", template: "back-squat", note: "", measurements: [{ metric: "load_lb", value: 315 }, { metric: "reps", value: 1 }, { metric: "test", value: 1 }] };

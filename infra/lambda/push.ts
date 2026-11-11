@@ -91,7 +91,8 @@ export function testText(row: LogRow) {
 /**
  * FIT-338: what a client's log change is worth telling their coach, from the day's log before and after: a note that
  * says something hurts first, then a new note, then the day's first session. Nothing for a set added to a session
- * already logged, a daily check-in, or an edit that changes neither.
+ * already logged, a daily check-in's weight or sleep, or an edit that changes neither. FIT-351: the day's note (on the
+ * sleep row, else the weight row, as Triage reads it) is a note too.
  * FIT-344: a weekly check-in, new or changed (pain when what they wrote says something hurts). FIT-343: a goal's new
  * test, which isn't a session.
  */
@@ -99,6 +100,10 @@ export function logNews(before: LogRow[], after: LogRow[]): { kind: "pain" | "no
   const note = (rows: LogRow[]) => rows.find((r) => r.kind === "workout" && !r.template && (r.note ?? "").trim())?.note?.trim();
   const said = note(after);
   if (said && said !== note(before)) return { kind: hurts(said) ? "pain" : "note", note: said };
+  const dayNote = (rows: LogRow[]) => [...rows.filter((r) => r.kind === "sleep"), ...rows.filter((r) => r.kind === "bodyweight")]
+    .map((r) => r.note?.trim()).find(Boolean);
+  const wrote = dayNote(after);
+  if (wrote && wrote !== dayNote(before)) return { kind: hurts(wrote) ? "pain" : "note", note: wrote };
   const weekly = (rows: LogRow[]) => rows.find((r) => r.kind === "checkin");
   const checked = weekly(after);
   if (checked && JSON.stringify(checked) !== JSON.stringify(weekly(before))) {
