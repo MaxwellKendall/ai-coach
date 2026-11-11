@@ -115,7 +115,7 @@ struct WelcomeView: View {
         .padding(.bottom, 28)
     }
 
-    /// The promise, its proof, and the three doors, each by its outcome.
+    /// The promise, its proof, the two doors, each by its outcome, and the way in for a coach's client.
     private var doors: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Hit your number by the date you set.").font(.display(34))
@@ -133,10 +133,19 @@ struct WelcomeView: View {
                 doorButton("Train on my own", "Your number, by your date", primary: true) {
                     if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
                 }
-                doorButton("I have a coach", "Their plan, in your pocket") { door = .athlete }
                 doorButton("I’m a coach", "More clients, not more hours") { door = .coach }
             }
             .padding(.top, 28)
+            // FIT-382 (author): joining a coach is the quiet way in, a link under the doors; most clients come by the
+            // coach's invite link, which skips this screen.
+            Button { withAnimation(.snappy) { door = .athlete } } label: {
+                Text("Have a coach? \(Text("Join them").foregroundStyle(Plate.current.mark).fontWeight(.semibold))")
+                    .font(.subheadline).foregroundStyle(Color.inkMuted)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 12)
         }
     }
 
