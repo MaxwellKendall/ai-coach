@@ -36,6 +36,28 @@ struct ClientDayTests {
         #expect(ClientDay.nextSession(units, from: "2026-11-15") == nil)
     }
 
+    /// FIT-379: several exercises picked at once land in the order picked, the first one the day's main lift.
+    @Test func severalExercisesInOneTrip() {
+        let rows = ClientDay.exercises(["back-squat", "romanian-deadlift", "plank"], on: day(13), after: [])
+        #expect(rows.map(\.template) == ["back-squat", "romanian-deadlift", "plank"])
+        #expect(rows.map(\.main) == [true, false, false])
+        #expect(zip(rows, rows.dropFirst()).allSatisfy { $0.at < $1.at })
+    }
+
+    /// FIT-379: sessions to copy, four weeks back to two ahead, newest first, not the day being planned nor rest days.
+    @Test func sessionsToCopyAreTheNearbyPlannedOnes() {
+        let meal = SyncUnits.PlanRow(id: UUID(), kind: .meal, at: day(9), slot: nil, template: nil, targets: [], note: "", adjustedReason: nil,
+                                     group: nil, main: false, pinned: false)
+        let units = ["plan#2026-10-01": SyncUnits.encode([row("deadlift", at: day(1))]),          // too long ago
+                     "plan#2026-11-09": SyncUnits.encode([meal]),                                 // nothing to lift
+                     "plan#2026-11-10": SyncUnits.encode([row("back-squat", at: day(10)), meal]),
+                     "plan#2026-11-12": SyncUnits.encode([row("bench-press", at: day(12))]),
+                     "plan#2026-11-13": SyncUnits.encode([row("press", at: day(13))])]            // the day being planned
+        let found = ClientDay.sessions(units, today: "2026-11-11", besides: "2026-11-13")
+        #expect(found.map(\.day) == ["2026-11-12", "2026-11-10"])
+        #expect(found[1].rows.map(\.template) == ["back-squat"])
+    }
+
     @Test func appendedGoesAfterWhatsThereInOrder() {
         let there = [row("bench-press", at: day(12) + 9 * 3600)]
         let coming = [row("back-squat", at: day(12) + 7 * 3600 + 1), row("deadlift", at: day(12) + 7 * 3600)]

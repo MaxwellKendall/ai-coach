@@ -155,6 +155,26 @@ enum ClientDay {
         return appended([row], to: existing)
     }
 
+    /// FIT-379: several new exercises on a day, in the order picked.
+    static func exercises(_ slugs: [String], on day: Date, after existing: [SyncUnits.PlanRow]) -> [SyncUnits.PlanRow] {
+        slugs.reduce(existing) { rows, slug in exercise(slug, on: day, after: rows) }
+    }
+
+    /// FIT-379: the planned sessions near `today` (four weeks back, two ahead) to copy onto another day, newest first:
+    /// the day and its workout rows, the day being planned left out.
+    static func sessions(_ units: [String: String], today: String, besides day: String, calendar: Calendar = .current) -> [(day: String, rows: [SyncUnits.PlanRow])] {
+        guard let now = SyncUnits.date(ofKey: "plan#\(today)", calendar: calendar) else { return [] }
+        let from = SyncUnits.day(calendar.date(byAdding: .day, value: -28, to: now)!, calendar: calendar)
+        let to = SyncUnits.day(calendar.date(byAdding: .day, value: 14, to: now)!, calendar: calendar)
+        return units.keys.filter { $0.hasPrefix("plan#") }.map { String($0.dropFirst(5)) }
+            .filter { $0 >= from && $0 <= to && $0 != day }
+            .sorted(by: >)
+            .compactMap { key in
+                let rows = plan(units, key).filter { $0.kind == .workout && $0.template != nil }
+                return rows.isEmpty ? nil : (day: key, rows: rows)
+            }
+    }
+
     /// A planned run, as the program plans one: the outdoor run with its distance, and its kind ("easy", "long", …)
     /// as the note, which Today's running tip reads (Coach.run).
     static func run(_ kind: String, miles: Double, on day: Date, after existing: [SyncUnits.PlanRow],

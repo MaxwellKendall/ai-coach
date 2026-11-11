@@ -23,11 +23,15 @@ struct ExercisePicker: View {
     var settings: TrainingSettings?
     var uses: [(slug: String, at: Date)]?
     let onPick: (String) -> Void
+    /// FIT-379: several in one trip: rows tick, and Add picks them in the order ticked.
+    var onPickMany: (([String]) -> Void)?
+    @State private var picked: [String] = []
     @State private var query = ""
     @State private var area: Area?
 
     init(title: String, replacing: String? = nil, excluding: Set<String> = [], warmup: Bool = false,
-         settings: TrainingSettings? = nil, uses: [(slug: String, at: Date)]? = nil, onPick: @escaping (String) -> Void) {
+         settings: TrainingSettings? = nil, uses: [(slug: String, at: Date)]? = nil, onPickMany: (([String]) -> Void)? = nil,
+         onPick: @escaping (String) -> Void) {
         self.title = title
         self.replacing = replacing
         self.excluding = excluding
@@ -35,6 +39,7 @@ struct ExercisePicker: View {
         self.settings = settings
         self.uses = uses
         self.onPick = onPick
+        self.onPickMany = onPickMany
         let since = Date.now.addingTimeInterval(-28 * 86_400)
         _logged = Query(filter: #Predicate<LogEntry> { $0.timestamp >= since })
         _planned = Query(filter: #Predicate<PlannedActivity> { $0.date >= since })
@@ -68,17 +73,28 @@ struct ExercisePicker: View {
                     Section(section.heading) {
                         ForEach(section.slugs, id: \.self) { slug in
                             Button {
-                                onPick(slug)
-                                dismiss()
-                            } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(names[slug] ?? slug).foregroundStyle(.primary)
-                                    if let exercise = bySlug[slug] { Text(Self.detail(exercise)).font(.footnote).foregroundStyle(.secondary) }
+                                if onPickMany != nil {
+                                    if let index = picked.firstIndex(of: slug) { picked.remove(at: index) } else { picked.append(slug) }
+                                } else {
+                                    onPick(slug)
+                                    dismiss()
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(names[slug] ?? slug).foregroundStyle(.primary)
+                                        if let exercise = bySlug[slug] { Text(Self.detail(exercise)).font(.footnote).foregroundStyle(.secondary) }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    if onPickMany != nil {
+                                        Image(systemName: picked.contains(slug) ? "checkmark.circle.fill" : "circle")
+                                            .font(.title3).foregroundStyle(picked.contains(slug) ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                                    }
+                                }
                                 .contentShape(.rect)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityAddTraits(picked.contains(slug) ? .isSelected : [])
                         }
                     }
                 }
@@ -92,7 +108,18 @@ struct ExercisePicker: View {
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search exercises")
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                if let onPickMany {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(picked.isEmpty ? "Add" : "Add \(picked.count)") {
+                            onPickMany(picked)
+                            dismiss()
+                        }
+                        .disabled(picked.isEmpty)
+                    }
+                }
+            }
         }
     }
 

@@ -46,7 +46,7 @@ struct ClientScreen: View {
 
     struct Correcting: Identifiable { var slug: String; var name: String; var id: String { slug } }
 
-    enum Adding: String, Identifiable { case workout, run; var id: String { rawValue } }
+    enum Adding: String, Identifiable { case workout, run, copy; var id: String { rawValue } }
     enum WeekSheet: String, Identifiable { case repeating, program; var id: String { rawValue } }
     struct Pending { var days: [String: [SyncUnits.PlanRow]]; var replacing: Int; var done: String }
     enum Dated: String, Identifiable { case move, copy; var id: String { rawValue } }
@@ -116,10 +116,17 @@ struct ClientScreen: View {
             switch adding {
             case .workout:
                 let units = latest()?.units ?? [:]
-                ExercisePicker(title: "Add exercise", excluding: Set(ClientDay.plan(units, day).compactMap(\.template)),
-                               settings: ClientDay.settings(units), uses: ClientDay.uses(units)) { slug in
+                // FIT-379: several in one trip.
+                ExercisePicker(title: "Add exercises", excluding: Set(ClientDay.plan(units, day).compactMap(\.template)),
+                               settings: ClientDay.settings(units), uses: ClientDay.uses(units), onPickMany: { slugs in
                     guard let client = latest() else { return }
-                    send(day, rows: ClientDay.exercise(slug, on: date, after: ClientDay.plan(client.units, day)), client)
+                    send(day, rows: ClientDay.exercises(slugs, on: date, after: ClientDay.plan(client.units, day)), client)
+                }, onPick: { _ in })
+            case .copy:
+                CopySessionSheet(client: id, day: day, names: names) { rows in
+                    guard let client = latest() else { return }
+                    let copied = ClientDay.appended(ClientDay.shifted(rows, to: date, fresh: true), to: ClientDay.plan(client.units, day))
+                    send(day, rows: copied, client, done: "Copied to \(Self.dayTitle(day))")
                 }
             case .run:
                 PlanRunSheet(day: day) { kind, miles in
@@ -335,6 +342,11 @@ struct ClientScreen: View {
                     Button { adding = .workout } label: { Label("Workout", systemImage: "plus").frame(maxWidth: .infinity) }.buttonStyle(.primary)
                     Button { adding = .run } label: { Label("Run", systemImage: "figure.run").frame(maxWidth: .infinity) }.buttonStyle(.secondary)
                 }
+                // FIT-379: a session from another of their days, or another client's.
+                Button { adding = .copy } label: {
+                    Label("Copy a Session", systemImage: "doc.on.doc").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.secondary)
             }
         }
     }
