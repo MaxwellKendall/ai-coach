@@ -160,7 +160,8 @@ final class Roster {
                 return fetched
             }
             let loaded = people.enumerated().map { index, person in
-                let (units, comments) = fetched[index]!
+                let (fetchedUnits, comments) = fetched[index]!
+                let units = withUnsent(fetchedUnits, of: person.uid)
                 return Client(person: person, units: units, comments: comments,
                               week: Triage.week(units, comments: comments, names: names, coach: coach, today: today))
             }
@@ -183,7 +184,41 @@ final class Roster {
         async let units = Cloud.units(of: id)
         async let comments = Cloud.comments(of: id)
         (client.units, client.comments) = try await (units, comments)
+        client.units = withUnsent(client.units, of: id)
         update(client, coach: coach, names: names)
+    }
+
+    // MARK: FIT-374: changes that didn't reach their phone
+
+    /// A unit changed here that the server hasn't got: what their phone has, to go back to, and the change.
+    struct Unsent: Equatable { var theirs: String?; var mine: String? }
+
+    /// Client → unit key → change, until it's sent or discarded. Not saved: a relaunch fetches what they have.
+    private(set) var unsent: [String: [String: Unsent]] = [:]
+
+    /// The first failure keeps what they had; a later change to the same unit replaces only mine.
+    func markUnsent(_ id: String, _ key: String, theirs: String?, mine: String?) {
+        unsent[id, default: [:]][key] = Unsent(theirs: unsent[id]?[key]?.theirs ?? theirs, mine: mine)
+    }
+
+    func markSent(_ id: String, _ key: String) {
+        unsent[id]?[key] = nil
+        if unsent[id]?.isEmpty == true { unsent[id] = nil }
+    }
+
+    /// The unsent changes put back to what their phone has.
+    func discardUnsent(_ id: String, coach: String, names: [String: String]) {
+        guard var client = clients.first(where: { $0.id == id }), let changes = unsent[id] else { return }
+        for (key, change) in changes { client.units[key] = change.theirs }
+        unsent[id] = nil
+        update(client, coach: coach, names: names)
+    }
+
+    /// A client's units as fetched, with what hasn't been sent yet still showing as changed here.
+    private func withUnsent(_ units: [String: String], of id: String) -> [String: String] {
+        var units = units
+        for (key, change) in unsent[id] ?? [:] { units[key] = change.mine }
+        return units
     }
 
     /// A client as just changed here (a reply, an edited day), without fetching everyone again.

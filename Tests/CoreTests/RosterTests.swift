@@ -30,6 +30,21 @@ struct RosterTests {
         #expect(!Roster.restored(from: url.appending(path: "missing")).loaded)
     }
 
+    /// FIT-374: a change that didn't reach their phone keeps what they had, however many times it's changed again, and
+    /// Discard puts that back.
+    @Test func anUnsentChangeKeepsWhatTheyHadUntilDiscarded() {
+        let roster = Roster(clients: [client("Mike", units: ["plan#2026-11-12": "theirs"])])
+        roster.markUnsent("Mike", "plan#2026-11-12", theirs: "theirs", mine: "first")
+        roster.markUnsent("Mike", "plan#2026-11-12", theirs: "first", mine: "second")
+        roster.markUnsent("Mike", "plan#2026-11-13", theirs: nil, mine: "new day")
+        #expect(roster.unsent["Mike"]?["plan#2026-11-12"] == Roster.Unsent(theirs: "theirs", mine: "second"))
+        roster.markSent("Mike", "plan#2026-11-13")
+        #expect(roster.unsent["Mike"]?.keys.sorted() == ["plan#2026-11-12"])
+        roster.discardUnsent("Mike", coach: "coach-1", names: [:])
+        #expect(roster.unsent["Mike"] == nil)
+        #expect(roster.clients[0].units["plan#2026-11-12"] == "theirs")
+    }
+
     @Test func lastLoggedIsTheLatestRowOfTheLatestDay() {
         func log(_ times: [Double]) -> String {
             String(decoding: try! JSONSerialization.data(withJSONObject: times.map {
