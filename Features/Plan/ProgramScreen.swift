@@ -191,8 +191,12 @@ struct ProgramScreen: View {
 
     private func program(_ weeks: [ProgramWeek], start: Date, current: Int, profile: Profile) -> some View {
         let index = Binding(get: { min(selected ?? current, weeks.count - 1) }, set: { selected = $0 })
-        // FIT-363: no bar of week blocks; each card says which week of how many, and swipes to the next.
         return VStack(spacing: 0) {
+            PhaseBars(weeks: weeks, current: current, selected: index.wrappedValue, tap: { week in
+                withAnimation(.snappy) { selected = week }
+            }, phases: profile.programSlug == nil)
+            .padding(.horizontal, 22)
+            .padding(.top, 12)
             SwipeDeck(index: index, count: weeks.count) { week in
                 weekCard(week, weeks: weeks, start: start, current: current, profile: profile)
             }
@@ -261,7 +265,7 @@ struct ProgramScreen: View {
         let week = weeks[index]
         let monday = ProgramPlan.monday(index, start: start)
         let sunday = Calendar.current.date(byAdding: .day, value: 6, to: monday)!
-        let name = "Week \(index + 1) of \(weeks.count)"
+        let name = index == current ? "This week" : index == current + 1 ? "Next week" : "Week \(index + 1)"
         // The week's kind (build, deload, test) is the title; the sessions, by their lifts, say the rest.
         return VStack(alignment: .leading, spacing: 0) {
             weekLine(name, monday: monday, sunday: sunday)
