@@ -171,13 +171,30 @@ enum ProgramDesigner {
             try await fillLoads(&designed, request, settings: settings, log: log, model: model)
             let (workouts, why) = rows(designed, request, settings: settings, tier: tier)
             guard !workouts.isEmpty else { return fallback("the model planned nothing", calls: log.calls.withLock { $0 }) }
-            let guarded = PlanGuard.check(workouts, context)
+            var guarded = PlanGuard.check(workouts, context)
+            guarded.workouts = reasoned(guarded.workouts, before: workouts, names: request.names)
             return Result(week: TrainingWeek(workouts: guarded.workouts, deload: light,
                                              warnings: TrainingGenerator.weekWarnings(program: request.program, deload: light)),
                           repairs: guarded.repairs, source: .model, seconds: seconds(), calls: log.calls.withLock { $0 },
                           why: why)
         } catch {
             return fallback("\(error)", calls: log.calls.withLock { $0 })
+        }
+    }
+
+    /// FIT-426: a load PlanGuard brought down no longer matches the model's reason for it ("85 lb" became 56), so the
+    /// row says what it is now and why.
+    static func reasoned(_ guarded: [PlannedWorkout], before: [PlannedWorkout], names: [String: String]) -> [PlannedWorkout] {
+        var designed = Dictionary(grouping: before) { "\($0.date) \($0.exercise)" }
+        return guarded.map { row in
+            let key = "\(row.date) \(row.exercise)"
+            guard let was = designed[key]?.first else { return row }
+            designed[key]?.removeFirst()
+            let load = { (row: PlannedWorkout) in row.target("load_lb") ?? row.target("load_lb_hand") }
+            guard let now = load(row), let then = load(was), now < then else { return row }
+            var changed = row
+            changed.adjustedReason = "\(names[row.exercise] ?? row.exercise) at \(Coach.number(now)) lb, near your recent sets"
+            return changed
         }
     }
 
@@ -249,7 +266,8 @@ enum ProgramDesigner {
         }
         if !light { lines += aims(request) }
         if !request.progression.isEmpty {
-            lines.append("Main lifts' top sets this week, decided from how they went; keep to them:\n"
+            lines.append("Main lifts' top sets this week, decided from how they went; keep to them, unless their notes report pain "
+                         + "in that lift: then hold it or ease it, and say so in its change:\n"
                          + request.progression.map { Progression.line($0, names: request.names) }.joined(separator: "\n"))
         }
         let low = light ? max(1, Int(Double(range.lowerBound) * TrainingGenerator.deloadSets)) : range.lowerBound

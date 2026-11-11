@@ -42,6 +42,8 @@ struct ProgressionTests {
         #expect(rules.step(lift([sets(6, reps: [5, 5, 4]), sets(13, reps: [5, 4, 4])])) == .backOff)
         // Time off: more than 2 weeks holds, more than 4 backs off.
         #expect(rules.step(lift([sets(20, reps: [5, 5, 5])], daysOff: 20)) == .hold)
+        // FIT-426: a missed week holds it too.
+        #expect(rules.step(lift([sets(10, reps: [5, 5, 5])], daysOff: 10)) == .hold)
         #expect(rules.step(lift([sets(35, reps: [5, 5, 5])], daysOff: 35)) == .backOff)
         // Nothing to go on: hold.
         #expect(rules.step(lift([])) == .hold)
@@ -140,7 +142,7 @@ struct ProgressionTests {
         request.progression = [Progression.Decision(exercise: "bench-press", step: .add, load: 190, reps: 5, estimatedMax: 214,
                                                     perHand: false, confidence: 0.9)]
         let prompt = ProgramDesigner.prompt(request, settings: settings, light: false)
-        #expect(prompt.contains("Main lifts' top sets this week, decided from how they went; keep to them:\nBench Press: add → top set 190 × 5."))
+        #expect(prompt.contains("Main lifts' top sets this week, decided from how they went; keep to them, unless their notes report pain in that lift: then hold it or ease it, and say so in its change:\nBench Press: add → top set 190 × 5."))
         #expect(prompt.contains("Bench Press is a goal (225 lb): aim for an estimated max of about"))
         #expect(!prompt.contains("a top set near"))
     }

@@ -77,6 +77,18 @@ struct ProgramDesignerTests {
         #expect(Coach.plan(deload: false, reasons: ["edited", bench!.adjustedReason!]) == "Bench held at 185: two sets short Tuesday.")
     }
 
+    /// FIT-426: a load the guard brought down says what it is now, not the model's old number.
+    @Test func aRepairedLoadSaysWhatItIsNow() {
+        let row = PlannedWorkout(date: monday, session: "A", exercise: "bench-press",
+                                 targets: [.init(metric: "load_lb", value: 85, unit: "lb")], adjustedReason: "Up to 85: easy last week")
+        var repaired = row
+        repaired.targets = [.init(metric: "load_lb", value: 56, unit: "lb")]
+        let other = PlannedWorkout(date: monday, session: "A", exercise: "pull-up", targets: [], adjustedReason: "Pull-ups for rows")
+        let rows = ProgramDesigner.reasoned([repaired, other], before: [row, other], names: names)
+        #expect(rows[0].adjustedReason == "Bench Press at 56 lb, near your recent sets")
+        #expect(rows[1].adjustedReason == "Pull-ups for rows")
+    }
+
     @Test func aDesignBecomesRowsOnTheTrainingDays() {
         let request = request()
         let designed = ProgramDesigner.DesignedWeek(sessions: [

@@ -184,7 +184,9 @@ enum Progression {
 
         func step(_ lift: Lift) -> Step {
             if let off = lift.daysOff, off > 28 { return .backOff }
-            if let off = lift.daysOff, off > 14 { return .hold }
+            // FIT-426: a week or more without it (each main lift is trained every week) holds it; the week evals' judge
+            // called going up after a missed week "a big jump after no training".
+            if let off = lift.daysOff, off > 7 { return .hold }
             guard let last = lift.sessions.first, !last.isEmpty else { return .hold }
             if Progression.short(last, planned: lift.plannedReps) {
                 let before = lift.sessions.dropFirst().first
