@@ -29,5 +29,6 @@ struct SessionTitleTests {
         #expect(TodayScreen.short("Bent Over Barbell Row") == "row")
         #expect(TodayScreen.short("Bench Press") == "bench press")
         #expect(TodayScreen.short("Deadlift") == "deadlift")
+        #expect(TodayScreen.short("Dumbbell Row (single-arm)") == "row")
     }
 }

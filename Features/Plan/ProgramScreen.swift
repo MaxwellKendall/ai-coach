@@ -45,7 +45,7 @@ struct ProgramScreen: View {
         var days: [RegenerateSheet.Day]
     }
 
-    enum Tab: String, CaseIterable { case program = "Program", goals = "Goals", wins = "Wins" }
+    enum Tab: String, CaseIterable { case program = "Program", goals = "Goals", wins = "Wins", history = "History" }
 
     init(tabs: [Tab]) {
         self.tabs = tabs
@@ -67,9 +67,12 @@ struct ProgramScreen: View {
                         goalList(ProgramSpan(weeks: weeks, start: start, current: current,
                                              end: profile.targetDate ?? ProgramPlan.monday(weeks.count, start: start)))
                     case .wins: WinsScreen()
+                    case .history: HistoryScreen()
                     }
                 } else if tab == .wins {
                     WinsScreen()
+                } else if tab == .history {
+                    HistoryScreen()
                 } else if tab == .program {
                     // FIT-201: a coach's client, or someone logging on their own, has no program of the app's.
                     plannedWeeks
@@ -167,7 +170,7 @@ struct ProgramScreen: View {
                     ForEach(tabs, id: \.self) { Text($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 200)
+                .frame(width: CGFloat(tabs.count) * 100)
             }
         }
         .padding(.horizontal, 22).padding(.top, 4).padding(.bottom, 4)

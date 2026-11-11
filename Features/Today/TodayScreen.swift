@@ -426,7 +426,8 @@ struct TodayScreen: View {
     /// A lift by the word people say: "Back Squat" → "squat", "Bent Over Barbell Row" → "row", "Bench Press" →
     /// "bench press" (a press needs its kind).
     static func short(_ name: String) -> String {
-        let words = name.split(separator: " ").map(String.init)
+        // FIT-356: "Dumbbell Row (single-arm)" is a row; the brackets only say which kind.
+        let words = name.replacing(/\s*\(.*\)\s*$/, with: "").split(separator: " ").map(String.init)
         guard let last = words.last else { return name.lowercased() }
         let needsKind = ["Press", "Raise", "Curl", "Extension", "Fly", "Pulldown", "Thrust"].contains(last)
         return (needsKind && words.count > 1 ? "\(words[words.count - 2]) \(last)" : last).lowercased()
@@ -610,7 +611,7 @@ struct TodayScreen: View {
             SessionList(session: plan.session, names: names, previous: previousLoads,
                         checked: lifts.isEmpty || !isToday ? nil : $checked,
                         onLoad: isToday ? { exercise, step in changeLoad(exercise, by: step, in: plan.items) } : nil,
-                        onEdit: isToday ? { edited($0, over: plan.items) } : nil)
+                        onEdit: isToday ? { edited($0, over: plan.items) } : nil, history: true)
             ForEach(plan.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
         }
     }

@@ -491,6 +491,6 @@ struct BlockBadge: View {
     }
 }
 
-private struct HowToID: Identifiable {
+struct HowToID: Identifiable {
     var id: String
 }

@@ -56,10 +56,14 @@ struct HowToSheet: View {
     let name: String
     let slug: String
     let steps: [String]
+    /// FIT-356: your last sessions of it, under the how-to.
+    var history = false
 
     var body: some View {
         NavigationStack {
             List {
+                // Mid-workout, what you did last time matters most.
+                if history { ExerciseHistorySection(slug: slug, limit: 3) }
                 if !ExercisePhotos.urls(slug).isEmpty {
                     Section { HowToPhotos(slug: slug) }.listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
                 }

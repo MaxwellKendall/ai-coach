@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 /// FIT-297, design A: today's session as a list. The warm-up first, folded to one line; each lift with its sets and its
@@ -17,6 +18,8 @@ struct SessionList: View {
     var onLoad: ((String, Double) -> Void)?
     /// FIT-302: the session as changed by hand, to save; nil where it can't be changed (another day).
     var onEdit: ((SessionPlan) -> Void)?
+    /// FIT-356: the ⋯ offers the how-to with your last sessions of the lift: on your own Today, not a client's day.
+    var history = false
     @State private var warm = false
     /// The exercise whose load is being changed.
     @State private var editing: String?
@@ -25,6 +28,9 @@ struct SessionList: View {
     /// Whether the open lift has been changed since it opened: only then does its ✓ show (author, 2026-11-10).
     @State private var changed = false
     @State private var picking: Picking?
+    /// FIT-356: the lift whose how-to and history are open.
+    @State private var looking: String?
+    @Query private var templates: [Template]
 
     struct Pick: Equatable { var block: Int, movement: Int }
 
@@ -78,6 +84,10 @@ struct SessionList: View {
         .animation(.snappy, value: open)
         .animation(.snappy, value: changed)
         .onChange(of: open) { changed = false }
+        .sheet(item: Binding(get: { looking.map(HowToID.init) }, set: { looking = $0?.id })) { item in
+            let template = templates.first { $0.slug == item.id }
+            HowToSheet(name: names[item.id] ?? item.id, slug: item.id, steps: template?.values("instructions") ?? [], history: true)
+        }
         .sheet(item: $picking) { picking in
             let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
             switch picking {
@@ -276,6 +286,7 @@ struct SessionList: View {
     @ViewBuilder private func actions(_ movement: SessionPlan.Movement, pick: Pick) -> some View {
         let place = lifts.firstIndex(of: pick.block) ?? 0
         Button("Edit Sets", systemImage: "slider.horizontal.3") { open = pick }
+        if history { Button("How To and History", systemImage: "clock.arrow.circlepath") { looking = movement.exercise } }
         Button("Swap", systemImage: "arrow.triangle.2.circlepath") { picking = .swap(pick, movement.exercise) }
         Button("Move Up", systemImage: "arrow.up") { change { $0.move(block: pick.block, by: lifts[place - 1] - pick.block) } }
             .disabled(place == 0)

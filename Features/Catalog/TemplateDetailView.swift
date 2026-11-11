@@ -25,6 +25,8 @@ struct TemplateDetailView: View {
                     DisclosureGroup("How to do it", isExpanded: $showSteps) { HowToSteps(steps: steps) }
                 }
             }
+            // FIT-356: your last sessions of it.
+            if template.kind == .exercise { ExerciseHistorySection(slug: template.slug) }
             if !details.isEmpty {
                 Section {
                     ForEach(details, id: \.key) { attr in
