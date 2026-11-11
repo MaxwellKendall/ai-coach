@@ -150,7 +150,7 @@ struct ProgramScreen: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(tabs.count > 1 || tab == .goals ? "Progress" : tab.rawValue).font(.display(34))
+                Text(tabs.count > 1 ? "Progress" : tab.rawValue).font(.display(34))
                 Spacer()
                 // FIT-111: share the program, signed in and once it has a brief.
                 if tab == .program, Pilot.groups, account.user != nil, let profile = profiles.first, profile.brief != nil {
@@ -620,80 +620,66 @@ struct ProgramScreen: View {
             }
             return GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: program.current, weeks: program.weeks)
         }
-        let status = [program.map { "Week \($0.current + 1) of \($0.weeks.count)" }].compactMap { $0 }
-        let days = Array(ExerciseHistory.days(sets).prefix(5))
-        // FIT-363: one page, not three tabs: goals a line each (the card a tap away), recent workouts, wins.
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                if !status.isEmpty {
-                    Text(status.joined(separator: " · ")).font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                }
-                ProgressCharts<EmptyView>.section("Goals") {
-                    ForEach(items.indices, id: \.self) { position in
-                        let item = items[position]
-                        let option = GoalOption.with(id: item.option)!
-                        let from = item.goal.baseline ?? item.goal.target
-                        let now = GoalProgress.standing(item.goal.metric, logged: GoalProgress.current(item.goal.metric, sets: sets, weighIns: weighIns,
-                                                                                                       since: spans[position].start), from: from)
-                        NavigationLink {
-                            ScrollView {
-                                GoalCard(goal: item.goal, option: option, weeks: program?.weeks ?? [], start: spans[position].start,
-                                         end: spans[position].end, current: program?.current ?? 0,
-                                         sets: sets, weighIns: weighIns, next: (option.exercise ?? (option.measure == .time ? Running.outdoor : nil)).flatMap(nextWorkout),
-                                         setTarget: { setTarget(item.goal, $0) },
-                                         update: { updating = item.goal }, change: { changing = item.goal })
-                                    .padding(20)
-                            }
-                            .screenBackground()
-                            .navigationTitle(option.name).navigationBarTitleDisplayMode(.inline)
-                        } label: {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(option.name).font(.headline)
-                                Spacer()
-                                Text("\(option.format(now)) → \(option.format(item.goal.target))").font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit()
-                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-                            }
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu { Button("Drop This Goal", systemImage: "trash", role: .destructive) { drop(item.goal) } }
-                        Divider()
-                    }
-                    Button { addingGoal = true } label: {
-                        Label("Add a Goal", systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
-                    }
-                    .buttonStyle(.plain)
-                }
-                ProgressCharts<EmptyView>.section("Workouts") {
-                    if days.isEmpty { Text("Workouts you log show up here.").font(.subheadline).foregroundStyle(Color.inkMuted) }
-                    ForEach(days) { day in
-                        NavigationLink { HistoryDayView(day: day, names: names) } label: {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(TodayScreen.title(lifts: day.lifts.map { names[$0.exercise] ?? $0.exercise })).font(.headline).lineLimit(1)
-                                Spacer()
-                                Text(day.date.formatted(.dateTime.month(.abbreviated).day())).font(.subheadline).foregroundStyle(Color.inkMuted)
-                            }
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        Divider()
-                    }
-                    NavigationLink { HistoryScreen().screenBackground().navigationTitle("History").navigationBarTitleDisplayMode(.inline) } label: {
-                        Text("All Workouts and Trends").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
-                    }
-                    .buttonStyle(.plain)
-                }
-                NavigationLink { WinsScreen().screenBackground().navigationTitle("Wins").navigationBarTitleDisplayMode(.inline) } label: {
-                    HStack {
-                        Label("Wins", systemImage: "trophy").font(.headline)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-                    }
-                    .padding(16).cardBackground()
-                }
-                .buttonStyle(.plain)
+        let index = Binding(get: { min(goalIndex, max(0, items.count - 1)) }, set: { goalIndex = $0 })
+        let status = [program.map { "Week \($0.current + 1) of \($0.weeks.count)" }, Self.summary(paces)].compactMap { $0 }
+        return VStack(alignment: .leading, spacing: 0) {
+            // One quiet line: where the program is and how the goals stand.
+            if !status.isEmpty {
+                Text(status.joined(separator: " · "))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 10)
             }
-            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 32)
+            ScrollViewReader { reader in
+                ScrollView(.horizontal) {
+                    HStack(spacing: 6) {
+                        ForEach(items.indices, id: \.self) { position in
+                            let on = position == index.wrappedValue
+                            let option = GoalOption.with(id: items[position].option)!
+                            Button { withAnimation(.snappy) { index.wrappedValue = position } } label: {
+                                Text(WeekReport.short(option)).font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(on ? Color(.systemBackground) : .secondary)
+                                    .padding(.horizontal, 14).frame(minHeight: 34)
+                                    .background(on ? Color.primary : Color.surface, in: .capsule)
+                                    .contentShape(.capsule)
+                            }
+                            .buttonStyle(.plain)
+                            .id(position)
+                            .accessibilityLabel(option.name)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                            .contextMenu {
+                                Button("Drop This Goal", systemImage: "trash", role: .destructive) { drop(items[position].goal) }
+                            }
+                        }
+                        addGoalChip
+                    }
+                    .padding(.horizontal, 22)
+                }
+                .scrollIndicators(.hidden)
+                .onChange(of: index.wrappedValue) { _, position in withAnimation(.snappy) { reader.scrollTo(position, anchor: .center) } }
+            }
+            .padding(.top, 10)
+            SwipeDeck(index: index, count: items.count) { position in
+                let item = items[position]
+                let option = GoalOption.with(id: item.option)!
+                GoalCard(goal: item.goal, option: option, weeks: program?.weeks ?? [], start: spans[position].start,
+                         end: spans[position].end, current: program?.current ?? 0,
+                         sets: sets, weighIns: weighIns, next: (option.exercise ?? (option.measure == .time ? Running.outdoor : nil)).flatMap(nextWorkout),
+                         setTarget: { setTarget(item.goal, $0) },
+                         update: { updating = item.goal }, change: { changing = item.goal })
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+        }
+        .overlay {
+            if items.isEmpty {
+                ContentUnavailableView {
+                    Label("No goals yet", systemImage: "target")
+                } actions: {
+                    Button("Add a Goal") { addingGoal = true }.buttonStyle(.primary)
+                }
+            }
         }
     }
 
