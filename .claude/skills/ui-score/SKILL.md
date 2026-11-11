@@ -77,6 +77,24 @@ Write `.claude/skills/ui-score/sim.json`:
 
 Every item is listed, with a note that says what failed. A rerun replaces the file.
 
+## Per screen (FIT-367)
+
+`score.py --screens` scores each screen in `screens.json` on its own, out of 100: the same automated 60 over only
+that screen's view files, plus 40 for its simulator items. Each screen has `light`, `dark` and `xl` (2 points each,
+graded as above) and `design` (4 points): judged against the design skill's laws, one primary action, native
+patterns (toolbar buttons, large titles, standard sheets with Cancel and the action in the bar), progressive
+disclosure, no duplicate paths to the same thing, nothing that reads as clutter above the content. A row of text
+buttons over the screen's content is a design 0.
+
+Screens cover the roles too: a coached client (`-coach Sam`) and a coach with a full roster (`-sampleClients YES`, 14
+made-up clients, so search and long names show). Add a screen to `screens.json` with the files that draw it and how to
+reach it (`how`), and set `commit` when the pass is done.
+
+```bash
+python3 .claude/skills/ui-score/score.py --screens            # each screen, LOW under 90, and what lost points
+python3 .claude/skills/ui-score/score.py --screens --findings # plus each screen's automated findings
+```
+
 ## Raising the score
 
 1. Run `score.py --findings` and the simulator pass. Fix the biggest losses first.

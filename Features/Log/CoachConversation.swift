@@ -63,6 +63,7 @@ struct CoachConversation: View {
             let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             Button(action: send) {
                 Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(Plate.current.onAccent)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge) // FIT-367: the arrow stays inside its 36 pt circle
                     .frame(width: 36, height: 36).background(Plate.current.accent.opacity(empty || sending ? 0.35 : 1), in: .circle)
             }
             .disabled(empty || sending)

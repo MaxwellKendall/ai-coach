@@ -28,6 +28,8 @@ extension Roster {
             if let note { rows.append(["id": UUID().uuidString, "kind": "workout", "at": at(offset) + 9, "note": note, "measurements": []]) }
             return ("log#\(day(offset))", json(rows))
         }
+        let more = ["Priya Natarajan", "Alexandria Montgomery-Whitfield", "Ben Okafor", "Chloe Dubois", "Diego Alvarez",
+                    "Emma Lindqvist", "Hiro Tanaka", "Jordan Blake", "Lena Fischer", "Marcus Bell", "Nora Haddad"]
         let names = ["back-squat": "Back Squat", "bench-press": "Bench Press", "romanian-deadlift": "Romanian Deadlift"]
         func client(_ name: String, _ pairs: [(String, String)]) -> Client {
             let units = Dictionary(pairs, uniquingKeysWith: { a, _ in a })
@@ -41,7 +43,17 @@ extension Roster {
             client("Sara Kim", [plan(-4, [("bench-press", 135)]), plan(-1, [("bench-press", 135)]), plan(1, [("bench-press", 140)])]),
             client("Tom Reyes", [plan(-3, [("bench-press", 185)]), log(-3, "bench-press", [(185, 5, 8), (185, 5, 8), (185, 5, 8)], note: nil),
                                  plan(2, [("bench-press", 190)])]),
-        ]
+        ] + more.enumerated().map { index, name in
+            // FIT-367: a full roster, to look at a coach with many clients: on track, a day behind, or nothing planned.
+            let lift = ["back-squat", "bench-press", "romanian-deadlift"][index % 3]
+            let load = Double(135 + index * 10)
+            switch index % 3 {
+            case 0: return client(name, [plan(-2, [(lift, load)]), log(-2, lift, [(load, 5, 7), (load, 5, 8), (load, 5, 8)], note: nil),
+                                         plan(1, [(lift, load + 5)])])
+            case 1: return client(name, [plan(-1, [(lift, load)]), plan(2, [(lift, load)])])
+            default: return client(name, [])
+            }
+        }
     }
 }
 #endif

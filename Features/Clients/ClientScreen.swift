@@ -12,6 +12,7 @@ struct ClientScreen: View {
     @Environment(Account.self) private var account
     @Environment(\.dismiss) private var dismiss
     @Environment(Roster.self) private var roster
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Query private var templates: [Template]
     @State private var day: String
     /// FIT-331: the Sunday of the week shown; any week, earlier or later.
@@ -57,33 +58,13 @@ struct ClientScreen: View {
         ScrollView {
             if let client {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack(spacing: 14) {
-                        Avatar(client: client, size: 52)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(client.name).font(.display(28))
-                            Text(summary(client)).font(.subheadline).foregroundStyle(Color.inkMuted)
-                        }
-                        Spacer(minLength: 0)
-                        // FIT-337: their goals, lifts, weeks, check-ins and profile.
-                        NavigationLink(value: ClientProgressScreen.Ref(client: id)) {
-                            Image(systemName: "chart.line.uptrend.xyaxis").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
-                                .frame(width: 44, height: 44).background(Color.fill, in: .circle)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(client.name)’s progress")
-                        // FIT-331: every message with them, all days, in one conversation.
-                        NavigationLink(value: DayThread.Ref(client: id, day: today)) {
-                            Image(systemName: "bubble.left.and.bubble.right").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
-                                .frame(width: 44, height: 44).background(Color.fill, in: .circle)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Messages with \(client.name)")
-                    }
                     flags(client)
                     VStack(spacing: 12) {
                         // FIT-363: the week's actions are in the day's ⋯, so the bar shows only for another week.
                         if start != Week.start(of: .now) { WeekBar(start: start, go: { go(to: $0) }) }
                         strip(client)
+                            // As Today's strip: seven dates across stay whole.
+                            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                             .id(start)
                             .motionTransition(.push(from: forward ? .trailing : .leading))
                     }
@@ -92,10 +73,28 @@ struct ClientScreen: View {
                     .simultaneousGesture(WeekPaging.swipe { go(to: WeekPaging.week($0, from: start)) })
                     dayCard(client)
                 }
-                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
+                .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 32)
             }
         }
         .screenBackground()
+        // FIT-367: their name as the screen's title, which goes inline as the week scrolls, and their progress and
+        // messages in the toolbar, as a native detail screen has them.
+        .navigationTitle(client?.name ?? "")
+        .navigationSubtitle(client.map(summary) ?? "")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            if let client {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    // FIT-337: their goals, lifts, weeks, check-ins and profile.
+                    NavigationLink(value: ClientProgressScreen.Ref(client: id)) { Image(systemName: "chart.line.uptrend.xyaxis") }
+                        .accessibilityLabel("\(client.name)’s progress")
+                    // FIT-331: every message with them, all days, in one conversation, opened on the day shown; what's
+                    // sent belongs to that day.
+                    NavigationLink(value: DayThread.Ref(client: id, day: day)) { Image(systemName: "bubble.left.and.bubble.right") }
+                        .accessibilityLabel("Messages with \(client.name)")
+                }
+            }
+        }
         .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 24) }
         // FIT-339: removed (from their progress screen): back to the list.
         .onChange(of: client == nil) { _, gone in if gone && roster.loaded { dismiss() } }
@@ -156,7 +155,7 @@ struct ClientScreen: View {
             Text("Those days already have a session; this puts the new one in its place.")
         }
         .sheet(item: $dated) { dated in
-            PlanDaySheet(title: dated == .move ? "Move to" : "Copy to", from: day) { target in
+            PlanDaySheet(title: dated == .move ? "Move to Another Day" : "Copy to Another Day", from: day) { target in
                 guard let client = roster.clients.first(where: { $0.id == id }) else { return }
                 place(client, at: target, move: dated == .move)
             }
@@ -172,9 +171,14 @@ struct ClientScreen: View {
         if !client.week.flags.isEmpty {
             VStack(spacing: 0) {
                 ForEach(Array(client.week.flags.enumerated()), id: \.offset) { index, flag in
-                    let row = HStack(spacing: 12) {
-                        FlagDot(kind: flag.kind)
-                        Text(flag.text).font(.body).frame(maxWidth: .infinity, alignment: .leading)
+                    // FIT-367: accessibility sizes put Reply under the note, so the note keeps the card's width.
+                    let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+                        : AnyLayout(HStackLayout(spacing: 12))
+                    let row = layout {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            FlagDot(kind: flag.kind)
+                            Text(flag.text).font(.body).frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         if flag.day != nil { Text("Reply").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark) }
                     }
                     .padding(.vertical, 14).contentShape(.rect)
@@ -191,7 +195,7 @@ struct ClientScreen: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
-                        .padding(.leading, 22).padding(.bottom, 14)
+                        .padding(.leading, typeSize.isAccessibilitySize ? 0 : 22).padding(.bottom, 14)
                     }
                     if index < client.week.flags.count - 1 { Divider() }
                 }
@@ -276,6 +280,8 @@ struct ClientScreen: View {
         let log = ClientDay.log(client.units, day)
         let lifts = ClientDay.lifts(log, names: names)
         if !lifts.isEmpty {
+            // FIT-367: the day's name over what they logged, as over a planned day.
+            Label(Self.dayTitle(day), systemImage: "checkmark.circle.fill").font(.headline).padding(.horizontal, 4)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(lifts.enumerated()), id: \.offset) { index, lift in
                     // FIT-337: a set logged wrong is corrected here, as on the dashboard (FIT-200).
@@ -295,7 +301,6 @@ struct ClientScreen: View {
             }
             .padding(.horizontal, 20)
             .cardBackground()
-            message(client)
         } else if editorDay != day {
             Color.clear.frame(height: 80)
         } else if let session = editor?.session {
@@ -308,7 +313,6 @@ struct ClientScreen: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .cardBackground()
             if day < today { Text("Not logged").font(.subheadline).foregroundStyle(Color.inkMuted).padding(.horizontal, 4) }
-            message(client)
         } else {
             Text("Rest day").font(.title3.weight(.bold))
                 .padding(20).frame(maxWidth: .infinity, alignment: .leading).cardBackground()
@@ -319,7 +323,6 @@ struct ClientScreen: View {
                     Button { adding = .run } label: { Label("Run", systemImage: "figure.run").frame(maxWidth: .infinity) }.buttonStyle(.secondary)
                 }
             }
-            message(client)
         }
     }
 
@@ -367,16 +370,6 @@ struct ClientScreen: View {
             // The client's latest, with the copy just made, so the second change keeps the first.
             send(day, rows: [], roster.clients.first { $0.id == id } ?? client)
         }
-    }
-
-    /// FIT-331: the coach writes to a client on any day, logged or not: the day's thread, which their Today shows.
-    private func message(_ client: Roster.Client) -> some View {
-        let count = client.comments.filter { $0.day == day }.count
-        return NavigationLink(value: DayThread.Ref(client: id, day: day)) {
-            Label(count == 0 ? "Message" : count == 1 ? "1 message" : "\(count) messages", systemImage: "bubble.left")
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.secondary)
     }
 
     /// FIT-331: a lift's working weight ±5 lb, every working set of it, as Today's load does for one's own session.

@@ -11,29 +11,35 @@ struct PlanRunSheet: View {
 
     static let kinds = [("easy", "Easy"), ("long", "Long"), ("tempo", "Tempo"), ("intervals", "Intervals")]
 
+    // FIT-367: a standard sheet: the title inline, Cancel and Add in the bar, the choices as a form.
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text(ClientScreen.dayTitle(day) == "Today" ? "Run today" : "Run on \(ClientScreen.dayTitle(day))").font(.title2.weight(.bold))
-            Picker("Kind", selection: $kind) {
-                ForEach(Self.kinds, id: \.0) { Text($0.1).tag($0.0) }
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Kind", selection: $kind) {
+                        ForEach(Self.kinds, id: \.0) { Text($0.1).tag($0.0) }
+                    }
+                    .pickerStyle(.segmented)
+                    Stepper("\(Coach.number(miles)) mi", value: $miles, in: 0.5...30, step: 0.5).monospacedDigit()
+                } footer: {
+                    Text(Coach.run(kind: kind))
+                }
             }
-            .pickerStyle(.segmented)
-            HStack {
-                Text(Coach.number(miles)).font(.display(34, weight: .semibold, relativeTo: .largeTitle)).monospacedDigit()
-                    + Text(" mi").font(.title3.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                Spacer()
-                Stepper("Miles", value: $miles, in: 0.5...30, step: 0.5).labelsHidden()
+            .navigationTitle(ClientScreen.dayTitle(day) == "Today" ? "Run Today" : "Run on \(ClientScreen.dayTitle(day))")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        onAdd(kind, miles)
+                        dismiss()
+                    }
+                }
             }
-            Text(Coach.run(kind: kind)).font(.subheadline).foregroundStyle(Color.inkMuted)
-            Button("Add Run") {
-                onAdd(kind, miles)
-                dismiss()
-            }
-            .buttonStyle(.primary)
         }
-        .padding(24)
-        .frame(maxHeight: .infinity, alignment: .top)
         .presentationDetents([.medium])
+        // Opaque, so the client's day behind doesn't show through the form.
+        .presentationBackground(Color(.systemGroupedBackground))
     }
 }
 
@@ -53,21 +59,30 @@ struct PlanDaySheet: View {
         _date = State(initialValue: Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start)
     }
 
+    // FIT-367: a standard sheet, as Calendar's date pickers are: the title inline, Cancel and the action in the bar.
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title).font(.title2.weight(.bold))
-            DatePicker("Day", selection: $date, in: Calendar.current.startOfDay(for: .now)..., displayedComponents: .date)
-                .datePickerStyle(.graphical).labelsHidden()
-            Button("\(title) \(ClientScreen.dayTitle(SyncUnits.day(date)))") {
-                onPick(date)
-                dismiss()
+        NavigationStack {
+            VStack(spacing: 0) {
+                DatePicker("Day", selection: $date, in: Calendar.current.startOfDay(for: .now)..., displayedComponents: .date)
+                    .datePickerStyle(.graphical).labelsHidden()
+                    .padding(.horizontal, 16)
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.primary)
-            .disabled(SyncUnits.day(date) == from)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(title.hasPrefix("Move") ? "Move" : "Copy") {
+                        onPick(date)
+                        dismiss()
+                    }
+                    .disabled(SyncUnits.day(date) == from)
+                }
+            }
         }
-        .padding(24)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .presentationDetents([.large])
+        .presentationDetents([.height(500), .large])
+        .presentationBackground(Color(.systemBackground))
     }
 }
 
@@ -78,25 +93,30 @@ struct RepeatWeekSheet: View {
     @State private var weeks = 3
     @State private var progress = true
 
+    // FIT-367: a standard sheet: the title inline, Cancel and Repeat in the bar, the choices as a form.
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Repeat this week").font(.title2.weight(.bold))
-            HStack {
-                Text("\(weeks)").font(.display(34, weight: .semibold, relativeTo: .largeTitle)).monospacedDigit()
-                    + Text(weeks == 1 ? " week" : " weeks").font(.title3.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                Spacer()
-                Stepper("Weeks", value: $weeks, in: 1...12).labelsHidden()
+        NavigationStack {
+            Form {
+                Section {
+                    Stepper(weeks == 1 ? "1 week" : "\(weeks) weeks", value: $weeks, in: 1...12).monospacedDigit()
+                    Toggle("5 lb more each week on the main lifts", isOn: $progress)
+                }
             }
-            Toggle("5 lb more each week on the main lifts", isOn: $progress)
-            Button("Repeat") {
-                onRepeat(weeks, progress)
-                dismiss()
+            .navigationTitle("Repeat This Week")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Repeat") {
+                        onRepeat(weeks, progress)
+                        dismiss()
+                    }
+                }
             }
-            .buttonStyle(.primary)
         }
-        .padding(24)
-        .frame(maxHeight: .infinity, alignment: .top)
         .presentationDetents([.medium])
+        // Opaque, so the client's day behind doesn't show through the form.
+        .presentationBackground(Color(.systemGroupedBackground))
     }
 }
 
@@ -138,7 +158,7 @@ struct StartProgramSheet: View {
                     Text("Every week is planned now, from what they've logged so far; change any day after.")
                 }
             }
-            .navigationTitle("Start a program")
+            .navigationTitle("Start a Program")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -215,6 +235,7 @@ struct CorrectSetsSheet: View {
 /// conversation, on today.
 struct MessageClientsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(Roster.self) private var roster
     @Environment(Account.self) private var account
     @Query private var templates: [Template]
@@ -235,7 +256,8 @@ struct MessageClientsSheet: View {
                             if picked.contains(client.id) { picked.remove(client.id) } else { picked.insert(client.id) }
                         } label: {
                             HStack(spacing: 12) {
-                                Avatar(client: client, size: 32)
+                                // As the list: accessibility sizes give the name the row's width.
+                                if !typeSize.isAccessibilitySize { Avatar(client: client, size: 32) }
                                 Text(client.name).foregroundStyle(Color.ink)
                                 Spacer()
                                 Image(systemName: picked.contains(client.id) ? "checkmark.circle.fill" : "circle")
@@ -247,14 +269,16 @@ struct MessageClientsSheet: View {
                         .buttonStyle(.plain)
                     }
                 } header: {
+                    // FIT-367: one Select menu that says what each choice picks; two bare links read as filters.
                     HStack {
-                        Text("To")
+                        Text(picked.isEmpty ? "To" : "To · \(picked.count)")
                         Spacer()
-                        if !roster.needsYou.isEmpty {
-                            Button("Needs You") { picked = Set(roster.needsYou.map(\.id)) }.textCase(nil)
-                        }
-                        Button(picked.count == roster.clients.count ? "None" : "All") {
-                            picked = picked.count == roster.clients.count ? [] : Set(roster.clients.map(\.id))
+                        Menu("Select") {
+                            if !roster.needsYou.isEmpty {
+                                Button("Who Needs You (\(roster.needsYou.count))") { picked = Set(roster.needsYou.map(\.id)) }
+                            }
+                            Button("Everyone (\(roster.clients.count))") { picked = Set(roster.clients.map(\.id)) }
+                            Button("No One") { picked = [] }.disabled(picked.isEmpty)
                         }
                         .textCase(nil)
                     }
@@ -262,7 +286,7 @@ struct MessageClientsSheet: View {
                     if let problem { Text(problem).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle("Message clients")
+            .navigationTitle("Message Clients")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

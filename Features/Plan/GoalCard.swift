@@ -26,6 +26,8 @@ struct GoalCard: View {
 
     /// FIT-342: a card with a date to aim at: the program's, or the goal's own. Without one there's no pace, plan line
     /// or forecast, only now → target and the trend.
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     private var dated: Bool { !weeks.isEmpty || goal.deadline != nil }
 
     var body: some View {
@@ -35,6 +37,17 @@ struct GoalCard: View {
             .clipShape(.rect(cornerRadius: 24))
             .cardBackground()
             .accessibilityElement(children: .contain)
+    }
+
+    private var more: some View {
+        Menu {
+            Button("Update", systemImage: "plus.circle", action: update)
+            Button("Change Target or Date", systemImage: "pencil", action: change)
+        } label: {
+            Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
+                .frame(width: 36, height: 28).contentShape(.rect)
+        }
+        .accessibilityLabel("More for this goal")
     }
 
     var content: some View {
@@ -51,18 +64,21 @@ struct GoalCard: View {
                                     // A date already past when the card starts can't end the chart: that range runs backwards.
                                     end: due > start ? due : end, format: option.format, dated: dated)
         return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(option.name).font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-                if let pace { PaceChip(pace: pace) }
-                Menu {
-                    Button("Update", systemImage: "plus.circle", action: update)
-                    Button("Change Target or Date", systemImage: "pencil", action: change)
-                } label: {
-                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
-                        .frame(width: 36, height: 28).contentShape(.rect)
+            if typeSize.isAccessibilitySize {
+                // FIT-367: the chip and ⋯ get their own line, so the goal's name isn't squeezed to a word a line.
+                HStack {
+                    if let pace { PaceChip(pace: pace) }
+                    Spacer()
+                    more
                 }
-                .accessibilityLabel("More for this goal")
+                Text(option.name).font(.subheadline).foregroundStyle(.secondary).padding(.top, 6)
+            } else {
+                HStack {
+                    Text(option.name).font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    if let pace { PaceChip(pace: pace) }
+                    more
+                }
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(format(now)).contentTransition(.numericText())

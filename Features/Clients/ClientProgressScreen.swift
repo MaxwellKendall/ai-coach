@@ -18,6 +18,7 @@ struct ClientProgressScreen: View {
     @State private var problem: String?
     /// FIT-344: why the check-in day didn't reach their phone.
     @State private var dayProblem: String?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var client: Roster.Client? { roster.clients.first { $0.id == id } }
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
@@ -32,10 +33,18 @@ struct ClientProgressScreen: View {
                     goals(client, sets: sets, weighIns: weighIns)
                     ProgressCharts(units: client.units, sets: sets, names: names) {
                         // FIT-344: the day they're asked for the weekly check-in, and reminded; Sunday until it's set.
-                        Picker("Weekly check-in", selection: Binding(get: { ClientProgress.checkInDay(client.units) }, set: { setCheckInDay($0, client) })) {
-                            ForEach(Week.ordered(Array(0...6)), id: \.self) { Text(Calendar.current.weekdaySymbols[Week.offset($0)]).tag($0) }
+                        // FIT-367: said what it is: a menu alone read as a stray "Sunday".
+                        // Accessibility sizes stack the label over the day, so neither hyphenates.
+                        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout())
+                        layout {
+                            Text("Check-in day").font(.subheadline)
+                            if !typeSize.isAccessibilitySize { Spacer() }
+                            Picker("Check-in day", selection: Binding(get: { ClientProgress.checkInDay(client.units) }, set: { setCheckInDay($0, client) })) {
+                                ForEach(Week.ordered(Array(0...6)), id: \.self) { Text(Calendar.current.weekdaySymbols[Week.offset($0)]).tag($0) }
+                            }
+                            .labelsHidden()
+                            .font(.subheadline)
                         }
-                        .font(.subheadline)
                         if let dayProblem { Text(dayProblem).font(.footnote).foregroundStyle(.red) }
                     }
                     profile(client)
