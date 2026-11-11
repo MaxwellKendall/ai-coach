@@ -183,8 +183,12 @@ struct RootView: View {
             } catch {
                 planningFailed(error)
             }
+            // FIT-426: a Pro lifter's weeks are designed by the AI, this one and next once it's saved, so it lands
+            // before it starts. A free lifter's never reach a model.
             guard source == .ai else { return }
-            await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
+            let model = LanguageModel.weeks(signedIn: account.user != nil)
+            await Planner.design(in: context, model: model)
+            await Planner.design(weekOf: Calendar.current.date(byAdding: .day, value: 7, to: .now)!, in: context, model: model)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             planDay = Calendar.current.startOfDay(for: .now)

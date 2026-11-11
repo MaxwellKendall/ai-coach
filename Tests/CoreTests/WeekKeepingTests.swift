@@ -92,6 +92,38 @@ struct WeekKeepingTests {
         #expect(try Planner.plan(weekOf: date(10, 11), in: context, calendar: calendar) != nil)
     }
 
+    /// FIT-426: a week the AI designed ahead, after this week's last session, is the week that comes; code doesn't
+    /// plan over it when it starts.
+    @Test func aWeekTheAIDesignedAheadIsTheWeekThatComes() throws {
+        let context = try store()
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let next = try #require(try Planner.generate(weekOf: date(10, 11), in: context, calendar: calendar))
+        next.updatedAt = date(10, 9)
+        next.designedBy = ProgramDesigner.Source.model.rawValue
+        for item in next.items where item.kind == .workout { item.adjustedReason = "Bench held at 185: two sets short Tuesday" }
+        let designed = Planner.workouts(next, templates: templates)
+        try Planner.keepWeeks(now: date(10, 11, hour: 8), in: context, calendar: calendar)
+        #expect(Planner.workouts(next, templates: templates) == designed)
+        #expect(next.updatedAt >= next.weekStart)
+    }
+
+    /// FIT-426: the designer is told what they wrote in the weeks before and so far, most recent first, once each.
+    @Test func notesAreToldMostRecentFirst() throws {
+        let context = try store()
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let squat = try #require(templates.first { $0.slug == "back-squat" })
+        let entries = [
+            LogEntry(kind: .workout, timestamp: date(10, 1, hour: 18), templateRef: squat.id, note: "knee sore at the bottom"),
+            LogEntry(kind: .workout, timestamp: date(10, 1, hour: 18), templateRef: squat.id, note: "knee sore at the bottom"),
+            LogEntry(kind: .checkin, timestamp: date(10, 3, hour: 9), note: "travelling Thursday"),
+            LogEntry(kind: .workout, timestamp: date(9, 1, hour: 18), templateRef: squat.id, note: "too long ago"),
+        ]
+        let notes = Planner.notes(entries, templates: templates, before: date(10, 11), now: date(10, 6), calendar: calendar)
+        #expect(notes.count == 2)
+        #expect(notes[0].hasSuffix("check-in: travelling Thursday"))
+        #expect(notes[1].hasSuffix("Back Squat: knee sore at the bottom"))
+    }
+
     @Test func eachChangeSaysHowAndSinceWhen() {
         let monday = date(10, 12, hour: 17)
         func row(_ exercise: String, _ load: Double) -> PlannedWorkout {

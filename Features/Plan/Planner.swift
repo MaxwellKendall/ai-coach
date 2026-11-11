@@ -38,7 +38,27 @@ enum Planner {
             programIndex: program?.index, programWeeks: profile.program?.count, goals: goals,
             lastWeek: (try? self.plan(weekOf: lastMonday, in: context)).flatMap { $0 }.map { workouts($0, templates: templates) } ?? [],
             brief: program.flatMap { brief?.phase($0.week.phase) }, goalLifts: goalLifts(active, history: history),
-            programPlan: weeks, sleepHours: sleepHours(entries, before: monday, calendar: calendar), calendar: calendar)
+            programPlan: weeks, sleepHours: sleepHours(entries, before: monday, calendar: calendar),
+            outline: (try? preview(weekOf: monday, in: context, calendar: calendar)) ?? [],
+            notes: notes(entries, templates: templates, before: calendar.date(byAdding: .day, value: 7, to: monday)!, calendar: calendar),
+            calendar: calendar)
+    }
+
+    /// FIT-426: what they wrote in the two weeks before a week and in it so far, most recent first, for the designer:
+    /// "Thu Nov 6, Squat: knee sore at the bottom". Session notes and the weekly check-in's.
+    static func notes(_ entries: [LogEntry], templates: [Template], before end: Date, now: Date = .now,
+                      calendar: Calendar = .current) -> [String] {
+        let since = calendar.date(byAdding: .day, value: -21, to: end)!
+        let names = Dictionary(templates.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        var seen = Set<String>()
+        return entries.filter { $0.timestamp >= since && $0.timestamp < min(end, now) }
+            .sorted { $0.timestamp > $1.timestamp }
+            .compactMap { entry -> String? in
+                let note = entry.note.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !note.isEmpty, seen.insert(note).inserted else { return nil }
+                let what = entry.kind == .checkin ? "check-in" : entry.templateRef.flatMap { names[$0] } ?? entry.kind.rawValue
+                return "\(entry.timestamp.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())), \(what): \(note.prefix(200))"
+            }
     }
 
     /// FIT-96: hours slept a night on average over the 7 days before `monday`, when any were logged.
@@ -269,6 +289,11 @@ enum Planner {
         }
         // FIT-131: a coach's week is theirs; nothing is added to it.
         guard plan.updatedAt < plan.weekStart, !isCoached(plan) else { return }
+        // FIT-426: the AI designed it after this week's last session, from how the week went; it's the week that comes.
+        if plan.designedBy == ProgramDesigner.Source.model.rawValue {
+            plan.updatedAt = date
+            return try context.save()
+        }
         let pinned = Dictionary(grouping: plan.items.filter { $0.kind == .workout }) { calendar.startOfDay(for: $0.date) }
             .filter { $0.value.allSatisfy(\.pinned) }.keys
         let templates = try context.fetch(FetchDescriptor<Template>())

@@ -53,6 +53,30 @@ struct ProgramDesignerTests {
         #expect((prompt + instructions).count < 4_000)
     }
 
+    /// FIT-426: the code week is the starting shape, their notes are told, and a change the model writes becomes the
+    /// row's reason, which Today's coach line shows.
+    @Test func theStartingShapeNotesAndChangesReachTheWeek() {
+        var request = request()
+        let monday = request.monday
+        request.outline = [PlannedWorkout(date: monday, session: "Upper", exercise: "bench-press",
+                                          targets: [.init(metric: "sets", value: 4, unit: "sets"), .init(metric: "reps", value: 5, unit: "reps"),
+                                                    .init(metric: "load_lb", value: 185, unit: "lb")], main: true)]
+        request.notes = ["Thu Oct 1, Back Squat: knee sore at the bottom"]
+        let prompt = ProgramDesigner.prompt(request, settings: request.settings, light: false)
+        #expect(prompt.contains("The program's sessions for this week, the starting shape:\nMon Upper: Bench Press"))
+        #expect(prompt.contains("What they wrote lately, most recent first:\nThu Oct 1, Back Squat: knee sore at the bottom"))
+        #expect(ProgramDesigner.instructions(request.settings, tier: .of(age: 36), light: false).contains("give its change"))
+
+        var held = item("Bench Press", main: true, reps: 5, pounds: 185, rpe: 8)
+        held.change = "Bench held at 185: two sets short Tuesday"
+        let designed = ProgramDesigner.DesignedWeek(sessions: [.init(name: "Upper", why: "push", exercises: [held, item("Pull-up")])])
+        let rows = ProgramDesigner.rows(designed, request, settings: request.settings, tier: .of(age: 36)).workouts
+        let bench = rows.first { $0.exercise == "bench-press" && $0.note != TrainingGenerator.warmupNote }
+        #expect(bench?.adjustedReason == "Bench held at 185: two sets short Tuesday")
+        #expect(rows.first { $0.exercise == "pull-up" }?.adjustedReason == nil)
+        #expect(Coach.plan(deload: false, reasons: ["edited", bench!.adjustedReason!]) == "Bench held at 185: two sets short Tuesday.")
+    }
+
     @Test func aDesignBecomesRowsOnTheTrainingDays() {
         let request = request()
         let designed = ProgramDesigner.DesignedWeek(sessions: [

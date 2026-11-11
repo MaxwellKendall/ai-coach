@@ -14,7 +14,13 @@ enum LanguageModel {
     /// pilot hides the in-app AI, so weeks come from the rules.
     static func programs(signedIn: Bool) -> any AIModel {
         guard Pilot.inAppAI else { return NoModel() }
-        return FallbackModel(primary: ClaudeModel(model: cloud, transport: ClaudeProxy(signedIn: signedIn)), fallback: OnDeviceModel())
+        return weeks(signedIn: signedIn)
+    }
+
+    /// FIT-422 (author, 2026-11-11): AI week design for a Pro lifter without a coach, the pilot's one exception to
+    /// hiding the in-app AI. Only the root's planning asks for it, and only for `WeekSource.ai`.
+    static func weeks(signedIn: Bool) -> any AIModel {
+        FallbackModel(primary: ClaudeModel(model: cloud, transport: ClaudeProxy(signedIn: signedIn)), fallback: OnDeviceModel())
     }
 }
 

@@ -35,6 +35,11 @@ enum ProgramDesigner {
         var sleepHours: Double?
         /// FIT-100: main lifts' top sets, decided before the week from how they went.
         var progression: [Progression.Decision] = []
+        /// FIT-426: the week code would plan (the ready program's sessions, or the generator's): the starting shape the
+        /// model designs inside, and the baseline its changes are told against.
+        var outline: [PlannedWorkout] = []
+        /// FIT-426: what they wrote lately, most recent first: "Thu, session: knee sore on lunges".
+        var notes: [String] = []
         var calendar: Calendar = .current
     }
 
@@ -90,6 +95,8 @@ enum ProgramDesigner {
             var rpe: Int?
             @Guide(description: "Same number, same superset")
             var superset: Int?
+            @Guide(description: "Only when it differs from the starting shape in a way they'd notice: what and why, with the number behind it")
+            var change: String?
         }
     }
 
@@ -214,6 +221,11 @@ enum ProgramDesigner {
             of the barbell bench, an overhead press about 65% of it, a row about 80%, a lunge about 60% of the squat. \
             Reps for lifts, seconds for holds and cardio, meters for carries; RPE for lifts only.
             Each week builds on the last: add a little load or a rep where the last top set was easy, hold where it was hard.
+            When a starting shape is given, keep its training days, its split and its kind of week; choose the exercises \
+            and doses inside it from their goals, their notes and how last week went. Where an exercise differs from the \
+            starting shape in a way they'd notice (a load held or cut, a swap, a set or rep change), give its change: one \
+            short line saying what and why, with the number behind it, like "Bench held at 185: two sets short Tuesday" or \
+            "Split squats for lunges: knee sore Thursday". Leave change out where nothing differs.
             The plan is checked against these rules, so keep to them: at most \(TrainingGenerator.maxSets.main) sets for a \
             main lift and \(TrainingGenerator.maxSets.accessory) for the rest, at least \(light ? 1 : TrainingGenerator.minSets); \
             at most \(settings.maxWeeklySets) working sets in the week; \(rpe); squat and deadlift never both main lifts \
@@ -253,6 +265,12 @@ enum ProgramDesigner {
         if !settings.avoidExercises.isEmpty {
             lines.append("Never: \(settings.avoidExercises.sorted().map { request.names[$0] ?? $0 }.joined(separator: ", ")).")
         }
+        if !request.outline.isEmpty {
+            var outline = request
+            outline.lastWeek = request.outline
+            lines.append("The program's sessions for this week, the starting shape:\n" + lastWeek(outline))
+        }
+        if !request.notes.isEmpty { lines.append("What they wrote lately, most recent first:\n" + request.notes.prefix(8).joined(separator: "\n")) }
         let last = lastWeek(request)
         if !last.isEmpty { lines.append("Last week's plan:\n" + last) }
         lines += lastWeekDone(request)
@@ -544,8 +562,10 @@ enum ProgramDesigner {
                 if !timed, !carry, let rpe = item.rpe { targets.append(Measurement(metric: "rpe", value: Double(rpe), unit: "RPE")) }
                 let row = PlannedWorkout(date: date, session: session.name, exercise: slug, targets: targets,
                                          // Main lifts go in straight sets after their warm-up; supersets are for the rest.
-                                         note: item.main ? tier.tempo.map { "tempo \($0)" } : nil, group: item.main ? nil : item.superset,
-                                         main: item.main)
+                                         note: item.main ? tier.tempo.map { "tempo \($0)" } : nil,
+                                         // FIT-426: the model's reason for a change, shown on Today and the session.
+                                         adjustedReason: item.change.flatMap { $0.isEmpty ? nil : $0 },
+                                         group: item.main ? nil : item.superset, main: item.main)
                 if item.main, let warmup = TrainingGenerator.warmup(for: row, settings: settings, tier: tier) { workouts.append(warmup) }
                 workouts.append(row)
             }

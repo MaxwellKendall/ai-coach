@@ -10,8 +10,9 @@ enum Coach {
         if let injury = reasons.first(where: { $0.contains("injury") }) {
             return "Working around the \(injury.prefix { $0 != ":" }.replacingOccurrences(of: " injury", with: ""))."
         }
-        // FIT-424: what changed since the week was seen ahead ("Squat up 5 lb after Thursday").
-        if let change = reasons.first(where: { $0.contains(" after ") || $0.hasSuffix(" since you saw it") }) { return "\(change)." }
+        // FIT-424, FIT-426: a change written for them, by code since the week was seen ahead ("Squat up 5 lb after
+        // Thursday") or by the AI ("Bench held at 185: two sets short Tuesday"). Reasons for code ("edited") are lowercase.
+        if let change = reasons.first(where: { $0.first?.isUppercase == true }) { return change.hasSuffix(".") ? change : "\(change)." }
         if deload { return "Light week: same moves, a little less weight. Leave a couple of reps in the tank." }
         return "Leave a rep or two in the tank on every set."
     }
