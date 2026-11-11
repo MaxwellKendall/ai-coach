@@ -1,34 +1,51 @@
 import SwiftData
 import SwiftUI
 
-/// FIT-356: every past workout, newest first, each opening what was lifted that day. Progress's third tab.
+/// FIT-356: every past workout, newest first, each opening what was lifted that day. Progress's third tab. FIT-358:
+/// above them, what the coach sees of you: each main lift's estimated max, sessions done of planned, and check-ins.
 struct HistoryScreen: View {
+    @Environment(\.modelContext) private var context
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
+    /// Your training as sync units, the coach's view's input; worked out again when the log changes.
+    @State private var units: [String: String] = [:]
 
-    private var days: [ExerciseHistory.Day] { ExerciseHistory.days(Planner.loggedSets(entries, templates: templates)) }
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first }) }
 
     var body: some View {
-        let days = days, names = names
-        if days.isEmpty {
-            ContentUnavailableView("No workouts yet", systemImage: "clock.arrow.circlepath",
-                                   description: Text("Each workout you log shows up here, with every set."))
-        } else {
-            List(days) { day in
-                NavigationLink {
-                    HistoryDayView(day: day, names: names)
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(Self.date(day.date)).font(.subheadline).foregroundStyle(.secondary)
-                        Text(TodayScreen.title(lifts: day.lifts.map { names[$0.exercise] ?? $0.exercise })).font(.headline)
-                        Text("\(day.lifts.reduce(0) { $0 + $1.sets.count }) sets").font(.subheadline).foregroundStyle(.secondary)
+        let sets = Planner.loggedSets(entries, templates: templates)
+        let days = ExerciseHistory.days(sets), names = names
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                ProgressCharts(units: units, sets: sets, names: names)
+                ProgressCharts<EmptyView>.section("Workouts") {
+                    if days.isEmpty {
+                        Text("Each workout you log shows up here, with every set.").font(.subheadline).foregroundStyle(Color.inkMuted)
                     }
-                    .padding(.vertical, 4)
+                    ForEach(days) { day in
+                        NavigationLink {
+                            HistoryDayView(day: day, names: names)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(Self.date(day.date)).font(.subheadline).foregroundStyle(.secondary)
+                                    Text(TodayScreen.title(lifts: day.lifts.map { names[$0.exercise] ?? $0.exercise })).font(.headline)
+                                        .multilineTextAlignment(.leading)
+                                    Text("\(day.lifts.reduce(0) { $0 + $1.sets.count }) sets").font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        if day.id != days.last?.id { Divider() }
+                    }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 32)
         }
+        .task(id: entries.count) { units = (try? SyncUnits.all(in: context)) ?? [:] }
     }
 }
 

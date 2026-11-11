@@ -57,11 +57,17 @@ enum ClientProgress {
             .sorted { $0.metric < $1.metric }
     }
 
-    /// The lifts they've logged most, for the progress charts: up to `count`, by sets logged.
+    /// The lifts for the progress charts: up to `count`, the goal lifts first (squat, bench, deadlift; FIT-358: an
+    /// accessory logged more often isn't a main lift), then by sets logged.
     static func mainLifts(_ sets: [LoggedSet], count: Int = 3) -> [String] {
+        let goalLifts = Set(GoalOption.all.filter { $0.measure == .load }.compactMap(\.exercise))
         var counts: [String: Int] = [:]
         for set in sets where set.value("load_lb") != nil && set.value("reps") != nil { counts[set.exercise, default: 0] += 1 }
-        let ranked = counts.sorted { a, b in a.value == b.value ? a.key < b.key : a.value > b.value }
+        let ranked = counts.sorted { a, b in
+            let (aMain, bMain) = (goalLifts.contains(a.key), goalLifts.contains(b.key))
+            if aMain != bMain { return aMain }
+            return a.value == b.value ? a.key < b.key : a.value > b.value
+        }
         return ranked.prefix(count).map(\.key)
     }
 

@@ -41,6 +41,17 @@ struct ClientProgressTests {
         #expect(ClientProgress.goals(units).map(\.metric) == ["back-squat.1rm_lb"])   // achieved ones aren't shown
     }
 
+    /// FIT-358: an accessory logged more often doesn't push a goal lift off the charts.
+    @Test func goalLiftsComeFirst() {
+        let date = Date(timeIntervalSince1970: 0)
+        func lifted(_ slug: String) -> LoggedSet {
+            LoggedSet(date: date, exercise: slug, pattern: nil, measurements: [Measurement(metric: "load_lb", value: 95, unit: "lb"), Measurement(metric: "reps", value: 10, unit: "reps")])
+        }
+        let sets = Array(repeating: lifted("dumbbell-row"), count: 9) + [lifted("back-squat"), lifted("deadlift")]
+        #expect(ClientProgress.mainLifts(sets) == ["back-squat", "deadlift", "dumbbell-row"])
+        #expect(ClientProgress.mainLifts(sets, count: 2) == ["back-squat", "deadlift"])
+    }
+
     @Test func weeksCountDaysTrainedOfDaysPlanned() {
         let weeks = ClientProgress.weeks(units, today: day(10), weeks: 2)
         #expect(weeks.map(\.done) == [1, 1])

@@ -30,9 +30,14 @@ struct ClientProgressScreen: View {
                 let weighIns = ClientProgress.checkIns(client.units, "weight_lb")
                 VStack(alignment: .leading, spacing: 28) {
                     goals(client, sets: sets, weighIns: weighIns)
-                    lifts(sets)
-                    weeks(client)
-                    checkIns(client, weighIns: weighIns)
+                    ProgressCharts(units: client.units, sets: sets, names: names) {
+                        // FIT-344: the day they're asked for the weekly check-in, and reminded; Sunday until it's set.
+                        Picker("Weekly check-in", selection: Binding(get: { ClientProgress.checkInDay(client.units) }, set: { setCheckInDay($0, client) })) {
+                            ForEach(Week.ordered(Array(0...6)), id: \.self) { Text(Calendar.current.weekdaySymbols[Week.offset($0)]).tag($0) }
+                        }
+                        .font(.subheadline)
+                        if let dayProblem { Text(dayProblem).font(.footnote).foregroundStyle(.red) }
+                    }
                     profile(client)
                     remove(client)
                 }
@@ -85,102 +90,6 @@ struct ClientProgressScreen: View {
         let parts = metric.split(separator: ".").map(String.init)
         guard parts.count == 2, let name = names[parts[0]] else { return metric }
         return parts[1] == "1rm_lb" ? "\(name) max" : parts[1] == "reps" ? "\(name) reps" : name
-    }
-
-    @ViewBuilder private func lifts(_ sets: [LoggedSet]) -> some View {
-        let lifts = ClientProgress.mainLifts(sets)
-        section("Estimated max") {
-            if lifts.isEmpty {
-                Text("Nothing lifted with a weight yet.").font(.subheadline).foregroundStyle(Color.inkMuted)
-            }
-            ForEach(lifts, id: \.self) { slug in
-                let trend = Training.estimated1RMTrend(sets, exercise: slug)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(names[slug] ?? slug).font(.headline)
-                        Spacer()
-                        if let last = trend.last {
-                            Text("\(Coach.number(last.value.rounded())) lb").font(.headline).monospacedDigit()
-                        }
-                    }
-                    if trend.count > 1 {
-                        Chart(trend, id: \.date) { point in
-                            LineMark(x: .value("Day", point.date), y: .value("lb", point.value))
-                                .foregroundStyle(Plate.current.mark).interpolationMethod(.monotone)
-                        }
-                        .chartYScale(domain: .automatic(includesZero: false))
-                        .chartXAxis(.hidden)
-                        .frame(height: 64)
-                    }
-                }
-            }
-        }
-    }
-
-    private func weeks(_ client: Roster.Client) -> some View {
-        let weeks = ClientProgress.weeks(client.units, today: .now)
-        return section("Sessions, last 8 weeks") {
-            Chart(weeks, id: \.sunday) { week in
-                // Done, then what's left of the planned on top, so the bar is as tall as the week's plan.
-                BarMark(x: .value("Week", week.sunday, unit: .weekOfYear), y: .value("Sessions", week.done))
-                    .foregroundStyle(Plate.current.mark)
-                BarMark(x: .value("Week", week.sunday, unit: .weekOfYear), y: .value("Sessions", max(0, week.planned - week.done)))
-                    .foregroundStyle(Color.fill)
-            }
-            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { AxisValueLabel(format: .dateTime.month(.abbreviated).day()) } }
-            .frame(height: 120)
-            let done = weeks.map(\.done).reduce(0, +), planned = weeks.map(\.planned).reduce(0, +)
-            Text(planned == 0 ? "Nothing planned yet" : "\(done) of \(planned) sessions done")
-                .font(.subheadline).foregroundStyle(Color.inkMuted)
-        }
-    }
-
-    @ViewBuilder private func checkIns(_ client: Roster.Client, weighIns: [DatedValue]) -> some View {
-        let sleep = ClientProgress.checkIns(client.units, "sleep_h").filter { $0.date > Date.now.addingTimeInterval(-7 * 86_400) }
-        let notes = ClientProgress.notes(client.units).prefix(3)
-        let weekly = ClientProgress.weekly(client.units).first
-        section("Check-ins") {
-            // FIT-344: the day they're asked for the weekly check-in, and reminded; Sunday until it's set.
-            Picker("Weekly check-in", selection: Binding(get: { ClientProgress.checkInDay(client.units) }, set: { setCheckInDay($0, client) })) {
-                ForEach(Week.ordered(Array(0...6)), id: \.self) { Text(Calendar.current.weekdaySymbols[Week.offset($0)]).tag($0) }
-            }
-            .font(.subheadline)
-            if let dayProblem { Text(dayProblem).font(.footnote).foregroundStyle(.red) }
-            if let weekly {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Weekly check-in").font(.headline)
-                        Spacer()
-                        Text(weekly.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
-                            .font(.footnote).foregroundStyle(Color.inkMuted)
-                    }
-                    Text(WeeklyCheckIn.summary(weekly.values)).font(.subheadline).monospacedDigit()
-                    let worries = WeeklyCheckIn.concerns(weekly.values)
-                    if !worries.isEmpty { Text(worries.joined(separator: ", ").capitalized(with: nil)).font(.footnote.weight(.semibold)).foregroundStyle(.orange) }
-                    if !weekly.note.isEmpty { Text(weekly.note).font(.subheadline) }
-                }
-            }
-            if weighIns.isEmpty && sleep.isEmpty && notes.isEmpty && weekly == nil {
-                Text("No check-ins yet.").font(.subheadline).foregroundStyle(Color.inkMuted)
-            }
-            if let last = weighIns.last {
-                HStack { Text("Weight"); Spacer(); Text("\(Coach.number(last.value)) lb").monospacedDigit().bold() }
-                if weighIns.count > 1 {
-                    Chart(weighIns, id: \.date) { LineMark(x: .value("Day", $0.date), y: .value("lb", $0.value)).foregroundStyle(Plate.current.mark) }
-                        .chartYScale(domain: .automatic(includesZero: false)).chartXAxis(.hidden).frame(height: 56)
-                }
-            }
-            if !sleep.isEmpty {
-                let average = sleep.map(\.value).reduce(0, +) / Double(sleep.count)
-                HStack { Text("Sleep, last 7 days"); Spacer(); Text("\(Coach.number((average * 10).rounded() / 10)) h a night").monospacedDigit().bold() }
-            }
-            ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("“\(note.text)”")
-                    Text(note.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).font(.footnote).foregroundStyle(Color.inkMuted)
-                }
-            }
-        }
     }
 
     /// FIT-344: the check-in day, kept here at once and sent to their phone as the `checkin` unit.
