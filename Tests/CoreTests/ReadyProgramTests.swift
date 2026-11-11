@@ -154,6 +154,18 @@ struct ReadyProgramTests {
         #expect(working(week("full-body-3", date(11, 1), history: missedTwice), "back-squat").first?.target("load_lb") == 90)
     }
 
+    /// FIT-425: Push/Pull/Legs has the press twice, 4 × 5 on Push B and 3 × 8–12 on Push A. A set of 8 on Push A isn't a
+    /// missed 4 × 5: each progresses from its own sessions, and the 4 × 5 adds its step.
+    @Test func aLiftInTwoItemsProgressesEachFromItsOwn() {
+        let heavy = logged("standing-military-press", on: date(10, 28), sets: 4, reps: 5, load: 65)
+        let light = logged("standing-military-press", on: date(10, 26), sets: 3, reps: 8, load: 45)
+            + logged("standing-military-press", on: date(10, 30), sets: 3, reps: 8, load: 45)
+        let next = week("push-pull-legs", date(11, 1), days: [0, 1, 2, 3, 4, 5], history: heavy + light)
+        let loads = Set(working(next, "standing-military-press").compactMap { $0.target("load_lb") })
+        #expect(loads.contains(70))
+        #expect(!loads.contains { $0 < 45 })
+    }
+
     @Test func doubleProgressionAddsRepsThenWeight() {
         let some = logged("split-squat-with-dumbbells", on: date(10, 26), sets: 3, reps: 8, load: 20, metric: "load_lb_hand")
         let split = working(week("dumbbell-full-body", date(11, 1), equipment: ["dumbbells"], history: some), "split-squat-with-dumbbells")[0]

@@ -163,6 +163,23 @@ struct TrainingGeneratorTests {
         #expect(week.workouts.first { $0.exercise == "farmer-carry" }?.target("distance_m") == 30)
     }
 
+    /// FIT-425: the week after a deload builds on the hard week before it, not the deload's lighter sets, so each
+    /// deload doesn't ratchet the loads down.
+    @Test func theWeekAfterADeloadBuildsOnTheHardWeek() {
+        let catalog = (try! Seeder.decode([TemplateSeed].self, "exercises", .main)).compactMap { Exercise(slug: $0.slug, attributes: $0.attributes) }
+        func squat(_ day: Int, _ load: Double, rpe: Double) -> [LoggedSet] {
+            (0..<3).map { _ in logged("back-squat", "squat", 7, day, [("reps", 5), ("load_lb", load), ("rpe", rpe)]) }
+        }
+        func next(_ history: [LoggedSet]) -> Double? {
+            TrainingGenerator.week(startingOn: date(7, 19, hour: 0), settings: config, catalog: catalog, history: history,
+                                   weeksSinceDeload: 0, calendar: calendar)
+                .workouts.first { $0.exercise == "back-squat" && $0.note != TrainingGenerator.warmupNote }?.target("load_lb")
+        }
+        #expect(next(squat(6, 170, rpe: 7) + squat(13, 150, rpe: 6)) == 175)
+        // A lighter session done hard isn't a deload: it stands.
+        #expect(next(squat(6, 170, rpe: 7) + squat(13, 150, rpe: 9)) == 150)
+    }
+
     /// FIT-71: the ceiling is the user's, so sessions shrink to fit it (and say so) rather than only flagging it.
     @Test func sessionsFitTheWeeklyCeiling() {
         var settings = config
