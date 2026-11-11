@@ -212,7 +212,7 @@ struct WeekDesignEvals {
     @Test func designedAgainstTheCodeWeek() async throws {
         let environment = ProcessInfo.processInfo.environment
         let designer = EvalModel.current()
-        let judge = EvalModel.model(environment["EVAL_JUDGE"].flatMap { $0.isEmpty ? nil : $0 } ?? "claude-opus-5-5")
+        let judge = EvalModel.model(environment["EVAL_JUDGE"].flatMap { $0.isEmpty ? nil : $0 } ?? "gpt-6-astra")
         try #require(designer.isAvailable, Comment(rawValue: EvalModel.unavailable(designer)))
         try #require(judge.isAvailable, Comment(rawValue: EvalModel.unavailable(judge)))
         let inputs = try ProgramDesignerEvals.inputs()
