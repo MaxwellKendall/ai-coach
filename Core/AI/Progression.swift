@@ -184,9 +184,9 @@ enum Progression {
 
         func step(_ lift: Lift) -> Step {
             if let off = lift.daysOff, off > 28 { return .backOff }
-            // FIT-426: a week or more without it (each main lift is trained every week) holds it: "missed week means
-            // prove it first" (fitness-planner plan.md). The week evals' judge called going up after a missed week "a big
-            // jump after no training".
+            // FIT-426: a week or more without it (each main lift is trained every week) holds it, as the generator's
+            // "missed week means prove it first" (TrainingGenerator.nextLoad). The week evals' judge called going up after
+            // a missed week "a big jump after no training".
             if let off = lift.daysOff, off > 7 { return .hold }
             guard let last = lift.sessions.first, !last.isEmpty else { return .hold }
             if Progression.short(last, planned: lift.plannedReps) {
