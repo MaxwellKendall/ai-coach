@@ -1,0 +1,488 @@
+{
+ "date": "2026-11-11",
+ "commit": "pending",
+ "screens": [
+  {
+   "id": "c-today",
+   "role": "client",
+   "how": "-coach Sam, Today",
+   "files": [
+    "Features/Today/TodayScreen.swift",
+    "Features/Today/SessionList.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "clean: Messages icon beside the account, weekly check-in card, Check in row under the day"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "rows stack; the session passes cleanly under the strip and fades under Start"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "one primary (Start); the coach's actions secondary, no header row of text buttons"
+    }
+   ]
+  },
+  {
+   "id": "c-checkin",
+   "role": "client",
+   "how": "Today › Check in",
+   "files": [
+    "Features/Today/CheckInSheet.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "weight, sleep and a note in one sheet; opaque"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "opens full height so the note shows"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "one place for the day's check-in and note"
+    }
+   ]
+  },
+  {
+   "id": "c-weekly",
+   "role": "client",
+   "how": "Today › Weekly check-in",
+   "files": [
+    "Features/Today/WeeklyCheckInSheet.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 1,
+     "note": "the 1–5 segmented controls stay system size beside large labels"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "clear form, Cancel and Save"
+    }
+   ]
+  },
+  {
+   "id": "c-messages",
+   "role": "client",
+   "how": "Today › messages icon",
+   "files": [
+    "Features/Log/CoachConversation.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "Done added; empty state says what to ask"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "send arrow stays inside its circle"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "a Messages conversation"
+    }
+   ]
+  },
+  {
+   "id": "c-program",
+   "role": "client",
+   "how": "Program tab",
+   "files": [
+    "Features/Plan/ProgramScreen.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "the week card is as tall as its week; no divider after the last day"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "done or missed on the day's line; lifts get the width"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "one card per week, the days as rows"
+    }
+   ]
+  },
+  {
+   "id": "c-progress",
+   "role": "client",
+   "how": "Progress tab",
+   "files": [
+    "Features/Plan/ProgramScreen.swift",
+    "Features/Plan/GoalCard.swift",
+    "Features/Progress/WinsScreen.swift",
+    "Features/Progress/HistoryScreen.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "chip and ⋯ on their own line over the goal's name"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 3,
+     "note": "the swipe deck keeps every goal card full height, so a short goal leaves blank space at its foot"
+    }
+   ]
+  },
+  {
+   "id": "c-you",
+   "role": "client",
+   "how": "Today › account",
+   "files": [
+    "Features/Today/YouScreen.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "form rows stack natively"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "native settings list"
+    }
+   ]
+  },
+  {
+   "id": "k-clients",
+   "role": "coach",
+   "how": "-sampleClients YES (14 clients)",
+   "files": [
+    "Features/Clients/ClientsScreen.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "native large title over the list, toolbar buttons, system search; invites hidden while searching"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "no monogram; name, status and week each on a line"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "A–Z with search past 8 clients, Needs You as a filter"
+    }
+   ]
+  },
+  {
+   "id": "k-client",
+   "role": "coach",
+   "how": "Clients › a client",
+   "files": [
+    "Features/Clients/ClientScreen.swift",
+    "Features/Today/SessionList.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "name and week in the nav bar, progress and messages in the toolbar; a logged day has its heading"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "flag's Reply under the note; strip dates stay whole"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "one way to message (the toolbar), the day's actions behind ⋯"
+    }
+   ]
+  },
+  {
+   "id": "k-thread",
+   "role": "coach",
+   "how": "Client › messages",
+   "files": [
+    "Features/Clients/DayThread.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "sets go under the lift; send arrow inside its circle"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "a Messages conversation with each day's session as a card"
+    }
+   ]
+  },
+  {
+   "id": "k-progress",
+   "role": "coach",
+   "how": "Client › progress",
+   "files": [
+    "Features/Clients/ClientProgressScreen.swift",
+    "Features/Progress/ProgressCharts.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "check-in day labelled"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "chart dates don't overlap; check-in day stacks"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "sections in cards, removal last and red"
+    }
+   ]
+  },
+  {
+   "id": "k-compose",
+   "role": "coach",
+   "how": "Clients › compose",
+   "files": [
+    "Features/Clients/ClientPlanSheets.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "one Select menu (who needs you, everyone, no one); To · count"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "names get the row's width"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "Messages-style group picker"
+    }
+   ]
+  },
+  {
+   "id": "k-invite",
+   "role": "coach",
+   "how": "Clients › +",
+   "files": [
+    "Features/Clients/ClientsScreen.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "a plain name field; opaque sheet"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "field visible on the dark sheet"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "opens full height so the explanation shows"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 3,
+     "note": "no Cancel: closed only by swiping down"
+    }
+   ]
+  },
+  {
+   "id": "k-plan-sheets",
+   "role": "coach",
+   "how": "Client › ⋯ › Move / Copy / Add a Run / Repeat / Start a Program; logged lift › Correct",
+   "files": [
+    "Features/Clients/ClientPlanSheets.swift"
+   ],
+   "items": [
+    {
+     "id": "light",
+     "max": 2,
+     "points": 2,
+     "note": "standard sheets: inline title, Cancel and the action in the bar, opaque"
+    },
+    {
+     "id": "dark",
+     "max": 2,
+     "points": 2,
+     "note": "clean"
+    },
+    {
+     "id": "xl",
+     "max": 2,
+     "points": 2,
+     "note": "forms reflow; segmented control system size"
+    },
+    {
+     "id": "design",
+     "max": 4,
+     "points": 4,
+     "note": "the same pattern on every sheet"
+    }
+   ]
+  }
+ ]
+}

@@ -11,6 +11,7 @@ struct ClientsScreen: View {
     @State private var needsOnly = false
     @State private var messaging = false
     @State private var query = ""
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
 
@@ -20,25 +21,6 @@ struct ClientsScreen: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    HStack {
-                        Text("Clients").font(.display(34))
-                        Spacer()
-                        // FIT-340: one message to several clients.
-                        if roster.clients.count > 1 {
-                            Button { messaging = true } label: {
-                                Image(systemName: "square.and.pencil").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
-                                    .frame(width: 44, height: 44).rowBackground()
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Message clients")
-                        }
-                        Button { inviting = true } label: {
-                            Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(Color.ink)
-                                .frame(width: 44, height: 44).rowBackground()
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Invite a client")
-                    }
                     if let problem = roster.problem {
                         Text(problem).font(.subheadline).foregroundStyle(Color.inkMuted)
                     }
@@ -47,7 +29,6 @@ struct ClientsScreen: View {
                     } else if roster.clients.isEmpty {
                         empty
                     } else {
-                        if roster.clients.count > 8 { search }
                         if !roster.needsYou.isEmpty {
                             Picker("Show", selection: $needsOnly) {
                                 Text("All").tag(false)
@@ -57,11 +38,26 @@ struct ClientsScreen: View {
                         }
                         list(shown)
                     }
-                    if !roster.invites.isEmpty { invited }
+                    if !roster.invites.isEmpty, query.isEmpty { invited }
                 }
-                .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 24)
+                .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 24)
             }
             .screenBackground()
+            // FIT-367: a native large title that goes inline over the list as it scrolls, its buttons in the toolbar,
+            // and the system's search under the title once the list is long (FIT-331).
+            .navigationTitle("Clients")
+            .toolbar {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    // FIT-340: one message to several clients.
+                    if roster.clients.count > 1 {
+                        Button { messaging = true } label: { Image(systemName: "square.and.pencil") }
+                            .accessibilityLabel("Message clients")
+                    }
+                    Button { inviting = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Invite a client")
+                }
+            }
+            .modifier(Searching(on: roster.clients.count > 8, query: $query))
             .refreshable { await reload() }
             .task(id: "\(account.restored) \(account.user?.uid ?? "")") { await reload() }
             .navigationDestination(for: String.self) { id in ClientScreen(id: id) }
@@ -76,7 +72,6 @@ struct ClientsScreen: View {
                 path.append(ClientScreen.Opening(client: client, day: target.day.map { SyncUnits.day($0) }))
                 Task { await reload() }
             }
-            .toolbarVisibility(.hidden, for: .navigationBar)
             .sheet(isPresented: $inviting) { InviteSheet() }
             .sheet(isPresented: $messaging) { MessageClientsSheet() }
         }
@@ -140,20 +135,6 @@ struct ClientsScreen: View {
         return "Sent \(date.formatted(.dateTime.month(.abbreviated).day()))"
     }
 
-    /// Search, as in Contacts: a grey field with the magnifying glass.
-    private var search: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").foregroundStyle(Color.inkMuted)
-            TextField("Search", text: $query).autocorrectionDisabled().textInputAutocapitalization(.words)
-            if !query.isEmpty {
-                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.inkFaint) }
-                    .buttonStyle(.plain).accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 10).frame(height: 38)
-        .background(Color.fill, in: .rect(cornerRadius: 8))
-    }
-
     @ViewBuilder private func list(_ clients: [Roster.Client]) -> some View {
         if clients.isEmpty {
             Text("No one called “\(query)”").font(.subheadline).foregroundStyle(Color.inkMuted)
@@ -164,7 +145,7 @@ struct ClientsScreen: View {
                     NavigationLink(value: client.id) { ClientRow(client: client) }
                         .buttonStyle(.plain)
                     // Inset to the names' edge, as in Messages.
-                    if client.id != clients.last?.id { Divider().padding(.leading, ClientRow.avatar + 12) }
+                    if client.id != clients.last?.id { Divider().padding(.leading, typeSize.isAccessibilitySize ? 0 : ClientRow.avatar + 12) }
                 }
             }
             .padding(.horizontal, 16)
@@ -192,6 +173,16 @@ struct ClientsScreen: View {
     }
 }
 
+/// The system's search, only for a list long enough to need it.
+private struct Searching: ViewModifier {
+    var on: Bool
+    @Binding var query: String
+
+    func body(content: Content) -> some View {
+        if on { content.searchable(text: $query, prompt: "Search") } else { content }
+    }
+}
+
 /// A client in the list, laid out as a Messages row: who, when they last logged, and the one line that says why they
 /// need you or how their week's going, with the week as seven dots.
 struct ClientRow: View {
@@ -199,41 +190,68 @@ struct ClientRow: View {
     let client: Roster.Client
     static let avatar: CGFloat = 44
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
         HStack(spacing: 12) {
-            Avatar(client: client, size: Self.avatar)
-                // FIT-338: something new from them, as Messages marks an unread conversation.
-                .overlay(alignment: .topTrailing) {
-                    if roster.unread(client) > 0 {
-                        Circle().fill(Plate.current.mark).frame(width: 12, height: 12)
-                            .overlay(Circle().stroke(Color.surface, lineWidth: 2))
-                            .accessibilityLabel("Unread")
+            // FIT-367: accessibility sizes give the words the row's width: no monogram, and each part on its own line.
+            if !typeSize.isAccessibilitySize {
+                Avatar(client: client, size: Self.avatar)
+                    // FIT-338: something new from them, as Messages marks an unread conversation.
+                    .overlay(alignment: .topTrailing) {
+                        if roster.unread(client) > 0 { unread }
                     }
-                }
+            }
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(client.name).font(.headline).lineLimit(1)
-                    Spacer(minLength: 8)
-                    if let last = client.lastLogged {
-                        Text(Self.ago(last)).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit()
+                if typeSize.isAccessibilitySize {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if roster.unread(client) > 0 { unread }
+                        Text(client.name).font(.headline)
                     }
-                }
-                HStack(spacing: 6) {
-                    if let flag = client.week.flags.min(by: { order($0) < order($1) }) {
-                        FlagDot(kind: flag.kind)
-                        Text(flag.text).lineLimit(1)
-                    } else {
-                        Text(client.week.planned == 0 ? "Nothing planned this week" : "\(client.week.done) of \(client.week.planned) this week")
-                            .lineLimit(1)
+                    status.font(.subheadline).foregroundStyle(Color.inkMuted)
+                    HStack {
+                        if let last = client.lastLogged { Text(Self.ago(last)) }
+                        Spacer(minLength: 8)
+                        WeekDots(units: client.units)
                     }
-                    Spacer(minLength: 8)
-                    WeekDots(units: client.units)
+                    .font(.subheadline).foregroundStyle(Color.inkMuted)
+                } else {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(client.name).font(.headline).lineLimit(1)
+                        Spacer(minLength: 8)
+                        if let last = client.lastLogged {
+                            Text(Self.ago(last)).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit()
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        status.lineLimit(1)
+                        Spacer(minLength: 8)
+                        WeekDots(units: client.units)
+                    }
+                    .font(.subheadline).foregroundStyle(Color.inkMuted)
                 }
-                .font(.subheadline).foregroundStyle(Color.inkMuted)
             }
         }
         .padding(.vertical, 12)
         .contentShape(.rect)
+    }
+
+    private var unread: some View {
+        Circle().fill(Plate.current.mark).frame(width: 12, height: 12)
+            .overlay(Circle().stroke(Color.surface, lineWidth: 2))
+            .accessibilityLabel("Unread")
+    }
+
+    /// The one line that says why they need you, or how their week's going.
+    @ViewBuilder private var status: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if let flag = client.week.flags.min(by: { order($0) < order($1) }) {
+                FlagDot(kind: flag.kind)
+                Text(flag.text)
+            } else {
+                Text(client.week.planned == 0 ? "Nothing planned this week" : "\(client.week.done) of \(client.week.planned) this week")
+            }
+        }
     }
 
     private func order(_ flag: Triage.Flag) -> Int { Triage.Flag.Kind.allCases.firstIndex(of: flag.kind)! }
@@ -306,6 +324,7 @@ struct FlagDot: View {
 /// FIT-298: a new client's invite: the code and its link, to share or copy (createClientInvite, FIT-130).
 struct InviteSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var invite: Cloud.ClientInvite?
     @State private var problem: String?
     @State private var copied = false
@@ -320,32 +339,39 @@ struct InviteSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Invite a client").font(.title2.weight(.bold))
             Text("They open the link in the free Barbrabell app and say yes to you coaching them.")
-                .font(.body).foregroundStyle(Color.inkMuted).padding(.top, 8)
-            VStack(spacing: 6) {
-                if let invite {
-                    Text(invite.code).font(.display(34, weight: .medium, design: .monospaced)).tracking(6)
-                        .textSelection(.enabled)
-                    Text(invite.url.replacingOccurrences(of: "https://", with: "")).font(.subheadline).foregroundStyle(Color.inkMuted)
-                } else if asking {
-                    TextField("Your name, as your client will see it", text: $name)
-                        .font(.body.weight(.semibold)).multilineTextAlignment(.center)
-                        .textContentType(.name).submitLabel(.done)
-                        .onSubmit { Task { await make() } }
-                } else if let problem {
-                    Text(problem).font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
-                } else if making {
-                    ProgressView()
-                } else {
-                    TextField("Who’s it for? (optional)", text: $client)
-                        .font(.body.weight(.semibold)).multilineTextAlignment(.center)
-                        .textContentType(.name).submitLabel(.done)
-                        .onSubmit { Task { await make() } }
+                .font(.body).foregroundStyle(Color.inkMuted).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
+            // FIT-367: a name is typed in an ordinary field; the big box is for the code once it's made.
+            if invite == nil, problem == nil, !making {
+                Group {
+                    if asking {
+                        TextField("Your name, as your client will see it", text: $name)
+                    } else {
+                        TextField("Who’s it for? (optional)", text: $client)
+                    }
                 }
+                .textContentType(.name).submitLabel(.done)
+                .onSubmit { Task { await make() } }
+                .padding(.horizontal, 16).frame(minHeight: 50)
+                // fillStrong: plain fill barely shows on a dark sheet.
+                .background(Color.fillStrong, in: .rect(cornerRadius: 12))
+                .padding(.top, 24)
+            } else {
+                VStack(spacing: 6) {
+                    if let invite {
+                        Text(invite.code).font(.display(34, weight: .medium, design: .monospaced)).tracking(6)
+                            .textSelection(.enabled)
+                        Text(invite.url.replacingOccurrences(of: "https://", with: "")).font(.subheadline).foregroundStyle(Color.inkMuted)
+                    } else if let problem {
+                        Text(problem).font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 96)
+                .padding(16)
+                .background(Color.fill, in: .rect(cornerRadius: 18))
+                .padding(.top, 24)
             }
-            .frame(maxWidth: .infinity, minHeight: 96)
-            .padding(16)
-            .background(Color.fill, in: .rect(cornerRadius: 18))
-            .padding(.top, 24)
             if asking {
                 Button("Make the Invite") { Task { await make() } }
                     .buttonStyle(.primary).padding(.top, 24)
@@ -367,7 +393,9 @@ struct InviteSheet: View {
         }
         .padding(.horizontal, 24).padding(.top, 32)
         .frame(maxHeight: .infinity, alignment: .top)
-        .presentationDetents([.medium])
+        // FIT-367: accessibility sizes need the whole height, or the explanation is cut off.
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium])
+        .presentationBackground(Color(.systemBackground))
     }
 
     private func make() async {

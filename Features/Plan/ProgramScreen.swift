@@ -248,11 +248,12 @@ struct ProgramScreen: View {
         return VStack(alignment: .leading, spacing: 0) {
             weekLine(eyebrow, monday: monday, sunday: sunday)
             sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
-            Spacer(minLength: 12)
+            Color.clear.frame(height: 12)
         }
         .padding(22)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .cardBackground()
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     /// "This week · Oct 25 – 31": which week, quietly, in sentence case.
@@ -277,7 +278,7 @@ struct ProgramScreen: View {
                 sessions(saved ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped(),
                          pinnable: saved && !coached, monday: monday)
                     .padding(.top, 14)
-                Spacer(minLength: 12)
+                Color.clear.frame(height: 12)
                 // FIT-215: planning the week again is the in-app AI's.
                 if index == current, Pilot.inAppAI {
                     let days = regenerateDays(monday)
@@ -294,15 +295,17 @@ struct ProgramScreen: View {
                     row("Weekly sets", "\(ProgramPlan.weeklySets(week, daysPerWeek: profile.trainingDays.count, sessionMinutes: profile.sessionMinutes, maxWeeklySets: profile.maxWeeklySets))")
                 }
                 .padding(.top, 14)
-                Spacer(minLength: 12)
+                Color.clear.frame(height: 12)
             } else {
-                Spacer(minLength: 12)
+                Color.clear.frame(height: 12)
             }
         }
         .padding(22)
         .scrollsWhenTall()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // FIT-367: the card is as tall as its week, not the page: a full-height card was half empty.
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .cardBackground()
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     /// Where each goal should be by a later week: "~190", "185".
@@ -348,6 +351,15 @@ struct ProgramScreen: View {
         }
     }
 
+    /// A day gone by: done, or (FIT-357) missed when nothing was logged.
+    @ViewBuilder private func status(_ date: Date) -> some View {
+        if done(date) {
+            Image(systemName: "checkmark").font(.footnote.weight(.bold)).accessibilityLabel("Done")
+        } else if missed(date) {
+            Text("Missed").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkMuted)
+        }
+    }
+
     /// Each day opens its session to edit (FIT-45); a done day opens what was logged.
     private func sessions(_ days: [Planner.SketchDay], pinnable: Bool, monday: Date) -> some View {
         VStack(spacing: 0) {
@@ -358,10 +370,18 @@ struct ProgramScreen: View {
                         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
                             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 14))
                         layout {
-                            Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
-                                .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                                .lineLimit(1).fixedSize()
-                                .frame(minWidth: 36, alignment: .leading)
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
+                                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                                    .lineLimit(1).fixedSize()
+                                    .frame(minWidth: 36, alignment: .leading)
+                                // FIT-367: at accessibility sizes, done or missed goes on the day's line, so the lifts
+                                // below get the card's whole width.
+                                if typeSize.isAccessibilitySize {
+                                    Spacer()
+                                    status(day.date)
+                                }
+                            }
                             // The lifts name the session, as on Today; the sets are one tap away.
                             Text(day.title).font(.body.weight(.semibold)).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -370,11 +390,8 @@ struct ProgramScreen: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint(done(day.date) ? "Shows what you logged" : missed(day.date) ? "Opens the day on Today, to log it" : "Opens the session to change it")
-                    if done(day.date) {
-                        Image(systemName: "checkmark").font(.footnote.weight(.bold)).accessibilityLabel("Done")
-                    } else if missed(day.date) {
-                        // FIT-357: a past day with nothing logged says so.
-                        Text("Missed").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                    if done(day.date) || missed(day.date) {
+                        if !typeSize.isAccessibilitySize { status(day.date) }
                     } else if pinnable, day.date >= Calendar.current.startOfDay(for: .now) {
                         let items = dayItems(day.date)
                         let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
@@ -394,7 +411,7 @@ struct ProgramScreen: View {
                     }
                 }
                 .padding(.vertical, 10)
-                Divider()
+                if day.id != days.last?.id { Divider() }
             }
             if days.isEmpty { Text("Nothing planned.").font(.subheadline).foregroundStyle(.secondary) }
         }

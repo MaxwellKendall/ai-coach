@@ -14,6 +14,7 @@ struct DayThread: View {
     @State private var sending = false
     @State private var problem: String?
     @FocusState private var focused: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
     private var client: Roster.Client? { roster.clients.first { $0.id == ref.client } }
@@ -110,9 +111,12 @@ struct DayThread: View {
                 Label(ClientDay.sessionName(log) ?? "Logged", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
                 ForEach(Array(lifts.enumerated()), id: \.offset) { _, lift in
-                    HStack(alignment: .firstTextBaseline) {
+                    // FIT-367: at accessibility sizes the sets go under the lift, each with the card's width.
+                    let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                        : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+                    layout {
                         Text(lift.name).font(.subheadline.weight(.semibold))
-                        Spacer(minLength: 8)
+                        if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
                         Text(lift.sets).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit()
                     }
                 }
@@ -154,6 +158,7 @@ struct DayThread: View {
             let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             Button(action: send) {
                 Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(Plate.current.onAccent)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge) // FIT-367: the arrow stays inside its 36 pt circle
                     .frame(width: 36, height: 36).background(Plate.current.accent.opacity(empty || sending ? 0.35 : 1), in: .circle)
             }
             .disabled(empty || sending)

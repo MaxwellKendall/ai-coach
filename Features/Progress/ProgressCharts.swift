@@ -70,6 +70,8 @@ struct ProgressCharts<CheckInsTop: View>: View {
                     .foregroundStyle(Color.fill)
             }
             .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { AxisValueLabel(format: .dateTime.month(.abbreviated).day()) } }
+            // FIT-367: four dates across a phone's width overlap past this size; the chart is read by its bars.
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
             .frame(height: 120)
             let done = weeks.map(\.done).reduce(0, +), planned = weeks.map(\.planned).reduce(0, +)
             Text(planned == 0 ? "Nothing planned yet" : "\(done) of \(planned) sessions done")

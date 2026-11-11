@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """FIT-364: the UI score, 0–100. The automated 60 points come from reading the Swift; the simulator's 40 come from
 sim.json, which the skill's simulator pass writes. Run from the repo root: python3 .claude/skills/ui-score/score.py
-[--json] [--findings]. Rules are the Appllama app design skill's laws, adapted to SwiftUI and App/Theme.swift."""
+[--json] [--findings]. FIT-367: --screens scores each screen in screens.json on its own: the same 60 over its own files
+and 40 from its own simulator items. Rules are the Appllama app design skill's laws, adapted to SwiftUI and App/Theme.swift."""
 
 import json
 import re
@@ -114,9 +115,14 @@ CHECKS = [
 ]
 
 
-def automated():
+def automated(only=None):
     files = sorted(p for d in SOURCES for p in (ROOT / d).rglob("*.swift"))
     views = [(str(p.relative_to(ROOT)), p.read_text()) for p in files]
+    if only is not None:
+        missing = set(only) - {p for p, _ in views}
+        if missing:
+            sys.exit(f"screens.json names files that aren't there: {', '.join(sorted(missing))}")
+        views = [(p, t) for p, t in views if p in only]
     views = [(p, t) for p, t in views if re.search(r":\s*(some\s+)?View\b|ButtonStyle|ViewModifier", t)]
     results = []
     for key, points, title, check in CHECKS:
@@ -146,7 +152,40 @@ def simulator():
     return json.loads(path.read_text())
 
 
+def screens():
+    """screens.json: {"date", "commit", "screens": [{"id", "role", "how", "files": [...], "items": [{"id", "max",
+    "points", "note", "hard_fail"?}]}]}. A screen's score is 60 for its own files' automated checks plus 40 times its
+    simulator points' share; a hard fail caps it at 79."""
+    data = json.loads((SKILL / "screens.json").read_text())
+    rows = []
+    for screen in data["screens"]:
+        auto = automated(set(screen["files"]))
+        auto_total = sum(r["points"] for r in auto)
+        items = screen["items"]
+        sim_max = sum(i["max"] for i in items)
+        sim_total = 40 * sum(i["points"] for i in items) / sim_max if sim_max else 0
+        score = auto_total + sim_total
+        if any(i.get("hard_fail") for i in items):
+            score = min(score, 79)
+        rows.append({"id": screen["id"], "role": screen["role"], "score": round(score, 1), "automated": round(auto_total, 1),
+                     "simulator": round(sim_total, 1), "findings": [f"{r['check']}\t{f}" for r in auto for f in r["findings"]],
+                     "losses": [f"{i['id']} {i['points']}/{i['max']}: {i.get('note', '')}" for i in items if i["points"] < i["max"]]})
+    if "--json" in sys.argv:
+        print(json.dumps(rows, indent=2))
+        return
+    print(f"Screens ({data.get('date', '?')} at {data.get('commit', '?')}): {sum(r['score'] >= 90 for r in rows)} of {len(rows)} at 90+")
+    for r in rows:
+        print(f"  {r['score']:>5}  {'ok ' if r['score'] >= 90 else 'LOW'}  {r['role']:<7} {r['id']:<20} automated {r['automated']}/60, simulator {r['simulator']}/40")
+        for loss in r["losses"]:
+            print(f"           - {loss}")
+        if "--findings" in sys.argv:
+            for f in r["findings"]:
+                print(f"           {f}")
+
+
 def main():
+    if "--screens" in sys.argv:
+        return screens()
     auto = automated()
     sim = simulator()
     auto_total = sum(r["points"] for r in auto)

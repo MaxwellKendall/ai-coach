@@ -17,6 +17,7 @@ struct TodayScreen: View {
     @Query private var templates: [Template]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// FIT-330: the day Today is on. It moves on when the app comes back on a new day, or at midnight while it's open,
     /// and with it the pages and the week's planning.
     @State private var today = Calendar.current.startOfDay(for: .now)
@@ -44,8 +45,6 @@ struct TodayScreen: View {
     @State private var picking = false
     /// FIT-204: today's check-in sheet.
     @State private var checkingIn: CheckInDay?
-    /// FIT-351: the day a note is being written for.
-    @State private var noting: CheckInDay?
     /// FIT-344: the weekly check-in sheet.
     @State private var weekly = false
     @State private var review: WeekReport?
@@ -156,7 +155,7 @@ struct TodayScreen: View {
         // FIT-235: another day's session comes to today; when today has a session of its own waiting, the two swap.
         let todayPlan: DayCard.Planned? = if case .plan(let plan) = weekCards[todayPos] { plan } else { nil }
         VStack(alignment: .leading, spacing: 0) {
-            header(days, cards: cards)
+            header(days, cards: cards).padding(.bottom, 8)
             // Each day a full-width page swiped sideways; the strip above follows it.
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
@@ -230,7 +229,13 @@ struct TodayScreen: View {
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen().tint(RootView.accent) }
-        .sheet(isPresented: $conversing) { NavigationStack { CoachConversation() }.tint(RootView.accent) }
+        .sheet(isPresented: $conversing) {
+            NavigationStack {
+                CoachConversation()
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { conversing = false } } }
+            }
+            .tint(RootView.accent)
+        }
         .fullScreenCover(isPresented: $picking) { ProgramPicker { picking = false } }
         .sheet(isPresented: $weekly) { WeeklyCheckInSheet() }
         // FIT-344: the weekly reminder on the coach's check-in day, while coached.
@@ -241,7 +246,6 @@ struct TodayScreen: View {
             CheckInSheet(day: checkIn.day,
                          lastWeight: entries.last { $0.kind == .bodyweight }?.measurements.first { $0.metric == "weight_lb" }?.value)
         }
-        .sheet(item: $noting) { DayNoteSheet(day: $0.day, coached: !pro.coaches.isEmpty) }
         .sheet(item: $sharing) { ShareWinSheet(win: $0) }
         .fullScreenCover(isPresented: Binding(get: { review != nil }, set: { if !$0 { review = nil } })) {
             if let review {
@@ -351,6 +355,14 @@ struct TodayScreen: View {
                 Text(Self.dayName(days[shown])).font(.display(34)).contentTransition(.opacity)
                     .animation(.snappy, value: shown)
                 Spacer()
+                // FIT-367: every message with the coach, beside the account, as a toolbar's buttons are.
+                if !pro.coaches.isEmpty {
+                    Button { conversing = true } label: {
+                        Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 22)).foregroundStyle(Color.inkMuted) // ui-score: allow dynamic-type: glyph sized to its fixed frame
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Messages with \(pro.coaches[0].name ?? "your coach")")
+                }
                 Button { you = true } label: {
                     Image(systemName: "person.crop.circle").font(.system(size: 26)).foregroundStyle(Color.inkMuted) // ui-score: allow dynamic-type: glyph sized to its fixed frame
                         .frame(width: 44, height: 44)
@@ -374,9 +386,6 @@ struct TodayScreen: View {
             .clipped()
             // FIT-332: swipe the strip for another week, as in Calendar; the pages below swipe between its days.
             .simultaneousGesture(WeekPaging.swipe { go(to: WeekPaging.week($0, from: shownWeek)) })
-            // FIT-353: one row, Check in · Note · Messages, so the session stays first. The goal bar is gone: goals are
-            // on Progress.
-            if !pro.coaches.isEmpty { actionRow(days[shown], today: isToday(shown)) }
         }
         .padding(.horizontal, 20).padding(.top, 4)
     }
@@ -459,59 +468,66 @@ struct TodayScreen: View {
         return WeeklyCheckIn.isDue(profiles.first?.checkInDay ?? WeeklyCheckIn.defaultDay, today: .now, done: done)
     }
 
-    /// FIT-353: the coached client's actions for the day shown. On the coach's day the weekly check-in takes Check in's
-    /// place until it's done; a later day has neither a check-in nor a note yet.
-    private func actionRow(_ day: Date, today: Bool) -> some View {
-        HStack(spacing: 22) {
-            if day <= Calendar.current.startOfDay(for: .now) {
-                if today && weeklyDue {
-                    // "Weekly check-in" doesn't fit beside Note and Messages: Check in, in the plate colour, and its clipboard.
-                    Button { weekly = true } label: {
-                        Label("Check in", systemImage: "list.clipboard").foregroundStyle(Plate.current.mark)
-                    }
-                    .accessibilityLabel("Weekly check-in")
-                    .accessibilityHint("Energy, stress, soreness, how the plan went, and a few words")
-                } else {
-                    checkInButton(day)
-                }
-                noteButton(day)
-            }
-            Spacer(minLength: 0)
-            // FIT-340: every message with the coach, in one place.
-            Button { conversing = true } label: { Label("Messages", systemImage: "bubble.left.and.bubble.right") }
-        }
-        .font(.subheadline.weight(.medium))
-        .buttonStyle(.plain)
-        .lineLimit(1)
-    }
-
-    /// FIT-351: a note for the day, about anything; filled in once there is one.
-    private func noteButton(_ day: Date) -> some View {
-        let noted = !CheckIn.values(entries.filter { ($0.kind == .bodyweight || $0.kind == .sleep) && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }).note.isEmpty
-        return Button { noting = CheckInDay(day: day) } label: {
-            Label(noted ? "Noted" : "Note", systemImage: noted ? "checkmark.circle.fill" : "square.and.pencil")
-                .foregroundStyle(noted ? .secondary : .primary)
-        }
-        .accessibilityHint("A note for your coach about this day")
-    }
-
     /// A check-in sheet's day.
     struct CheckInDay: Identifiable {
         var day: Date
         var id: Date { day }
     }
 
-    /// FIT-204: weight, sleep and a note for the coach, or what the day's said. FIT-345: for the day shown, which opens
-    /// it to change.
-    private func checkInButton(_ day: Date) -> some View {
-        let rows = entries.filter { ($0.kind == .bodyweight || $0.kind == .sleep) && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }
-        let summary = CheckIn.summary(rows)
-        return Button { checkingIn = CheckInDay(day: day) } label: {
-            Label(summary == nil ? "Check in" : "Checked in", systemImage: summary == nil ? "plus.circle" : "checkmark.circle.fill")
-                .foregroundStyle(summary == nil ? .primary : .secondary)
+    /// FIT-367: a coached client's weekly check-in, due today: a card over the session, as the week's review is.
+    private var weeklyCard: some View {
+        Button { weekly = true } label: {
+            HStack(spacing: 14) {
+                // Accessibility sizes keep the words and their width: no glyph, and the title alone.
+                if !typeSize.isAccessibilitySize {
+                    Image(systemName: "list.clipboard").font(.title3).foregroundStyle(Plate.current.mark).frame(width: 28)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Weekly check-in").font(.headline)
+                    if !typeSize.isAccessibilitySize {
+                        Text("A few questions from \(pro.coaches.first?.name ?? "your coach") about your week")
+                            .font(.subheadline).foregroundStyle(Color.inkMuted).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkFaint)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardBackground()
+            .contentShape(.rect)
         }
-        .accessibilityValue(summary ?? "")
-        .accessibilityHint("Weight and sleep for your coach")
+        .buttonStyle(.plain)
+    }
+
+    /// FIT-204, FIT-367: the day's check-in for the coach (weight, sleep and a note) as one row under the day, saying
+    /// what it said once there is one. Any day up to today (FIT-345).
+    private func checkInRow(_ day: Date) -> some View {
+        let rows = entries.filter { ($0.kind == .bodyweight || $0.kind == .sleep) && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }
+        let values = CheckIn.values(rows)
+        let said = [CheckIn.summary(rows), values.note.isEmpty ? nil : "“\(values.note)”"].compactMap { $0 }.joined(separator: " · ")
+        return Button { checkingIn = CheckInDay(day: day) } label: {
+            HStack(spacing: 14) {
+                if !typeSize.isAccessibilitySize {
+                    Image(systemName: said.isEmpty ? "plus.circle" : "checkmark.circle.fill").font(.title3)
+                        .foregroundStyle(said.isEmpty ? Plate.current.mark : Color.good).frame(width: 28)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(said.isEmpty ? "Check in" : "Checked in").font(.headline)
+                    if !typeSize.isAccessibilitySize || !said.isEmpty {
+                        Text(said.isEmpty ? "Weight, sleep or a note for \(pro.coaches.first?.name ?? "your coach")" : said)
+                            .font(.subheadline).foregroundStyle(Color.inkMuted).lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.inkFaint)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardBackground()
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 
     /// "Today", "Tomorrow", then the weekday.
@@ -689,6 +705,7 @@ struct TodayScreen: View {
                         let report = weekReport()
                         WeekReviewCard(report: report) { review = report }
                     }
+                    if isToday(index), !pro.coaches.isEmpty, weeklyDue { weeklyCard }
                     if isToday(index), let done = finishedProgram {
                         ProgramDoneCard(finished: done, next: done.following(days: profiles.first?.trainingDays.count ?? 3),
                                         recap: { review = weekReport() }, start: { startNext(after: done) }, pick: { picking = true })
@@ -699,21 +716,25 @@ struct TodayScreen: View {
                         .padding(.horizontal, 20).padding(.vertical, Self.isList(card) && !planning ? 4 : 20)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .cardBackground()
-                    // FIT-331: a coach can write on any day, planned or rest, so its thread is here too; a logged
-                    // session's is in its record.
-                    // Simplicity pass: the coach's messages are behind Messages, not under each day too.
+                    if !pro.coaches.isEmpty, day <= Calendar.current.startOfDay(for: .now) { checkInRow(day) }
                 }
                 .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 24)
             }
             .scrollBounceBehavior(.basedOnSize)
-            Group {
-                // Another day this week, earlier or later: its session can be moved to today, or swapped with today's.
-                // A later week's waits for its week (FIT-332): its plan may change before then.
-                if isToday(index) { actions(card, week: weekCards) }
-                else if isPast(day) { pastActions(card, day: day) }
-                else if isThisWeek { laterActions(card, todayPlan: todayPlan) }
+            // FIT-367: the actions as the page's bottom bar, so a long session scrolls under them with the system's
+            // soft edge rather than stopping at a hard line.
+            .safeAreaBar(edge: .bottom) {
+                Group {
+                    // Another day this week, earlier or later: its session can be moved to today, or swapped with
+                    // today's. A later week's waits for its week (FIT-332): its plan may change before then.
+                    if isToday(index) { actions(card, week: weekCards) }
+                    else if isPast(day) { pastActions(card, day: day) }
+                    else if isThisWeek { laterActions(card, todayPlan: todayPlan) }
+                }
+                .padding(.horizontal, 20).padding(.bottom, 16)
             }
-            .padding(.horizontal, 20).padding(.bottom, 16)
+            // FIT-367: a scrolled session stays inside its page, under the strip, not drawn through its dots.
+            .clipped()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
