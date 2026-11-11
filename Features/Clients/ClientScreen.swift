@@ -34,7 +34,6 @@ struct ClientScreen: View {
     @State private var adding: Adding?
     @State private var dated: Dated?
     @State private var clearing = false
-    @State private var retrying = false
 
     /// FIT-336: a sheet for the week, and a change to it waiting on "Replace?" when it would overwrite planned days.
     @State private var weekSheet: WeekSheet?
@@ -59,7 +58,7 @@ struct ClientScreen: View {
         ScrollView {
             if let client {
                 VStack(alignment: .leading, spacing: 20) {
-                    unsent()
+                    UnsentCard(id: id, first: first, names: names) { said($0, done: "Sent") }
                     flags(client)
                     VStack(spacing: 12) {
                         // FIT-363: the week's actions are in the day's ⋯, so the bar shows only for another week.
@@ -416,74 +415,21 @@ struct ClientScreen: View {
         deliver([(key: "log#\(day)", body: rows.isEmpty ? nil : SyncUnits.encode(rows))], client, done: "Corrected")
     }
 
-    /// Units as they now are, kept here at once so the change shows while they go, then sent to their phone one by one.
-    /// FIT-374: what doesn't get there stays marked unsent, with what they have, until it's retried or discarded.
+    /// Units as they now are, sent to their phone (FIT-374: or marked unsent, with Retry).
     private func deliver(_ units: [(key: String, body: String?)], _ client: Roster.Client, done: String?) {
-        var changed = client
-        for unit in units { changed.units[unit.key] = unit.body }
-        roster.update(changed, coach: account.user?.uid ?? "", names: names)
-        let theirs = Dictionary(units.map { ($0.key, client.units[$0.key]) }, uniquingKeysWith: { a, _ in a })
-        Task { await push(theirs, done: done) }
+        let units = Dictionary(units.map { ($0.key, $0.body) }, uniquingKeysWith: { _, b in b })
+        Task { said(await roster.send(units, to: id, coach: account.user?.uid ?? "", names: names), done: done) }
     }
 
-    /// Each unit as it is here, sent; `theirs` is what their phone had before it.
-    private func push(_ theirs: [String: String?], done: String?) async {
-        let name = first
-        var kept = true
-        var left = theirs.keys.sorted()
-        do {
-            while let key = left.first {
-                let mine = roster.clients.first { $0.id == id }?.units[key]
-                kept = try await Cloud.push(key, body: mine, client: id) && kept
-                roster.markSent(id, key)
-                left.removeFirst()
-            }
-        } catch {
-            let units = roster.clients.first { $0.id == id }?.units ?? [:]
-            for key in left { roster.markUnsent(id, key, theirs: theirs[key] ?? nil, mine: units[key]) }
-            toast = Toast(text: "Couldn’t send that to \(name)")
-            return
-        }
-        if kept {
-            if let done { toast = Toast(text: done) }
-        } else {
-            // Their phone kept its newer copy: theirs is what's shown, so what's here matches what they have.
-            try? await roster.reload(id, coach: account.user?.uid ?? "", names: names)
-            toast = Toast(text: "\(name)’s phone had a newer copy, shown here")
+    private func said(_ sent: Roster.Sent, done: String?) {
+        switch sent {
+        case .sent: if let done { toast = Toast(text: done) }
+        case .theirsWasNewer: toast = Toast(text: "\(first)’s phone had a newer copy, shown here")
+        case .failed: toast = Toast(text: "Couldn’t send that to \(first)")
         }
     }
 
     private var first: String { client?.person.name.map { $0.split(separator: " ").first.map(String.init) ?? $0 } ?? "your client" }
-
-    /// FIT-374: what didn't reach their phone, which days it's on, and sending it again or going back to what they have.
-    @ViewBuilder private func unsent() -> some View {
-        if let changes = roster.unsent[id], !changes.isEmpty {
-            let days = changes.keys.sorted().compactMap { $0.split(separator: "#").last.map { Self.dayTitle(String($0)) } }
-            VStack(alignment: .leading, spacing: 14) {
-                Label("Not sent to \(first)", systemImage: "exclamationmark.triangle.fill")
-                    .font(.headline).foregroundStyle(Color.ink)
-                Text("\(ListFormatter.localizedString(byJoining: days)) didn’t reach their phone, which still has what was there before.")
-                    .font(.subheadline).foregroundStyle(Color.inkMuted)
-                HStack(spacing: 10) {
-                    Button {
-                        retrying = true
-                        Task {
-                            await push(changes.mapValues(\.theirs), done: "Sent")
-                            retrying = false
-                        }
-                    } label: { Text(retrying ? "Sending…" : "Retry").frame(maxWidth: .infinity) }
-                        .buttonStyle(.primary).disabled(retrying)
-                    Button { roster.discardUnsent(id, coach: account.user?.uid ?? "", names: names) } label: {
-                        Text("Discard").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.secondary).disabled(retrying)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .cardBackground()
-        }
-    }
 
     /// FIT-336: what can be done to the whole week shown, from today on.
     @ViewBuilder private func weekActions(_ client: Roster.Client) -> some View {

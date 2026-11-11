@@ -98,6 +98,8 @@ struct GoalCard: View {
             .font(.display(34, weight: .bold, design: .rounded))
             .padding(.top, 6)
             Text(line(from: from, now: now)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+            // FIT-376: a goal the coach set says so, until it's changed here.
+            if let by = goal.setBy { Text("Set by \(by)").font(.footnote).foregroundStyle(.secondary).padding(.top, 2) }
             Button(action: update) {
                 Label("Update", systemImage: "plus.circle.fill").font(.subheadline.weight(.semibold))
             }

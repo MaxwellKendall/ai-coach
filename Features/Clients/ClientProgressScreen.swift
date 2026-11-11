@@ -3,8 +3,8 @@ import SwiftData
 import SwiftUI
 
 /// FIT-337: a client at a glance, one tap from their screen: goals, their main lifts' estimated max over time, weeks
-/// done of planned, check-ins, and their profile. Read-only: goals and profile are the client's own (principle 6; the
-/// server lets a coach write only the plan and the logs), so a change is suggested in a message.
+/// done of planned, check-ins, and their profile. FIT-376: the coach adds, changes and drops their goals and edits their
+/// profile with the client's own editors (ClientScratch); it goes to their phone with the coach's name on it.
 struct ClientProgressScreen: View {
     struct Ref: Hashable { var client: String }
 
@@ -16,8 +16,16 @@ struct ClientProgressScreen: View {
     /// FIT-339: removing them, asked first.
     @State private var removing = false
     @State private var problem: String?
-    /// FIT-344: why the check-in day didn't reach their phone.
-    @State private var dayProblem: String?
+    /// FIT-376: a goal or the profile being changed, on a store of their units made for it.
+    @State private var editing: Editing?
+    @State private var toast: Toast?
+
+    struct Editing: Identifiable {
+        enum Kind { case newGoal, goal(String), profile }
+        let id = UUID()
+        var kind: Kind
+        var scratch: ClientScratch
+    }
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var client: Roster.Client? { roster.clients.first { $0.id == id } }
@@ -30,6 +38,7 @@ struct ClientProgressScreen: View {
                 let sets = ClientProgress.sets(client.units, patterns: patterns)
                 let weighIns = ClientProgress.checkIns(client.units, "weight_lb")
                 VStack(alignment: .leading, spacing: 28) {
+                    UnsentCard(id: id, first: first, names: names) { said($0, done: "Sent") }
                     goals(client, sets: sets, weighIns: weighIns)
                     ProgressCharts(units: client.units, sets: sets, names: names) {
                         // FIT-344: the day they're asked for the weekly check-in, and reminded; Sunday until it's set.
@@ -45,7 +54,6 @@ struct ClientProgressScreen: View {
                             .labelsHidden()
                             .font(.subheadline)
                         }
-                        if let dayProblem { Text(dayProblem).font(.footnote).foregroundStyle(.red) }
                     }
                     profile(client)
                     remove(client)
@@ -57,6 +65,64 @@ struct ClientProgressScreen: View {
         .navigationTitle(client.map { "\($0.name.split(separator: " ").first.map(String.init) ?? $0.name)’s progress" } ?? "Progress")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
+        .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, 24) }
+        .animation(.snappy, value: toast)
+        .sheet(item: $editing, onDismiss: sendEdits) { editing in
+            Group {
+                switch editing.kind {
+                case .newGoal:
+                    NewGoalSheet()
+                case .goal(let key):
+                    if let goal = editing.scratch.goal(key), let option = GoalOption.all.first(where: { $0.metric == goal.metric }) {
+                        GoalChangeSheet(goal: goal, option: option, seenBy: "\(first) sees the change, with your name on it.") {
+                            goal.status = .abandoned
+                            goal.updatedAt = .now
+                        }
+                    }
+                case .profile:
+                    if let profile = editing.scratch.profile {
+                        NavigationStack {
+                            ProfileEditor(profile: profile, isNew: false)
+                                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { self.editing = nil } } }
+                        }
+                    }
+                }
+            }
+            .environment(\.modelContext, editing.scratch.context)
+            .tint(RootView.accent)
+        }
+    }
+
+    /// The scratch store the last sheet edited, sent once it's closed.
+    @State private var pending: ClientScratch?
+
+    private var first: String { client.map { $0.name.split(separator: " ").first.map(String.init) ?? $0.name } ?? "your client" }
+
+    private func open(_ kind: Editing.Kind, _ client: Roster.Client) {
+        do {
+            let scratch = try ClientScratch(units: client.units, templates: templates)
+            pending = scratch
+            editing = Editing(kind: kind, scratch: scratch)
+        } catch {
+            toast = Toast(text: "Couldn’t open that")
+        }
+    }
+
+    /// What the sheet changed, sent to their phone with the coach's name on it.
+    private func sendEdits() {
+        guard let scratch = pending else { return }
+        pending = nil
+        let coach = account.user?.name.map { $0.split(separator: " ").first.map(String.init) ?? $0 } ?? "Your coach"
+        guard let units = try? scratch.changes(by: coach), !units.isEmpty else { return }
+        Task { said(await roster.send(units, to: id, coach: account.user?.uid ?? "", names: names), done: "Sent to \(first)") }
+    }
+
+    private func said(_ sent: Roster.Sent, done: String?) {
+        switch sent {
+        case .sent: if let done { toast = Toast(text: done) }
+        case .theirsWasNewer: toast = Toast(text: "\(first)’s phone had a newer copy, shown here")
+        case .failed: toast = Toast(text: "Couldn’t send that to \(first)")
+        }
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
@@ -68,12 +134,12 @@ struct ClientProgressScreen: View {
     }
 
     @ViewBuilder private func goals(_ client: Roster.Client, sets: [LoggedSet], weighIns: [DatedValue]) -> some View {
-        let goals = ClientProgress.goals(client.units)
+        let goals = ClientProgress.keyedGoals(client.units)
         section("Goals") {
             if goals.isEmpty {
-                Text("No goals yet. They set their own; suggest one in a message.").font(.subheadline).foregroundStyle(Color.inkMuted)
+                Text("No goals yet.").font(.subheadline).foregroundStyle(Color.inkMuted)
             }
-            ForEach(Array(goals.enumerated()), id: \.offset) { _, goal in
+            ForEach(goals, id: \.key) { key, goal in
                 let now = GoalProgress.current(goal.metric, sets: sets, weighIns: weighIns, since: .distantPast)
                 let from = goal.baseline ?? now ?? 0
                 let fraction = goal.target == from ? 1 : min(1, max(0, ((now ?? from) - from) / (goal.target - from)))
@@ -89,6 +155,13 @@ struct ClientProgressScreen: View {
                         Text("By \(deadline.formatted(.dateTime.month(.abbreviated).day().year()))").font(.footnote).foregroundStyle(Color.inkMuted)
                     }
                 }
+                .contentShape(.rect)
+                .onTapGesture { open(.goal(key), client) }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Change or drop this goal")
+            }
+            Button { open(.newGoal, client) } label: {
+                Label("Add a Goal", systemImage: "plus").font(.subheadline.weight(.semibold))
             }
         }
     }
@@ -103,18 +176,8 @@ struct ClientProgressScreen: View {
 
     /// FIT-344: the check-in day, kept here at once and sent to their phone as the `checkin` unit.
     private func setCheckInDay(_ day: Int, _ client: Roster.Client) {
-        let body = SyncUnits.encode(WeeklyCheckIn.Day(day: day))
-        var changed = client
-        changed.units["checkin"] = body
-        roster.update(changed, coach: account.user?.uid ?? "", names: names)
-        dayProblem = nil
-        Task {
-            do {
-                if !(try await Cloud.push("checkin", body: body, client: client.id)) { dayProblem = "Their phone had a newer copy. Pull to see it." }
-            } catch {
-                dayProblem = "Couldn’t send that. Try again."
-            }
-        }
+        let units: [String: String?] = ["checkin": SyncUnits.encode(WeeklyCheckIn.Day(day: day))]
+        Task { said(await roster.send(units, to: client.id, coach: account.user?.uid ?? "", names: names), done: nil) }
     }
 
     @ViewBuilder private func profile(_ client: Roster.Client) -> some View {
@@ -127,6 +190,9 @@ struct ClientProgressScreen: View {
                 row("Equipment", profile.equipment.count >= Profile.allEquipment.count ? "Full gym"
                     : profile.equipment.map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: ", "))
                 if !profile.injuredAreas.isEmpty { row("Injuries", profile.injuredAreas.joined(separator: ", ")) }
+                Button { open(.profile, client) } label: {
+                    Label("Edit Profile", systemImage: "pencil").font(.subheadline.weight(.semibold))
+                }
             }
         }
     }

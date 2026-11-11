@@ -11,7 +11,7 @@ struct ProfileEditor: View {
 
     var body: some View {
         Form {
-            Section("You") {
+            Section {
                 LabeledContent("Age") {
                     TextField("Years", value: blankZero($profile.age), format: .number).keyboardType(.numberPad).focused($typing).multilineTextAlignment(.trailing)
                 }
@@ -22,6 +22,11 @@ struct ProfileEditor: View {
                     TextField("Optional", value: $profile.targetWeightLb, format: .number).keyboardType(.decimalPad).focused($typing)
                         .multilineTextAlignment(.trailing)
                 }
+            } header: {
+                Text("You")
+            } footer: {
+                // FIT-376: a coach's change says who made it.
+                if let by = profile.changedBy { Text("\(by) changed this last.") }
             }
             Section("Training days") {
                 DayPicker(days: $profile.trainingDays)
@@ -115,6 +120,7 @@ struct ProfileEditor: View {
         // FIT-355: pushed from You, with its back button: what changed is saved on the way out.
         .onDisappear {
             guard !isNew, context.hasChanges else { return }
+            profile.changedBy = nil
             profile.updatedAt = .now
             try? context.save()
         }

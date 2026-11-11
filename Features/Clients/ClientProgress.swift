@@ -51,10 +51,14 @@ enum ClientProgress {
     }
 
     /// Their goals still being worked on.
-    static func goals(_ units: [String: String]) -> [SyncUnits.GoalBody] {
-        units.filter { $0.key.hasPrefix("goal#") }.compactMap { try? SyncUnits.decode(SyncUnits.GoalBody.self, $0.value) }
-            .filter { $0.status == .active }
-            .sorted { $0.metric < $1.metric }
+    static func goals(_ units: [String: String]) -> [SyncUnits.GoalBody] { keyedGoals(units).map(\.goal) }
+
+    /// FIT-376: with each one's unit key, to change it.
+    static func keyedGoals(_ units: [String: String]) -> [(key: String, goal: SyncUnits.GoalBody)] {
+        units.filter { $0.key.hasPrefix("goal#") }
+            .compactMap { unit in (try? SyncUnits.decode(SyncUnits.GoalBody.self, unit.value)).map { (key: unit.key, goal: $0) } }
+            .filter { $0.goal.status == .active }
+            .sorted { ($0.goal.metric, $0.key) < ($1.goal.metric, $1.key) }
     }
 
     /// The lifts for the progress charts: up to `count`, the goal lifts first (squat, bench, deadlift; FIT-358: an

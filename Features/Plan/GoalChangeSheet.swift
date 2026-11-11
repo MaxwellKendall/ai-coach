@@ -8,6 +8,7 @@ enum GoalChange {
     static func apply(_ goal: Goal, target: Double, deadline: Date?, in context: ModelContext, now: Date = .now) throws {
         goal.target = max(0, target)
         goal.deadline = deadline.map { Calendar.current.startOfDay(for: $0) }
+        goal.setBy = nil
         goal.updatedAt = now
         try context.save()
     }
@@ -17,6 +18,8 @@ enum GoalChange {
 struct GoalChangeSheet: View {
     let goal: Goal
     let option: GoalOption
+    /// Who else sees it: the coach on the client's phone; FIT-376: the client on a coach's.
+    var seenBy = "Your coach sees the change."
     var drop: () -> Void
 
     @Environment(\.modelContext) private var context
@@ -29,9 +32,10 @@ struct GoalChangeSheet: View {
     @State private var dropping = false
     @State private var failure: String?
 
-    init(goal: Goal, option: GoalOption, drop: @escaping () -> Void) {
+    init(goal: Goal, option: GoalOption, seenBy: String = "Your coach sees the change.", drop: @escaping () -> Void) {
         self.goal = goal
         self.option = option
+        self.seenBy = seenBy
         self.drop = drop
         _target = State(initialValue: goal.target)
         _clock = State(initialValue: Running.clock(goal.target))
@@ -62,7 +66,7 @@ struct GoalChangeSheet: View {
                 } header: {
                     Text(option.name)
                 } footer: {
-                    if let failure { Text(failure).foregroundStyle(.red) } else { Text("Your coach sees the change.") }
+                    if let failure { Text(failure).foregroundStyle(.red) } else { Text(seenBy) }
                 }
                 Section {
                     Button("Drop This Goal", role: .destructive) { dropping = true }

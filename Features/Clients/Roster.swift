@@ -206,6 +206,44 @@ final class Roster {
         if unsent[id]?.isEmpty == true { unsent[id] = nil }
     }
 
+    enum Sent { case sent, theirsWasNewer, failed }
+
+    /// Units as changed here, kept at once so the change shows while they go, then sent to their phone one by one.
+    /// What doesn't get there stays unsent, with what they had, until it's retried or discarded.
+    func send(_ units: [String: String?], to id: String, coach: String, names: [String: String]) async -> Sent {
+        guard var client = clients.first(where: { $0.id == id }) else { return .failed }
+        let theirs = Dictionary(uniqueKeysWithValues: units.keys.map { ($0, client.units[$0]) })
+        for (key, body) in units { client.units[key] = body }
+        update(client, coach: coach, names: names)
+        return await push(theirs, to: id, coach: coach, names: names)
+    }
+
+    /// What didn't get there, sent again.
+    func retry(_ id: String, coach: String, names: [String: String]) async -> Sent {
+        await push((unsent[id] ?? [:]).mapValues(\.theirs), to: id, coach: coach, names: names)
+    }
+
+    /// Each unit as it is here; `theirs` is what their phone had before it.
+    private func push(_ theirs: [String: String?], to id: String, coach: String, names: [String: String]) async -> Sent {
+        var kept = true
+        var left = theirs.keys.sorted()
+        do {
+            while let key = left.first {
+                kept = try await Cloud.push(key, body: clients.first { $0.id == id }?.units[key], client: id) && kept
+                markSent(id, key)
+                left.removeFirst()
+            }
+        } catch {
+            let units = clients.first { $0.id == id }?.units ?? [:]
+            for key in left { markUnsent(id, key, theirs: theirs[key] ?? nil, mine: units[key]) }
+            return .failed
+        }
+        if kept { return .sent }
+        // Their phone kept its newer copy: fetched, so what's shown is what they have.
+        try? await reload(id, coach: coach, names: names)
+        return .theirsWasNewer
+    }
+
     /// The unsent changes put back to what their phone has.
     func discardUnsent(_ id: String, coach: String, names: [String: String]) {
         guard var client = clients.first(where: { $0.id == id }), let changes = unsent[id] else { return }

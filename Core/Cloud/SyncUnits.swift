@@ -58,6 +58,8 @@ enum SyncUnits {
         var deadline: Date?
         var baseline: Double?
         var status: GoalStatus
+        /// FIT-376: the coach's name when a coach set it. Left out when nil, so a client's own goal is the same bytes.
+        var by: String?
     }
 
     struct ProfileBody: Codable, Equatable {
@@ -86,6 +88,8 @@ enum SyncUnits {
         var brief: ProgramBrief.Stored?
         /// FIT-324: the ready-made program they follow, so a second phone plans its weeks too.
         var programSlug: String?
+        /// FIT-376: the coach's name when a coach changed it last.
+        var by: String?
     }
 
     static func encode(_ value: some Encodable) -> String {
@@ -166,7 +170,7 @@ enum SyncUnits {
 
     static func goalBody(_ goal: Goal) -> GoalBody {
         GoalBody(kind: goal.kind, metric: goal.metric, target: goal.target, unit: goal.unit, deadline: goal.deadline,
-                 baseline: goal.baseline, status: goal.status)
+                 baseline: goal.baseline, status: goal.status, by: goal.setBy)
     }
 
     static func profileBody(_ p: Profile) -> ProfileBody {
@@ -175,7 +179,7 @@ enum SyncUnits {
                     injuredAreas: p.injuredAreas, fineAreas: p.fineAreas, avoidExercises: p.avoidExercises, maxWeeklySets: p.maxWeeklySets,
                     style: p.style, warmups: p.warmups, deloadEveryWeeks: p.deloadEveryWeeks, cookWindows: p.cookWindows,
                     groceryDay: p.groceryDay, weeklyBudgetUSD: p.weeklyBudgetUSD, programStart: p.programStart, targetDate: p.targetDate,
-                    travelWeeks: p.travelWeeks, starts: p.starts, brief: p.brief, programSlug: p.programSlug)
+                    travelWeeks: p.travelWeeks, starts: p.starts, brief: p.brief, programSlug: p.programSlug, by: p.changedBy)
     }
 
     // MARK: Into the store
@@ -268,6 +272,7 @@ enum SyncUnits {
             target.deadline = g.deadline
             target.baseline = g.baseline
             target.status = g.status
+            target.setBy = g.by
             target.updatedAt = now
         } else if key.hasPrefix("template#") {
             // Applied before the plans and logs that name it (SyncEngine), so their rows find it by slug.
@@ -323,6 +328,7 @@ enum SyncUnits {
             p.starts = b.starts
             p.brief = b.brief
             p.programSlug = b.programSlug
+            p.changedBy = b.by
             p.updatedAt = now
         }
     }

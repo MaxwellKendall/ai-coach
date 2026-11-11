@@ -96,12 +96,15 @@ export async function owner(caller: string, asked: string | null | undefined) {
 }
 
 /**
- * A coach changes the client's plan and (FIT-200) corrects what they logged, never their goals or their profile.
+ * A coach changes the client's plan and (FIT-200) corrects what they logged.
  * FIT-344: and sets the client's weekly check-in day, the `checkin` unit ({ day }, 0 = Monday … 6 = Sunday).
+ * FIT-376: and their goals and profile, from the phone, as the MCP's add_goal and set_profile already do. Never the
+ * client's own exercises (`template#`).
  */
 export function coachMayWrite(units: UnitInput[]) {
-  if (units.some((u) => !u.key.startsWith("plan#") && !u.key.startsWith("log#") && u.key !== "checkin")) {
-    throw new Error("Unauthorized: a coach changes only the plan, the logs and the check-in day");
+  const allowed = (key: string) => key.startsWith("plan#") || key.startsWith("log#") || key.startsWith("goal#") || key === "checkin" || key === "profile";
+  if (units.some((u) => !allowed(u.key))) {
+    throw new Error("Unauthorized: a coach changes only the plan, the logs, goals, the profile and the check-in day");
   }
 }
 

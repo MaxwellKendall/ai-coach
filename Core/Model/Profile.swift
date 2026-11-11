@@ -47,6 +47,8 @@ final class Profile {
     /// FIT-344: the weekly check-in's day the coach chose (0 = Monday … 6 = Sunday), from the `checkin` unit; nil is
     /// WeeklyCheckIn.defaultDay.
     var checkInDay: Int?
+    /// FIT-376: the coach who last changed it, by name, until the client changes it themselves.
+    var changedBy: String?
     var createdAt: Date
     var updatedAt: Date
 

@@ -12,6 +12,8 @@ final class Goal {
     /// Where the goal started (FIT-36), in the goal's unit. User-owned; progress since is derived from logs.
     var baseline: Double?
     var status: GoalStatus
+    /// FIT-376: the coach who last set it, by name, until the client changes it themselves.
+    var setBy: String?
     var createdAt: Date
     var updatedAt: Date
 

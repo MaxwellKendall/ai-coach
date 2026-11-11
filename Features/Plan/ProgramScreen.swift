@@ -779,6 +779,7 @@ struct ProgramScreen: View {
     /// FIT-233: they drop a goal themselves; it stays, abandoned, so the coach sees it went.
     private func drop(_ goal: Goal) {
         goal.status = .abandoned
+        goal.setBy = nil
         goal.updatedAt = .now
         try? context.save()
         goalIndex = 0
