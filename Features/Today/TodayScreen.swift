@@ -203,6 +203,10 @@ struct TodayScreen: View {
         .animation(.snappy, value: toast)
         .onAppear { if day == nil { day = todayPos } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { turnDay() } }
+        // FIT-383: the coach removed them while the app was open: Messages, check-ins and their name go.
+        .onChange(of: Navigator.shared.arrived) { _, arrival in
+            if arrival?.target.kind == .ended { Task { await pro.refreshCoaches(signedIn: account.user != nil) } }
+        }
         // FIT-372: what the coach wrote, for Messages' dot, on opening and on coming back to the front.
         .task(id: scenePhase == .active && !pro.coaches.isEmpty) {
             if scenePhase == .active && !pro.coaches.isEmpty { await CoachMessages.shared.refresh() }

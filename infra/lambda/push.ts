@@ -216,11 +216,23 @@ async function weekChanged(owner: string, coach: string, days: string[], now: Da
   await notify(devices, weekText(link.coachName, day, today), { kind: "plan", day });
 }
 
+/** FIT-383: "Sam stopped coaching you". */
+export function endedText(coachName: string | null | undefined) {
+  return { title: `${coachName ?? "Your coach"} stopped coaching you`, body: "Your program and everything you've logged stay on your phone." };
+}
+
 export async function handler(event: DynamoDBStreamEvent) {
   // FIT-220: a batch's plan changes, by client and coach, so one apply of a week is one push.
   const changed = new Map<string, { owner: string; coach: string; days: string[] }>();
   for (const record of event.Records) {
     const image = record.dynamodb;
+    // FIT-383: a client's link to their coach removed by the coach (coach.ts's endedBy): their phone drops the coaching.
+    if (record.eventName === "REMOVE" && String(image?.Keys?.SK?.S ?? "").startsWith("COACH#") && image?.OldImage) {
+      const link = unmarshall(image.OldImage as never) as { PK: string; SK: string; coachName?: string | null; endedBy?: string };
+      const coach = link.SK.slice("COACH#".length);
+      if (link.endedBy === coach) await notify(await query(link.PK, "DEVICE#"), endedText(link.coachName), { kind: "ended" });
+      continue;
+    }
     if (!image?.NewImage) continue;
     if (String(image.Keys?.SK?.S ?? "").startsWith("SYNC#plan#")) {
       const unit = unmarshall(image.NewImage as never) as { PK: string; key: string; by?: string };

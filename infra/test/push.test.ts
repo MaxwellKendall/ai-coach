@@ -26,6 +26,23 @@ beforeEach(() => {
   send.mockResolvedValue({ Items: [{ token: "t1", PK: "USER#ann", SK: "DEVICE#t1" }] });
 });
 
+describe("FIT-383: coaching ended", () => {
+  const removed = (link: Record<string, unknown>) => ({
+    eventName: "REMOVE", dynamodb: { Keys: marshall({ PK: link.PK, SK: link.SK }), OldImage: marshall(link) },
+  });
+  const link = { PK: "USER#ann", SK: "COACH#sam", coachName: "Sam" };
+
+  it("tells the client when their coach removed them", async () => {
+    await handler({ Records: [removed({ ...link, endedBy: "sam" })] } as never);
+    expect((sendAlerts.mock.calls[0] as unknown[]).slice(2)).toEqual([["t1"], { title: "Sam stopped coaching you", body: expect.any(String) }, { kind: "ended" }]);
+  });
+
+  it("not when they stopped it themselves, or a link with no endedBy", async () => {
+    await handler({ Records: [removed({ ...link, endedBy: "ann" }), removed(link)] } as never);
+    expect(sendAlerts).not.toHaveBeenCalled();
+  });
+});
+
 describe("a coach's reply", () => {
   it("is pushed once, when it's written", async () => {
     await handler({ Records: [record("INSERT", reply)] } as never);

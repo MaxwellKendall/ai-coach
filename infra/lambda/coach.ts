@@ -203,7 +203,16 @@ export async function list(uid: string, prefix: "COACH#" | "CLIENT#"): Promise<P
 }
 
 /** Ends a link from either side: both items go, so the coach's access ends at once. */
-export async function unlink(coach: string, client: string) {
+export async function unlink(coach: string, client: string, by = client) {
+  // FIT-383: who ended it, on the client's link as it goes, so push.ts tells the client only when the coach did.
+  try {
+    await db.send(new UpdateCommand({
+      TableName: TABLE(), Key: { PK: `USER#${client}`, SK: `COACH#${coach}` },
+      UpdateExpression: "SET endedBy = :b", ConditionExpression: "attribute_exists(PK)", ExpressionAttributeValues: { ":b": by },
+    }));
+  } catch (error: any) {
+    if (error?.name !== "ConditionalCheckFailedException") throw error;
+  }
   await Promise.all([
     db.send(new DeleteCommand({ TableName: TABLE(), Key: { PK: `USER#${client}`, SK: `COACH#${coach}` } })),
     db.send(new DeleteCommand({ TableName: TABLE(), Key: { PK: `USER#${coach}`, SK: `CLIENT#${client}` } })),
@@ -259,8 +268,8 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
       case "acceptCoach": return await accept(me, args.code, identity.claims);
       case "myCoaches": return await list(me, "COACH#");
       case "myClients": return await myClients(me);
-      case "unlinkCoach": return await unlink(args.uid, me);
-      case "removeClient": return await unlink(me, args.uid);
+      case "unlinkCoach": return await unlink(args.uid, me, me);
+      case "removeClient": return await unlink(me, args.uid, me);
       case "myInvites": return await myInvites(me);
       case "cancelInvite": return await cancelInvite(me, args.code);
       case "postComment": return await postComment(me, identity.claims, args.uid, args.day, args.text);

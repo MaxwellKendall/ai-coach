@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // FIT-130: a fake table for coach links and invites, with TransactWrite's all-or-nothing.
 const table = new Map<string, Record<string, any>>();
 const id = (k: { PK: string; SK: string }) => `${k.PK}|${k.SK}`;
+/** FIT-383: every UpdateCommand's input, to see unlink stamp who ended it. */
+const updates: any[] = [];
 vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
   const actual: any = await orig();
   return {
@@ -21,6 +23,7 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
             case "DeleteCommand": table.delete(id(input.Key)); return {};
             // FIT-228: setDisplayName's SET of displayName on the profile.
             case "UpdateCommand": {
+              updates.push(input);
               const key = id(input.Key);
               table.set(key, { ...(table.get(key) ?? input.Key), displayName: input.ExpressionAttributeValues[":n"] });
               return {};
@@ -196,8 +199,12 @@ describe("a coach link (FIT-130)", () => {
     await expect(owner("sam", "ann")).rejects.toThrow(/Unauthorized/);
     expect(table.has("USER#sam|CLIENT#ann")).toBe(false);
     await linked();
+    // FIT-383: who ended it goes on the client's link first, for push.ts.
+    updates.length = 0;
     await coach.handler({ identity: { sub: "sam" }, info: { fieldName: "removeClient" }, arguments: { uid: "ann" } } as any);
     expect(await coach.coached("ann")).toBe(false);
+    expect(updates).toEqual([expect.objectContaining({ Key: { PK: "USER#ann", SK: "COACH#sam" }, ExpressionAttributeValues: { ":b": "sam" } })]);
+    expect(table.has("USER#ann|COACH#sam")).toBe(false);
   });
 
   it("lists each side's people", async () => {

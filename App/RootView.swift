@@ -154,6 +154,8 @@ struct RootView: View {
             guard let target else { return }
             navigator.pushed = nil
             switch target.kind {
+            case .ended:
+                Task { await pro.refreshCoaches(signedIn: account.user != nil) }
             case .offer:
                 Task { await checkOffers() }
             case .client:
@@ -172,7 +174,12 @@ struct RootView: View {
         }
         // FIT-131: a program a coach sent waits until it's answered.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await checkOffers() } }
+            guard phase == .active else { return }
+            Task {
+                await checkOffers()
+                // FIT-383: coaching that ended on another device, or by the coach, goes without a relaunch.
+                await pro.refreshCoaches(signedIn: account.user != nil)
+            }
         }
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).
         .onOpenURL { url in

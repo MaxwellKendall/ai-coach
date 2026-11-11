@@ -57,6 +57,8 @@ struct PushTarget: Equatable, Sendable {
         case offer
         /// FIT-338, to a coach: a client logged, left a note or replied: that client's day.
         case client
+        /// FIT-383, to a client: their coach removed them: the coaches are fetched again.
+        case ended
     }
 
     var kind: Kind
@@ -140,8 +142,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         // FIT-373: a reply shows in a conversation that's open, and puts the dot on Today's Messages (FIT-372).
         if target?.kind == .reply { await CoachMessages.shared.refresh() }
-        // To a coach: an open conversation with that client fetches it.
-        if let target, target.kind == .client { await MainActor.run { Navigator.shared.arrived = Navigator.Arrival(target: target) } }
+        // To a coach: an open conversation with that client fetches it. FIT-383: to a client, coaching ended.
+        if let target, target.kind == .client || target.kind == .ended {
+            await MainActor.run { Navigator.shared.arrived = Navigator.Arrival(target: target) }
+        }
         return [.banner, .sound]
     }
 
