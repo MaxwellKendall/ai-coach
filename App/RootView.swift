@@ -132,6 +132,8 @@ struct RootView: View {
         // FIT-122: Pro from a gift is the account's.
         .task(id: account.user?.uid) {
             await pro.refreshGift(signedIn: account.user != nil)
+            // FIT-422: lifter Pro bought on the web decides who gets AI-designed weeks.
+            await pro.refreshWebPro(signedIn: account.user != nil)
             // FIT-130: and from a coach, while coached.
             await pro.refreshCoaches(signedIn: account.user != nil)
             await checkOffers()
@@ -169,6 +171,7 @@ struct RootView: View {
                 await checkOffers()
                 // FIT-383: coaching that ended on another device, or by the coach, goes without a relaunch.
                 await pro.refreshCoaches(signedIn: account.user != nil)
+                await pro.refreshWebPro(signedIn: account.user != nil)
             }
         }
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).

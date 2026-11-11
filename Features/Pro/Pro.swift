@@ -23,6 +23,21 @@ final class Pro {
         .flatMap { try? JSONDecoder().decode([Cloud.Person].self, from: $0) } ?? []
     /// The App Store has answered once since launch, so a paywall isn't shown to a subscriber before it knows.
     private(set) var checked = false
+    /// FIT-327: lifter Pro bought on the web (Stripe), from the server. Kept on the phone so it holds offline.
+    private(set) var webPro = UserDefaults.standard.bool(forKey: webProKey)
+    /// FIT-422: Pro for someone training themselves, however it was bought: the App Store, a gift or the web. Unlike
+    /// `active`, it's never everyone during the pilot and never comes with a coach. It decides who gets AI-designed weeks.
+    var lifterPro: Bool {
+        #if DEBUG
+        // `-pro YES`, or You › Pro (debug).
+        if UserDefaults.standard.bool(forKey: "pro") { return true }
+        #endif
+        return subscribed || webPro || giftUntil.map { $0 > .now } == true
+    }
+    /// FIT-422: where this person's weeks come from.
+    func weekSource(hasProgram: Bool) -> WeekSource? {
+        WeekSource.of(lifterPro: lifterPro, coached: !coaches.isEmpty, hasProgram: hasProgram)
+    }
     /// FIT-215: while Pro isn't sold, everyone has what it gated.
     var active: Bool { !Pilot.sellsPro || subscribed || giftUntil.map { $0 > .now } == true || !coaches.isEmpty }
     /// When the free trial ends, while in one.
@@ -98,6 +113,22 @@ final class Pro {
     func setCoaches(_ coaches: [Cloud.Person]) {
         self.coaches = coaches
         UserDefaults.standard.set(try? JSONEncoder().encode(coaches), forKey: Self.coachesKey)
+    }
+
+    // MARK: Pro bought on the web (FIT-327)
+
+    private static let webProKey = "pro.web"
+
+    /// The account's lifter Pro from Stripe; signed out, none. Offline, the last answer stands.
+    func refreshWebPro(signedIn: Bool) async {
+        guard signedIn else { return setWebPro(false) }
+        guard let status = try? await Cloud.proPlanStatus() else { return }
+        setWebPro(Cloud.hasPlan(status))
+    }
+
+    func setWebPro(_ on: Bool) {
+        webPro = on
+        UserDefaults.standard.set(on, forKey: Self.webProKey)
     }
 
     // MARK: Gifts (FIT-122)

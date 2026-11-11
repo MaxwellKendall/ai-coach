@@ -445,7 +445,7 @@ struct ProgramScreen: View {
         guard pro.active else { return pro.paywall = true }
         // FIT-357: a missed day is logged where past days are, on Today, not changed as a plan.
         if missed(date) { return Navigator.shared.pushed = PushTarget(kind: .nudge, day: Calendar.current.startOfDay(for: date)) }
-        if dayItems(in: monday).isEmpty, Pilot.plansWeeks(hasProgram: true, coached: !pro.coaches.isEmpty) {
+        if dayItems(in: monday).isEmpty, pro.weekSource(hasProgram: true)?.plansItself == true {
             try? Planner.generate(weekOf: monday, in: context)
         }
         opened = Calendar.current.startOfDay(for: date)

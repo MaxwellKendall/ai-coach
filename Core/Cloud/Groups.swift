@@ -176,6 +176,16 @@ enum Cloud {
         return until.flatMap(date)
     }
 
+    /// FIT-327: the status of the account's lifter Pro: "none", or Stripe's (trialing, active, past_due, canceled…).
+    @MainActor static func proPlanStatus() async throws -> String {
+        struct Plan: Decodable, Sendable { var status: String }
+        return try await run("query { proPlan { status } }", at: "proPlan", as: Plan.self, query: true).status
+    }
+
+    /// Stripe's statuses that still have the plan, as the server counts them (infra/lambda/coachPlan.ts HAS_PLAN): a
+    /// failed payment keeps it while Stripe retries.
+    static func hasPlan(_ status: String) -> Bool { ["active", "trialing", "past_due"].contains(status) }
+
     // MARK: Coaches (FIT-130)
 
     struct Person: Codable, Identifiable, Hashable, Sendable {
