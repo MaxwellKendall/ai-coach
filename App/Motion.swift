@@ -12,6 +12,8 @@ extension Animation {
     static let `throw` = Animation.spring(response: 0.36, dampingFraction: 0.86)
     /// Something arriving or leaving slowly enough to be noticed: a fresh highlight fading, a review being written.
     static let reveal = Animation.smooth(duration: 0.6)
+    /// Something getting out of the way, quickly, of what's under it: the splash's mark.
+    static let out = Animation.easeOut(duration: 0.15)
     /// A pressed button coming back up, a little past where it rests.
     static let release = Animation.spring(duration: 0.3, bounce: 0.5)
 

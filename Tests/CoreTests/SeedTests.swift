@@ -30,6 +30,23 @@ struct SeederTests {
         #expect(templates.filter { $0.kind == .exercise }.count == 700)
         #expect(templates.filter { $0.slug == "bench-press" }.map(\.name) == ["Bench (mine)"])
     }
+
+    /// FIT-413: a launch with the same bundled catalog as last time doesn't read it again; a new one (an update) does.
+    @Test func readsTheCatalogOnlyWhenTheBundleChanged() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SeederTests.\(UUID())"))
+        let context = ModelContext(try AppSchema.container(inMemory: true))
+        try Seeder.seed(context, remembering: defaults)
+        let squat = try #require(try context.fetch(FetchDescriptor<Template>()).first { $0.slug == "back-squat" })
+        context.delete(squat)
+        try context.save()
+
+        try Seeder.seed(context, remembering: defaults)
+        #expect(try context.fetch(FetchDescriptor<Template>()).filter { $0.slug == "back-squat" }.isEmpty)
+
+        defaults.removeObject(forKey: "catalogStamp")
+        try Seeder.seed(context, remembering: defaults)
+        #expect(try context.fetch(FetchDescriptor<Template>()).filter { $0.slug == "back-squat" }.count == 1)
+    }
 }
 
 /// Regenerates Resources/Seed from the sibling repos (CLAUDE.md §6). Off by default:

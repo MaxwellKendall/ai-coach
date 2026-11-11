@@ -5,23 +5,14 @@ import SwiftData
 /// how-to steps they lack (FIT-75); nothing else on them changes.
 /// Debug builds also load the author's fitness-planner history and goals, which Release builds don't bundle.
 enum Seeder {
+    /// FIT-413: given `defaults`, the catalog is read only when the bundled files changed since it last was (an app
+    /// install or update), so an ordinary launch doesn't decode 900 templates before its first frame.
     @MainActor
-    static func seed(_ context: ModelContext, bundle: Bundle = .main) throws {
-        // Bundled templates the store doesn't have yet (FIT-70: the catalog grows with app updates). Ones it has, and
-        // anything the user made, are left alone.
-        let existing = Dictionary(try context.fetch(FetchDescriptor<Template>()).map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
-        for file in ["exercises", "recipes"] {
-            for seed in try decode([TemplateSeed].self, file, bundle) {
-                guard let template = existing[seed.slug] else {
-                    context.insert(Template(kind: seed.kind, name: seed.name, slug: seed.slug, attributes: seed.attributes))
-                    continue
-                }
-                // FIT-75: how-to steps reach exercises already in the store; nothing else on them changes.
-                if let steps = seed.attributes.first(where: { $0.key == "instructions" }),
-                   !template.attributes.contains(where: { $0.key == "instructions" }) {
-                    template.attributes.append(steps)
-                }
-            }
+    static func seed(_ context: ModelContext, bundle: Bundle = .main, remembering defaults: UserDefaults? = nil) throws {
+        let stamp = catalogStamp(bundle)
+        let empty = try context.fetchCount(FetchDescriptor<Template>()) == 0
+        if stamp == nil || defaults?.string(forKey: stampKey) != stamp || empty {
+            try seedCatalog(context, bundle: bundle)
         }
         if try context.fetchCount(FetchDescriptor<PantryItem>()) == 0 {
             for seed in try decode([PantrySeed].self, "pantry", bundle) {
@@ -47,7 +38,42 @@ enum Seeder {
             }
         }
 #endif
-        try context.save()
+        if context.hasChanges { try context.save() }
+        if let stamp { defaults?.set(stamp, forKey: stampKey) }
+    }
+
+    /// Bundled templates the store doesn't have yet (FIT-70: the catalog grows with app updates). Ones it has, and
+    /// anything the user made, are left alone.
+    @MainActor
+    private static func seedCatalog(_ context: ModelContext, bundle: Bundle) throws {
+        let existing = Dictionary(try context.fetch(FetchDescriptor<Template>()).map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
+        for file in ["exercises", "recipes"] {
+            for seed in try decode([TemplateSeed].self, file, bundle) {
+                guard let template = existing[seed.slug] else {
+                    context.insert(Template(kind: seed.kind, name: seed.name, slug: seed.slug, attributes: seed.attributes))
+                    continue
+                }
+                // FIT-75: how-to steps reach exercises already in the store; nothing else on them changes.
+                if let steps = seed.attributes.first(where: { $0.key == "instructions" }),
+                   !template.attributes.contains(where: { $0.key == "instructions" }) {
+                    template.attributes.append(steps)
+                }
+            }
+        }
+    }
+
+    private static let stampKey = "catalogStamp"
+
+    /// The catalog files' sizes and dates, which change whenever the app is installed or updated.
+    private static func catalogStamp(_ bundle: Bundle) -> String? {
+        var parts: [String] = []
+        for name in ["exercises", "recipes"] {
+            guard let url = bundle.url(forResource: name, withExtension: "json"),
+                  let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                  let size = values.fileSize, let date = values.contentModificationDate else { return nil }
+            parts.append("\(size)@\(date.timeIntervalSince1970)")
+        }
+        return parts.joined(separator: ",")
     }
 
     static func decode<T: Decodable>(_ type: T.Type, _ name: String, _ bundle: Bundle) throws -> T {
