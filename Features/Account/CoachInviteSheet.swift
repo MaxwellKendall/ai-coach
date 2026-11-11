@@ -9,6 +9,7 @@ struct CoachInviteSheet: View {
 
     @State private var coach: Cloud.CoachInvite?
     @State private var loaded = false
+    @State private var unreachable = false
     @State private var working = false
     @State private var failure: String?
     @State private var accepted: Cloud.Person?
@@ -63,6 +64,19 @@ struct CoachInviteSheet: View {
                     .disabled(working)
                     Button("Not Now") { dismiss() }.controlSize(.large)
                 }
+            } else if unreachable {
+                // FIT-380: no network isn't a used code.
+                Text("Couldn’t check this invite").font(.title3.bold()).multilineTextAlignment(.center)
+                Text("You may be offline. Try again once you’re connected.").foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Spacer(minLength: 0)
+                VStack(spacing: 8) {
+                    Button {
+                        loaded = false
+                        Task { await lookUp() }
+                    } label: { Text("Try Again").frame(maxWidth: .infinity) }
+                        .buttonStyle(.primary)
+                    Button("Close") { dismiss() }.controlSize(.large)
+                }
             } else {
                 Text("This invite has been used or has expired").font(.title3.bold()).multilineTextAlignment(.center)
                 Text("Ask your coach for a new link.").foregroundStyle(.secondary)
@@ -72,10 +86,19 @@ struct CoachInviteSheet: View {
         }
         .padding(24)
         .presentationDetents([.medium])
-        .task {
-            coach = try? await Cloud.coachInvite(code)
-            loaded = true
+        .task { await lookUp() }
+    }
+
+    /// The server answers nil for a used or expired code; a throw is the network or the server.
+    private func lookUp() async {
+        do {
+            coach = try await Cloud.coachInvite(code)
+            unreachable = false
+        } catch {
+            coach = nil
+            unreachable = true
         }
+        loaded = true
     }
 
     private func accept() {

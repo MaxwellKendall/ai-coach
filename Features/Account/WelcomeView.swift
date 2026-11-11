@@ -18,6 +18,8 @@ struct WelcomeView: View {
     @State private var coach: Cloud.CoachInvite?
     /// The code `coach` was looked up for.
     @State private var lookedUp: String?
+    /// FIT-380: the lookup didn't reach the server, which isn't the same as a used code.
+    @State private var unreachable = false
     @State private var working = false
     @State private var failure: String?
     /// FIT-219: joined; the coach's questions follow.
@@ -209,6 +211,15 @@ struct WelcomeView: View {
                 .disabled(working)
                 Button("Use a Different Code") { self.code = nil }
                     .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
+            } else if unreachable {
+                title("Couldn’t check this invite", "You may be offline. Try again once you’re connected.")
+                Button {
+                    lookedUp = nil
+                    Task { await lookUp() }
+                } label: { Text("Try Again").font(.headline).frame(maxWidth: .infinity, minHeight: 54) }
+                    .buttonStyle(.primary)
+                Button("Type a Code") { self.code = nil }
+                    .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)
             } else {
                 title("This invite has been used or has expired", "Ask your coach for a new link.")
                 Button("Type a Code") { self.code = nil }
@@ -290,7 +301,14 @@ struct WelcomeView: View {
 
     private func lookUp() async {
         guard let code else { return }
-        coach = try? await Cloud.coachInvite(code)
+        // The server answers nil for a used or expired code; a throw is the network or the server.
+        do {
+            coach = try await Cloud.coachInvite(code)
+            unreachable = false
+        } catch {
+            coach = nil
+            unreachable = true
+        }
         lookedUp = code
     }
 
