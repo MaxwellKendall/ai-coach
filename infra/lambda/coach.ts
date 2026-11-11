@@ -95,8 +95,11 @@ export async function coaching(uid: string) {
 /** FIT-228: a coach with no name on their account is asked for one before an invite, so the client knows who it's from. */
 export const NAME_NEEDED = "Add your name first, so your client knows who's inviting them.";
 
-export async function createInvite(coach: string, claims: Record<string, unknown> | undefined, now = new Date(), given?: string | null) {
+/** FIT-360: `client` is who the coach made it for, kept on their own copy so their open invites say so. */
+export async function createInvite(coach: string, claims: Record<string, unknown> | undefined, now = new Date(), given?: string | null,
+                                   client?: string | null) {
   const name = given?.trim().slice(0, 40);
+  const forWhom = client?.trim().slice(0, 40) || undefined;
   if (name) await setDisplayName(coach, name, now);
   const coachName = name || (await nameOf(coach, claims));
   if (!coachName) throw new CoachError(NAME_NEEDED);
@@ -117,12 +120,12 @@ export async function createInvite(coach: string, claims: Record<string, unknown
         TableName: TABLE(),
         Item: {
           PK: `USER#${coach}`, SK: `INVITE#${code}`, code, createdAt: now.toISOString(),
-          expiresAt: Math.floor(now.getTime() / 1000) + INVITE_DAYS * 86_400,
+          expiresAt: Math.floor(now.getTime() / 1000) + INVITE_DAYS * 86_400, ...(forWhom ? { client: forWhom } : {}),
         },
       },
     }],
   }));
-  return { code, url: `${process.env.SHARE_ORIGIN}/c/${code}` };
+  return { code, url: `${process.env.SHARE_ORIGIN}/c/${code}`, client: forWhom ?? null };
 }
 
 /** FIT-339: a coach's invites not yet used, newest first; expired ones are left out (TTL deletes them late). */
@@ -134,7 +137,8 @@ export async function myInvites(coach: string, now = new Date()) {
   }));
   return (Items ?? []).filter((i) => i.expiresAt > now.getTime() / 1000)
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-    .map((i) => ({ code: i.code as string, url: `${process.env.SHARE_ORIGIN}/c/${i.code}`, createdAt: i.createdAt as string }));
+    .map((i) => ({ code: i.code as string, url: `${process.env.SHARE_ORIGIN}/c/${i.code}`, createdAt: i.createdAt as string,
+                   client: (i.client as string | undefined) ?? null }));
 }
 
 /** FIT-339: a coach takes back an invite of theirs before it's used. */
@@ -250,7 +254,7 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
   const args = event.arguments;
   try {
     switch (event.info.fieldName) {
-      case "createClientInvite": return await createInvite(me, identity.claims, new Date(), args.name);
+      case "createClientInvite": return await createInvite(me, identity.claims, new Date(), args.name, args.client);
       case "coachInvite": return await inviteName(args.code);
       case "acceptCoach": return await accept(me, args.code, identity.claims);
       case "myCoaches": return await list(me, "COACH#");

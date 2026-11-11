@@ -98,8 +98,14 @@ struct ClientsScreen: View {
                     HStack(spacing: 12) {
                         Image(systemName: "envelope").foregroundStyle(Color.inkMuted).frame(width: ClientRow.avatar)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(invite.code).font(.headline.monospaced())
-                            Text(Self.sent(invite.createdAt)).font(.subheadline).foregroundStyle(Color.inkMuted)
+                            // FIT-360: who it's for, when the coach said; else its code.
+                            if let client = invite.client {
+                                Text(client).font(.headline)
+                                Text("\(invite.code) · \(Self.sent(invite.createdAt).lowercased())").font(.subheadline).foregroundStyle(Color.inkMuted)
+                            } else {
+                                Text(invite.code).font(.headline.monospaced())
+                                Text(Self.sent(invite.createdAt)).font(.subheadline).foregroundStyle(Color.inkMuted)
+                            }
                         }
                         Spacer()
                         if let url = URL(string: invite.url) {
@@ -306,6 +312,9 @@ struct InviteSheet: View {
     /// FIT-228: asked for only when the account has no name, so the invite says who it's from.
     @State private var asking = false
     @State private var name = ""
+    /// FIT-360: who it's for, asked first (optional), so open invites can be told apart.
+    @State private var client = ""
+    @State private var making = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -324,8 +333,13 @@ struct InviteSheet: View {
                         .onSubmit { Task { await make() } }
                 } else if let problem {
                     Text(problem).font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
-                } else {
+                } else if making {
                     ProgressView()
+                } else {
+                    TextField("Who’s it for? (optional)", text: $client)
+                        .font(.body.weight(.semibold)).multilineTextAlignment(.center)
+                        .textContentType(.name).submitLabel(.done)
+                        .onSubmit { Task { await make() } }
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 96)
@@ -336,6 +350,8 @@ struct InviteSheet: View {
                 Button("Make the Invite") { Task { await make() } }
                     .buttonStyle(.primary).padding(.top, 24)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            } else if invite == nil, problem == nil, !making {
+                Button("Make the Invite") { Task { await make() } }.buttonStyle(.primary).padding(.top, 24)
             }
             if let invite, let url = URL(string: invite.url) {
                 ShareLink(item: url, message: Text("Train with me in Barbrabell. Your code is \(invite.code).")) {
@@ -352,13 +368,14 @@ struct InviteSheet: View {
         .padding(.horizontal, 24).padding(.top, 32)
         .frame(maxHeight: .infinity, alignment: .top)
         .presentationDetents([.medium])
-        .task { await make() }
     }
 
     private func make() async {
         let given = name.trimmingCharacters(in: .whitespaces)
+        making = true
+        defer { making = false }
         do {
-            invite = try await Cloud.createClientInvite(name: asking ? given : nil)
+            invite = try await Cloud.createClientInvite(name: asking ? given : nil, client: client.trimmingCharacters(in: .whitespaces))
             asking = false
         } catch {
             let message = (error as? Cloud.Failure)?.message

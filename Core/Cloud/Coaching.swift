@@ -8,6 +8,8 @@ extension Cloud {
         var url: String
         /// FIT-339: when it was made, in myInvites.
         var createdAt: String?
+        /// FIT-360: who the coach made it for, as they typed it.
+        var client: String?
     }
 
     private struct ClientUnit: Decodable, Sendable {
@@ -33,7 +35,12 @@ extension Cloud {
 
     /// FIT-339: invites not used yet, newest first.
     @MainActor static func myInvites() async throws -> [ClientInvite] {
-        try await run("query { myInvites { code url createdAt } }", at: "myInvites", query: true)
+        do {
+            return try await run("query { myInvites { code url createdAt client } }", at: "myInvites", query: true)
+        } catch {
+            // A server from before FIT-360 has no `client`: the invites without it.
+            return try await run("query { myInvites { code url createdAt } }", at: "myInvites", query: true)
+        }
     }
 
     @MainActor static func cancelInvite(_ code: String) async throws {
@@ -48,7 +55,20 @@ extension Cloud {
     /// FIT-228: the server's answer to a coach with no name; `name` is then saved as theirs and put on the invite.
     static let nameNeeded = "Add your name first, so your client knows who's inviting them."
 
-    @MainActor static func createClientInvite(name: String? = nil) async throws -> ClientInvite {
+    /// FIT-360: `client` is who it's for; asked for only when given, so a server from before it still answers.
+    @MainActor static func createClientInvite(name: String? = nil, client: String? = nil) async throws -> ClientInvite {
+        guard let client, !client.isEmpty else { return try await plainInvite(name: name) }
+        do {
+            var variables: [String: Any] = ["c": client]
+            if let name { variables["n"] = name }
+            return try await run("mutation($n: String, $c: String) { createClientInvite(name: $n, client: $c) { code url client } }",
+                                 variables, at: "createClientInvite")
+        } catch {
+            return try await plainInvite(name: name)
+        }
+    }
+
+    @MainActor private static func plainInvite(name: String?) async throws -> ClientInvite {
         var variables: [String: Any] = [:]
         if let name { variables["n"] = name }
         return try await run("mutation($n: String) { createClientInvite(name: $n) { code url } }", variables, at: "createClientInvite")

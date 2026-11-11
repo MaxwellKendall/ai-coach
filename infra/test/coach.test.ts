@@ -137,6 +137,16 @@ describe("coach invites (FIT-130)", () => {
     expect(await coach.inviteName(second.code, later(1))).toBeNull();
   });
 
+  // FIT-360
+  it("say who they're for, to their coach", async () => {
+    const made = await coach.createInvite("sam", undefined, now, null, "  Ann Lee ");
+    const plain = await coach.createInvite("sam", undefined, later(1));
+    expect(made.client).toBe("Ann Lee");
+    const listed = await coach.myInvites("sam", later(1));
+    expect(listed.map((i: { client: string | null }) => i.client)).toEqual([null, "Ann Lee"]);
+    expect(listed[0].code).toBe(plain.code);
+  });
+
   it("are cancelled only by their coach", async () => {
     const { code } = await coach.createInvite("sam", undefined, now);
     await expect(coach.cancelInvite("bob", code)).rejects.toThrow(/isn't your invite/);

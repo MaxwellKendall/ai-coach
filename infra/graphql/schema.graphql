@@ -176,6 +176,8 @@ type ClientInvite {
   url: String!
   "FIT-339: when it was made; in myInvites only."
   createdAt: AWSDateTime
+  "FIT-360: who the coach made it for, as they typed it; theirs only."
+  client: String
 }
 
 type SyncPage {
@@ -236,7 +238,7 @@ type Mutation {
   proBillingPortal: String
   "FIT-130: a single-use link for someone to make me their coach (14 days)."
   # FIT-228: name, when the coach has none yet, is saved as theirs and put on the invite.
-  createClientInvite(name: String): ClientInvite
+  createClientInvite(name: String, client: String): ClientInvite
   "FIT-130: make the invite's coach mine; returns the coach."
   acceptCoach(code: String!): Person
   "FIT-130: end a link, as the client (unlinkCoach) or the coach (removeClient)."
