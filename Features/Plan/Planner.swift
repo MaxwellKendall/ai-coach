@@ -8,6 +8,8 @@ enum Planner {
     /// FIT-74: the Mondays whose week the model is designing right now, for Today to say so.
     @Observable final class Designing {
         var weeks: Set<Date> = []
+        /// FIT-424: planning failed and the last good week stands; Today says so once, then clears it.
+        var trouble: String?
     }
     static let designing = Designing()
 
@@ -257,8 +259,9 @@ enum Planner {
     }
 
     /// Generates the current week once a profile is complete and nothing is planned yet.
-    /// A week saved before it began (a session edited from next week's card, FIT-45) is planned again once, now that
-    /// the week before is done; its pinned days stay.
+    /// A week saved before it began (next week, saved once this week's last session is logged, FIT-424; or a session
+    /// edited from next week's card, FIT-45) is brought up to date once, now that the week before is done: what's the
+    /// same as was seen stays, each change says why, and pinned days stay.
     static func ensureWeek(of date: Date = .now, in context: ModelContext, calendar: Calendar = .current) throws {
         guard let plan = try plan(weekOf: date, in: context) else {
             try generate(weekOf: date, in: context, calendar: calendar)
@@ -268,8 +271,57 @@ enum Planner {
         guard plan.updatedAt < plan.weekStart, !isCoached(plan) else { return }
         let pinned = Dictionary(grouping: plan.items.filter { $0.kind == .workout }) { calendar.startOfDay(for: $0.date) }
             .filter { $0.value.allSatisfy(\.pinned) }.keys
-        try replan(plan, with: preview(weekOf: date, in: context, calendar: calendar), keep: Set(pinned), today: date,
-                   templates: try context.fetch(FetchDescriptor<Template>()), in: context, calendar: calendar)
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+        let lastLogged = try context.fetch(FetchDescriptor<LogEntry>()).filter { $0.kind == .workout && $0.timestamp < plan.weekStart }
+            .map(\.timestamp).max()
+        let week = changes(from: workouts(plan, templates: templates), to: try preview(weekOf: date, in: context, calendar: calendar),
+                           names: names, after: lastLogged, calendar: calendar)
+        try replan(plan, with: week, keep: Set(pinned), today: date, templates: templates, in: context, calendar: calendar)
+    }
+
+    /// FIT-424: the week as it's planned now, against the week as it was seen ahead. A row the same as one seen comes
+    /// through as it was; one that differs says how and since when ("Squat up 5 lb after Thursday").
+    static func changes(from seen: [PlannedWorkout], to now: [PlannedWorkout], names: [String: String], after logged: Date?,
+                        calendar: Calendar = .current) -> [PlannedWorkout] {
+        let when = logged.map { "after \($0.formatted(.dateTime.weekday(.wide)))" } ?? "since you saw it"
+        var left = Dictionary(grouping: seen) { "\(calendar.startOfDay(for: $0.date)) \($0.exercise)" }
+        return now.map { row in
+            let key = "\(calendar.startOfDay(for: row.date)) \(row.exercise)"
+            let name = names[row.exercise] ?? row.exercise
+            var changed = row
+            guard let was = left[key]?.first else {
+                changed.adjustedReason = "\(name) added \(when)"
+                return changed
+            }
+            left[key]?.removeFirst()
+            if was.targets == row.targets { return was }
+            let load = { (targets: [Measurement]) in targets.filter { $0.metric == "load_lb" }.map(\.value).max() }
+            if let before = load(was.targets), let after = load(row.targets), before != after {
+                changed.adjustedReason = "\(name) \(after > before ? "up" : "down") \((abs(after - before)).formatted()) lb \(when)"
+            } else {
+                changed.adjustedReason = "\(name) changed \(when)"
+            }
+            return changed
+        }
+    }
+
+    /// FIT-424: what the app does whenever it's opened, a day turns or a session is logged, on any tab: this week
+    /// planned, and next week saved once this week's last session is logged, so the week Program shows ahead is the
+    /// one that comes. A week already planned is never removed by a failure here.
+    static func keepWeeks(now: Date = .now, in context: ModelContext, calendar: Calendar = .current) throws {
+        try ensureWeek(of: now, in: context, calendar: calendar)
+        let next = calendar.date(byAdding: .day, value: 7, to: Week.start(of: now, calendar: calendar))!
+        guard try plan(weekOf: next, in: context) == nil, try lastSessionLogged(weekOf: now, in: context, calendar: calendar) else { return }
+        try generate(weekOf: next, in: context, calendar: calendar)
+    }
+
+    /// A workout logged on or after the week's last planned session day, before the week ends.
+    static func lastSessionLogged(weekOf date: Date, in context: ModelContext, calendar: Calendar = .current) throws -> Bool {
+        guard let plan = try plan(weekOf: date, in: context),
+              let last = plan.items.filter({ $0.kind == .workout }).map({ calendar.startOfDay(for: $0.date) }).max() else { return false }
+        let end = calendar.date(byAdding: .day, value: 7, to: plan.weekStart)!
+        return try context.fetch(FetchDescriptor<LogEntry>()).contains { $0.kind == .workout && $0.timestamp >= last && $0.timestamp < end }
     }
 
     /// FIT-131: a week a coach planned (a program they sent, "From Sam") or changed on the web ("Changed by Sam"). The

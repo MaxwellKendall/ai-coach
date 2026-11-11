@@ -11,6 +11,15 @@ struct RootView: View {
         descriptor.fetchLimit = 1
         return descriptor
     }
+    /// FIT-424: the last thing logged, so logging this week's last session saves next week.
+    @Query(RootView.lastLogged) private var lastLog: [LogEntry]
+    static var lastLogged: FetchDescriptor<LogEntry> {
+        var descriptor = FetchDescriptor<LogEntry>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+        descriptor.fetchLimit = 1
+        return descriptor
+    }
+    /// FIT-424: the day weeks were last kept planned for; it moves on when the app comes back on a new day or at midnight.
+    @State private var planDay = Calendar.current.startOfDay(for: .now)
     /// Set while onboarding; presenting by item hands the profile straight to the cover.
     @State private var onboarding: Profile?
     /// FIT-201: the pilot's first launch, sign in and join your coach, in place of onboarding.
@@ -164,9 +173,26 @@ struct RootView: View {
                 }
             }
         }
+        // FIT-424: weeks are kept planned here, whichever tab is open: on launch, a new day, a change of mode or program,
+        // and a session logged. FIT-422: code plans a free lifter's week and the AI redesigns a Pro lifter's; a coach's
+        // client gets the coach's.
+        .task(id: "\(planDay) \(profiles.first?.plansItself == true) \(profiles.first?.programSlug ?? "") \(pro.lifterPro) \(pro.coaches.isEmpty) \(lastLog.first?.id.uuidString ?? "")") {
+            guard let source = pro.weekSource(hasProgram: profiles.first?.programStart != nil), source.plansItself else { return }
+            do {
+                try Planner.keepWeeks(in: context)
+            } catch {
+                planningFailed(error)
+            }
+            guard source == .ai else { return }
+            await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            planDay = Calendar.current.startOfDay(for: .now)
+        }
         // FIT-131: a program a coach sent waits until it's answered.
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
+            planDay = Calendar.current.startOfDay(for: .now)
             Task {
                 await checkOffers()
                 // FIT-383: coaching that ended on another device, or by the coach, goes without a relaunch.
@@ -330,6 +356,14 @@ struct RootView: View {
         if UserDefaults.standard.bool(forKey: "welcome") { return true }
         #endif
         return profiles.first?.programStart == nil && !welcomed
+    }
+
+    /// FIT-424: the last good week stands. Today says so once, and the error goes to the author with the crash reports.
+    private func planningFailed(_ error: Error) {
+        Planner.designing.trouble = "Couldn't plan your week. The last one stands."
+        let report = ["planning": String(describing: error), "day": planDay.ISO8601Format()]
+        if let data = try? JSONEncoder().encode(report) { Diagnostics.keep(data) }
+        Task { await Diagnostics.send() }
     }
 
     /// FIT-131: the oldest program a coach sent that hasn't been answered, if any.

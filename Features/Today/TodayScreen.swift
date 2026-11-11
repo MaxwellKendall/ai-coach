@@ -280,16 +280,11 @@ struct TodayScreen: View {
         .sheet(isPresented: Binding(get: { celebrating != nil }, set: { if !$0 { celebrating = nil } })) {
             if let celebrating { CelebrationSheet(wins: celebrating) }
         }
-        // A new week, or a profile that just finished onboarding, gets a plan; the coach designs it with Pro (FIT-120).
-        .task(id: "\(today) \(profiles.first?.plansItself == true) \(profiles.first?.programSlug ?? "") \(pro.lifterPro) \(pro.coaches.isEmpty)") {
-            // FIT-422: code plans a free lifter's week and the AI redesigns a Pro lifter's; a coach's client gets the coach's.
-            guard let source = pro.weekSource(hasProgram: profiles.first?.programStart != nil), source.plansItself else { return }
-            try? Planner.ensureWeek(in: context)
-            // On a Sunday the swiped week (Sunday to Saturday) runs into the next plan week (Monday first): plan it now, so
-            // its sessions don't show as rest days. A week planned early is replanned when it starts (ensureWeek).
-            if let last = week.last, Week.start(of: last) != week[0] { try? Planner.ensureWeek(of: last, in: context) }
-            guard source == .ai else { return }
-            await Planner.design(in: context, model: LanguageModel.programs(signedIn: account.user != nil))
+        // FIT-424: weeks are planned at the root (RootView); a failure there is said here, once.
+        .onChange(of: Planner.designing.trouble, initial: true) { _, trouble in
+            guard let trouble else { return }
+            toast = Toast(text: trouble)
+            Planner.designing.trouble = nil
         }
     }
 

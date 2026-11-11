@@ -10,6 +10,8 @@ enum Coach {
         if let injury = reasons.first(where: { $0.contains("injury") }) {
             return "Working around the \(injury.prefix { $0 != ":" }.replacingOccurrences(of: " injury", with: ""))."
         }
+        // FIT-424: what changed since the week was seen ahead ("Squat up 5 lb after Thursday").
+        if let change = reasons.first(where: { $0.contains(" after ") || $0.hasSuffix(" since you saw it") }) { return "\(change)." }
         if deload { return "Light week: same moves, a little less weight. Leave a couple of reps in the tank." }
         return "Leave a rep or two in the tank on every set."
     }
