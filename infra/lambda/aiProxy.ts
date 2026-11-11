@@ -4,6 +4,7 @@ import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-sec
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { checkEntitlement } from "./entitlement.ts";
 import { giftedUntil } from "./gifts.ts";
+import { HAS_PLAN, planRecord, type PlanRecord } from "./coachPlan.ts";
 
 /**
  * FIT-102: the app's one way to Claude. The app runs the conversation (the same code the evals run, `ClaudeModel`)
@@ -11,6 +12,7 @@ import { giftedUntil } from "./gifts.ts";
  * what the app needs: Haiku, a capped answer, a capped prompt, and a daily allowance per signed-in user.
  * FIT-123: Claude is Pro's. With Apple's signed proof of Pro (`entitlement`) a request goes on; without it, an account
  * has a few for good (`limits.freeRequests`), enough for onboarding's brief and first week, the program it's offered.
+ * FIT-426: lifter Pro bought on the web (FIT-327) counts too: it's what pays for AI-designed weeks.
  */
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -92,6 +94,9 @@ export async function apiKey() {
   return key;
 }
 
+/** FIT-426: Pro bought on the web, while Stripe still has the plan (the server's HAS_PLAN, as the app counts it). */
+export const webPro = (record?: PlanRecord) => HAS_PLAN.includes(record?.status ?? "");
+
 export async function handler(event: AppSyncResolverEvent<{ request: unknown; entitlement?: string | null }>) {
   const uid = (event.identity as AppSyncIdentityCognito | null)?.sub;
   if (!uid) throw new Error("Sign in to use the coach.");
@@ -100,7 +105,8 @@ export async function handler(event: AppSyncResolverEvent<{ request: unknown; en
   const now = new Date();
   // FIT-122: or Pro from a redeemed gift, on the account.
   // FIT-216: coaches and their clients no longer get it free; the pilot has no AI of its own.
-  const pro = checkEntitlement(event.arguments.entitlement, now).pro || (await giftedUntil(uid, now)) !== undefined;
+  const pro = checkEntitlement(event.arguments.entitlement, now).pro || (await giftedUntil(uid, now)) !== undefined
+    || webPro(await planRecord(uid, "pro"));
   if (!pro && !(await allowance(uid, "AIFREE", limits.freeRequests))) {
     throw new Error(`${PRO_REQUIRED}: start your free trial so your coach can keep planning.`);
   }

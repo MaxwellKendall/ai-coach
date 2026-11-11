@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedRequest, day, limits } from "../lambda/aiProxy.ts";
+import { allowedRequest, day, limits, webPro } from "../lambda/aiProxy.ts";
 
 /** FIT-102: what the AI proxy lets through to Claude. */
 describe("aiProxy: the request it sends on", () => {
@@ -39,5 +39,14 @@ describe("aiProxy: the request it sends on", () => {
   it("counts each user's requests by UTC day", () => {
     expect(day(new Date("2026-10-10T23:59:00Z"))).toBe("2026-10-10");
     expect(day(new Date("2026-10-11T00:00:00Z"))).toBe("2026-10-11");
+  });
+});
+
+/** FIT-426: lifter Pro bought on the web pays for Claude, as an App Store entitlement does. */
+describe("aiProxy: Pro bought on the web", () => {
+  it("counts while Stripe still has the plan", () => {
+    for (const status of ["active", "trialing", "past_due"]) expect(webPro({ status })).toBe(true);
+    for (const status of ["canceled", "unpaid", "incomplete", "incomplete_expired"]) expect(webPro({ status })).toBe(false);
+    expect(webPro(undefined)).toBe(false);
   });
 });
