@@ -162,14 +162,14 @@ struct WelcomeView: View {
                 title("Your clients, in your pocket",
                       "See who needs you, reply to their notes, change a session and invite clients, here. Import programs and billing are on barbrabell.com.")
                 Button {
-                    UserDefaults.standard.set(true, forKey: Roster.coachingKey)
+                    UserDefaults.standard.set(account.user?.uid, forKey: Roster.coachingKey)
                     onDone()
                 } label: {
                     Text("Go to My Clients").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
                         .foregroundStyle(Plate.current.onAccent).background(.tint, in: .rect(cornerRadius: 16))
                 }
                 Button("Train on my own too") {
-                    UserDefaults.standard.set(true, forKey: Roster.coachingKey)
+                    UserDefaults.standard.set(account.user?.uid, forKey: Roster.coachingKey)
                     if profiles.first?.programStart == nil { withAnimation(.snappy) { picking = true } } else { onDone() }
                 }
                 .frame(maxWidth: .infinity, minHeight: 44).padding(.top, 8)

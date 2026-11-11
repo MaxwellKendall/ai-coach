@@ -26,8 +26,9 @@ final class Roster {
         }
     }
 
-    /// FIT-298: someone who came in by "I'm a coach", or has clients: the Clients tab shows.
-    static let coachingKey = "coaching"
+    /// FIT-298: someone who came in by "I'm a coach", or has clients: the Clients tab shows. FIT-352: kept as that
+    /// account's uid, not a flag for the phone, so another account signed in here isn't shown Clients.
+    static let coachingKey = "coachingUID"
 
     private(set) var clients: [Client] = []
     /// FIT-339: invites sent and not used yet.
@@ -147,7 +148,7 @@ final class Roster {
         if coach != loadedFor { clients = []; invites = []; loaded = false }
         do {
             let people = try await Cloud.myClients()
-            if !people.isEmpty { UserDefaults.standard.set(true, forKey: Self.coachingKey) }
+            if !people.isEmpty { UserDefaults.standard.set(coach, forKey: Self.coachingKey) }
             let today = SyncUnits.day(.now)
             // All at once: one after another, ten clients took 13 s on prod.
             let fetched = try await withThrowingTaskGroup(of: (Int, [String: String], [Triage.Comment]).self) { group in

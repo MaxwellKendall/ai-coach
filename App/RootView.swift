@@ -28,7 +28,13 @@ struct RootView: View {
     @State private var joined: Cloud.GroupSummary?
     /// FIT-298: coach mode, for someone who came in as a coach or has clients.
     @State private var roster = Roster.restored()
-    @AppStorage(Roster.coachingKey) private var coaching = false
+    @AppStorage(Roster.coachingKey) private var coachUID = ""
+    private var coaching: Bool {
+        #if DEBUG
+        if Roster.sample { return true }
+        #endif
+        return account.user.map { $0.uid == coachUID } ?? false
+    }
 
     /// FIT-297: the plate colour picked on You (design system v2); Blue 20 until one is picked.
     static var accent: Color { Plate.current.accent }
@@ -64,8 +70,8 @@ struct RootView: View {
         // FIT-298: a coach opens on their clients; one who has clients is a coach, whichever door they came in by.
         .onChange(of: coaching, initial: true) { _, coaching in if coaching { tab = .clients } }
         .task(id: account.user?.uid) {
-            guard account.user != nil, !coaching, let clients = try? await Cloud.myClients(), !clients.isEmpty else { return }
-            coaching = true
+            guard let user = account.user, !coaching, let clients = try? await Cloud.myClients(), !clients.isEmpty else { return }
+            coachUID = user.uid
         }
         .onChange(of: tab) { _, new in if new != .coach { lastTab = new } }
         // FIT-65: Talk to Coach opens the coach, which starts listening; without Apple Intelligence, Today.
@@ -99,7 +105,6 @@ struct RootView: View {
                         code: "K7Q2MX", url: "https://join.barbrabell.com/K7Q2MX", createdAt: Date.now.addingTimeInterval(-86_400).ISO8601Format())])
                     // FIT-338: last looked at four days ago, so Mike's Sunday note is unread.
                     for client in roster.clients { roster.markSeen(client.id, at: .now.addingTimeInterval(-4 * 86_400)) }
-                    coaching = true
                 }
                 // `-welcome YES` opens the first launch over any program, to look at it (FIT-296).
                 if UserDefaults.standard.bool(forKey: "welcome") { welcoming = true }
@@ -137,7 +142,7 @@ struct RootView: View {
             case .offer:
                 Task { await checkOffers() }
             case .client:
-                coaching = true
+                if let user = account.user { coachUID = user.uid }
                 tab = .clients
                 navigator.clientDay = target
             case .plan, .nudge, .reply:
