@@ -10,6 +10,7 @@ struct ProgramScreen: View {
     @Environment(Account.self) private var account
     @Environment(CoachInbox.self) private var coach
     @Environment(Pro.self) private var pro
+    @Environment(\.appMode) private var mode
     @Environment(\.dynamicTypeSize) private var typeSize
     @Query private var profiles: [Profile]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
@@ -285,6 +286,13 @@ struct ProgramScreen: View {
                          pinnable: saved && !coached, monday: monday)
                     .padding(.top, 14)
                 Color.clear.frame(height: 12)
+                // FIT-437: the one place a free lifter meets Lifter Pro by asking for AI planning; with it, the AI has
+                // already designed this week (WeekSource.ai).
+                if index == current + 1, Pilot.sellsPro, mode.offers(.lifter), !pro.lifterPro {
+                    Button("Plan my next week", systemImage: "sparkles") { pro.paywall = true }
+                        .buttonStyle(.secondary)
+                        .accessibilityIdentifier("program.planNextWeek")
+                }
                 // FIT-215: planning the week again is the in-app AI's.
                 if index == current, Pilot.inAppAI {
                     let days = regenerateDays(monday)
