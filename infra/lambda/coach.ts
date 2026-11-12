@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
-import { HAS_PLAN, planRecord } from "./coachPlan.ts";
+import { hasPlan } from "./coachPlan.ts";
 import { ensureSample } from "./sample.ts";
 
 // FIT-130: coaches and their clients. A coach (any account) makes an invite link; the client opens it in the app and
@@ -55,9 +55,10 @@ export async function isCoachOf(coach: string, client: string) {
 /**
  * FIT-284: the coach plan is Pro (the same Stripe products, coach_monthly and coach_yearly): the exhaustive coach MCP
  * (mcp.ts). Coaching itself never asks for it. Pro while Stripe's status still has the plan (active, trialing, past_due).
+ * FIT-437: or the App Store's Coach Pro (plan.ts effective).
  */
 export async function hasCoachPlan(uid: string) {
-  return HAS_PLAN.includes((await planRecord(uid, "coach"))?.status ?? "");
+  return hasPlan(uid, "coach");
 }
 
 /** Whether a coach may see and change this client: linked. */

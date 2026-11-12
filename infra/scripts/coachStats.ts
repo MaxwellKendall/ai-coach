@@ -7,17 +7,17 @@
  */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { effective, type PlanRecord } from "../lambda/plan.ts";
 import { ACTIVE_CLIENTS, checkpoint, coachRow, DAYS, realClient, retention, TARGETS, type CoachFacts } from "../lambda/coachStats.ts";
 
 const stage = process.argv[2] ?? "dev";
 const TABLE = `AICoach-${stage}`;
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: "us-east-1" }));
-const HAS_PLAN = ["active", "trialing", "past_due"]; // coachPlan.ts's
 const today = new Date().toISOString().slice(0, 10);
 
 // A scan is fine at the pilot's size: the coach links, invites out, dashboard imports and the plans.
 const links: Record<string, any>[] = [];
-const plans = new Map<string, string>();
+const plans = new Map<string, boolean>();
 const invited = new Set<string>(), imported = new Set<string>();
 let liftersOnPro = 0;
 let start: Record<string, any> | undefined;
@@ -29,8 +29,9 @@ do {
   for (const item of out.Items ?? []) {
     const coach = String(item.PK).slice("USER#".length);
     const sk = String(item.SK);
-    if (sk === "COACHPLAN") plans.set(coach, item.status);
-    else if (sk === "PROPLAN") liftersOnPro += HAS_PLAN.includes(item.status) ? 1 : 0;
+    // FIT-437: a plan from either store.
+    if (sk === "COACHPLAN") plans.set(coach, effective(item as PlanRecord).has);
+    else if (sk === "PROPLAN") liftersOnPro += effective(item as PlanRecord).has ? 1 : 0;
     else if (sk.startsWith("INVITE#")) invited.add(coach);
     else if (sk.startsWith("AIIMPORT#")) imported.add(coach);
     else if (realClient(item.clientUid)) links.push({ coach, ...item });
@@ -66,7 +67,7 @@ for (const coach of coaches) {
   const first = theirs.map((l) => String(l.since).slice(0, 10)).sort()[0];
   const profile = first ? undefined : (await db.send(new GetCommand({ TableName: TABLE, Key: { PK: `USER#${coach}`, SK: "PROFILE" } }))).Item;
   const signup = first ?? String(profile?.createdAt ?? today).slice(0, 10);
-  const f: CoachFacts = { coach, signup, paid: HAS_PLAN.includes(plans.get(coach) ?? ""), clients, invited: invited.has(coach), imported: imported.has(coach) };
+  const f: CoachFacts = { coach, signup, paid: plans.get(coach) ?? false, clients, invited: invited.has(coach), imported: imported.has(coach) };
   rows.push(coachRow(f, today));
 }
 

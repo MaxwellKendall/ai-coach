@@ -3,6 +3,9 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { stripeConfig } from "./gifts.ts";
 import { stripe } from "./stripe.ts";
+import { appStoreHas, effective, HAS_PLAN, shownPlan, stripeHas, supersedes, type AppStoreState, type PlanRecord } from "./plan.ts";
+
+export { HAS_PLAN, shownPlan, type CoachPlan, type PlanRecord } from "./plan.ts";
 
 /**
  * FIT-144: the coach plan (FIT-133, author 2026-10-17: $19.99/month or $199/year), sold on the web through Stripe.
@@ -30,40 +33,10 @@ export type Kind = keyof typeof PLANS;
 export const LOOKUP_KEYS = PLANS.coach.keys;
 export type Interval = keyof typeof LOOKUP_KEYS;
 
-/** Stripe's statuses that still have the plan: a payment that failed keeps it while Stripe retries. */
-export const HAS_PLAN = ["active", "trialing", "past_due"];
-
 /** Where Checkout and the portal come back to. Pro's buyers come from Claude, so a purchase lands on the site's page that sends them back. */
 const returns = (kind: Kind, origin: string) => kind === "coach"
   ? { success: `${origin}/billing?started=1`, cancel: `${origin}/billing`, portal: `${origin}/billing` }
   : { success: `${origin}/pro/thanks`, cancel: `${origin}/app/billing`, portal: `${origin}/app/billing` };
-
-export interface PlanRecord {
-  customer?: string;
-  subscription?: string;
-  status?: string;
-  interval?: string;
-  renews?: string;
-  cancelsAtEnd?: boolean;
-  eventAt?: number;
-}
-
-export interface CoachPlan {
-  onSale: boolean;
-  /** "none", or Stripe's subscription status: trialing, active, past_due, unpaid, canceled, incomplete… */
-  status: string;
-  interval?: string;
-  renews?: string;
-  cancelsAtEnd: boolean;
-}
-
-export const shownPlan = (onSale: boolean, record?: PlanRecord): CoachPlan => ({
-  onSale,
-  status: record?.status ?? "none",
-  interval: record?.interval,
-  renews: record?.renews,
-  cancelsAtEnd: record?.cancelsAtEnd ?? false,
-});
 
 /** Checkout for the plan, as a subscription; the uid rides on the subscription so its events find the account. */
 export function checkoutParams(uid: string, customer: string, price: string, origin: string, kind: Kind = "coach") {
@@ -123,23 +96,73 @@ export async function planRecord(uid: string, kind: Kind = "coach"): Promise<Pla
   return Item as PlanRecord | undefined;
 }
 
-/**
- * FIT-189: whether an event replaces the plan kept. For the same subscription the newest event wins (Stripe doesn't
- * promise their order). Another subscription's event (a duplicate the coach paid for twice) never takes away a plan
- * the kept one still has: one that has the plan replaces it if newer, or whenever the kept one has ended.
- */
+/** FIT-437: whether the account has the plan now, from either store. */
+export async function hasPlan(uid: string, kind: Kind, now = new Date()): Promise<boolean> {
+  return effective(await planRecord(uid, kind), now).has;
+}
+
+/** FIT-189: whether a Stripe event replaces the Stripe subscription kept (plan.ts supersedes). */
 export function replaces(kept: PlanRecord | undefined, event: PlanRecord): boolean {
-  const newer = kept?.eventAt === undefined || kept.eventAt <= event.eventAt!;
-  if (!kept?.subscription || kept.subscription === event.subscription) return newer;
-  const keptHas = HAS_PLAN.includes(kept.status ?? "");
-  if (!HAS_PLAN.includes(event.status ?? "")) return !keptHas && newer;
-  return !keptHas || newer;
+  return supersedes(kept && { id: kept.subscription, has: stripeHas(kept), eventAt: kept.eventAt },
+                    { id: event.subscription, has: stripeHas(event), eventAt: event.eventAt! });
+}
+
+/** FIT-437: the same guard for the App Store's subscription kept (by original transaction). */
+export function replacesAppStore(kept: AppStoreState | undefined, event: AppStoreState, now = new Date()): boolean {
+  return supersedes(kept && { id: kept.originalTransactionId, has: appStoreHas(kept, now), eventAt: kept.eventAt },
+                    { id: event.originalTransactionId, has: appStoreHas(event, now), eventAt: event.eventAt });
+}
+
+export type StoreUpdate = { source: "stripe"; record: PlanRecord } | { source: "appstore"; state: AppStoreState };
+
+/**
+ * FIT-437: the one way either store's event reaches a plan's record. Each store writes only its own state (Stripe's
+ * top-level fields, the App Store's `appStore`), so one store's event never takes the plan from the other; within a
+ * store FIT-189's guard keeps the subscription that has the plan. Written only if the store's state is still the one
+ * read (its eventAt), read again up to 3 times. Whether it was saved.
+ */
+export async function saveState(uid: string, kind: Kind, update: StoreUpdate, now = new Date()): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const kept = await planRecord(uid, kind);
+    const keptAt = update.source === "stripe" ? kept?.eventAt : kept?.appStore?.eventAt;
+    if (update.source === "stripe" ? !replaces(kept, update.record) : !replacesAppStore(kept?.appStore, update.state, now)) {
+      const [keptId, id, status] = update.source === "stripe" ? [kept?.subscription, update.record.subscription, update.record.status]
+        : [kept?.appStore?.originalTransactionId, update.state.originalTransactionId, update.state.status];
+      if (keptId !== id) console.error("Kept the plan's subscription", keptId, "over", id, status);
+      return false;
+    }
+    // Unchanged since read: the same event time, or none yet.
+    const seen = keptAt !== undefined;
+    const write = update.source === "stripe" ? stripeWrite(update.record, seen)
+      : { UpdateExpression: "SET appStore = :appStore", ConditionExpression: seen ? "appStore.eventAt = :seen" : "attribute_not_exists(appStore.eventAt)",
+          ExpressionAttributeValues: { ":appStore": update.state } as Record<string, unknown> };
+    if (seen) write.ExpressionAttributeValues[":seen"] = keptAt;
+    try {
+      await db.send(new UpdateCommand({ TableName: TABLE(), Key: planKey(uid, kind), ...write }));
+      return true;
+    } catch (error) {
+      if (!(error instanceof ConditionalCheckFailedException)) throw error;
+    }
+  }
+  return false;
+}
+
+/** Stripe's fields, set where FIT-144 kept them; an interval or renewal the event doesn't have is removed. */
+function stripeWrite(record: PlanRecord, seen: boolean) {
+  const fields = Object.entries(record).filter(([k, v]) => v !== undefined && k !== "appStore");
+  const removed = (["interval", "renews"] as const).filter((k) => record[k] === undefined);
+  return {
+    UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(", ")}${removed.length ? ` REMOVE ${removed.map((k) => `#${k}`).join(", ")}` : ""}`,
+    ConditionExpression: seen ? "eventAt = :seen" : "attribute_not_exists(eventAt)",
+    ExpressionAttributeNames: Object.fromEntries([...fields.map(([k]) => k), ...removed].map((k) => [`#${k}`, k])) as Record<string, string> | undefined,
+    ExpressionAttributeValues: Object.fromEntries(fields.map(([k, v]) => [`:${k}`, v])) as Record<string, unknown>,
+  };
 }
 
 /**
- * Saves a subscription event if it replaces the plan kept, writing only if the record is still the one read. FIT-212:
- * a subscription already kept as the other plan has switched plans outside our portals; saving it would start a second
- * plan and leave the first at its last status, so it's left for the author to sort out.
+ * Saves a subscription event if it replaces the plan kept (saveState). FIT-212: a subscription already kept as the
+ * other plan has switched plans outside our portals; saving it would start a second plan and leave the first at its
+ * last status, so it's left for the author to sort out.
  */
 export async function saveSubscription(sub: Subscription, eventAt: number): Promise<void> {
   const made = recordFrom(sub, eventAt);
@@ -150,30 +173,7 @@ export async function saveSubscription(sub: Subscription, eventAt: number): Prom
       return;
     }
   }
-  const fields = Object.entries(made.record).filter(([, v]) => v !== undefined);
-  const removed = (["interval", "renews"] as const).filter((k) => made.record[k] === undefined);
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const kept = await planRecord(made.uid, made.kind);
-    if (!replaces(kept, made.record)) {
-      if (kept?.subscription !== sub.id) console.error("Kept the plan's subscription", kept?.subscription, "over", sub.id, sub.status);
-      return;
-    }
-    // Unchanged since read: the same event time, or none yet.
-    const seen = kept?.eventAt !== undefined;
-    try {
-      await db.send(new UpdateCommand({
-        TableName: TABLE(),
-        Key: planKey(made.uid, made.kind),
-        UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(", ")}${removed.length ? ` REMOVE ${removed.map((k) => `#${k}`).join(", ")}` : ""}`,
-        ConditionExpression: seen ? "eventAt = :seen" : "attribute_not_exists(eventAt)",
-        ExpressionAttributeNames: Object.fromEntries([...fields.map(([k]) => k), ...removed].map((k) => [`#${k}`, k])),
-        ExpressionAttributeValues: { ...Object.fromEntries(fields.map(([k, v]) => [`:${k}`, v])), ...(seen ? { ":seen": kept.eventAt } : {}) },
-      }));
-      return;
-    } catch (error) {
-      if (!(error instanceof ConditionalCheckFailedException)) throw error;
-    }
-  }
+  await saveState(made.uid, made.kind, { source: "stripe", record: made.record });
 }
 
 export class PlanError extends Error {}
@@ -227,6 +227,8 @@ async function customerFor(key: string, uid: string, email: string | undefined, 
 const already = (kind: Kind) => kind === "coach" ? "You already have the coach plan. Use Manage billing to change it."
   : "You already have Pro. Use Manage billing to change it.";
 
+const alreadyInApp = (kind: Kind) => `You already have ${kind === "coach" ? "Coach Pro" : "Pro"} through the App Store. Manage it in your iPhone's Settings.`;
+
 /** The customer's subscription to the plan that still has it, if Stripe has one (the list leaves out canceled ones). */
 export async function activeSubscription(key: string, customer: string, kind: Kind): Promise<Subscription | undefined> {
   const found = await stripe<{ data: Subscription[] }>(key, `subscriptions?customer=${customer}&limit=100`);
@@ -240,6 +242,8 @@ export async function start(uid: string, interval: string, email?: string, origi
   if (!keys) return undefined;
   const current = await planRecord(uid, kind);
   if (current?.status && !["canceled", "incomplete_expired"].includes(current.status)) throw new PlanError(already(kind));
+  // FIT-437: bought in the App Store already; a second Checkout would pay twice for one plan.
+  if (appStoreHas(current?.appStore)) throw new PlanError(alreadyInApp(kind));
   // FIT-189: a late or missed webhook leaves the record behind Stripe; ask Stripe before a second Checkout. A key that
   // can't read subscriptions (a restricted key without the permission) goes on to Checkout as before.
   const live = current?.customer && await activeSubscription(keys.secretKey, current.customer, kind).catch((error) => {

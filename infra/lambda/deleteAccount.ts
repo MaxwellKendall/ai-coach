@@ -28,6 +28,8 @@ export async function itemsToDelete(uid: string) {
   });
   const memberships = indexed.filter((i) => String(i.GSI1SK).startsWith("GROUP#"));
   const shares = indexed.filter((i) => String(i.GSI1SK).startsWith("SHARE#"));
+  // FIT-437: their App Store subscriptions' links, so a new account can restore them.
+  const purchases = indexed.filter((i) => String(i.GSI1SK).startsWith("APPSTORETXN#"));
   const own = await queryKeys({
     KeyConditionExpression: "PK = :pk",
     ExpressionAttributeValues: { ":pk": `USER#${uid}` },
@@ -55,7 +57,7 @@ export async function itemsToDelete(uid: string) {
     if (sk.startsWith("CLIENT#")) return [{ PK: `USER#${sk.slice(7)}`, SK: `COACH#${uid}` }];
     return [];
   });
-  return [...own, ...shares, ...perGroup.flat(), ...links].map(({ PK, SK }) => ({ PK, SK }));
+  return [...own, ...shares, ...purchases, ...perGroup.flat(), ...links].map(({ PK, SK }) => ({ PK, SK }));
 }
 
 // App Store 5.1.1(v): in-app account deletion removes the account and the data tied to it.

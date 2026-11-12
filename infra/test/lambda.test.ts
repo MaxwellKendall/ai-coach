@@ -39,7 +39,7 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
     ...actual,
     paginateQuery: async function* (_: unknown, input: any) {
       const v = input.ExpressionAttributeValues;
-      if (input.IndexName === "GSI1") yield { Items: [{ PK: "GROUP#g1", SK: "MEMBER#a", GSI1SK: "GROUP#g1" }, { PK: "SHARE#s1", SK: "META", GSI1SK: "SHARE#s1" }] };
+      if (input.IndexName === "GSI1") yield { Items: [{ PK: "GROUP#g1", SK: "MEMBER#a", GSI1SK: "GROUP#g1" }, { PK: "SHARE#s1", SK: "META", GSI1SK: "SHARE#s1" }, { PK: "APPSTORETXN#200", SK: "APPSTORETXN", GSI1SK: "APPSTORETXN#200" }] };
       else if (v[":pk"] === "USER#a") yield { Items: [{ PK: "USER#a", SK: "PROFILE" }, { PK: "USER#a", SK: "DEVICE#tok" }] };
       else if (v[":p"] === "PROGRESS#a#") yield { Items: [{ PK: "GROUP#g1", SK: "PROGRESS#a#goal1", pct: 50 }] };
       else if (v[":f"] === "FEED#") yield { Items: [{ PK: "GROUP#g1", SK: "FEED#t#1", uid: "a" }] };
@@ -48,13 +48,14 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
 });
 
 describe("deleteAccount", () => {
-  it("collects the user's own partition, what they shared, and their items in each group", async () => {
+  it("collects the user's own partition, what they shared, their App Store links (FIT-437), and their items in each group", async () => {
     process.env.TABLE = "AICoach-test";
     const { itemsToDelete } = await import("../lambda/deleteAccount.ts");
     expect(await itemsToDelete("a")).toEqual([
       { PK: "USER#a", SK: "PROFILE" },
       { PK: "USER#a", SK: "DEVICE#tok" },
       { PK: "SHARE#s1", SK: "META" },
+      { PK: "APPSTORETXN#200", SK: "APPSTORETXN" },
       { PK: "GROUP#g1", SK: "MEMBER#a" },
       { PK: "GROUP#g1", SK: "LIVE#a" },
       { PK: "GROUP#g1", SK: "WEEK#a" },

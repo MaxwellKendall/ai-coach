@@ -407,6 +407,21 @@ export class AICoachStack extends Stack {
     coachPlanSource.createResolver("ProPlanStart", { typeName: "Mutation", fieldName: "startProPlan" });
     coachPlanSource.createResolver("ProPlanPortal", { typeName: "Mutation", fieldName: "proBillingPortal" });
 
+    // ---- FIT-437: Lifter Pro and Coach Pro bought in the App Store, kept in the same plan records ----
+    // Prod takes Sandbox too: App Review and TestFlight buy there, and the reviewer must see Pro work.
+    const appStoreEnv = { APPSTORE_ENVIRONMENTS: isProd ? "Production,Sandbox" : "Sandbox" };
+    const appStore = fn("appStore", appStoreEnv);
+    table.grant(appStore, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem");
+    api.addLambdaDataSource("AppStoreSource", appStore).createResolver("RegisterAppStorePurchase", {
+      typeName: "Mutation",
+      fieldName: "registerAppStorePurchase",
+    });
+    // Apple posts here directly, as Stripe does to its webhook; the URL goes in App Store Connect's App Information.
+    const appStoreNotifications = fn("appStoreNotifications", appStoreEnv);
+    table.grant(appStoreNotifications, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem");
+    const appStoreNotificationsUrl = appStoreNotifications.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
+    new CfnOutput(this, "AppStoreNotificationsUrl", { value: appStoreNotificationsUrl.url });
+
     // ---- FIT-102: Claude for the app, with the key kept here ----
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(this, "AnthropicSecret", `aicoach/${stage}/anthropic`);
     // FIT-123: without Pro, a few requests per account for good; dev has room for testing with StoreKit's local

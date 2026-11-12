@@ -141,7 +141,7 @@ describe("resolvers", () => {
         "Mutation.unlinkCoach", "Mutation.removeClient", "Query.myInvites", "Mutation.cancelInvite", "Mutation.postComment", "Query.comments", "Mutation.editComment", "Mutation.deleteComment",
         "Mutation.sendProgram", "Query.programOffers", "Mutation.answerProgram", "Mutation.linkAccount",
         "Query.coachPlan", "Mutation.startCoachPlan", "Mutation.coachBillingPortal",
-        "Query.proPlan", "Mutation.startProPlan", "Mutation.proBillingPortal",
+        "Query.proPlan", "Mutation.startProPlan", "Mutation.proBillingPortal", "Mutation.registerAppStorePurchase",
         "Subscription.onLiveSet", "Subscription.onProgress", "Subscription.onFeed",
       ].sort(),
     );
@@ -165,6 +165,12 @@ describe("push", () => {
         ],
       },
     });
+  });
+
+  it("FIT-437: App Store purchases from the sandbox in dev; prod takes production and App Review's sandbox", () => {
+    dev.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ APPSTORE_ENVIRONMENTS: "Sandbox" }) } });
+    prod.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ APPSTORE_ENVIRONMENTS: "Production,Sandbox" }) } });
+    dev.hasOutput("AppStoreNotificationsUrl", {});
   });
 
   it("targets APNs sandbox in dev and production in prod", () => {
@@ -218,6 +224,11 @@ describe("least privilege", () => {
     // FIT-144: the coach plan reads and updates its own record, and reads the Stripe key.
     expect(actionsOf(dev, /^coachPlan/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:UpdateItem"]);
     expect(actionsOf(dev, /^coachPlan/)).toContain("secretsmanager:GetSecretValue");
+    // FIT-437: the App Store's two ways in read and write plans and put links; they never delete, scan or read Stripe's key.
+    for (const name of [/^appStore(?!Notifications)/, /^appStoreNotifications/]) {
+      expect(actionsOf(dev, name).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]);
+      expect(actionsOf(dev, name)).not.toContain("secretsmanager:GetSecretValue");
+    }
     // FIT-130: coach links are put and deleted one by one, never scanned.
     expect(actionsOf(dev, /^coach(?!Plan)/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
     // FIT-137: linking deletes the empty account Cognito made and links its identity; nothing else in the pool.

@@ -257,7 +257,7 @@ describe("FIT-189: which event replaces the plan kept", () => {
 
 describe("the plan shown", () => {
   it("is none without a subscription", () => {
-    expect(shownPlan(false)).toEqual({ onSale: false, status: "none", interval: undefined, renews: undefined, cancelsAtEnd: false });
+    expect(shownPlan(false)).toEqual({ onSale: false, status: "none", interval: undefined, renews: undefined, cancelsAtEnd: false, source: undefined, paidTwice: false });
     expect(shownPlan(true, { status: "active", interval: "year", renews: "2027-10-17T00:00:00.000Z", cancelsAtEnd: true }))
       .toMatchObject({ onSale: true, status: "active", interval: "year", cancelsAtEnd: true });
   });

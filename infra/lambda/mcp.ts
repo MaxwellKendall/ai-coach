@@ -16,7 +16,7 @@ import { clock, distanceName, goalMeters, meters, MILE, miles, OUTDOOR_RUN, pace
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
 import { coached, comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, NAME_NEEDED, list as linked, postComment, type Person } from "./coach.ts";
-import { HAS_PLAN, onSale, planRecord } from "./coachPlan.ts";
+import { hasPlan, onSale } from "./coachPlan.ts";
 import { giftedUntil } from "./gifts.ts";
 import { ensureSample, isSample } from "./sample.ts";
 import { fingerprint } from "./programStats.ts";
@@ -140,8 +140,9 @@ export const dynamoStore: Store = {
       TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROTRIAL" },
       UpdateExpression: "SET startedAt = if_not_exists(startedAt, :n)", ExpressionAttributeValues: { ":n": now.toISOString() }, ReturnValues: "ALL_NEW",
     }));
-    const [plan, gift, coach] = await Promise.all([planRecord(uid, "pro"), giftedUntil(uid, now), hasCoachPlan(uid)]);
-    return { trialStart: trial.Attributes!.startedAt, pro: HAS_PLAN.includes(plan?.status ?? "") || gift !== undefined || coach };
+    // FIT-437: either plan from either store (Stripe or the App Store).
+    const [plan, gift, coach] = await Promise.all([hasPlan(uid, "pro", now), giftedUntil(uid, now), hasCoachPlan(uid)]);
+    return { trialStart: trial.Attributes!.startedAt, pro: plan || gift !== undefined || coach };
   },
   onSale: () => onSale("pro"),
   async unshare(uid, id) {

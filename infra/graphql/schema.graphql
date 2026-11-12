@@ -194,6 +194,16 @@ type CoachPlan {
   interval: String
   renews: AWSDateTime
   cancelsAtEnd: Boolean!
+  "FIT-437: which store the status is from, stripe or appstore; null without a plan."
+  source: String
+  "FIT-437: the plan is paid for in both stores at once; one should be cancelled."
+  paidTwice: Boolean!
+}
+
+"FIT-437: an App Store subscription registered to the account: which plan it is (pro or coach), and that plan now."
+type RegisteredPurchase {
+  kind: String!
+  plan: CoachPlan!
 }
 
 
@@ -237,6 +247,8 @@ type Mutation {
   startProPlan(interval: String!): String
   "FIT-327: a Stripe customer portal URL for lifter Pro, or null without one."
   proBillingPortal: String
+  "FIT-437: register the App Store subscription the app just bought or restored (StoreKit 2's jwsRepresentation, and its renewal info's if known) to my account, so the plan is mine at once. Refused if it's another account's."
+  registerAppStorePurchase(transaction: String!, renewalInfo: String): RegisteredPurchase!
   "FIT-130: a single-use link for someone to make me their coach (14 days)."
   # FIT-228: name, when the coach has none yet, is saved as theirs and put on the invite.
   createClientInvite(name: String, client: String): ClientInvite

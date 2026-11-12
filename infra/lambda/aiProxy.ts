@@ -4,7 +4,8 @@ import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-sec
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { checkEntitlement } from "./entitlement.ts";
 import { giftedUntil } from "./gifts.ts";
-import { HAS_PLAN, planRecord, type PlanRecord } from "./coachPlan.ts";
+import { planRecord } from "./coachPlan.ts";
+import { effective, type PlanRecord } from "./plan.ts";
 
 /**
  * FIT-102: the app's one way to Claude. The app runs the conversation (the same code the evals run, `ClaudeModel`)
@@ -94,8 +95,8 @@ export async function apiKey() {
   return key;
 }
 
-/** FIT-426: Pro bought on the web, while Stripe still has the plan (the server's HAS_PLAN, as the app counts it). */
-export const webPro = (record?: PlanRecord) => HAS_PLAN.includes(record?.status ?? "");
+/** FIT-426: Pro bought on the web, while Stripe still has the plan. FIT-437: or bought in the App Store, registered or notified. */
+export const webPro = (record?: PlanRecord, now = new Date()) => effective(record, now).has;
 
 export async function handler(event: AppSyncResolverEvent<{ request: unknown; entitlement?: string | null }>) {
   const uid = (event.identity as AppSyncIdentityCognito | null)?.sub;
@@ -106,7 +107,7 @@ export async function handler(event: AppSyncResolverEvent<{ request: unknown; en
   // FIT-122: or Pro from a redeemed gift, on the account.
   // FIT-216: coaches and their clients no longer get it free; the pilot has no AI of its own.
   const pro = checkEntitlement(event.arguments.entitlement, now).pro || (await giftedUntil(uid, now)) !== undefined
-    || webPro(await planRecord(uid, "pro"));
+    || webPro(await planRecord(uid, "pro"), now);
   if (!pro && !(await allowance(uid, "AIFREE", limits.freeRequests))) {
     throw new Error(`${PRO_REQUIRED}: start your free trial so your coach can keep planning.`);
   }
