@@ -202,13 +202,21 @@ struct RootView: View {
             // FIT-426: a Pro lifter's weeks are designed by the AI, this one and next once it's saved, so it lands
             // before it starts. A free lifter's never reach a model.
             guard source == .ai else { return }
+            let next = Calendar.current.date(byAdding: .day, value: 7, to: .now)!
             #if DEBUG
-            // FIT-445: a UI test's role keeps the week code planned, the same every run.
-            if DebugRole.uiTesting { return }
+            // FIT-445: a UI test's role keeps the week code planned, the same every run; FIT-426: with -aiWeeks, the stub
+            // designs it.
+            if DebugRole.uiTesting {
+                guard DebugRole.aiWeeks else { return }
+                for week in [Date.now, next] {
+                    await Planner.design(weekOf: week, in: context, model: StubDesigner.week(of: week, in: context))
+                }
+                return
+            }
             #endif
             let model = LanguageModel.weeks(signedIn: account.user != nil)
             await Planner.design(in: context, model: model)
-            await Planner.design(weekOf: Calendar.current.date(byAdding: .day, value: 7, to: .now)!, in: context, model: model)
+            await Planner.design(weekOf: next, in: context, model: model)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             planDay = Calendar.current.startOfDay(for: .now)

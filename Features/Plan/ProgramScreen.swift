@@ -263,6 +263,21 @@ struct ProgramScreen: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
+    /// FIT-426: Lifter Pro's "Plan my next week": next week saved as the code plans it, if it isn't yet, then designed
+    /// by the AI on request. The week stays usable throughout, and stays as it was when the model can't.
+    @discardableResult
+    private func planNextWeek(_ monday: Date) async -> Bool {
+        if dayItems(in: monday).isEmpty { try? Planner.generate(weekOf: monday, in: context) }
+        #if DEBUG
+        if DebugRole.uiTesting {
+            guard DebugRole.aiWeeks else { return false }
+            return await Planner.design(weekOf: monday, in: context, model: StubDesigner.week(of: monday, in: context), force: true)
+        }
+        #endif
+        return await Planner.design(weekOf: monday, in: context, model: LanguageModel.weeks(signedIn: account.user != nil),
+                                    force: true)
+    }
+
     /// "This week · Oct 25 – 31": which week, quietly, in sentence case.
     private func weekLine(_ name: String, monday: Date, sunday: Date) -> some View {
         Text("\(name) · \(monday.formatted(.dateTime.month(.abbreviated).day())) – \(sunday.formatted(.dateTime.month(.abbreviated).day()))")
@@ -286,12 +301,16 @@ struct ProgramScreen: View {
                          pinnable: saved && !coached, monday: monday)
                     .padding(.top, 14)
                 Color.clear.frame(height: 12)
-                // FIT-437: the one place a free lifter meets Lifter Pro by asking for AI planning; with it, the AI has
-                // already designed this week (WeekSource.ai).
-                if index == current + 1, Pilot.sellsPro, mode.offers(.lifter), !pro.lifterPro {
-                    Button("Plan my next week", systemImage: "sparkles") { pro.paywall = true }
-                        .buttonStyle(.secondary)
-                        .accessibilityIdentifier("program.planNextWeek")
+                // FIT-437: the one place a free lifter meets Lifter Pro by asking for AI planning. FIT-426: Lifter Pro
+                // has the AI design next week now, or again, up to Planner.redesignsPerWeek times.
+                if index == current + 1, Pilot.sellsPro, mode.offers(.lifter),
+                   !pro.lifterPro || Planner.canRedesign(try? Planner.plan(weekOf: monday, in: context)) {
+                    Button("Plan my next week", systemImage: "sparkles") {
+                        if pro.lifterPro { Task { await planNextWeek(monday) } } else { pro.paywall = true }
+                    }
+                    .buttonStyle(.secondary)
+                    .disabled(Planner.designing.weeks.contains(monday))
+                    .accessibilityIdentifier("program.planNextWeek")
                 }
                 // FIT-215: planning the week again is the in-app AI's.
                 if index == current, Pilot.inAppAI {

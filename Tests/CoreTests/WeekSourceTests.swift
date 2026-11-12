@@ -20,6 +20,17 @@ struct WeekSourceTests {
         #expect(WeekSource.code.plansItself && WeekSource.ai.plansItself)
     }
 
+    /// FIT-426: the root designs only `.ai` weeks, so a free lifter's never reach a model; every other caller's model
+    /// is `LanguageModel.programs`, none while the pilot hides the in-app AI.
+    @Test func aFreeLiftersWeeksNeverReachAModel() {
+        for coached in [false, true] {
+            for hasProgram in [false, true] {
+                #expect(WeekSource.of(lifterPro: false, coached: coached, hasProgram: hasProgram) != .ai)
+            }
+        }
+        if Pilot.simple { #expect(LanguageModel.programs(signedIn: true) is NoModel) }
+    }
+
     /// Stripe's statuses that keep Pro match the server's HAS_PLAN.
     @Test func webProCountsWhileStripeStillHasThePlan() {
         #expect(["active", "trialing", "past_due"].allSatisfy(Cloud.hasPlan))
