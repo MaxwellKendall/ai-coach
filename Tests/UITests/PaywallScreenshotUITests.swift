@@ -20,10 +20,15 @@ final class PaywallScreenshotUITests: XCTestCase {
         app.launch()
 
         // The App Store's products, with their prices, once loaded.
-        let yearly = app.buttons["paywall.yearly"]
-        XCTAssertTrue(yearly.waitForExistence(timeout: 30), "The \(plan) paywall's products didn't load.")
+        // Lifter Pro's approved layout leads with the yearly button; Coach Pro lists both plans.
+        let first = plan == "lifter" ? app.buttons["paywall.buy"] : app.buttons["paywall.yearly"]
+        XCTAssertTrue(first.waitForExistence(timeout: 30), "The \(plan) paywall's products didn't load.")
         XCTAssertTrue(app.buttons["paywall.monthly"].exists)
         XCTAssertTrue(app.buttons["paywall.buy"].exists)
+        if plan == "lifter" {
+            XCTAssertTrue(app.staticTexts["paywall.headline"].exists)
+            XCTAssertTrue(app.staticTexts["paywall.yearly.price"].exists)
+        }
         XCTAssertTrue(app.staticTexts["paywall.terms.renewal"].exists)
         XCTAssertTrue(app.staticTexts[plan == "lifter" ? "Lifter Pro" : "Coach Pro"].exists)
         XCTAssertTrue(app.buttons["paywall.restore"].exists)
