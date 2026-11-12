@@ -645,6 +645,12 @@ export class AICoachStack extends Stack {
             viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           },
+          // App Review demo video and other /review/ objects, uploaded by hand to the cards bucket like /exercises/*.
+          "/review/*": {
+            origin: origins.S3BucketOrigin.withOriginAccessControl(cards),
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          },
           // FIT-151: the MCP server and its sign-in. No origin access control, which would pass only GETs.
           "/mcp": { ...mcpBehavior, responseHeadersPolicy: signInHeader },
           // FIT-236: /docs, the connector's documentation, which the MCP server writes from its own tools.

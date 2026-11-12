@@ -1,5 +1,7 @@
 We've added a Terms of Use link to the description and the paywall, and the subscriptions are now offered in the app with the required terms.
 
+This resubmission addresses the 27 October 2026 rejection under Guideline 3.1.2 (missing Terms of Use). The app description ends with Terms of Use: https://barbrabell.com/terms. The Lifter Pro and Coach Pro paywalls also include links to the Terms of Use and the Privacy Policy (https://barbrabell.com/privacy).
+
 Demo video: {{VIDEO_URL}}
 
 Sign in with email.
@@ -11,14 +13,17 @@ Coach mode is in this build. Sign out, tap I'm a coach, and sign in as {{COACH_E
 
 Invite codes, one use, 14 days: {{INVITE_CODES}}
 
-How to reach the paywalls:
+Subscriptions and how to reach the paywalls (to verify once FIT-437 ships):
 
-Lifter Pro is $5.99 a month or $39.99 a year, with a 14-day free trial. Sign out. On the first screen tap Train on my own, answer the questions, and pick a program. The Lifter Pro paywall is the subscription offer for the AI-designed weeks. Opening a day on Program without a subscription shows it again, and so does sending a message in the coach tab. The sheet shows the price, the trial, Restore Purchases, and links to the Terms of Use and the privacy policy.
+Barbrabell has three tiers. Free includes the athlete app, the coach dashboard (unlimited clients, planning, messaging, and import), and the basic connector tools for reading and logging. Paid plans can be purchased in the iPhone app (StoreKit) or on the web (Stripe). A purchase in either store unlocks the same plan everywhere. Sandbox purchases work for App Review.
 
-Coach Pro is $19.99 a month or $199 a year. Sign in as {{COACH_EMAIL}}. Coach Pro is the subscription offer where a coach opens a Pro-only feature. That sheet shows the price, Restore Purchases, and the same Terms of Use and privacy policy links.
+Lifter Pro is $5.99 a month or $39.99 a year, with a 14-day free trial on both. It unlocks AI-designed training weeks for self-coached lifters. To reach the Lifter Pro paywall (to verify once FIT-437 ships): sign out, and on the first screen tap Train on my own, answer the questions, and pick a program. The Lifter Pro paywall is the subscription offer for AI-designed weeks. The sheet shows the price, the billing period, the trial, auto-renew terms, Restore Purchases, and links to the Terms of Use and the Privacy Policy.
+
+Coach Pro is $19.99 a month or $199 a year. It unlocks the exhaustive connector tools for coaches. To reach the Coach Pro paywall (to verify once FIT-437 ships): sign in as {{COACH_EMAIL}}. The Coach Pro paywall is the subscription offer on a Pro-only coach feature. That sheet shows the price, the billing period, auto-renew terms, Restore Purchases, and the same Terms of Use and Privacy Policy links.
 
 Without an account the free path is still there: Train on my own, the short questions, and a ready-made program.
 
 Run mode uses location only while a run is recording, including with the phone locked, and saves the run to Apple Health. Heart rate shows only when an Apple Watch or AirPods measure it.
 
 Terms of Use: https://barbrabell.com/terms
+Privacy Policy: https://barbrabell.com/privacy

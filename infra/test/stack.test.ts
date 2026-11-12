@@ -343,6 +343,9 @@ describe("share pages (FIT-105)", () => {
     t.hasResourceProperties("AWS::CloudFront::Distribution", {
       DistributionConfig: Match.objectLike({ CacheBehaviors: Match.arrayWith([Match.objectLike({ PathPattern: "/exercises/*" })]) }),
     });
+    t.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: Match.objectLike({ CacheBehaviors: Match.arrayWith([Match.objectLike({ PathPattern: "/review/*" })]) }),
+    });
     t.hasResourceProperties("AWS::S3::Bucket", {
       PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },
     });

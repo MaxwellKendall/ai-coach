@@ -13,7 +13,7 @@ The command is plain `xcodebuild` plus a small App Store Connect client (`script
 3. In the same `.env`, set `DEMO_COACH_EMAIL`, `DEMO_CLIENT_EMAIL`, and `DEMO_PASSWORD` for the two FIT-328 demo accounts. Review notes sent to Apple include this login. It is not written into the repo.
 4. Set `ASC_CONTACT_PHONE` in `.env` if the version's review contact has no phone yet. The command reuses a phone already on the version and never prints it.
 5. Sign the Paid Apps agreement and enter tax and banking under Business in App Store Connect. Apple does not offer that signature through the API. The command stops if a read fails with the missing-agreement error. It cannot see the agreement row itself, so confirm Paid Apps is Active before the first real run.
-6. The demo video is recorded to `build/review/demo.mp4`. `https://barbrabell.com/review/demo.mp4` is not a route: CloudFront serves files only at `/cards/*`, `/exercises/*`, and `/app/*` (`infra/lib/stack.ts`). Nothing in the repo uploads `/review/`, so the command does not deploy the file. After a `/review/*` behavior points at the cards bucket, host the file the same way the exercise photos are hosted:
+6. The demo video is recorded to `build/review/demo.mp4`. The stack defines a `/review/*` CloudFront behavior pointing at the cards bucket (`infra/lib/stack.ts`); deploying that behavior is a later, separate step. Nothing in the repo uploads `/review/`, so the release command does not deploy the file. After the behavior is deployed, upload the file by hand, the same way the exercise photos are hosted. Resolve the cards bucket from the stack outputs:
 
 ```bash
 BUCKET=$(aws cloudformation describe-stacks --profile aicoach-dev --stack-name AICoach-prod \
@@ -23,7 +23,7 @@ aws s3 cp build/review/demo.mp4 "s3://$BUCKET/review/demo.mp4" --profile aicoach
 curl -sI https://barbrabell.com/review/demo.mp4 | head -1
 ```
 
-Until that behavior exists, the curl is a 404 and the review notes' video link will not play. Put the file somewhere reviewers can open, or add the behavior in a prod deploy, before `submit`.
+The upload's `--content-type video/mp4` sets the S3 object metadata used to serve the video. The behavior uses the default GET/HEAD methods and `CACHING_OPTIMIZED`, which support byte-range GETs from the cached S3 object. Before `submit`, deploy the behavior in a separate prod deployment, upload the video, and verify that `https://barbrabell.com/review/demo.mp4` is accessible to reviewers. The stack definition alone does not make the URL live in production.
 
 ## What the command does
 
