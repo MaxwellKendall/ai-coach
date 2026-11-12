@@ -54,7 +54,7 @@ From a checkout of this repo (the agent worktree is fine; do not use Maxwell's `
 npm run revenue
 ```
 
-That is `node scripts/revenue.mjs`. It loads the gitignored `.env` at the repo root the same way the release command does (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`).
+That is `node scripts/revenue.mjs`. Catalog calls use the release key (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`) from the worktree `.env`. Sales and Trends reports use a separate Finance-role key.
 
 Secrets are loaded in this order (already-set environment variables win; values are never printed):
 
@@ -64,7 +64,8 @@ Secrets are loaded in this order (already-set environment variables win; values 
 
 Optional variables:
 
-* `ASC_VENDOR_NUMBER` — the vendor number from App Store Connect → Payments and Financial Reports. Required to download Sales, Subscription, and Subscription Event reports. The API key also needs the Sales and Trends / Finance role; a 403 is reported exactly and is not treated as zero revenue.
+* `ASC_FINANCE_KEY_ID` and `ASC_FINANCE_KEY_PATH` — a Finance-role key, used only for Sales and Trends (`salesReports`) and finance reports. The issuer is `ASC_ISSUER_ID` (same as the release key). The path may be an absolute path or a bare `AuthKey_….p8` filename under `~/.appstoreconnect/private_keys/`. The `.p8` is never printed or committed.
+* `ASC_VENDOR_NUMBER` — the vendor number from App Store Connect → Payments and Financial Reports. Required to download Sales, Subscription, and Subscription Event reports. A 403 is reported exactly and is not treated as zero revenue. A 404 is treated as zero only when Apple's error says there were no sales (or subscriptions) for that date; any other 404 is UNKNOWN.
 * `STRIPE_READONLY_KEY` — a restricted organization or live read-only key. Organization keys (`sk_org_…`) are sent with a `Stripe-Context` header per account (`Stripe-Account` is tried only if that fails). When this is unset, Stripe is skipped and the output records status `missing`. Do not put the full `aicoach/prod/stripe` secret here, and do not fetch it from AWS.
 * `STRIPE_ACCOUNT_BARBRABELL` and `STRIPE_ACCOUNT_REMIX` — the Stripe account ids to query, one request set per app.
 

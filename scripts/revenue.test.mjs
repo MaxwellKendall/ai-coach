@@ -10,19 +10,26 @@ import {
   classifyReportError,
   combinedMrr,
   dateDaysAgo,
+  daysBetween,
   durationMonths,
+  financeAuthStatus,
   formatDashboardComment,
   loadRevenueEnv,
   matchesApp,
   monthlyCents,
+  mrrPace,
   num,
   parseTsv,
   reportWindow,
+  resolveAscKeyPath,
+  sanitizePublicError,
   stripeErrorSummary,
   stripeHeaders,
   stripeKeyMode,
   stripeMissingStatus,
   stripeMrr,
+  summarizeUnknownDays,
+  subscriptionSnapshotFromReport,
   summarizeSalesProceeds,
   summarizeStripeSubscriptions,
   summarizeSubscriptionEvents,
@@ -108,16 +115,40 @@ test("sales proceeds multiply units by developer proceeds in USD", () => {
   ];
   const byProduct = summarizeSalesProceeds(rows, targets);
   assert.equal(byProduct.Barbrabell.proceedsUSD, 10.18);
+  assert.equal(byProduct.Barbrabell.units, 2);
   assert.equal(byProduct.Remix.proceedsUSD, 0);
 });
 
-test("classifyReportError distinguishes 403, 404, and a missing vendor parameter", () => {
+test("classifyReportError treats a 404 as zero only when Apple says no sales for that date", () => {
   const forbidden = classifyReportError(403, "403 FORBIDDEN_ERROR This request is forbidden for security reasons: The API key in use does not allow this request");
   assert.equal(forbidden.kind, "forbidden");
   assert.match(forbidden.message, /403/);
   assert.match(forbidden.message, /does not allow this request/);
-  assert.equal(classifyReportError(404, "").kind, "empty");
+  const noSales = classifyReportError(404, "404 NOT_FOUND The request expected results but none were found: There were no sales for the date specified.");
+  assert.equal(noSales.kind, "empty");
+  assert.match(noSales.message, /no sales for the date specified/);
+  const noSubs = classifyReportError(404, "There were no subscriptions for the date specified.");
+  assert.equal(noSubs.kind, "empty");
+  const other = classifyReportError(404, "404 NOT_FOUND The request expected results but none were found: Resource not found");
+  assert.equal(other.kind, "error");
+  assert.match(other.message, /404/);
+  assert.equal(classifyReportError(404, "").kind, "error");
   assert.equal(classifyReportError(400, "The parameter 'filter[vendorNumber]' is required but was not provided").kind, "missing_vendor_number");
+  const invalid = classifyReportError(400, "400 PARAMETER_ERROR.INVALID A parameter has an invalid value: Invalid vendor number specified. Try again.");
+  assert.equal(invalid.kind, "invalid_vendor_number");
+  assert.match(invalid.message, /Invalid vendor number/);
+});
+
+test("summarizeUnknownDays collapses a repeated Apple error into one line", () => {
+  const text = summarizeUnknownDays([
+    { date: "2026-10-13", status: 400, error: "400 PARAMETER_ERROR.INVALID: Invalid vendor number specified. Try again." },
+    { date: "2026-10-14", status: 400, error: "400 PARAMETER_ERROR.INVALID: Invalid vendor number specified. Try again." },
+    { date: "2026-11-11", status: 400, error: "400 PARAMETER_ERROR.INVALID: Invalid vendor number specified. Try again." },
+  ]);
+  assert.match(text, /3 date\(s\)/);
+  assert.match(text, /2026-10-13 through 2026-11-11/);
+  assert.match(text, /Invalid vendor number/);
+  assert.equal(text.includes("2026-10-14"), false);
 });
 
 test("Stripe is skipped cleanly when STRIPE_READONLY_KEY is unset", () => {
@@ -232,6 +263,179 @@ test("loadRevenueEnv reads the agents file first and does not override existing 
   assert.equal(env.ASC_VENDOR_NUMBER, "from-worktree");
   assert.equal(env.ALREADY_SET, "keep-me");
   assert.equal(found.length, 3);
+});
+
+test("resolveAscKeyPath looks up a bare .p8 under ~/.appstoreconnect/private_keys", () => {
+  const home = mkdtempSync(join(tmpdir(), "asc-home-"));
+  const dir = join(home, ".appstoreconnect", "private_keys");
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, "AuthKey_TESTKEYID.p8");
+  writeFileSync(file, "not-a-real-key\n");
+  assert.equal(resolveAscKeyPath("AuthKey_TESTKEYID.p8", home), file);
+  assert.equal(resolveAscKeyPath(file, home), file);
+  assert.equal(resolveAscKeyPath("~/.appstoreconnect/private_keys/AuthKey_TESTKEYID.p8", home), file);
+});
+
+test("financeAuthStatus fails closed when finance key vars are unset", () => {
+  const status = financeAuthStatus({}, { home: tmpdir() });
+  assert.equal(status.available, false);
+  assert.match(status.reason, /ASC_FINANCE_KEY_ID/);
+});
+
+test("financeAuthStatus is available when a bare .p8 exists in the standard directory", () => {
+  const home = mkdtempSync(join(tmpdir(), "asc-fin-"));
+  const dir = join(home, ".appstoreconnect", "private_keys");
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, "AuthKey_TESTKEYID.p8");
+  writeFileSync(file, "not-a-real-key\n");
+  const status = financeAuthStatus({
+    ASC_FINANCE_KEY_ID: "TESTKEYID",
+    ASC_FINANCE_KEY_PATH: "AuthKey_TESTKEYID.p8",
+    ASC_ISSUER_ID: "issuer",
+    ASC_VENDOR_NUMBER: "12345678",
+  }, { home });
+  assert.equal(status.available, true);
+  assert.equal(status.auth.keyPath, file);
+  assert.equal(status.vendorNumber, "12345678");
+});
+
+test("sanitizePublicError redacts .p8 paths", () => {
+  const text = sanitizePublicError("ENOENT: no such file or directory, open '/Users/example/.appstoreconnect/private_keys/AuthKey_TESTKEYID.p8'");
+  assert.equal(text.includes("AuthKey_TESTKEYID"), false);
+  assert.equal(text.includes("/Users/example/.appstoreconnect"), false);
+  assert.match(text, /redacted/);
+});
+
+test("subscription snapshot prefers developer proceeds for MRR and divides yearly by 12", () => {
+  const rows = [
+    {
+      "App Apple ID": "6821439066",
+      "Subscription Name": "Lifter Pro Annual",
+      "Standard Subscription Duration": "1 Year",
+      "Customer Price": "39.99",
+      "Customer Currency": "USD",
+      "Developer Proceeds": "27.99",
+      "Proceeds Currency": "USD",
+      "Active Standard Price Subscriptions": "2",
+      "Active Free Trial Introductory Offers": "1",
+    },
+  ];
+  const byProduct = summarizeSubscriptionSnapshot(rows, targets);
+  assert.equal(byProduct.Barbrabell.activeStandard, 2);
+  assert.equal(byProduct.Barbrabell.activeFreeTrial, 1);
+  assert.equal(byProduct.Barbrabell.mrrCustomerUSD, (39.99 / 12) * 2);
+  assert.equal(byProduct.Barbrabell.mrrProceedsUSD, (27.99 / 12) * 2);
+  assert.equal(byProduct.Barbrabell.mrrUSD, (27.99 / 12) * 2);
+  assert.equal(byProduct.Barbrabell.mrrBasis, "developer_proceeds");
+});
+
+test("subscriptionSnapshotFromReport treats a full window of Apple no-data 404s as zero, not unknown", () => {
+  const sub = {
+    dayStatus: {
+      "2026-11-10": { status: 404, kind: "empty", empty: true },
+      "2026-11-11": { status: 404, kind: "empty", empty: true },
+    },
+    rows: [],
+  };
+  const snap = subscriptionSnapshotFromReport(sub, targets, "2026-11-11");
+  assert.equal(snap.available, true);
+  assert.equal(snap.assumedZero, true);
+  assert.equal(snap.byProduct.Barbrabell.activeStandard, 0);
+  assert.equal(snap.byProduct.Barbrabell.mrrUSD, 0);
+});
+
+test("subscriptionSnapshotFromReport stays unknown when a 404 lacks Apple's no-data message", () => {
+  const sub = {
+    dayStatus: {
+      "2026-11-11": { status: 404, kind: "error", error: "HTTP 404: Resource not found" },
+    },
+    rows: [],
+  };
+  const snap = subscriptionSnapshotFromReport(sub, targets, "2026-11-11");
+  assert.equal(snap.available, false);
+  assert.match(snap.reason, /404/);
+});
+
+test("mrrPace is on the line on the first measurement and off pace if later MRR misses the straight line", () => {
+  const first = mrrPace({ current: 0, today: "2026-11-12" });
+  assert.equal(first.available, true);
+  assert.equal(first.isFirstMeasurement, true);
+  assert.equal(first.requiredToday, 0);
+  assert.equal(first.onPace, true);
+  const later = mrrPace({ current: 0, today: "2026-12-12", firstMeasured: 0, firstDate: "2026-11-12" });
+  const span = daysBetween("2026-11-12", "2027-03-01");
+  assert.equal(later.requiredToday, 1000 * (30 / span));
+  assert.equal(later.onPace, false);
+  const unknown = mrrPace({ current: null, today: "2026-11-12" });
+  assert.equal(unknown.available, false);
+});
+
+test("combinedMrr uses proceeds-based App Store MRR and reports each app", () => {
+  const ok = combinedMrr({
+    appStore: {
+      available: true,
+      snapshotDate: "2026-11-11",
+      byProduct: {
+        Barbrabell: { mrrUSD: 10, mrrProceedsUSD: 10, mrrCustomerUSD: 14, mrrBasis: "developer_proceeds", mrrUnknownDurationRows: 0 },
+        Remix: { mrrUSD: 5, mrrProceedsUSD: 5, mrrCustomerUSD: 7, mrrBasis: "developer_proceeds", mrrUnknownDurationRows: 0 },
+      },
+    },
+    stripe: {
+      available: true,
+      mode: "live",
+      accounts: {
+        Barbrabell: { available: true, mrr: 4, currency: "usd" },
+        Remix: { available: true, mrr: 3, currency: "usd" },
+      },
+    },
+  });
+  assert.equal(ok.total, 22);
+  assert.equal(ok.byApp.Barbrabell.total, 14);
+  assert.equal(ok.byApp.Remix.total, 8);
+});
+
+test("the dashboard comment lists pace when combined MRR is known", () => {
+  const comment = formatDashboardComment({
+    generatedAt: "Nov 12, 2026, 12:30 PM America/New_York",
+    window: { startDate: "2026-10-13", endDate: "2026-11-11" },
+    metrics: {
+      combinedMrr: combinedMrr({
+        appStore: {
+          available: true,
+          snapshotDate: "2026-11-11",
+          byProduct: {
+            Barbrabell: { mrrUSD: 0, mrrBasis: "no_paid_subscriptions", mrrUnknownDurationRows: 0, activeStandard: 0, activeFreeTrial: 0, byPlan: {} },
+            Remix: { mrrUSD: 0, mrrBasis: "no_paid_subscriptions", mrrUnknownDurationRows: 0, activeStandard: 0, activeFreeTrial: 0, byPlan: {} },
+          },
+        },
+        stripe: {
+          available: true,
+          mode: "live",
+          accounts: {
+            Barbrabell: { available: true, mrr: 0, currency: "usd" },
+            Remix: { available: true, mrr: 0, currency: "usd" },
+          },
+        },
+      }),
+      pace: mrrPace({ current: 0, today: "2026-11-12" }),
+      ascSubscriptionSnapshot: {
+        available: true,
+        date: "2026-11-11",
+        assumedZero: true,
+        reason: "All daily SUBSCRIPTION reports in the window returned HTTP 404 with Apple's no-data message (no sales/subscriptions for that date); treated as zero active subscribers as of 2026-11-11.",
+        byProduct: {
+          Barbrabell: { activeStandard: 0, activeFreeTrial: 0, activePayUpFrontIntro: 0, activePayAsYouGoIntro: 0, mrrUSD: 0, mrrBasis: "no_paid_subscriptions", byPlan: {} },
+          Remix: { activeStandard: 0, activeFreeTrial: 0, activePayUpFrontIntro: 0, activePayAsYouGoIntro: 0, mrrUSD: 0, mrrBasis: "no_paid_subscriptions", byPlan: {} },
+        },
+      },
+    },
+    asc: { sales: { status: "ok", reports: { SUBSCRIPTION: { okDays: 0, emptyDays: 30, versionUsed: null, rowCount: 0 } } }, catalogs: [], finance: { available: true, usedFor: "salesReports" } },
+    stripe: { available: true, mode: "live", headerUsed: "Stripe-Context", accounts: { Barbrabell: { available: true, mrr: 0, currency: "usd", active: 0, trialing: 0, byPlan: {} }, Remix: { available: true, mrr: 0, currency: "usd", active: 0, trialing: 0, byPlan: {} } } },
+  });
+  assert.match(comment, /Combined current MRR: \*\*\$0\.00\*\*/);
+  assert.match(comment, /on pace/);
+  assert.match(comment, /first measured combined MRR/i);
+  assert.match(comment, /Finance-role key/);
 });
 
 test("the dashboard comment lists unknown MRR and the exact missing sources", () => {

@@ -5,17 +5,19 @@
  * already set in the process environment take precedence. Never prints,
  * copies, or returns the .p8 or API keys, and never fetches AWS secrets.
  *
- * Optional: ASC_VENDOR_NUMBER (Sales and Trends), STRIPE_READONLY_KEY,
- * STRIPE_ACCOUNT_BARBRABELL, STRIPE_ACCOUNT_REMIX.
+ * Optional: ASC_VENDOR_NUMBER, ASC_FINANCE_KEY_ID, ASC_FINANCE_KEY_PATH
+ * (Sales and Trends / finance reports only; same ASC_ISSUER_ID as the
+ * release key). STRIPE_READONLY_KEY, STRIPE_ACCOUNT_BARBRABELL,
+ * STRIPE_ACCOUNT_REMIX.
  *
  * GET only against Apple and Stripe. Writes JSON under revenue-out/ (gitignored).
  *
  *   node scripts/revenue.mjs
  *   npm run revenue
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { basename, isAbsolute, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { loadAscEnv, signJwt } from "./asc.mjs";
 import { loadEnv } from "./load-env.mjs";
@@ -47,12 +49,80 @@ export function loadRevenueEnv({ home = homedir(), cwd = process.cwd(), env = pr
   }
   return found;
 }
+/** Resolve an ASC .p8 path without logging it. Bare filenames are looked up under ~/.appstoreconnect/private_keys/. */
+export function resolveAscKeyPath(keyPath, home = homedir()) {
+  if (!keyPath) return keyPath;
+  let expanded = String(keyPath).trim().replace(/\$\{HOME\}/g, home).replace(/\$HOME/g, home);
+  if (expanded.startsWith("~/")) expanded = resolve(home, expanded.slice(2));
+  else if (expanded === "~") expanded = home;
+  if (isAbsolute(expanded)) return expanded;
+  const standard = resolve(home, ".appstoreconnect", "private_keys", basename(expanded));
+  if (existsSync(standard)) return standard;
+  return resolve(expanded);
+}
+
+/** Redact key paths and .p8 names so errors can be shown in the dashboard. */
+export function sanitizePublicError(message) {
+  return String(message || "")
+    .replace(/AuthKey_[A-Za-z0-9]+\.p8/g, "AuthKey_<redacted>.p8")
+    .replace(/(?:\/[^\s:'"]+)?\/\.appstoreconnect[^\s:'"]*/g, "~/.appstoreconnect/<redacted>");
+}
+
+function signJwtQuiet(auth) {
+  try {
+    return signJwt(auth);
+  } catch (e) {
+    throw new Error(`Failed to sign ASC JWT (${e.code || e.name || "error"}; key path and .p8 contents are not logged)`);
+  }
+}
+
+/** Finance key is used only for Sales and Trends / finance reports. Never returns the path or .p8. */
+export function financeAuthStatus(env = process.env, { home = homedir() } = {}) {
+  const missing = ["ASC_FINANCE_KEY_ID", "ASC_FINANCE_KEY_PATH", "ASC_ISSUER_ID"].filter((k) => !env[k]);
+  if (missing.length) {
+    return { available: false, reason: `Finance key not configured: ${missing.join(", ")} unset` };
+  }
+  const keyPath = resolveAscKeyPath(env.ASC_FINANCE_KEY_PATH, home);
+  if (!keyPath || !existsSync(keyPath)) {
+    return { available: false, reason: "ASC_FINANCE_KEY_PATH does not resolve to a readable .p8 under ~/.appstoreconnect (path not logged)" };
+  }
+  return {
+    available: true,
+    auth: { keyId: env.ASC_FINANCE_KEY_ID, issuerId: env.ASC_ISSUER_ID, keyPath },
+    vendorNumber: env.ASC_VENDOR_NUMBER || null,
+  };
+}
+
+export function daysBetween(start, end) {
+  const [sy, sm, sd] = String(start).split("-").map(Number);
+  const [ey, em, ed] = String(end).split("-").map(Number);
+  return Math.round((Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, sd)) / 86400000);
+}
+
+/** Sundays on or before endDate, most recent first, that overlap the window. */
+export function sundaysOnOrBefore(endDate, { count = 3, startDate } = {}) {
+  const Sundays = [];
+  let cur = endDate;
+  while (Sundays.length < count) {
+    const [y, m, d] = cur.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    if (dt.getUTCDay() === 0) {
+      if (!startDate || cur >= dateDaysAgo(startDate, 6)) Sundays.push(cur);
+      cur = dateDaysAgo(cur, 7);
+    } else {
+      cur = dateDaysAgo(cur, 1);
+    }
+    if (cur < "2000-01-01") break;
+  }
+  return Sundays;
+}
+
 export const NORTH_STAR_MRR = 1000;
 export const NORTH_STAR_DATE = "2027-03-01";
 export const BARBRABELL = { product: "Barbrabell", bundleId: "com.maxwellkendall.aicoach", appleId: "6821439066" };
 export const REMIX_BUNDLE = "com.remix.app.Remix";
 
-export const APPS = [BARBRABELL, { product: "Remix", bundleId: REMIX_BUNDLE, appleId: null }];
+export const APPS = [BARBRABELL, { product: "Remix", bundleId: REMIX_BUNDLE, appleId: "6802880519" }];
 
 export function todayISO(now = new Date(), tz = "America/New_York") {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -150,9 +220,13 @@ export function emptyProductMetrics() {
     billingRetry: 0,
     gracePeriod: 0,
     mrrCustomerUSD: 0,
+    mrrProceedsUSD: 0,
+    mrrUSD: 0,
+    mrrBasis: "no_paid_subscriptions",
     mrrUnknownDurationRows: 0,
     byPlan: {},
     proceedsUSD: 0,
+    units: 0,
     trialsStarted: 0,
     trialConverted: 0,
     cancels: 0,
@@ -185,9 +259,46 @@ export function summarizeSubscriptionSnapshot(rows, targets) {
     const months = durationMonths(col(row, ["Standard Subscription Duration", "Subscription Duration"]));
     const price = num(col(row, ["Customer Price"]));
     const currency = col(row, ["Customer Currency"]) || "USD";
+    const proceedsRaw = col(row, ["Developer Proceeds"]);
+    const proceedsCurrency = col(row, ["Proceeds Currency", "Currency of Proceeds"]) || currency;
     const paid = standard + payUpFront + payAsYouGo;
-    if (currency === "USD" && months && paid) bucket.mrrCustomerUSD += (price / months) * paid;
-    else if (paid) bucket.mrrUnknownDurationRows += 1;
+    const planBucket = bucket.byPlan[plan];
+    planBucket.paid = (planBucket.paid || 0) + paid;
+    if (paid) {
+      if (!months) bucket.mrrUnknownDurationRows += 1;
+      else {
+        if (currency === "USD" || currency === "US") {
+          const customer = (price / months) * paid;
+          bucket.mrrCustomerUSD += customer;
+          planBucket.mrrCustomerUSD = (planBucket.mrrCustomerUSD || 0) + customer;
+        }
+        if (proceedsRaw !== "") {
+          if (proceedsCurrency === "USD" || proceedsCurrency === "US") {
+            const proceedsMrr = (num(proceedsRaw) / months) * paid;
+            bucket.mrrProceedsUSD += proceedsMrr;
+            planBucket.mrrProceedsUSD = (planBucket.mrrProceedsUSD || 0) + proceedsMrr;
+          } else {
+            bucket.mrrUnknownDurationRows += 1;
+          }
+        }
+      }
+    }
+  }
+  for (const bucket of Object.values(byProduct)) {
+    const paid = bucket.activeStandard + bucket.activePayUpFrontIntro + bucket.activePayAsYouGoIntro;
+    if (!paid) {
+      bucket.mrrUSD = 0;
+      bucket.mrrBasis = "no_paid_subscriptions";
+    } else if (bucket.mrrUnknownDurationRows) {
+      bucket.mrrUSD = null;
+      bucket.mrrBasis = "unknown";
+    } else if (bucket.mrrProceedsUSD) {
+      bucket.mrrUSD = bucket.mrrProceedsUSD;
+      bucket.mrrBasis = "developer_proceeds";
+    } else {
+      bucket.mrrUSD = bucket.mrrCustomerUSD;
+      bucket.mrrBasis = "customer_price";
+    }
   }
   return byProduct;
 }
@@ -223,20 +334,84 @@ export function summarizeSalesProceeds(rows, targets) {
     const units = num(col(row, ["Units"]));
     const proceeds = num(col(row, ["Developer Proceeds"]));
     const curr = col(row, ["Currency of Proceeds", "Customer Currency"]) || "USD";
+    bucket.units += units;
     if (curr === "USD" || curr === "US") bucket.proceedsUSD += proceeds * (units || 1);
   }
   return byProduct;
 }
 
+/** Other apps in a SALES report that are not Barbrabell or Remix. Used so excluded rows are visible. */
+export function unmatchedSales(rows, targets) {
+  const groups = new Map();
+  for (const row of rows) {
+    if (targets.find((t) => matchesApp(row, t))) continue;
+    const appleId = String(col(row, ["App Apple ID", "Apple Identifier"]) || "unknown");
+    const title = col(row, ["App Name", "Title"]) || "unknown";
+    const key = `${appleId}|${title}`;
+    const rec = groups.get(key) || { appleId, title, rows: 0, units: 0, proceedsUSD: 0 };
+    rec.rows += 1;
+    const units = num(col(row, ["Units"]));
+    const proceeds = num(col(row, ["Developer Proceeds"]));
+    const curr = col(row, ["Currency of Proceeds", "Customer Currency"]) || "USD";
+    rec.units += units;
+    if (curr === "USD" || curr === "US") rec.proceedsUSD += proceeds * (units || 1);
+    groups.set(key, rec);
+  }
+  return [...groups.values()];
+}
+
+export function isAppleNoDataForDate(detail) {
+  return /no (sales|subscriptions|subscription events|data) for the date specified/i.test(String(detail || ""));
+}
+
 export function classifyReportError(status, detail) {
   const text = String(detail || "");
-  if (status === 404) return { kind: "empty", message: "HTTP 404: no report for that date" };
+  if (status === 404) {
+    if (isAppleNoDataForDate(text)) {
+      return { kind: "empty", message: `HTTP 404: ${text}` };
+    }
+    const suffix = text ? `: ${text}` : " (no Apple no-data message; not treated as zero)";
+    return { kind: "error", message: `HTTP 404${suffix}` };
+  }
   if (status === 403) return { kind: "forbidden", message: `HTTP 403: ${text || "The API key in use does not allow this request"}` };
   if (status === 401) return { kind: "unauthorized", message: `HTTP 401: ${text}` };
   if (status === 400 && /vendorNumber/i.test(text) && /required/i.test(text)) {
     return { kind: "missing_vendor_number", message: text };
   }
+  if (status === 400 && /invalid vendor number/i.test(text)) {
+    return { kind: "invalid_vendor_number", message: `HTTP 400: ${text}` };
+  }
   return { kind: "error", message: `HTTP ${status}: ${text}` };
+}
+
+export function summarizeUnknownDays(unknownDays, label = "") {
+  if (!unknownDays?.length) return null;
+  const prefix = label ? `${label} ` : "";
+  const groups = new Map();
+  for (const d of unknownDays) {
+    const key = `HTTP ${d.status}${d.error ? ` ${d.error}` : ""}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(d.date);
+  }
+  return [...groups.entries()].map(([key, dates]) => {
+    if (dates.length === 1) return `${prefix}${dates[0]} ${key}`;
+    return `${prefix}${dates.length} date(s) (${dates[0]} through ${dates.at(-1)}) ${key}`;
+  }).join("; ");
+}
+
+export function appStoreMrrAmount(bucket) {
+  if (!bucket) return { value: null, basis: null, reason: "no App Store product bucket" };
+  if (bucket.mrrUnknownDurationRows) {
+    return {
+      value: null,
+      basis: bucket.mrrBasis || "unknown",
+      reason: `${bucket.mrrUnknownDurationRows} paid subscription row(s) could not be converted to monthly USD`,
+      partialCustomer: bucket.mrrCustomerUSD || 0,
+      partialProceeds: bucket.mrrProceedsUSD || 0,
+    };
+  }
+  const value = bucket.mrrUSD ?? (bucket.mrrProceedsUSD || bucket.mrrCustomerUSD || 0);
+  return { value, basis: bucket.mrrBasis || "customer_price", reason: null };
 }
 
 export function errorDetail(json, fallback = "") {
@@ -251,51 +426,174 @@ export function usd(n) {
   return `$${Number(n).toFixed(2)}`;
 }
 
-export function combinedMrr({ appStore, stripe }) {
+export function productMrrParts({ appStore, stripe, product }) {
   const parts = [];
   const missing = [];
   let total = 0;
   if (appStore?.available) {
-    for (const product of ["Barbrabell", "Remix"]) {
-      const b = appStore.byProduct?.[product];
-      if (!b) continue;
-      if (b.mrrUnknownDurationRows) missing.push(`App Store ${product} MRR not fully convertible`);
-      else {
-        parts.push(`App Store ${product} ${usd(b.mrrCustomerUSD || 0)} as of ${appStore.snapshotDate}`);
-        total += b.mrrCustomerUSD || 0;
-      }
+    const amount = appStoreMrrAmount(appStore.byProduct?.[product]);
+    if (amount.value == null) missing.push(`App Store ${product} MRR unknown${amount.reason ? ` (${amount.reason})` : ""}`);
+    else {
+      const asOf = appStore.snapshotDate ? ` as of ${appStore.snapshotDate}` : "";
+      const basis = amount.basis && amount.basis !== "no_paid_subscriptions" ? `, ${amount.basis.replaceAll("_", " ")}` : "";
+      parts.push(`App Store ${product} ${usd(amount.value)}${asOf}${basis}`);
+      total += amount.value;
     }
   } else {
     missing.push(appStore?.reason || "App Store subscription reports not available");
   }
-  const accounts = stripe?.accounts || {};
-  const hasAccounts = Object.keys(accounts).length > 0;
+  const a = stripe?.accounts?.[product];
   if (stripe?.mode === "test") {
     missing.push("Stripe key is test-mode; excluded from combined live MRR");
-  } else if (!hasAccounts && !stripe?.available) {
-    missing.push(stripe?.reason || "Stripe live MRR unavailable");
+  } else if (!a) {
+    if (!stripe?.available && !Object.keys(stripe?.accounts || {}).length) {
+      missing.push(stripe?.reason || "Stripe live MRR unavailable");
+    } else {
+      missing.push(`Stripe ${product} not returned`);
+    }
+  } else if (!a.available || a.mrr == null) {
+    missing.push(`Stripe ${product}: ${a.reason || a.mrrUnknownReason || "MRR unknown"}`);
+  } else if ((a.currency || "usd") !== "usd") {
+    missing.push(`Stripe ${product} MRR is ${a.currency}, not combined with USD`);
+    parts.push(`Stripe ${product} ${a.mrr.toFixed(2)} ${a.currency}`);
   } else {
-    for (const product of ["Barbrabell", "Remix"]) {
-      const a = accounts[product];
-      if (!a) {
-        missing.push(`Stripe ${product} not returned`);
-        continue;
+    parts.push(`Stripe ${product} ${usd(a.mrr)}`);
+    total += a.mrr;
+  }
+  if (missing.length) return { product, total: null, reason: missing.join("; "), breakdown: parts.join(" + ") || "none" };
+  return { product, total, reason: null, breakdown: parts.join(" + ") };
+}
+
+export function combinedMrr({ appStore, stripe }) {
+  const byApp = {
+    Barbrabell: productMrrParts({ appStore, stripe, product: "Barbrabell" }),
+    Remix: productMrrParts({ appStore, stripe, product: "Remix" }),
+  };
+  const parts = [];
+  const missing = [];
+  let total = 0;
+  for (const product of ["Barbrabell", "Remix"]) {
+    const row = byApp[product];
+    if (row.breakdown && row.breakdown !== "none") parts.push(row.breakdown);
+    if (row.total == null) missing.push(row.reason);
+    else total += row.total;
+  }
+  if (missing.length) return { total: null, reason: [...new Set(missing)].join("; "), breakdown: parts.join(" + ") || "none", byApp };
+  return { total, reason: null, breakdown: parts.join(" + "), byApp };
+}
+
+/** Straight line from the first measured combined MRR to $1,000 by 2027-03-01. */
+export function mrrPace({ current, today, firstMeasured, firstDate, target = NORTH_STAR_MRR, targetDate = NORTH_STAR_DATE }) {
+  if (current == null) {
+    return { available: false, reason: "Combined MRR is unknown, so pace cannot be computed." };
+  }
+  const isFirstMeasurement = firstMeasured == null || !firstDate;
+  const startValue = isFirstMeasurement ? current : firstMeasured;
+  const startDate = isFirstMeasurement ? today : firstDate;
+  const span = daysBetween(startDate, targetDate);
+  const elapsed = daysBetween(startDate, today);
+  const remaining = daysBetween(today, targetDate);
+  if (span <= 0) {
+    return {
+      available: false,
+      reason: `Target date ${targetDate} is not after the first measurement (${startDate}).`,
+      firstMeasured: startValue,
+      firstDate: startDate,
+      current,
+      isFirstMeasurement,
+    };
+  }
+  const requiredToday = startValue + (target - startValue) * (elapsed / span);
+  const deltaVsRequired = current - requiredToday;
+  return {
+    available: true,
+    firstMeasured: startValue,
+    firstDate: startDate,
+    isFirstMeasurement,
+    current,
+    requiredToday,
+    target,
+    targetDate,
+    daysElapsed: elapsed,
+    daysRemaining: remaining,
+    onPace: deltaVsRequired >= -0.005,
+    deltaVsRequired,
+    gapToTarget: target - current,
+  };
+}
+
+export function baselinePath(cwd = process.cwd()) {
+  return resolve(cwd, OUTPUT_DIR, "baseline.json");
+}
+
+export function readFirstMeasured(cwd = process.cwd()) {
+  const file = baselinePath(cwd);
+  if (existsSync(file)) {
+    try {
+      const parsed = JSON.parse(readFileSync(file, "utf8"));
+      if (parsed && parsed.firstMeasured != null && parsed.firstDate) {
+        return { firstMeasured: Number(parsed.firstMeasured), firstDate: String(parsed.firstDate) };
       }
-      if (!a.available || a.mrr == null) {
-        missing.push(`Stripe ${product}: ${a.reason || "MRR unknown"}`);
-        continue;
-      }
-      if ((a.currency || "usd") !== "usd") {
-        missing.push(`Stripe ${product} MRR is ${a.currency}, not combined with USD`);
-        parts.push(`Stripe ${product} ${a.mrr.toFixed(2)} ${a.currency}`);
-        continue;
-      }
-      parts.push(`Stripe ${product} ${usd(a.mrr)}`);
-      total += a.mrr;
+    } catch {
+      return null;
     }
   }
-  if (missing.length) return { total: null, reason: missing.join("; "), breakdown: parts.join(" + ") || "none" };
-  return { total, reason: null, breakdown: parts.join(" + ") };
+  return null;
+}
+
+export function writeFirstMeasured(cwd, { firstMeasured, firstDate }) {
+  const dir = resolve(cwd, OUTPUT_DIR);
+  mkdirSync(dir, { recursive: true });
+  const file = baselinePath(cwd);
+  if (existsSync(file)) return file;
+  writeFileSync(file, `${JSON.stringify({ firstMeasured, firstDate, target: NORTH_STAR_MRR, targetDate: NORTH_STAR_DATE }, null, 2)}
+`);
+  return file;
+}
+
+export function windowCoverage(dayStatus = {}) {
+  const entries = Object.entries(dayStatus);
+  const okDates = entries.filter(([, v]) => v.status === 200).map(([d]) => d).sort();
+  const emptyCount = entries.filter(([, v]) => v.kind === "empty").length;
+  const unknownDays = entries
+    .filter(([, v]) => v.status !== 200 && v.kind !== "empty")
+    .map(([date, v]) => ({ date, status: v.status, kind: v.kind || "error", error: v.error || null }));
+  return {
+    okDates,
+    emptyCount,
+    unknownDays,
+    complete: unknownDays.length === 0 && entries.length > 0,
+    requested: entries.length,
+  };
+}
+
+export function subscriptionSnapshotFromReport(sub, targets, endDate) {
+  const coverage = windowCoverage(sub?.dayStatus);
+  if (coverage.okDates.length) {
+    const date = coverage.okDates.at(-1);
+    const rows = (sub.rows || []).filter((r) => r._reportDate === date);
+    return {
+      available: true,
+      date,
+      frequency: sub.dayStatus?.[date]?.frequency || "DAILY",
+      assumedZero: false,
+      byProduct: summarizeSubscriptionSnapshot(rows, targets),
+      coverage,
+    };
+  }
+  if (coverage.requested && !coverage.unknownDays.length) {
+    return {
+      available: true,
+      date: endDate,
+      frequency: "DAILY",
+      assumedZero: true,
+      reason: `All ${coverage.requested} daily SUBSCRIPTION reports in the window returned HTTP 404 with Apple's no-data message (no sales/subscriptions for that date); treated as zero active subscribers as of ${endDate}.`,
+      byProduct: summarizeSubscriptionSnapshot([], targets),
+      coverage,
+    };
+  }
+  const reasons = summarizeUnknownDays(coverage.unknownDays) || "SUBSCRIPTION reports were not requested";
+  return { available: false, reason: reasons, coverage };
 }
 
 export function stripeKeyMode(key) {
@@ -479,44 +777,81 @@ export function formatDashboardComment(report) {
   } else {
     lines.push(`Combined current MRR: **${usd(mrr.total)}** (${mrr.breakdown}). Gap to $1,000: ${usd(NORTH_STAR_MRR - mrr.total)}.`);
   }
+  if (mrr?.byApp) {
+    for (const product of ["Barbrabell", "Remix"]) {
+      const row = mrr.byApp[product];
+      if (!row) continue;
+      if (row.total == null) lines.push(`- ${product} combined MRR: UNKNOWN (${row.reason})${row.breakdown && row.breakdown !== "none" ? `; partial ${row.breakdown}` : ""}.`);
+      else lines.push(`- ${product} combined MRR: ${usd(row.total)} (${row.breakdown}).`);
+    }
+  }
+  const pace = report.metrics?.pace;
+  if (!pace || !pace.available) {
+    lines.push(pace?.reason || "Pace against $1,000 cannot be computed without a real combined MRR figure.");
+  } else {
+    const firstNote = pace.isFirstMeasurement
+      ? `This pull is the first measured combined MRR (${usd(pace.firstMeasured)} on ${pace.firstDate}).`
+      : `First measured combined MRR: ${usd(pace.firstMeasured)} on ${pace.firstDate}.`;
+    lines.push(`${firstNote} Straight-line required MRR today to reach ${usd(pace.target)} by ${pace.targetDate}: **${usd(pace.requiredToday)}**.`);
+    lines.push(`Pace: **${pace.onPace ? "on pace" : "off pace"}** (${pace.deltaVsRequired >= 0 ? "ahead" : "behind"} by ${usd(Math.abs(pace.deltaVsRequired))}; ${pace.daysRemaining} day(s) remaining).`);
+  }
   lines.push("");
   lines.push("## App Store Connect Sales and Trends");
   const sales = report.asc?.sales;
-  if (sales?.status === "missing_vendor_number") {
-    lines.push(`Unavailable: ${sales.message}`);
-  } else if (sales?.status === "forbidden") {
-    lines.push(`Unavailable: the API key does not have access to Sales and Trends / Finance reports. Exact response: ${sales.message}`);
-  } else if (sales?.status && sales.status !== "ok") {
+  if (report.asc?.finance && !report.asc.finance.available) {
+    lines.push(`Finance key: ${report.asc.finance.reason}`);
+  } else if (report.asc?.finance?.available) {
+    lines.push("Sales and Trends were requested with the Finance-role key (not the release/catalog key).");
+  }
+  const blocked = ["missing_vendor_number", "missing_finance_key", "forbidden", "unauthorized"];
+  if (blocked.includes(sales?.status)) {
     lines.push(`Unavailable: ${sales.message || sales.status}`);
   } else if (!sales) {
     lines.push("Unavailable: Sales and Trends were not requested.");
   } else {
+    if (sales.status === "partial") lines.push(`Partial: at least one daily report failed. ${sales.message || ""}`.trim());
     for (const typ of ["SUBSCRIPTION", "SUBSCRIPTION_EVENT", "SALES"]) {
       const block = sales.reports?.[typ];
-      lines.push(`- ${typ}: ${block?.okDays ?? 0} daily report(s) downloaded, ${block?.emptyDays ?? 0} date(s) with no report (HTTP 404), version ${block?.versionUsed || "n/a"}, rows ${block?.rowCount ?? 0}.`);
+      const unknown = block?.unknownDays ? `, ${block.unknownDays} date(s) UNKNOWN` : "";
+      lines.push(`- ${typ}: ${block?.okDays ?? 0} report(s) downloaded, ${block?.emptyDays ?? 0} date(s) with Apple no-data 404 (treated as zero)${unknown}, version ${block?.versionUsed || "n/a"}, rows ${block?.rowCount ?? 0}.`);
       if (block?.error) lines.push(`  Error: ${block.error}`);
     }
     const snap = report.metrics?.ascSubscriptionSnapshot;
-    if (snap) {
+    if (snap?.available !== false && snap?.byProduct) {
       lines.push("");
-      lines.push(`Subscription snapshot: ${snap.date} (latest successful SUBSCRIPTION daily report in the window).`);
+      const freq = (snap.frequency || "DAILY").toLowerCase();
+      if (snap.assumedZero) {
+        lines.push(`Subscription snapshot: ${snap.date} (${snap.reason})`);
+      } else {
+        lines.push(`Subscription snapshot: ${snap.date} (latest successful SUBSCRIPTION ${freq} report in the window).`);
+      }
       for (const product of ["Barbrabell", "Remix"]) {
         const b = snap.byProduct?.[product] || {};
         const paid = (b.activeStandard || 0) + (b.activePayUpFrontIntro || 0) + (b.activePayAsYouGoIntro || 0);
         const plans = Object.entries(b.byPlan || {}).map(([name, v]) => `${name}: ${v.standard} paid, ${v.trial} trial`).join("; ") || "none";
+        const amount = appStoreMrrAmount(b);
+        let basis = "unknown";
+        if (amount.basis === "developer_proceeds") basis = "developer proceeds, yearly normalized / 12";
+        else if (amount.basis === "customer_price") basis = "customer price (developer proceeds not on these rows), yearly normalized / 12";
+        else if (amount.basis === "no_paid_subscriptions") basis = "no paid subscriptions";
         lines.push(`### ${product}`);
         lines.push(`- Active paid subscriptions: ${paid}`);
         lines.push(`- Active free trials: ${b.activeFreeTrial ?? 0}`);
         lines.push(`- By plan: ${plans}`);
-        lines.push(`- Current MRR (customer price, USD, monthly equivalent): ${b.mrrUnknownDurationRows ? `unknown (${b.mrrUnknownDurationRows} paid row(s) not convertible); partial ${usd(b.mrrCustomerUSD)}` : usd(b.mrrCustomerUSD || 0)}`);
+        lines.push(`- App Store MRR: ${amount.value == null ? `UNKNOWN (${amount.reason})` : usd(amount.value)} (basis: ${basis})`);
       }
     } else {
-      lines.push("No successful SUBSCRIPTION daily report in the window, so active subscriptions and App Store MRR are unknown (not assumed to be zero).");
+      lines.push(`No usable SUBSCRIPTION report in the window, so active subscriptions and App Store MRR are UNKNOWN${snap?.reason || sales?.message ? ` (${snap?.reason || sales.message})` : ""} and are not assumed to be zero.`);
     }
     const ev = report.metrics?.ascEvents;
-    if (ev) {
+    if (ev?.available === false) {
       lines.push("");
-      lines.push("Subscription events in the window:");
+      lines.push(`Subscription events in the window: UNKNOWN (${ev.reason}).`);
+    } else if (ev) {
+      lines.push("");
+      lines.push(ev.assumedZero
+        ? "Subscription events in the window: all daily SUBSCRIPTION_EVENT reports were Apple no-data 404s, treated as zero events."
+        : "Subscription events in the window:");
       for (const product of ["Barbrabell", "Remix"]) {
         const b = ev.byProduct?.[product] || {};
         const counts = Object.entries(b.eventCounts || {}).map(([k, v]) => `${k}: ${v}`).join("; ") || "no events";
@@ -524,12 +859,24 @@ export function formatDashboardComment(report) {
       }
     }
     const proceeds = report.metrics?.ascSales;
-    if (proceeds) {
+    if (proceeds?.available === false) {
       lines.push("");
-      lines.push("Developer proceeds (SALES report, USD, units × proceeds) in the window:");
+      lines.push(`Developer proceeds in the window: UNKNOWN (${proceeds.reason}).`);
+    } else if (proceeds) {
+      lines.push("");
+      const extra = proceeds.complete === false
+        ? ` UNKNOWN as a complete 30-day total (${proceeds.reason}). Partial downloaded:`
+        : proceeds.assumedZero
+          ? " All daily SALES reports were Apple no-data 404s, treated as zero."
+          : "";
+      lines.push(`Developer proceeds (SALES report, USD, units × proceeds) in the window:${extra}`);
       for (const product of ["Barbrabell", "Remix"]) {
         const b = proceeds.byProduct?.[product] || {};
-        lines.push(`- ${product}: ${usd(b.proceedsUSD || 0)} across ${b.rows || 0} row(s).`);
+        lines.push(`- ${product}: ${usd(b.proceedsUSD || 0)}, units ${b.units || 0}, across ${b.rows || 0} row(s).`);
+      }
+      if (proceeds.unmatched?.length) {
+        const bits = proceeds.unmatched.map((u) => `${u.title} (Apple ID ${u.appleId}): ${usd(u.proceedsUSD || 0)}, units ${u.units || 0}, ${u.rows} row(s)`);
+        lines.push(`- Other apps on this vendor account (excluded from Barbrabell/Remix totals): ${bits.join("; ")}.`);
       }
     }
   }
@@ -648,11 +995,11 @@ export async function downloadSalesReport(token, { vendorNumber, reportType, rep
     "filter[reportDate]": reportDate,
   });
   const { status, buf } = await ascRequest(token, `/v1/salesReports?${params}`, { accept: "application/a-gzip" });
-  if (status === 404) return { status, empty: true, version };
   if (status < 200 || status >= 300) {
     const json = parseJsonSafe(buf);
     const detail = errorDetail(json, buf.toString("utf8").slice(0, 400));
-    return { status, error: detail, classification: classifyReportError(status, detail), version };
+    const classification = classifyReportError(status, detail);
+    return { status, empty: classification.kind === "empty", error: detail, classification, version };
   }
   const tsv = parseTsv(gunzipMaybe(buf));
   return { status, empty: tsv.rows.length === 0, headers: tsv.headers, rows: tsv.rows, version };
@@ -662,25 +1009,44 @@ export async function downloadSalesReportWithVersions(token, spec, versions) {
   const tried = [];
   for (const version of versions) {
     const result = await downloadSalesReport(token, { ...spec, version });
-    tried.push({ version, status: result.status, error: result.error || null });
+    tried.push({ version, status: result.status, error: result.error || null, kind: result.classification?.kind || null });
     if (result.status === 200) return { ...result, tried };
-    const msg = `${result.error || ""}`;
-    if (result.status === 400 && /version/i.test(msg)) continue;
+    if (result.classification?.kind === "empty" || result.status === 404) return { ...result, tried };
+    if (result.classification?.kind === "forbidden" || result.classification?.kind === "unauthorized") {
+      return { ...result, tried };
+    }
+    // Any other 400 (invalid version, or a misleading vendor error on an unsupported version) — try the next version.
+    if (result.status === 400 && version !== versions.at(-1)) continue;
+    if (version !== versions.at(-1) && result.status !== 403 && result.status !== 401) continue;
     return { ...result, tried };
   }
-  return { status: tried.at(-1)?.status, error: tried.at(-1)?.error, classification: classifyReportError(tried.at(-1)?.status, tried.at(-1)?.error), tried };
+  const last = tried.at(-1) || {};
+  return { status: last.status, error: last.error, classification: classifyReportError(last.status, last.error), tried };
 }
 
 export async function listTargetApps(token) {
   const apps = await pages(token, "/v1/apps");
   const remix = apps.find((a) => a.attributes?.bundleId === REMIX_BUNDLE);
   const barbrabell = apps.find((a) => a.attributes?.bundleId === BARBRABELL.bundleId || String(a.id) === BARBRABELL.appleId);
-  const targets = [];
+  const targets = [
+    {
+      product: "Barbrabell",
+      bundleId: BARBRABELL.bundleId,
+      appleId: BARBRABELL.appleId,
+      name: barbrabell?.attributes?.name,
+      id: barbrabell?.id || BARBRABELL.appleId,
+    },
+    {
+      product: "Remix",
+      bundleId: REMIX_BUNDLE,
+      appleId: remix ? String(remix.id) : "6802880519",
+      name: remix?.attributes?.name,
+      id: remix?.id || "6802880519",
+    },
+  ];
   if (barbrabell) {
-    targets.push({ product: "Barbrabell", bundleId: barbrabell.attributes.bundleId, appleId: String(barbrabell.id), name: barbrabell.attributes.name, id: barbrabell.id });
-  }
-  if (remix) {
-    targets.push({ product: "Remix", bundleId: remix.attributes.bundleId, appleId: String(remix.id), name: remix.attributes.name, id: remix.id });
+    targets[0].bundleId = barbrabell.attributes.bundleId;
+    targets[0].appleId = String(barbrabell.id);
   }
   return {
     targets,
@@ -769,8 +1135,8 @@ export async function pullSalesReports(token, vendorNumber, startDate, endDate) 
   }
   const types = [
     { reportType: "SALES", reportSubType: "SUMMARY", frequency: "DAILY", versions: ["1_1", "1_0"] },
-    { reportType: "SUBSCRIPTION", reportSubType: "SUMMARY", frequency: "DAILY", versions: ["1_4", "1_3"] },
-    { reportType: "SUBSCRIPTION_EVENT", reportSubType: "SUMMARY", frequency: "DAILY", versions: ["1_4", "1_3"] },
+    { reportType: "SUBSCRIPTION", reportSubType: "SUMMARY", frequency: "DAILY", versions: ["1_3", "1_4", "1_2"] },
+    { reportType: "SUBSCRIPTION_EVENT", reportSubType: "SUMMARY", frequency: "DAILY", versions: ["1_3", "1_4", "1_2"] },
   ];
   const reports = {};
   let overall = "ok";
@@ -794,29 +1160,78 @@ export async function pullSalesReports(token, vendorNumber, startDate, endDate) 
       if (got.status === 200) {
         sawSuccess = true;
         versionLocked = got.version;
-        allRows.push(...(got.rows || []).map((r) => ({ ...r, _reportDate: reportDate })));
-        dayStatus[reportDate] = { status: 200, rows: (got.rows || []).length, version: got.version };
-      } else if (got.status === 404 || got.empty) {
-        dayStatus[reportDate] = { status: 404, empty: true };
+        allRows.push(...(got.rows || []).map((r) => ({ ...r, _reportDate: reportDate, _frequency: typ.frequency })));
+        dayStatus[reportDate] = { status: 200, rows: (got.rows || []).length, version: got.version, frequency: typ.frequency, kind: "ok" };
+      } else if (classified.kind === "empty") {
+        dayStatus[reportDate] = { status: got.status || 404, empty: true, kind: "empty", error: got.error || classified.message, frequency: typ.frequency };
       } else {
-        dayStatus[reportDate] = { status: got.status, error: got.error, kind: classified.kind };
+        dayStatus[reportDate] = { status: got.status, error: got.error || classified.message, kind: classified.kind, frequency: typ.frequency };
         if (classified.kind === "forbidden" || classified.kind === "unauthorized" || classified.kind === "missing_vendor_number") {
           overall = classified.kind;
           overallMessage = classified.message;
           stopped = classified;
           break;
         }
+        if (classified.kind === "invalid_vendor_number") {
+          // Don't retry every date with a vendor Apple already rejected for this report type.
+          overall = overall === "ok" && !Object.values(reports).length ? classified.kind : "partial";
+          overallMessage = classified.message;
+          typ._stoppedType = classified;
+          break;
+        }
+        if (overall === "ok") {
+          overall = "partial";
+          overallMessage = classified.message;
+        }
+      }
+    }
+    // Weekly fallback only when daily requests did not already fail closed (auth/vendor).
+    if (!stopped && !typ._stoppedType && typ.reportType !== "SALES" && typ.frequency === "DAILY" && !sawSuccess) {
+      const weeklyVersions = typ.versions;
+      let weeklyNote = null;
+      for (const reportDate of sundaysOnOrBefore(endDate, { count: 3, startDate })) {
+        const got = await downloadSalesReportWithVersions(token, {
+          vendorNumber,
+          reportType: typ.reportType,
+          reportSubType: typ.reportSubType,
+          frequency: "WEEKLY",
+          reportDate,
+        }, weeklyVersions);
+        const classified = got.classification || classifyReportError(got.status, got.error);
+        if (got.status === 200) {
+          sawSuccess = true;
+          versionLocked = got.version;
+          allRows.push(...(got.rows || []).map((r) => ({ ...r, _reportDate: reportDate, _frequency: "WEEKLY" })));
+          dayStatus[reportDate] = { status: 200, rows: (got.rows || []).length, version: got.version, frequency: "WEEKLY", kind: "ok" };
+          break;
+        }
+        if (got.status === 400 && /frequenc/i.test(got.error || classified.message || "")) {
+          weeklyNote = classified.message;
+          break;
+        }
+        if (classified.kind === "empty") {
+          dayStatus[reportDate] = { status: got.status, empty: true, kind: "empty", error: got.error || classified.message, frequency: "WEEKLY" };
+          continue;
+        }
+        weeklyNote = classified.message;
+        dayStatus[reportDate] = { status: got.status, error: got.error || classified.message, kind: classified.kind, frequency: "WEEKLY" };
+        break;
+      }
+      if (weeklyNote && !sawSuccess) {
+        reports[typ.reportType] = reports[typ.reportType] || {};
+        typ._weeklyNote = weeklyNote;
       }
     }
     const days = Object.values(dayStatus);
     reports[typ.reportType] = {
       versionUsed: sawSuccess ? versionLocked : null,
       okDays: days.filter((d) => d.status === 200).length,
-      emptyDays: days.filter((d) => d.status === 404 || d.empty).length,
+      emptyDays: days.filter((d) => d.kind === "empty").length,
+      unknownDays: days.filter((d) => d.status !== 200 && d.kind !== "empty").length,
       rowCount: allRows.length,
       dayStatus,
       rows: allRows,
-      error: stopped ? stopped.message : null,
+      error: stopped ? stopped.message : (typ._stoppedType?.message || typ._weeklyNote || null),
     };
     if (stopped) break;
   }
@@ -951,6 +1366,10 @@ export async function pullStripe(env = process.env, { now = new Date(), apiVersi
   };
 }
 
+function coverageReason(coverage, label) {
+  return summarizeUnknownDays(coverage?.unknownDays, label);
+}
+
 export async function runPull({ env = process.env, now = new Date(), home, cwd } = {}) {
   const secretFilesFound = loadRevenueEnv({ home, cwd, env });
   const generatedAt = new Intl.DateTimeFormat("en-US", {
@@ -959,6 +1378,7 @@ export async function runPull({ env = process.env, now = new Date(), home, cwd }
     timeStyle: "short",
   }).format(now) + " America/New_York";
   const window = reportWindow(now);
+  const workdir = cwd || process.cwd();
   const report = {
     generatedAt,
     window,
@@ -967,6 +1387,8 @@ export async function runPull({ env = process.env, now = new Date(), home, cwd }
       ascKeyIdSet: Boolean(env.ASC_KEY_ID),
       ascIssuerIdSet: Boolean(env.ASC_ISSUER_ID),
       ascKeyPathSet: Boolean(env.ASC_KEY_PATH),
+      financeKeyIdSet: Boolean(env.ASC_FINANCE_KEY_ID),
+      financeKeyPathSet: Boolean(env.ASC_FINANCE_KEY_PATH),
       vendorNumberSet: Boolean(env.ASC_VENDOR_NUMBER),
       stripeKeySet: Boolean(env.STRIPE_READONLY_KEY),
       stripeAccountBarbrabellSet: Boolean(env.STRIPE_ACCOUNT_BARBRABELL),
@@ -976,42 +1398,98 @@ export async function runPull({ env = process.env, now = new Date(), home, cwd }
     stripe: {},
     metrics: {},
   };
+  let listed = { targets: APPS.map((a) => ({ ...a, id: a.appleId })), unmatched: [] };
   try {
     const auth = loadAscEnv(env);
-    const token = signJwt(auth);
-    const listed = await listTargetApps(token);
+    const token = signJwtQuiet(auth);
+    listed = await listTargetApps(token);
     report.asc.unmatched = listed.unmatched;
     report.asc.catalogs = await loadCatalog(token, listed.targets);
-    const sales = await pullSalesReports(token, env.ASC_VENDOR_NUMBER, window.startDate, window.endDate);
-    report.asc.sales = {
-      status: sales.status,
-      message: sales.message,
-      reports: Object.fromEntries(Object.entries(sales.reports || {}).map(([k, v]) => [k, { ...v }])),
-    };
-    const sub = sales.reports?.SUBSCRIPTION;
-    const okSubDates = Object.entries(sub?.dayStatus || {}).filter(([, v]) => v.status === 200).map(([d]) => d).sort();
-    if (okSubDates.length) {
-      const date = okSubDates.at(-1);
-      const latestRows = (sub.rows || []).filter((r) => r._reportDate === date);
-      report.metrics.ascSubscriptionSnapshot = { date, byProduct: summarizeSubscriptionSnapshot(latestRows, listed.targets) };
-    }
-    const ev = sales.reports?.SUBSCRIPTION_EVENT;
-    if (Object.values(ev?.dayStatus || {}).some((v) => v.status === 200)) {
-      report.metrics.ascEvents = { byProduct: summarizeSubscriptionEvents(ev.rows || [], listed.targets, window.startDate, window.endDate) };
-    }
-    const salesBlock = sales.reports?.SALES;
-    if (Object.values(salesBlock?.dayStatus || {}).some((v) => v.status === 200)) {
-      report.metrics.ascSales = { byProduct: summarizeSalesProceeds(salesBlock.rows || [], listed.targets) };
-    }
-    report.metrics.appStore = report.metrics.ascSubscriptionSnapshot
-      ? { available: true, snapshotDate: report.metrics.ascSubscriptionSnapshot.date, byProduct: report.metrics.ascSubscriptionSnapshot.byProduct }
-      : { available: false, reason: sales.message || "App Store subscription reports not available" };
   } catch (e) {
-    report.asc.catalogError = e.message;
-    report.metrics.appStore = { available: false, reason: e.message };
+    report.asc.catalogError = sanitizePublicError(e.message);
   }
+
+  const finance = financeAuthStatus(env, { home: home || homedir() });
+  report.asc.finance = { available: finance.available, usedFor: "salesReports", reason: finance.reason || null };
+  let sales;
+  if (!finance.available) {
+    sales = { status: "missing_finance_key", message: finance.reason, reports: {} };
+  } else if (!env.ASC_VENDOR_NUMBER) {
+    sales = {
+      status: "missing_vendor_number",
+      message: "ASC_VENDOR_NUMBER is unset, so Sales, Subscription, and Subscription Event reports were not requested. Add the vendor number from App Store Connect → Payments and Financial Reports to ~/.config/secrets.env or the gitignored .env.",
+      reports: {},
+    };
+  } else {
+    try {
+      const financeToken = signJwtQuiet(finance.auth);
+      sales = await pullSalesReports(financeToken, env.ASC_VENDOR_NUMBER, window.startDate, window.endDate);
+    } catch (e) {
+      sales = { status: "error", message: sanitizePublicError(e.message), reports: {} };
+    }
+  }
+  report.asc.sales = {
+    status: sales.status,
+    message: sales.message,
+    reports: Object.fromEntries(Object.entries(sales.reports || {}).map(([k, v]) => [k, { ...v }])),
+  };
+
+  const snapshot = subscriptionSnapshotFromReport(sales.reports?.SUBSCRIPTION, listed.targets, window.endDate);
+  if (snapshot.available) {
+    report.metrics.ascSubscriptionSnapshot = snapshot;
+    report.metrics.appStore = {
+      available: true,
+      snapshotDate: snapshot.date,
+      assumedZero: Boolean(snapshot.assumedZero),
+      reason: snapshot.reason || null,
+      byProduct: snapshot.byProduct,
+    };
+  } else {
+    report.metrics.appStore = { available: false, reason: snapshot.reason || sales.message || "App Store subscription reports not available" };
+  }
+
+  const ev = sales.reports?.SUBSCRIPTION_EVENT;
+  if (ev) {
+    const coverage = windowCoverage(ev.dayStatus);
+    if (coverage.okDates.length || (coverage.requested && !coverage.unknownDays.length)) {
+      report.metrics.ascEvents = {
+        available: true,
+        assumedZero: !coverage.okDates.length,
+        coverage,
+        byProduct: summarizeSubscriptionEvents(coverage.okDates.length ? ev.rows || [] : [], listed.targets, window.startDate, window.endDate),
+      };
+    } else if (coverage.requested) {
+      report.metrics.ascEvents = { available: false, reason: coverageReason(coverage, "SUBSCRIPTION_EVENT"), coverage };
+    }
+  }
+
+  const salesBlock = sales.reports?.SALES;
+  if (salesBlock) {
+    const coverage = windowCoverage(salesBlock.dayStatus);
+    if (coverage.okDates.length || (coverage.requested && !coverage.unknownDays.length)) {
+      report.metrics.ascSales = {
+        available: true,
+        assumedZero: !coverage.okDates.length,
+        complete: coverage.complete,
+        reason: coverage.complete ? null : coverageReason(coverage, "SALES"),
+        coverage,
+        byProduct: summarizeSalesProceeds(coverage.okDates.length ? salesBlock.rows || [] : [], listed.targets),
+        unmatched: unmatchedSales(coverage.okDates.length ? salesBlock.rows || [] : [], listed.targets),
+      };
+    } else if (coverage.requested) {
+      report.metrics.ascSales = { available: false, complete: false, reason: coverageReason(coverage, "SALES"), coverage };
+    }
+  }
+
   report.stripe = await pullStripe(env, { now });
   report.metrics.combinedMrr = combinedMrr({ appStore: report.metrics.appStore, stripe: report.stripe });
+  const prior = readFirstMeasured(workdir);
+  report.metrics.pace = mrrPace({
+    current: report.metrics.combinedMrr.total,
+    today: todayISO(now),
+    firstMeasured: prior?.firstMeasured,
+    firstDate: prior?.firstDate,
+  });
   report.comment = formatDashboardComment(report);
   return report;
 }
@@ -1025,6 +1503,12 @@ export function writeReport(report, cwd = process.cwd()) {
   const forFile = { ...report };
   writeFileSync(jsonPath, JSON.stringify(forFile, null, 2));
   writeFileSync(mdPath, report.comment);
+  if (report.metrics?.combinedMrr?.total != null && report.metrics?.pace?.firstDate) {
+    writeFirstMeasured(cwd, {
+      firstMeasured: report.metrics.pace.firstMeasured,
+      firstDate: report.metrics.pace.firstDate,
+    });
+  }
   return { jsonPath, mdPath };
 }
 
