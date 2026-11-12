@@ -20,7 +20,8 @@
     "review-account": "tsx scripts/review-account.ts",
     "coach-demo": "tsx scripts/coach-demo.ts",
     "program-stats": "tsx scripts/programStats.ts",
-    "coach-stats": "tsx scripts/coachStats.ts"
+    "coach-stats": "tsx scripts/coachStats.ts",
+    "checkpoint": "tsx scripts/coachStats.ts"
   },
   "devDependencies": {
     "@aws-appsync/utils": "^2.1.1",
