@@ -197,6 +197,8 @@ enum Cloud {
         var title: String { name ?? "Your coach" }
         /// FIT-227: inside a sentence, "Hear from your coach".
         var mention: String { name ?? "your coach" }
+        /// FIT-240: the server's sample client (infra/lambda/sample.ts); a real account's uid never starts so.
+        var isSample: Bool { uid.hasPrefix("sample-") }
     }
 
     /// FIT-227: an invite still open; `name` is nil when the coach has none (Sign in with Apple without one).

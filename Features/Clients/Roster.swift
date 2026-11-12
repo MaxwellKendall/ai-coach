@@ -148,7 +148,8 @@ final class Roster {
         if coach != loadedFor { clients = []; invites = []; loaded = false }
         do {
             let people = try await Cloud.myClients()
-            if !people.isEmpty { UserDefaults.standard.set(coach, forKey: Self.coachingKey) }
+            // FIT-445: a real client makes a coach; the sample client is only there to try coaching on.
+            if people.contains(where: { !$0.isSample }) { UserDefaults.standard.set(coach, forKey: Self.coachingKey) }
             let today = SyncUnits.day(.now)
             // All at once: one after another, ten clients took 13 s on prod.
             let fetched = try await withThrowingTaskGroup(of: (Int, [String: String], [Triage.Comment]).self) { group in

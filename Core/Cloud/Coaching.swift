@@ -29,8 +29,11 @@ extension Cloud {
         var rejected: [Key]
     }
 
-    @MainActor static func myClients() async throws -> [Person] {
-        try await run("query { myClients { uid name since } }", at: "myClients", query: true)
+    /// FIT-445: `sample` false asks the server not to make a sample client: the launch's check of whether this account
+    /// coaches anyone must not make it a coach.
+    @MainActor static func myClients(sample: Bool = true) async throws -> [Person] {
+        if sample { return try await run("query { myClients { uid name since } }", at: "myClients", query: true) }
+        return try await run("query { myClients(sample: false) { uid name since } }", at: "myClients", query: true)
     }
 
     /// FIT-339: invites not used yet, newest first.

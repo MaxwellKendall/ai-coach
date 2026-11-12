@@ -1,11 +1,6 @@
 import SwiftUI
 import SwiftData
 
-/// The app's tabs (FIT-64). The coach sits in the slot iOS 26 keeps for Search.
-enum AppTab: Hashable {
-    case clients, today, program, progress, groups, coach
-}
-
 /// What was said or typed to the coach, waiting for the screen that acts on it. That screen does the work in place
 /// (FIT-47 to FIT-50, FIT-41), as if the mic there had heard it.
 @MainActor @Observable

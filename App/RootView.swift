@@ -51,17 +51,18 @@ struct RootView: View {
     /// FIT-298: coach mode, for someone who came in as a coach or has clients.
     @State private var roster = Roster.restored()
     @AppStorage(Roster.coachingKey) private var coachUID = ""
-    private var coaching: Bool {
-        #if DEBUG
-        if Roster.sample { return true }
-        #endif
-        return account.user.map { $0.uid == coachUID } ?? false
-    }
 
-    /// FIT-381: a coach who doesn't train sees Clients alone; Today, Program and Progress come with a program of their
-    /// own ("Train on my own too", or Program on You), a planned day, or a coach of their own.
-    private var athlete: Bool {
-        !coaching || profiles.first?.programStart != nil || !planned.isEmpty || !pro.coaches.isEmpty
+    /// FIT-445: coach, coached client or lifter on their own, and so the tabs. FIT-381: Today, Program and Progress come
+    /// with a program of their own ("Train on my own too", or Program on You), a planned day, or a coach of their own.
+    private var mode: AppMode {
+        var chose = account.user.map { $0.uid == coachUID } ?? false
+        var realClients = roster.clients.contains { !$0.person.isSample }
+        #if DEBUG
+        // `-sampleClients YES`: a made-up roster, which (like the server's Mike) never makes a client a coach.
+        if Roster.sample { chose = true; realClients = false }
+        #endif
+        return AppMode(choseCoaching: chose, coached: !pro.coaches.isEmpty, realClients: realClients,
+                       trains: profiles.first?.programStart != nil || !planned.isEmpty || !pro.coaches.isEmpty)
     }
 
     /// FIT-297: the plate colour picked on You (design system v2); Blue 20 until one is picked.
@@ -78,10 +79,23 @@ struct RootView: View {
         .environment(coach)
         .environment(roster)
         // FIT-298: a coach opens on their clients; one who has clients is a coach, whichever door they came in by.
-        .onChange(of: coaching, initial: true) { _, coaching in if coaching { tab = .clients } }
+        .onChange(of: mode.coach, initial: true) { _, coach in if coach { tab = .clients } }
+        // FIT-445: never left on a tab that isn't there for them.
+        .onChange(of: mode.tabs, initial: true) { _, _ in if let other = mode.replacing(tab) { tab = other } }
         .task(id: account.user?.uid) {
-            guard let user = account.user, !coaching, let clients = try? await Cloud.myClients(), !clients.isEmpty else { return }
-            coachUID = user.uid
+            guard let user = account.user else { return }
+            let chose = coachUID == user.uid
+            // A coach already, with no coach of their own: nothing to find out.
+            if chose && pro.coaches.isEmpty { return }
+            // FIT-445: asked without a sample, and a sample doesn't count, so this never makes anyone a coach. A server
+            // from before FIT-445 refuses `sample`; the coach door still sets coach mode until it's deployed.
+            guard let clients = try? await Cloud.myClients(sample: false) else { return }
+            if clients.contains(where: { !$0.isSample }) {
+                coachUID = user.uid
+            } else if chose, !pro.coaches.isEmpty {
+                // FIT-445: a client this check made a coach of the sample client, before it asked without one.
+                coachUID = ""
+            }
         }
         .onChange(of: tab) { _, new in if new != .coach { lastTab = new } }
         // FIT-430: signing out, or deleting the account, goes back to the three doors; the next account's door decides
@@ -171,7 +185,9 @@ struct RootView: View {
             case .offer:
                 Task { await checkOffers() }
             case .client:
+                // Only coaches are sent these; the tab is there only if the mode says so (FIT-445).
                 if let user = account.user { coachUID = user.uid }
+                guard mode.tabs.contains(.clients) else { return }
                 tab = .clients
                 navigator.clientDay = target
             case .plan, .nudge, .reply:
@@ -337,12 +353,12 @@ struct RootView: View {
     /// FIT-64: the app's places as tabs, and the coach in the slot iOS 26 keeps for Search.
     private var tabs: some View {
         TabView(selection: $tab) {
-            if coaching {
+            if mode.tabs.contains(.clients) {
                 // FIT-338: how many clients wrote since the coach last looked.
                 Tab("Clients", systemImage: "person.2", value: AppTab.clients) { ClientsScreen() }
                     .badge(roster.unread)
             }
-            if athlete {
+            if mode.tabs.contains(.today) {
                 Tab("Today", systemImage: "figure.strengthtraining.traditional", value: AppTab.today) { TodayScreen() }
                 Tab("Program", systemImage: "calendar", value: AppTab.program) { ProgramScreen(tabs: [.program]) }
                 Tab("Progress", systemImage: "chart.bar", value: AppTab.progress) { ProgramScreen(tabs: [.goals, .wins, .history]) }
