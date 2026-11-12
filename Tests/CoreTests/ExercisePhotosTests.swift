@@ -43,6 +43,17 @@ struct ExercisePhotosTests {
         #expect(ExercisePhotos.urls("dumbbell-romanian-deadlift").isEmpty)
     }
 
+    /// FIT-348: every listed demo is a catalog exercise, on the site under /exercises/demos/; none for one not listed.
+    @Test func demosOnTheSite() {
+        let slugs = Set(catalog.map(\.slug))
+        let base = Backend.current.web.absoluteString
+        for slug in ExerciseDemos.bundled {
+            #expect(slugs.contains(slug), "\(slug)")
+            #expect(ExerciseDemos.url(slug)?.absoluteString == "\(base)/exercises/demos/\(slug).mp4")
+        }
+        #expect(ExerciseDemos.url("not-an-exercise") == nil)
+    }
+
     /// Every program exercise has its two photos, except the author's own card free-exercise-db has no match for.
     @Test func programExercisesHavePhotos() {
         let missing = programExercises.filter { ExercisePhotos.bundled[$0]?.count != 2 }

@@ -50,6 +50,23 @@ enum ExercisePhotos {
         .flatMap { try? JSONDecoder().decode([String: [String]].self, from: Data(contentsOf: $0)) } ?? [:]
 }
 
+/// FIT-348: our own looping demo clip of an exercise, made by the exercise-demo skill (.claude/skills) and
+/// approved by a person, on the site under exercises/demos/. Resources/Seed/exercise-demos.json lists the slugs that
+/// have one. Debug only: `-exerciseDemos <base URL>` reads them from somewhere else, to look at them before the upload.
+enum ExerciseDemos {
+    static func url(_ slug: String) -> URL? {
+        guard bundled.contains(slug) else { return nil }
+        var base = Backend.current.web
+        #if DEBUG
+        if let other = UserDefaults.standard.string(forKey: "exerciseDemos").flatMap(URL.init(string:)) { base = other }
+        #endif
+        return base.appending(path: "exercises/demos/\(slug).mp4")
+    }
+
+    static let bundled: Set<String> = Set(Bundle.main.url(forResource: "exercise-demos", withExtension: "json")
+        .flatMap { try? JSONDecoder().decode([String].self, from: Data(contentsOf: $0)) } ?? [])
+}
+
 /// FIT-319: a YouTube demo for each exercise the ready-made programs use (Resources/Seed/exercise-videos.json),
 /// hand-picked and checked to exist (YouTube's oEmbed). Links only: the video plays in YouTube, never re-hosted.
 enum ExerciseVideos {
