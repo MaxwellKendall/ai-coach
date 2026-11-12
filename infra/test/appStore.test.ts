@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const items = new Map<string, Record<string, any>>();
 const keyOf = (key: { PK: string; SK: string }) => `${key.PK}|${key.SK}`;
-const { ConditionalCheckFailedException } = await import("@aws-sdk/client-dynamodb");
+const { ConditionalCheckFailedException, TransactionCanceledException } = await import("@aws-sdk/client-dynamodb");
 const failed = () => new ConditionalCheckFailedException({ message: "condition", $metadata: {} });
 
 function get(item: Record<string, any> | undefined, path: string) {
@@ -25,36 +25,84 @@ function holds(condition: string | undefined, item: Record<string, any> | undefi
     return item !== undefined && get(item, name(left)) === values[right];
   });
 }
+function put(input: any) {
+  if (!holds(input.ConditionExpression, items.get(keyOf(input.Item)), input.ExpressionAttributeNames ?? {}, input.ExpressionAttributeValues ?? {})) throw failed();
+  items.set(keyOf(input.Item), structuredClone(input.Item));
+}
+function update(input: any, write = true) {
+  const names = input.ExpressionAttributeNames ?? {};
+  const values = input.ExpressionAttributeValues ?? {};
+  const kept = items.get(keyOf(input.Key));
+  if (!holds(input.ConditionExpression, kept, names, values)) throw failed();
+  if (!write) return;
+  const item = structuredClone(kept ?? { ...input.Key });
+  const [set, remove] = String(input.UpdateExpression).replace(/^SET /, "").split(" REMOVE ");
+  for (const pair of set.split(", ")) {
+    const [k, v] = pair.split(" = ");
+    item[names[k] ?? k] = structuredClone(values[v]);
+  }
+  for (const k of remove?.split(", ") ?? []) delete item[names[k] ?? k];
+  items.set(keyOf(input.Key), item);
+}
+/** Writes that lose every race: each UpdateCommand or plan TransactWrite fails its condition while this is > 0. */
+let conflicts = 0;
 const send = vi.fn(async (command: any) => {
   const input = command.input;
   const name = command.constructor.name;
-  const names = input.ExpressionAttributeNames ?? {};
-  const values = input.ExpressionAttributeValues ?? {};
   if (name === "GetCommand") return { Item: structuredClone(items.get(keyOf(input.Key))) };
-  if (name === "PutCommand") {
-    if (!holds(input.ConditionExpression, items.get(keyOf(input.Item)), names, values)) throw failed();
-    items.set(keyOf(input.Item), structuredClone(input.Item));
+  if (name === "PutCommand") return put(input), {};
+  if (name === "UpdateCommand") {
+    if (conflicts > 0) { conflicts--; throw failed(); }
+    return update(input), {};
+  }
+  if (name === "TransactWriteCommand") {
+    // All conditions first, as DynamoDB does; none is written if any fails.
+    const reasons = input.TransactItems.map((t: any) => {
+      try {
+        if (t.ConditionCheck) update({ ...t.ConditionCheck, UpdateExpression: "SET" }, false);
+        if (t.Put) holds(t.Put.ConditionExpression, items.get(keyOf(t.Put.Item)), t.Put.ExpressionAttributeNames ?? {}, t.Put.ExpressionAttributeValues ?? {}) || (() => { throw failed(); })();
+        if (t.Update) {
+          if (conflicts > 0) { conflicts--; throw failed(); }
+          update(t.Update, false);
+        }
+        return { Code: "None" };
+      } catch {
+        return { Code: "ConditionalCheckFailed" };
+      }
+    });
+    if (reasons.some((r: any) => r.Code !== "None")) throw new TransactionCanceledException({ message: "cancelled", $metadata: {}, CancellationReasons: reasons });
+    for (const t of input.TransactItems) {
+      if (t.Put) put(t.Put);
+      if (t.Update) update(t.Update);
+    }
     return {};
   }
-  if (name === "UpdateCommand") {
-    const kept = items.get(keyOf(input.Key));
-    if (!holds(input.ConditionExpression, kept, names, values)) throw failed();
-    const item = structuredClone(kept ?? { ...input.Key });
-    const [set, remove] = String(input.UpdateExpression).replace(/^SET /, "").split(" REMOVE ");
-    for (const pair of set.split(", ")) {
-      const [k, v] = pair.split(" = ");
-      item[names[k] ?? k] = structuredClone(values[v]);
+  if (name === "BatchWriteCommand") {
+    for (const request of Object.values(input.RequestItems).flat() as any[]) {
+      if (request.PutRequest) items.set(keyOf(request.PutRequest.Item), structuredClone(request.PutRequest.Item));
+      if (request.DeleteRequest) items.delete(keyOf(request.DeleteRequest.Key));
     }
-    for (const k of remove?.split(", ") ?? []) delete item[names[k] ?? k];
-    items.set(keyOf(input.Key), item);
     return {};
   }
   throw new Error(`No ${name}`);
 });
 vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
   const actual: any = await orig();
-  return { ...actual, DynamoDBDocumentClient: { from: () => ({ send }) } };
+  return {
+    ...actual,
+    DynamoDBDocumentClient: { from: () => ({ send }) },
+    // deleteAccount's queries: by GSI1PK, or by PK (with begins_with on SK).
+    paginateQuery: async function* (_: unknown, input: any) {
+      const v = input.ExpressionAttributeValues;
+      const all = [...items.values()];
+      if (input.IndexName === "GSI1") yield { Items: all.filter((i) => i.GSI1PK === v[":u"]) };
+      else yield { Items: all.filter((i) => i.PK === v[":pk"] && (!v[":p"] || String(i.SK).startsWith(v[":p"])) && (!v[":f"] || (String(i.SK).startsWith(v[":f"]) && i.uid === v[":uid"]))) };
+    },
+  };
 });
+const cognitoSend = vi.fn(async () => ({}));
+vi.mock("@aws-sdk/client-cognito-identity-provider", async (orig) => ({ ...(await orig() as object), CognitoIdentityProviderClient: class { send = cognitoSend; } }));
+vi.mock("@aws-sdk/client-s3", async (orig) => ({ ...(await orig() as object), S3Client: class { send = vi.fn(async () => ({})); } }));
 const keys = vi.fn();
 vi.mock("../lambda/gifts.ts", () => ({ stripeConfig: () => keys(), giftedUntil: async () => undefined }));
 
@@ -62,6 +110,7 @@ const { handleNotification, registerPurchase, statusOf, PurchaseError } = await 
 const { handler: notifications } = await import("../lambda/appStoreNotifications.ts");
 const { hasPlan, planRecord, saveSubscription, start } = await import("../lambda/coachPlan.ts");
 const { hasCoachPlan } = await import("../lambda/coach.ts");
+const { handler: deleteAccount } = await import("../lambda/deleteAccount.ts");
 const { PRODUCTS, productOf } = await import("../lambda/entitlement.ts");
 const { effective, shownPlan } = await import("../lambda/plan.ts");
 
@@ -109,10 +158,14 @@ const options = () => ({ root, environments: ["Sandbox"], now: new Date(clock) }
 const notify = (signedPayload: string) => handleNotification(signedPayload, options());
 const plan = (kind: "pro" | "coach" = "pro", uid = SAM) => planRecord(uid, kind);
 const later = (days: number) => { clock += days * DAY; };
+/** One App Store subscription's state in the plan. */
+const apple = async (otid = "2000", kind: "pro" | "coach" = "pro", uid = SAM) => (await planRecord(uid, kind))?.appStores?.[otid];
 
 beforeEach(() => {
   items.clear();
+  conflicts = 0;
   send.mockClear();
+  cognitoSend.mockClear();
   keys.mockReset();
   clock = t0;
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -134,7 +187,7 @@ describe("FIT-437: the App Store's products are the two plans", () => {
 
   it("Coach Pro bought in the app is the coach plan: COACHPLAN, and the coach tools", async () => {
     await notify(notification("SUBSCRIBED", { subtype: "INITIAL_BUY", txn: { productId: COACH, expiresDate: clock + 365 * DAY } }));
-    expect((await plan("coach"))?.appStore).toMatchObject({ status: "active", productId: COACH, interval: "year" });
+    expect((await apple("2000", "coach"))).toMatchObject({ status: "active", productId: COACH, interval: "year" });
     expect(await plan("pro")).toBeUndefined();
     expect(await hasCoachPlan(SAM)).toBe(true);
     expect(await hasPlan(SAM, "pro")).toBe(false);
@@ -145,7 +198,7 @@ describe("FIT-437: App Store Server Notifications", () => {
   it("SUBSCRIBED with the free trial: trialing, linked to the account in appAccountToken", async () => {
     const out = await notify(notification("SUBSCRIBED", { subtype: "INITIAL_BUY", txn: { offerType: 1, offerDiscountType: "FREE_TRIAL", expiresDate: clock + 14 * DAY } }));
     expect(out).toEqual({ status: 200, outcome: { saved: true, uid: SAM, kind: "pro" } });
-    expect((await plan())?.appStore).toMatchObject({ originalTransactionId: "2000", status: "trialing", autoRenew: true, environment: "Sandbox" });
+    expect((await apple())).toMatchObject({ originalTransactionId: "2000", status: "trialing", autoRenew: true, environment: "Sandbox" });
     expect(items.get("APPSTORETXN#2000|APPSTORETXN")).toMatchObject({ uid: SAM, GSI1PK: `USER#${SAM}` });
     expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
     expect(shownPlan(false, await plan(), new Date(clock))).toMatchObject({ status: "trialing", source: "appstore", cancelsAtEnd: false, paidTwice: false });
@@ -155,13 +208,13 @@ describe("FIT-437: App Store Server Notifications", () => {
     await notify(notification("SUBSCRIBED"));
     later(30);
     await notify(notification("DID_RENEW"));
-    expect((await plan())?.appStore).toMatchObject({ status: "active", expiresAt: new Date(clock + 30 * DAY).toISOString() });
+    expect((await apple())).toMatchObject({ status: "active", expiresAt: new Date(clock + 30 * DAY).toISOString() });
     later(1);
     await notify(notification("OFFER_REDEEMED", { subtype: "UPGRADE" }));
-    expect((await plan())?.appStore?.status).toBe("active");
+    expect((await apple())?.status).toBe("active");
     later(1);
     await notify(notification("DID_CHANGE_RENEWAL_PREF", { subtype: "DOWNGRADE", info: { autoRenewProductId: "com.maxwellkendall.aicoach.pro.yearly" } }));
-    expect((await plan())?.appStore?.status).toBe("active");
+    expect((await apple())?.status).toBe("active");
     expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
   });
 
@@ -170,7 +223,7 @@ describe("FIT-437: App Store Server Notifications", () => {
     later(3);
     await notify(notification("DID_CHANGE_RENEWAL_STATUS", { subtype: "AUTO_RENEW_DISABLED", txn: { expiresDate: t0 + 30 * DAY }, info: { autoRenewStatus: 0 } }));
     const record = await plan();
-    expect(record?.appStore).toMatchObject({ status: "active", autoRenew: false });
+    expect(record?.appStores?.["2000"]).toMatchObject({ status: "active", autoRenew: false });
     expect(shownPlan(true, record, new Date(clock))).toMatchObject({ status: "active", cancelsAtEnd: true, source: "appstore" });
     // Past its end with no EXPIRED yet: the date says it's over.
     expect(effective(record, new Date(t0 + 31 * DAY)).has).toBe(false);
@@ -182,7 +235,7 @@ describe("FIT-437: App Store Server Notifications", () => {
     later(30);
     await notify(notification("DID_FAIL_TO_RENEW", { subtype: "GRACE_PERIOD", txn: { expiresDate: clock }, info: { isInBillingRetryPeriod: true, gracePeriodExpiresDate: clock + 16 * DAY } }));
     const record = await plan();
-    expect(record?.appStore).toMatchObject({ status: "in_grace", graceUntil: new Date(clock + 16 * DAY).toISOString() });
+    expect(record?.appStores?.["2000"]).toMatchObject({ status: "in_grace", graceUntil: new Date(clock + 16 * DAY).toISOString() });
     expect(effective(record, new Date(clock + DAY)).has).toBe(true);
     expect(shownPlan(true, record, new Date(clock + DAY)).status).toBe("past_due");
     expect(effective(record, new Date(clock + 17 * DAY)).has).toBe(false);
@@ -193,7 +246,7 @@ describe("FIT-437: App Store Server Notifications", () => {
     later(30);
     await notify(notification("DID_FAIL_TO_RENEW", { txn: { expiresDate: clock }, info: { isInBillingRetryPeriod: true } }));
     const record = await plan();
-    expect(record?.appStore?.status).toBe("billing_retry");
+    expect(record?.appStores?.["2000"]?.status).toBe("billing_retry");
     expect(effective(record, new Date(clock)).has).toBe(false);
     expect(shownPlan(true, record, new Date(clock)).status).toBe("unpaid");
     // Apple's retry succeeds: DID_RENEW (BILLING_RECOVERY) brings it back.
@@ -208,11 +261,11 @@ describe("FIT-437: App Store Server Notifications", () => {
     await notify(notification("DID_FAIL_TO_RENEW", { subtype: "GRACE_PERIOD", txn: { expiresDate: clock }, info: { gracePeriodExpiresDate: clock + 16 * DAY } }));
     later(16);
     await notify(notification("GRACE_PERIOD_EXPIRED", { txn: { expiresDate: t0 + 30 * DAY } }));
-    expect((await plan())?.appStore?.status).toBe("billing_retry");
+    expect((await apple())?.status).toBe("billing_retry");
     expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(false);
     later(30);
     await notify(notification("EXPIRED", { subtype: "BILLING_RETRY", txn: { expiresDate: t0 + 30 * DAY } }));
-    expect((await plan())?.appStore?.status).toBe("expired");
+    expect((await apple())?.status).toBe("expired");
     expect(shownPlan(true, await plan(), new Date(clock)).status).toBe("canceled");
   });
 
@@ -220,15 +273,15 @@ describe("FIT-437: App Store Server Notifications", () => {
     await notify(notification("SUBSCRIBED"));
     later(2);
     await notify(notification("REFUND", { txn: { revocationDate: clock, revocationReason: 0 } }));
-    expect((await plan())?.appStore?.status).toBe("refunded");
+    expect((await apple())?.status).toBe("refunded");
     expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(false);
     later(1);
     await notify(notification("REFUND_REVERSED"));
-    expect((await plan())?.appStore?.status).toBe("active");
+    expect((await apple())?.status).toBe("active");
     expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
     later(1);
     await notify(notification("REVOKE", { txn: { revocationDate: clock } }));
-    expect((await plan())?.appStore?.status).toBe("revoked");
+    expect((await apple())?.status).toBe("revoked");
     expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(false);
   });
 
@@ -246,7 +299,7 @@ describe("FIT-437: App Store Server Notifications", () => {
     later(32);
     await notify(notification("DID_RENEW", { subtype: "BILLING_RECOVERY" }));
     expect((await notify(early)).outcome.saved).toBe(false);
-    expect((await plan())?.appStore?.status).toBe("active");
+    expect((await apple())?.status).toBe("active");
   });
 
   it("refuses what Apple didn't sign; ignores another app's or another environment's", async () => {
@@ -318,7 +371,7 @@ describe("FIT-437: registering the app's purchase", () => {
     await notify(notification("REFUND", { txn: { revocationDate: clock } }));
     const out = await registerPurchase(SAM, stale, undefined, options());
     expect(out.plan).toMatchObject({ status: "canceled", source: "appstore" });
-    expect((await plan())?.appStore?.status).toBe("refunded");
+    expect((await apple())?.status).toBe("refunded");
   });
 });
 
@@ -348,7 +401,7 @@ describe("FIT-437: one plan across both stores", () => {
     later(2);
     await notify(notification("REFUND", { txn: { revocationDate: clock } }));
     const record = await plan();
-    expect(record).toMatchObject({ status: "active", subscription: "sub_1", eventAt: 100, appStore: { status: "refunded" } });
+    expect(record).toMatchObject({ status: "active", subscription: "sub_1", eventAt: 100, appStores: { "2000": { status: "refunded" } } });
     expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
     expect(shownPlan(true, record, new Date(clock))).toMatchObject({ status: "active", source: "stripe", paidTwice: false });
   });
@@ -360,7 +413,7 @@ describe("FIT-437: one plan across both stores", () => {
     // A second, ended Stripe subscription's event too (FIT-189).
     await saveSubscription(stripeSub("incomplete_expired", 300, "sub_2"), 300);
     const record = await plan();
-    expect(record?.appStore).toMatchObject({ status: "active", originalTransactionId: "2000" });
+    expect(record?.appStores?.["2000"]).toMatchObject({ status: "active", originalTransactionId: "2000" });
     expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
   });
 
@@ -369,15 +422,147 @@ describe("FIT-437: one plan across both stores", () => {
     await notify(notification("SUBSCRIBED", { txn: { originalTransactionId: "2000" } }));
     later(1);
     await notify(notification("SUBSCRIBED", { txn: { originalTransactionId: "4000" }, info: { originalTransactionId: "4000" } }));
+    expect(effective(await plan(), new Date(clock))).toEqual({ has: true, source: "appstore", paidTwice: true });
     later(1);
     await notify(notification("EXPIRED", { txn: { originalTransactionId: "2000", expiresDate: clock - 1 } }));
-    expect((await plan())?.appStore).toMatchObject({ originalTransactionId: "4000", status: "active" });
+    expect(await apple("4000")).toMatchObject({ status: "active" });
+    expect(await apple("2000")).toMatchObject({ status: "expired" });
+    expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
+  });
+
+  it("review: a newer subscription ending doesn't take Pro from an older one still paid (each kept apart)", async () => {
+    // A year bought on one Apple ID, then a month on another for the same account.
+    await notify(notification("SUBSCRIBED", { txn: { productId: "com.maxwellkendall.aicoach.pro.yearly", expiresDate: t0 + 365 * DAY } }));
+    later(10);
+    await notify(notification("SUBSCRIBED", { txn: { originalTransactionId: "4000" }, info: { originalTransactionId: "4000" } }));
+    later(2);
+    await notify(notification("REFUND", { txn: { originalTransactionId: "4000", revocationDate: clock }, info: { originalTransactionId: "4000" } }));
+    expect(await apple("4000")).toMatchObject({ status: "refunded" });
+    expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
+    // The month would have ended by now anyway; the year still has Pro, and is what Billing shows.
+    later(60);
+    expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
+    expect(shownPlan(true, await plan(), new Date(clock))).toMatchObject({ status: "active", interval: "year", source: "appstore", paidTwice: false });
+    expect(await hasPlan(SAM, "pro", new Date(t0 + 366 * DAY))).toBe(false);
   });
 
   it("the web won't sell a plan already bought in the App Store", async () => {
     keys.mockResolvedValue({ secretKey: "sk_test_1" });
     await notify(notification("SUBSCRIBED"));
     await expect(start(SAM, "month", undefined, "https://example.com", "pro")).rejects.toThrow("through the App Store");
+  });
+});
+
+describe("FIT-437 review: renewal extensions and refunds of past periods", () => {
+  it("RENEWAL_EXTENDED moves the end: still Pro past the original expiration, until the new one", async () => {
+    await notify(notification("SUBSCRIBED", { txn: { transactionId: "t1" } }));
+    later(10);
+    const out = await notify(notification("RENEWAL_EXTENDED", { txn: { transactionId: "t1", purchaseDate: t0, expiresDate: t0 + 37 * DAY } }));
+    expect(out.outcome).toMatchObject({ saved: true });
+    expect(await apple()).toMatchObject({ status: "active", expiresAt: new Date(t0 + 37 * DAY).toISOString() });
+    expect(await hasPlan(SAM, "pro", new Date(t0 + 33 * DAY))).toBe(true);
+    expect(await hasPlan(SAM, "pro", new Date(t0 + 38 * DAY))).toBe(false);
+  });
+
+  it("a refund of an earlier period leaves the period paid for now", async () => {
+    await notify(notification("SUBSCRIBED", { txn: { transactionId: "A" } }));
+    later(30);
+    await notify(notification("DID_RENEW", { txn: { transactionId: "B" } }));
+    later(5);
+    // Apple's REFUND carries the refunded transaction: A, with a newer signedDate than B's renewal.
+    const refundA = { transactionId: "A", purchaseDate: t0, expiresDate: t0 + 30 * DAY, revocationDate: clock };
+    expect((await notify(notification("REFUND", { txn: refundA }))).outcome).toMatchObject({ saved: false, ignored: "older than the state kept" });
+    expect(await apple()).toMatchObject({ status: "active", transactionId: "B" });
+    expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
+    // Its reversal (A's dates are past) doesn't end B either.
+    later(1);
+    await notify(notification("REFUND_REVERSED", { txn: { transactionId: "A", purchaseDate: t0, expiresDate: t0 + 30 * DAY } }));
+    expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(true);
+    // A refund of B, the current period, ends it.
+    later(1);
+    await notify(notification("REFUND", { txn: { transactionId: "B", purchaseDate: t0 + 30 * DAY, revocationDate: clock } }));
+    expect(await apple()).toMatchObject({ status: "refunded", transactionId: "B" });
+    expect(await hasPlan(SAM, "pro", new Date(clock))).toBe(false);
+  });
+});
+
+describe("FIT-437 review: a notification is acknowledged only once saved", () => {
+  it("reads the plan consistently before each conditional write, and retries a lost race", async () => {
+    await notify(notification("SUBSCRIBED"));
+    later(30);
+    send.mockClear();
+    conflicts = 1;
+    expect((await notify(notification("DID_RENEW"))).outcome).toMatchObject({ saved: true });
+    const reads = send.mock.calls.map(([c]: any) => c.input).filter((i: any) => i.Key?.SK === "PROPLAN" && !i.TransactItems);
+    expect(reads.length).toBe(2);
+    expect(reads.every((i: any) => i.ConsistentRead === true)).toBe(true);
+  });
+
+  it("a write that loses every attempt is a 500, so Apple sends it again; nothing half-saved", async () => {
+    await notify(notification("SUBSCRIBED"));
+    later(2);
+    conflicts = 100;
+    const out = await notify(notification("REFUND", { txn: { revocationDate: clock } }));
+    expect(out).toMatchObject({ status: 500, outcome: { saved: false, ignored: "not saved" } });
+    expect((await apple())?.status).toBe("active");
+    // Apple's retry lands.
+    conflicts = 0;
+    expect((await notify(notification("REFUND", { txn: { revocationDate: clock } }))).status).toBe(200);
+    expect((await apple())?.status).toBe("refunded");
+  });
+
+  it("Stripe's events throw too (the webhook answers 5xx and Stripe retries)", async () => {
+    const { SaveError } = await import("../lambda/coachPlan.ts");
+    conflicts = 100;
+    const sub = { id: "sub_1", status: "active", customer: "cus_1", metadata: { uid: SAM }, items: { data: [{ price: { lookup_key: "pro_monthly" } }] } };
+    await expect(saveSubscription(sub, 100)).rejects.toThrow(SaveError);
+  });
+});
+
+describe("FIT-437 review: deleting the account releases its App Store subscriptions", () => {
+  const remove = (uid: string) => deleteAccount({ identity: { sub: uid, username: uid } } as never);
+  const ownItems = (uid: string) => [...items.values()].filter((i) => i.PK === `USER#${uid}` || i.uid === uid || i.GSI1PK === `USER#${uid}`);
+
+  it("a notification after deletion is dropped, not saved under the deleted account; a new account restores it; renewals follow", async () => {
+    await notify(notification("SUBSCRIBED"));
+    await remove(SAM);
+    expect(ownItems(SAM)).toEqual([]);
+    expect(cognitoSend).toHaveBeenCalled();
+    later(30);
+    expect(await notify(notification("DID_RENEW"))).toEqual({ status: 200, outcome: { saved: false, ignored: "account deleted" } });
+    expect(ownItems(SAM)).toEqual([]);
+    expect(items.has("APPSTORETXN#2000|APPSTORETXN")).toBe(false);
+    // Restored in the app while signed in as a new account: Apple's transaction still says SAM.
+    const out = await registerPurchase(ALEX, jws(transaction()), undefined, options());
+    expect(out).toMatchObject({ kind: "pro", plan: { status: "active", source: "appstore" } });
+    expect(items.get("APPSTORETXN#2000|APPSTORETXN")?.uid).toBe(ALEX);
+    later(30);
+    expect((await notify(notification("DID_RENEW"))).outcome).toMatchObject({ saved: true, uid: ALEX });
+    expect(await hasPlan(ALEX, "pro", new Date(clock))).toBe(true);
+    expect(ownItems(SAM)).toEqual([]);
+  });
+
+  it("a purchase never linked before the deletion is released too", async () => {
+    await remove(SAM);
+    expect((await notify(notification("SUBSCRIBED"))).outcome).toMatchObject({ saved: false, ignored: "account deleted" });
+    expect(ownItems(SAM)).toEqual([]);
+    await expect(registerPurchase(ALEX, jws(transaction()), undefined, options())).resolves.toMatchObject({ kind: "pro" });
+  });
+
+  it("a notification racing the deletion (link read before it went) doesn't bring the plan back", async () => {
+    await notify(notification("SUBSCRIBED"));
+    // The marker is written first; the link is still there for a moment.
+    items.set(`DELETEDACCOUNT#${SAM}|DELETEDACCOUNT`, { PK: `DELETEDACCOUNT#${SAM}`, SK: "DELETEDACCOUNT" });
+    items.delete(`USER#${SAM}|PROPLAN`);
+    later(30);
+    expect((await notify(notification("DID_RENEW"))).outcome).toMatchObject({ saved: false, ignored: "account deleted" });
+    expect(items.has(`USER#${SAM}|PROPLAN`)).toBe(false);
+  });
+
+  it("a live account's subscription is still refused to another", async () => {
+    await notify(notification("SUBSCRIBED", { txn: { originalTransactionId: "5000" }, info: { originalTransactionId: "5000" } }));
+    items.delete("APPSTORETXN#5000|APPSTORETXN");
+    await expect(registerPurchase(ALEX, jws(transaction({ originalTransactionId: "5000" })), undefined, options())).rejects.toThrow("another Barbrabell account");
   });
 });
 

@@ -410,15 +410,16 @@ export class AICoachStack extends Stack {
     // ---- FIT-437: Lifter Pro and Coach Pro bought in the App Store, kept in the same plan records ----
     // Prod takes Sandbox too: App Review and TestFlight buy there, and the reviewer must see Pro work.
     const appStoreEnv = { APPSTORE_ENVIRONMENTS: isProd ? "Production,Sandbox" : "Sandbox" };
+    // ConditionCheckItem: links and plans are written only while the account has no deletion marker (deleteAccount).
     const appStore = fn("appStore", appStoreEnv);
-    table.grant(appStore, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem");
+    table.grant(appStore, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:ConditionCheckItem");
     api.addLambdaDataSource("AppStoreSource", appStore).createResolver("RegisterAppStorePurchase", {
       typeName: "Mutation",
       fieldName: "registerAppStorePurchase",
     });
     // Apple posts here directly, as Stripe does to its webhook; the URL goes in App Store Connect's App Information.
     const appStoreNotifications = fn("appStoreNotifications", appStoreEnv);
-    table.grant(appStoreNotifications, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem");
+    table.grant(appStoreNotifications, "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:ConditionCheckItem");
     const appStoreNotificationsUrl = appStoreNotifications.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
     new CfnOutput(this, "AppStoreNotificationsUrl", { value: appStoreNotificationsUrl.url });
 

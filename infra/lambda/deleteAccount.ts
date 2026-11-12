@@ -3,6 +3,7 @@ import { BatchWriteCommand, DynamoDBDocumentClient, paginateQuery } from "@aws-s
 import { AdminDeleteUserCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { DeleteObjectsCommand, S3Client } from "@aws-sdk/client-s3";
 import type { AppSyncResolverEvent, AppSyncIdentityCognito } from "aws-lambda";
+import { deletedAccountKey } from "./plan.ts";
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
@@ -28,7 +29,7 @@ export async function itemsToDelete(uid: string) {
   });
   const memberships = indexed.filter((i) => String(i.GSI1SK).startsWith("GROUP#"));
   const shares = indexed.filter((i) => String(i.GSI1SK).startsWith("SHARE#"));
-  // FIT-437: their App Store subscriptions' links, so a new account can restore them.
+  // FIT-437: their App Store subscriptions' links, so a new account can restore them (appStore.ts, deleted accounts).
   const purchases = indexed.filter((i) => String(i.GSI1SK).startsWith("APPSTORETXN#"));
   const own = await queryKeys({
     KeyConditionExpression: "PK = :pk",
@@ -61,18 +62,27 @@ export async function itemsToDelete(uid: string) {
 }
 
 // App Store 5.1.1(v): in-app account deletion removes the account and the data tied to it.
-export async function handler(event: AppSyncResolverEvent<Record<string, never>>) {
-  const identity = event.identity as AppSyncIdentityCognito;
-  const keys = await itemsToDelete(identity.sub);
-  for (let i = 0; i < keys.length; i += 25) {
-    let pending: Record<string, unknown[]> | undefined = {
-      [TABLE]: keys.slice(i, i + 25).map((Key) => ({ DeleteRequest: { Key } })),
-    };
+async function batchWrite(requests: unknown[]) {
+  for (let i = 0; i < requests.length; i += 25) {
+    let pending: Record<string, unknown[]> | undefined = { [TABLE]: requests.slice(i, i + 25) };
     while (pending && Object.keys(pending).length > 0) {
       const out = await db.send(new BatchWriteCommand({ RequestItems: pending as never }));
       pending = out.UnprocessedItems as Record<string, unknown[]> | undefined;
     }
   }
+}
+
+/**
+ * FIT-437: the marker that the account is gone, written before anything is deleted, so an App Store notification
+ * racing the deletion can't link the account's subscription or save its plan again. Only the opaque uid and a date.
+ */
+export const deletedMarker = (uid: string, now = new Date()) => ({ ...deletedAccountKey(uid), deletedAt: now.toISOString() });
+
+export async function handler(event: AppSyncResolverEvent<Record<string, never>>) {
+  const identity = event.identity as AppSyncIdentityCognito;
+  await batchWrite([{ PutRequest: { Item: deletedMarker(identity.sub) } }]);
+  const keys = await itemsToDelete(identity.sub);
+  await batchWrite(keys.map((Key) => ({ DeleteRequest: { Key } })));
   // FIT-107: the images of what they shared.
   const cards = keys.filter((k) => k.PK.startsWith("SHARE#")).map((k) => ({ Key: `cards/${k.PK.slice(6)}.png` }));
   for (let i = 0; i < cards.length; i += 1000) {

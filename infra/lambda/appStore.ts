@@ -1,9 +1,9 @@
-import { ConditionalCheckFailedException, DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBClient, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { APPLE_ROOT_G3, app, productOf, verifyJWS } from "./entitlement.ts";
-import { planRecord, saveState, type Kind } from "./coachPlan.ts";
-import { shownPlan, type AppStoreState, type AppStoreStatus, type CoachPlan } from "./plan.ts";
+import { planRecord, saveState, SaveError, type Kind } from "./coachPlan.ts";
+import { deletedAccountKey, shownPlan, type AppStoreState, type AppStoreStatus, type CoachPlan } from "./plan.ts";
 
 /**
  * FIT-437: Lifter Pro and Coach Pro bought in the iPhone app, kept in the same plan records as Stripe's (plan.ts).
@@ -17,6 +17,11 @@ import { shownPlan, type AppStoreState, type AppStoreStatus, type CoachPlan } fr
  * to arrive. The app sets StoreKit's appAccountToken to the account's uid (a Cognito sub, already a UUID), so a
  * notification that arrives first finds the account from it. A subscription linked to one account is refused to
  * another (a restore while signed in as someone else).
+ *
+ * Deleted accounts: deleteAccount keeps a DELETEDACCOUNT#uid marker and removes the account's links. Apple's
+ * transactions keep the deleted uid as their appAccountToken forever, so a token whose account is deleted owns
+ * nothing: the subscription is released, notifications for it are acknowledged and dropped (never saved under the
+ * deleted uid), and the next account to restore it in the app takes it, after which its notifications go there.
  */
 
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -37,13 +42,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The notification types that say something about a subscription's state; any other is acknowledged and ignored. */
 export const HANDLED = ["SUBSCRIBED", "DID_RENEW", "DID_CHANGE_RENEWAL_STATUS", "DID_CHANGE_RENEWAL_PREF", "OFFER_REDEEMED",
-  "DID_FAIL_TO_RENEW", "GRACE_PERIOD_EXPIRED", "EXPIRED", "REFUND", "REVOKE", "REFUND_REVERSED"];
+  "DID_FAIL_TO_RENEW", "GRACE_PERIOD_EXPIRED", "EXPIRED", "REFUND", "REVOKE", "REFUND_REVERSED",
+  // One subscription's renewal date moved later (by us, in App Store Connect): its transaction has the new expiresDate.
+  "RENEWAL_EXTENDED"];
 
 /** Apple's JWSTransactionDecodedPayload and JWSRenewalInfoDecodedPayload, the fields read here. */
 export interface Transaction {
   originalTransactionId: string;
+  transactionId?: string;
   productId: string;
   bundleId: string;
+  purchaseDate?: number;
   environment: string;
   expiresDate?: number;
   revocationDate?: number;
@@ -89,9 +98,11 @@ export function stateFrom(type: string | undefined, subtype: string | undefined,
   const status = statusOf(type, subtype, txn, renewal, at);
   const state: AppStoreState = {
     originalTransactionId: String(txn.originalTransactionId),
+    transactionId: txn.transactionId === undefined ? undefined : String(txn.transactionId),
     productId: txn.productId,
     status,
     interval: product.interval,
+    purchasedAt: iso(txn.purchaseDate),
     expiresAt: iso(txn.expiresDate),
     graceUntil: status === "in_grace" ? iso(renewal?.gracePeriodExpiresDate) : undefined,
     // Without renewal info (a registration from the app), it renews unless a notification says otherwise.
@@ -122,29 +133,43 @@ export async function linkedUid(originalTransactionId: string): Promise<string |
   return Item?.uid;
 }
 
+/** Whether the account was deleted (deleteAccount's marker). */
+export async function deleted(uid: string): Promise<boolean> {
+  const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: deletedAccountKey(uid), ConsistentRead: true }));
+  return Item !== undefined;
+}
+
 /**
- * Links the subscription to the account unless it's another's; the account it's linked to. On GSI1 under the
- * account, so deleting the account deletes the link (deleteAccount).
+ * Links the subscription to the account unless it's another's, and only while the account isn't deleted; the account
+ * it's linked to, or undefined if this one is deleted. On GSI1 under the account, so deleting the account deletes the
+ * link (deleteAccount).
  */
-export async function link(originalTransactionId: string, uid: string, now = new Date()): Promise<string> {
+export async function link(originalTransactionId: string, uid: string, now = new Date()): Promise<string | undefined> {
   try {
-    await db.send(new PutCommand({
-      TableName: TABLE(),
-      Item: { ...linkKey(originalTransactionId), uid, createdAt: now.toISOString(), GSI1PK: `USER#${uid}`, GSI1SK: `APPSTORETXN#${originalTransactionId}` },
-      ConditionExpression: "attribute_not_exists(PK) OR #uid = :uid",
-      ExpressionAttributeNames: { "#uid": "uid" },
-      ExpressionAttributeValues: { ":uid": uid },
-    }));
+    await db.send(new TransactWriteCommand({ TransactItems: [
+      { ConditionCheck: { TableName: TABLE(), Key: deletedAccountKey(uid), ConditionExpression: "attribute_not_exists(PK)" } },
+      { Put: {
+        TableName: TABLE(),
+        Item: { ...linkKey(originalTransactionId), uid, createdAt: now.toISOString(), GSI1PK: `USER#${uid}`, GSI1SK: `APPSTORETXN#${originalTransactionId}` },
+        ConditionExpression: "attribute_not_exists(PK) OR #uid = :uid",
+        ExpressionAttributeNames: { "#uid": "uid" },
+        ExpressionAttributeValues: { ":uid": uid },
+      } },
+    ] }));
     return uid;
   } catch (error) {
-    if (!(error instanceof ConditionalCheckFailedException)) throw error;
+    if (!(error instanceof TransactionCanceledException)) throw error;
+    if (error.CancellationReasons?.[0]?.Code === "ConditionalCheckFailed") return undefined;
     return (await linkedUid(originalTransactionId))!;
   }
 }
 
 export type Outcome = { saved: boolean; uid?: string; kind?: Kind; ignored?: string };
 
-/** A notification's signedPayload: verified, read, and saved to the account's plan. Anything not ours is ignored. */
+/**
+ * A notification's signedPayload: verified, read, and saved to the account's plan. Anything not ours, or older than
+ * what's kept, is acknowledged (200) and ignored; a save that couldn't be made is a 500, so Apple sends it again.
+ */
 export async function handleNotification(signedPayload: string | undefined, options: Options = {}): Promise<{ status: number; outcome: Outcome }> {
   const now = options.now ?? new Date();
   const root = options.root ?? APPLE_ROOT_G3;
@@ -181,10 +206,19 @@ export async function handleNotification(signedPayload: string | undefined, opti
       console.error("App Store subscription with no account", otid, type);
       return { status: 200, outcome: { saved: false, ignored: "no account" } };
     }
-    uid = await link(otid, token, now);
+    // Bought by an account since deleted: released until another account restores it.
+    const linked = await link(otid, token, now);
+    if (!linked) return { status: 200, outcome: { saved: false, ignored: "account deleted" } };
+    uid = linked;
   }
-  const saved = await saveState(uid, made.kind, { source: "appstore", state: made.state }, now);
-  return { status: 200, outcome: { saved, uid, kind: made.kind } };
+  try {
+    const result = await saveState(uid, made.kind, { source: "appstore", state: made.state });
+    if (result === "saved") return { status: 200, outcome: { saved: true, uid, kind: made.kind } };
+    return { status: 200, outcome: { saved: false, uid, kind: made.kind, ignored: result === "deleted" ? "account deleted" : "older than the state kept" } };
+  } catch (error) {
+    if (!(error instanceof SaveError)) throw error;
+    return { status: 500, outcome: { saved: false, uid, kind: made.kind, ignored: "not saved" } };
+  }
 }
 
 export class PurchaseError extends Error {}
@@ -206,12 +240,15 @@ export async function registerPurchase(uid: string, transaction: string | undefi
   }
   const made = stateFrom(undefined, undefined, txn, renewal, Number(txn.signedDate), now)!;
   const otid = made.state.originalTransactionId;
-  const owner = (await linkedUid(otid)) ?? txn.appAccountToken?.toLowerCase();
+  const token = txn.appAccountToken?.toLowerCase();
+  // The account that bought it, unless that account is deleted: then whoever restores it now takes it.
+  const owner = (await linkedUid(otid)) ?? (token && token !== uid && !(await deleted(token)) ? token : undefined);
   if (owner && owner !== uid) throw new PurchaseError("That subscription belongs to another Barbrabell account. Sign in with that account to use it.");
   if ((await link(otid, uid, now)) !== uid) throw new PurchaseError("That subscription belongs to another Barbrabell account. Sign in with that account to use it.");
-  await saveState(uid, made.kind, { source: "appstore", state: made.state }, now);
+  // Older than what's kept (a stale transaction the app held) is fine: the plan kept is shown.
+  await saveState(uid, made.kind, { source: "appstore", state: made.state });
   // On sale: it was just sold in the App Store, whatever Stripe has.
-  return { kind: made.kind, plan: shownPlan(true, await planRecord(uid, made.kind), now) };
+  return { kind: made.kind, plan: shownPlan(true, await planRecord(uid, made.kind, true), now) };
 }
 
 export async function handler(event: AppSyncResolverEvent<{ transaction?: string; renewalInfo?: string | null }>) {

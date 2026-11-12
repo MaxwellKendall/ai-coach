@@ -4,8 +4,9 @@
  *
  * - Stripe's at the record's top level (customer, subscription, status, interval, renews, cancelsAtEnd, eventAt),
  *   where FIT-144 kept it, so records already saved need no migration.
- * - The App Store's in `appStore` (AppStoreState), written from App Store Server Notifications and the transactions
- *   the app registers after a purchase or restore.
+ * - The App Store's in `appStores`, one AppStoreState per subscription (original transaction id), written from App
+ *   Store Server Notifications and the transactions the app registers after a purchase or restore. Two Apple IDs can
+ *   each subscribe for the same account; each keeps its own state, so one ending never hides another still paid.
  *
  * The plan is had while either store has it (`effective`). No module here talks to AWS, so scripts can use it.
  */
@@ -22,9 +23,13 @@ export type AppStoreStatus = "active" | "trialing" | "in_grace" | "billing_retry
 
 export interface AppStoreState {
   originalTransactionId: string;
+  /** The transaction (one billing period) this state was read from. */
+  transactionId?: string;
   productId: string;
   status: AppStoreStatus;
   interval?: string;
+  /** When the transaction's period was bought (ISO): orders periods, so an older one's refund can't end a newer one. */
+  purchasedAt?: string;
   /** When the current period ends (ISO). */
   expiresAt?: string;
   /** When the billing grace period ends (ISO), while in_grace. */
@@ -43,8 +48,14 @@ export interface PlanRecord {
   renews?: string;
   cancelsAtEnd?: boolean;
   eventAt?: number;
-  appStore?: AppStoreState;
+  /** The App Store's subscriptions by original transaction id. */
+  appStores?: Record<string, AppStoreState>;
+  /** Bumped on every write of appStores, which is written only if unchanged since read. */
+  appStoreVersion?: number;
 }
+
+/** FIT-437: kept under this key when an account is deleted, so its App Store subscriptions aren't saved to it again. */
+export const deletedAccountKey = (uid: string) => ({ PK: `DELETEDACCOUNT#${uid}`, SK: "DELETEDACCOUNT" });
 
 export type Source = "stripe" | "appstore";
 
@@ -59,18 +70,30 @@ export function appStoreHas(state: AppStoreState | undefined, now = new Date()):
   return false;
 }
 
+export const appStoreStates = (record?: PlanRecord): AppStoreState[] => Object.values(record?.appStores ?? {});
+
+/** Whether any of the account's App Store subscriptions has the plan now. */
+export const appStoreHasAny = (record: PlanRecord | undefined, now = new Date()) => appStoreStates(record).some((s) => appStoreHas(s, now));
+
+/** The App Store subscription to show: of those that have the plan, the one that runs longest; else the latest news. */
+export function appStoreShown(record: PlanRecord | undefined, now = new Date()): AppStoreState | undefined {
+  const ends = (s: AppStoreState) => Date.parse((s.status === "in_grace" ? s.graceUntil : s.expiresAt) ?? "") || Infinity;
+  const having = appStoreStates(record).filter((s) => appStoreHas(s, now)).sort((a, b) => ends(b) - ends(a));
+  return having[0] ?? appStoreStates(record).sort((a, b) => b.eventAt - a.eventAt)[0];
+}
+
 export interface Effective {
   has: boolean;
   /** The store that has it (Stripe's first, since the web can manage it), else none. */
   source?: Source;
-  /** FIT-437: paying in both stores for the same plan: Billing suggests cancelling one. */
+  /** FIT-437: paying twice for the same plan (both stores, or two Apple IDs): Billing suggests cancelling one. */
   paidTwice: boolean;
 }
 
 export function effective(record: PlanRecord | undefined, now = new Date()): Effective {
   const stripe = stripeHas(record);
-  const appStore = appStoreHas(record?.appStore, now);
-  return { has: stripe || appStore, source: stripe ? "stripe" : appStore ? "appstore" : undefined, paidTwice: stripe && appStore };
+  const apple = appStoreStates(record).filter((s) => appStoreHas(s, now)).length;
+  return { has: stripe || apple > 0, source: stripe ? "stripe" : apple ? "appstore" : undefined, paidTwice: Number(stripe) + apple > 1 };
 }
 
 /**
@@ -105,7 +128,7 @@ const STRIPE_WORDS: Record<AppStoreStatus, string> = {
 /** The plan as the app and Billing show it: the store that has it, or Stripe's last word, or the App Store's. */
 export function shownPlan(onSale: boolean, record?: PlanRecord, now = new Date()): CoachPlan {
   const { source, paidTwice } = effective(record, now);
-  const apple = record?.appStore;
+  const apple = appStoreShown(record, now);
   if (apple && (source === "appstore" || (!source && !record?.status))) {
     return {
       onSale,

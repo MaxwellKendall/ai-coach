@@ -224,9 +224,11 @@ describe("least privilege", () => {
     // FIT-144: the coach plan reads and updates its own record, and reads the Stripe key.
     expect(actionsOf(dev, /^coachPlan/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:UpdateItem"]);
     expect(actionsOf(dev, /^coachPlan/)).toContain("secretsmanager:GetSecretValue");
-    // FIT-437: the App Store's two ways in read and write plans and put links; they never delete, scan or read Stripe's key.
+    // FIT-437: the App Store's two ways in read and write plans and put links, checking the account isn't deleted; they
+    // never delete, scan or read Stripe's key.
     for (const name of [/^appStore(?!Notifications)/, /^appStoreNotifications/]) {
-      expect(actionsOf(dev, name).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]);
+      expect(actionsOf(dev, name).filter((a) => a.startsWith("dynamodb:")).sort())
+        .toEqual(["dynamodb:ConditionCheckItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]);
       expect(actionsOf(dev, name)).not.toContain("secretsmanager:GetSecretValue");
     }
     // FIT-130: coach links are put and deleted one by one, never scanned.

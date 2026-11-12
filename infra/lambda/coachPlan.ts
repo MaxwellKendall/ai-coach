@@ -1,9 +1,9 @@
-import { ConditionalCheckFailedException, DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { ConditionalCheckFailedException, DynamoDBClient, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { AppSyncIdentityCognito, AppSyncResolverEvent } from "aws-lambda";
 import { stripeConfig } from "./gifts.ts";
 import { stripe } from "./stripe.ts";
-import { appStoreHas, effective, HAS_PLAN, shownPlan, stripeHas, supersedes, type AppStoreState, type PlanRecord } from "./plan.ts";
+import { appStoreHasAny, deletedAccountKey, effective, HAS_PLAN, shownPlan, stripeHas, supersedes, type AppStoreState, type PlanRecord } from "./plan.ts";
 
 export { HAS_PLAN, shownPlan, type CoachPlan, type PlanRecord } from "./plan.ts";
 
@@ -91,8 +91,9 @@ export function recordFrom(sub: Subscription, eventAt: number): { uid: string; k
 
 const planKey = (uid: string, kind: Kind = "coach") => ({ PK: `USER#${uid}`, SK: PLANS[kind].sk });
 
-export async function planRecord(uid: string, kind: Kind = "coach"): Promise<PlanRecord | undefined> {
-  const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: planKey(uid, kind) }));
+/** The plan's record; `consistent` for a read that a conditional write depends on. */
+export async function planRecord(uid: string, kind: Kind = "coach", consistent = false): Promise<PlanRecord | undefined> {
+  const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: planKey(uid, kind), ConsistentRead: consistent || undefined }));
   return Item as PlanRecord | undefined;
 }
 
@@ -107,55 +108,93 @@ export function replaces(kept: PlanRecord | undefined, event: PlanRecord): boole
                     { id: event.subscription, has: stripeHas(event), eventAt: event.eventAt! });
 }
 
-/** FIT-437: the same guard for the App Store's subscription kept (by original transaction). */
-export function replacesAppStore(kept: AppStoreState | undefined, event: AppStoreState, now = new Date()): boolean {
-  return supersedes(kept && { id: kept.originalTransactionId, has: appStoreHas(kept, now), eventAt: kept.eventAt },
-                    { id: event.originalTransactionId, has: appStoreHas(event, now), eventAt: event.eventAt });
+/** When a state's billing period began, to order an App Store subscription's transactions; NaN if unknown. */
+const periodOf = (s: AppStoreState) => Date.parse(s.purchasedAt ?? s.expiresAt ?? "");
+
+/**
+ * FIT-437: whether an App Store event replaces the state kept for the same subscription (each subscription has its
+ * own, so another's never does). A later billing period always does; an earlier one never does (a refund or reversal
+ * of a past renewal says nothing about the period paid for now); within a period, the newest event wins.
+ */
+export function replacesAppStore(kept: AppStoreState | undefined, event: AppStoreState): boolean {
+  if (!kept) return true;
+  if (kept.transactionId && event.transactionId && kept.transactionId !== event.transactionId) {
+    if (periodOf(event) > periodOf(kept)) return true;
+    if (periodOf(event) < periodOf(kept)) return false;
+  }
+  return kept.eventAt <= event.eventAt;
 }
 
 export type StoreUpdate = { source: "stripe"; record: PlanRecord } | { source: "appstore"; state: AppStoreState };
 
+/** saved; obsolete: older than what's kept, so rightly not written; deleted: the account is gone (App Store only). */
+export type SaveResult = "saved" | "obsolete" | "deleted";
+
+/** The write kept losing to others: nothing was saved, and the caller must fail so the store sends it again. */
+export class SaveError extends Error {}
+
+const ATTEMPTS = 5;
+
 /**
  * FIT-437: the one way either store's event reaches a plan's record. Each store writes only its own state (Stripe's
- * top-level fields, the App Store's `appStore`), so one store's event never takes the plan from the other; within a
- * store FIT-189's guard keeps the subscription that has the plan. Written only if the store's state is still the one
- * read (its eventAt), read again up to 3 times. Whether it was saved.
+ * top-level fields, the App Store's `appStores`), so one store's event never takes the plan from the other; within
+ * Stripe FIT-189's guard keeps the subscription that has the plan, and each App Store subscription keeps its own
+ * state. Written only if the store's state is still the one read (consistently), read again on a conflict; throws
+ * SaveError when every attempt lost.
  */
-export async function saveState(uid: string, kind: Kind, update: StoreUpdate, now = new Date()): Promise<boolean> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const kept = await planRecord(uid, kind);
-    const keptAt = update.source === "stripe" ? kept?.eventAt : kept?.appStore?.eventAt;
-    if (update.source === "stripe" ? !replaces(kept, update.record) : !replacesAppStore(kept?.appStore, update.state, now)) {
-      const [keptId, id, status] = update.source === "stripe" ? [kept?.subscription, update.record.subscription, update.record.status]
-        : [kept?.appStore?.originalTransactionId, update.state.originalTransactionId, update.state.status];
-      if (keptId !== id) console.error("Kept the plan's subscription", keptId, "over", id, status);
-      return false;
+export async function saveState(uid: string, kind: Kind, update: StoreUpdate): Promise<SaveResult> {
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const kept = await planRecord(uid, kind, true);
+    if (update.source === "stripe") {
+      if (!replaces(kept, update.record)) {
+        if (kept?.subscription !== update.record.subscription) console.error("Kept the plan's subscription", kept?.subscription, "over", update.record.subscription, update.record.status);
+        return "obsolete";
+      }
+      try {
+        await db.send(new UpdateCommand({ TableName: TABLE(), Key: planKey(uid, kind), ...stripeWrite(update.record, kept?.eventAt) }));
+        return "saved";
+      } catch (error) {
+        if (!(error instanceof ConditionalCheckFailedException)) throw error;
+      }
+      continue;
     }
-    // Unchanged since read: the same event time, or none yet.
-    const seen = keptAt !== undefined;
-    const write = update.source === "stripe" ? stripeWrite(update.record, seen)
-      : { UpdateExpression: "SET appStore = :appStore", ConditionExpression: seen ? "appStore.eventAt = :seen" : "attribute_not_exists(appStore.eventAt)",
-          ExpressionAttributeValues: { ":appStore": update.state } as Record<string, unknown> };
-    if (seen) write.ExpressionAttributeValues[":seen"] = keptAt;
+    const { state } = update;
+    if (!replacesAppStore(kept?.appStores?.[state.originalTransactionId], state)) return "obsolete";
+    const version = kept?.appStoreVersion;
     try {
-      await db.send(new UpdateCommand({ TableName: TABLE(), Key: planKey(uid, kind), ...write }));
-      return true;
+      // With the account's deletion marker absent, so an event racing a deletion can't bring its plan back.
+      await db.send(new TransactWriteCommand({ TransactItems: [
+        { ConditionCheck: { TableName: TABLE(), Key: deletedAccountKey(uid), ConditionExpression: "attribute_not_exists(PK)" } },
+        { Update: {
+          TableName: TABLE(), Key: planKey(uid, kind),
+          UpdateExpression: "SET appStores = :appStores, appStoreVersion = :version",
+          ConditionExpression: version === undefined ? "attribute_not_exists(appStoreVersion)" : "appStoreVersion = :seen",
+          ExpressionAttributeValues: {
+            ":appStores": { ...kept?.appStores, [state.originalTransactionId]: state },
+            ":version": (version ?? 0) + 1,
+            ...(version === undefined ? {} : { ":seen": version }),
+          },
+        } },
+      ] }));
+      return "saved";
     } catch (error) {
-      if (!(error instanceof ConditionalCheckFailedException)) throw error;
+      if (!(error instanceof TransactionCanceledException)) throw error;
+      if (error.CancellationReasons?.[0]?.Code === "ConditionalCheckFailed") return "deleted";
     }
   }
-  return false;
+  console.error("Plan write lost every attempt", uid, kind, update.source);
+  throw new SaveError(`Couldn't save the ${kind} plan; try again.`);
 }
 
 /** Stripe's fields, set where FIT-144 kept them; an interval or renewal the event doesn't have is removed. */
-function stripeWrite(record: PlanRecord, seen: boolean) {
-  const fields = Object.entries(record).filter(([k, v]) => v !== undefined && k !== "appStore");
+function stripeWrite(record: PlanRecord, seen: number | undefined) {
+  const fields = Object.entries(record).filter(([k, v]) => v !== undefined && k !== "appStores" && k !== "appStoreVersion");
   const removed = (["interval", "renews"] as const).filter((k) => record[k] === undefined);
   return {
     UpdateExpression: `SET ${fields.map(([k]) => `#${k} = :${k}`).join(", ")}${removed.length ? ` REMOVE ${removed.map((k) => `#${k}`).join(", ")}` : ""}`,
-    ConditionExpression: seen ? "eventAt = :seen" : "attribute_not_exists(eventAt)",
+    ConditionExpression: seen !== undefined ? "eventAt = :seen" : "attribute_not_exists(eventAt)",
     ExpressionAttributeNames: Object.fromEntries([...fields.map(([k]) => k), ...removed].map((k) => [`#${k}`, k])) as Record<string, string> | undefined,
-    ExpressionAttributeValues: Object.fromEntries(fields.map(([k, v]) => [`:${k}`, v])) as Record<string, unknown>,
+    ExpressionAttributeValues: Object.fromEntries([...fields.map(([k, v]) => [`:${k}`, v]), ...(seen !== undefined ? [[":seen", seen]] : [])]) as Record<string, unknown>,
   };
 }
 
@@ -243,7 +282,7 @@ export async function start(uid: string, interval: string, email?: string, origi
   const current = await planRecord(uid, kind);
   if (current?.status && !["canceled", "incomplete_expired"].includes(current.status)) throw new PlanError(already(kind));
   // FIT-437: bought in the App Store already; a second Checkout would pay twice for one plan.
-  if (appStoreHas(current?.appStore)) throw new PlanError(alreadyInApp(kind));
+  if (appStoreHasAny(current)) throw new PlanError(alreadyInApp(kind));
   // FIT-189: a late or missed webhook leaves the record behind Stripe; ask Stripe before a second Checkout. A key that
   // can't read subscriptions (a restricted key without the permission) goes on to Checkout as before.
   const live = current?.customer && await activeSubscription(keys.secretKey, current.customer, kind).catch((error) => {

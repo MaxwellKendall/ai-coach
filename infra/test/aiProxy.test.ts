@@ -53,9 +53,9 @@ describe("aiProxy: Pro bought on the web", () => {
   it("FIT-437: counts Pro bought in the App Store too, until its period ends", () => {
     const now = new Date("2027-01-04T12:00:00Z");
     const appStore = { originalTransactionId: "1", productId: "com.maxwellkendall.aicoach.pro.monthly", autoRenew: true, environment: "Production", eventAt: 1 };
-    expect(webPro({ appStore: { ...appStore, status: "active", expiresAt: "2027-02-01T00:00:00Z" } }, now)).toBe(true);
-    expect(webPro({ status: "canceled", appStore: { ...appStore, status: "trialing", expiresAt: "2027-01-10T00:00:00Z" } }, now)).toBe(true);
-    expect(webPro({ appStore: { ...appStore, status: "active", expiresAt: "2027-01-01T00:00:00Z" } }, now)).toBe(false);
-    expect(webPro({ appStore: { ...appStore, status: "billing_retry" } }, now)).toBe(false);
+    expect(webPro({ appStores: { "1": { ...appStore, status: "active", expiresAt: "2027-02-01T00:00:00Z" } } }, now)).toBe(true);
+    expect(webPro({ status: "canceled", appStores: { "1": { ...appStore, status: "trialing", expiresAt: "2027-01-10T00:00:00Z" } } }, now)).toBe(true);
+    expect(webPro({ appStores: { "1": { ...appStore, status: "active", expiresAt: "2027-01-01T00:00:00Z" } } }, now)).toBe(false);
+    expect(webPro({ appStores: { "1": { ...appStore, status: "billing_retry" } } }, now)).toBe(false);
   });
 });
