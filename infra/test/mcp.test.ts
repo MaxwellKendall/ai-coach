@@ -56,6 +56,7 @@ function memory(accounts: Record<string, Account>, units: Record<string, Record<
     async comment(coach, client, day, text) { threads.push({ owner: client, day, at: now.toISOString(), by: coach, byName: "Coach", text }); },
     async clients(coach) { return links.filter((l) => l.coach === coach).map((l) => ({ uid: l.client, name: l.name, since: "2026-10-01T00:00:00.000Z" })); },
     async coachOf(coach, client) { return links.some((l) => l.coach === coach && l.client === client); },
+    async coached(uid) { return links.some((l) => l.client === uid); },
     async invite(coach) { invites.push(coach); return { code: "ABCDEFGHJK", url: "https://example.com/c/ABCDEFGHJK" }; },
     async share(uid, kind, payload) {
       const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
@@ -845,8 +846,10 @@ describe("FIT-196: the coach's roster", () => {
     await callTool("add_note", { client: "Sarah", date: "2026-10-15", note: "Ice it and keep the squat at RPE 7." }, coach, store, now);
     expect(store.threads).toMatchObject([{ owner: "me", day: "2026-10-15", by: "coach", text: "Ice it and keep the squat at RPE 7." }]);
     expect(await callTool("list_clients", {}, coach, store, now)).toMatch(/Sarah Jones \[me\]: .* No flags\./);
-    // FIT-240: someone with no clients gets the sample client, plan or not.
-    expect(await callTool("list_clients", {}, me, store, now)).toMatch(/^1 client, those who need them first:\n- Mike Torres \(sample\)/);
+    // FIT-445: Sarah ("me") is coached, so she isn't handed a sample client, nor made a coach by asking.
+    expect(await callTool("list_clients", {}, me, store, now)).toBe("They have no clients yet. invite_client makes an invite link to send one.");
+    expect(store.links.filter((l) => l.coach === "me")).toEqual([]);
+    expect(await callTool("get_context", {}, me, store, now)).not.toMatch(/They coach/);
   });
 
   it("leaves out a client whose link ended after listing", async () => {
@@ -1137,6 +1140,15 @@ describe("FIT-240: a sample client to coach before paying", () => {
     // Made once: a second look doesn't make another.
     await callTool("list_clients", {}, coach, store, now);
     expect(store.links.filter((l) => l.coach === "newcoach")).toHaveLength(1);
+  });
+
+  // FIT-445
+  it("hands no sample client to someone with a coach of their own", async () => {
+    const store = setup();
+    store.links.push({ coach: "sam", client: "newcoach", name: "New Coach" });
+    expect(await callTool("list_clients", {}, coach, store, now)).toBe("They have no clients yet. invite_client makes an invite link to send one.");
+    await expect(callTool("roster_review", {}, coach, store, now)).resolves.not.toMatch(/sample/);
+    expect(store.links.filter((l) => l.coach === "newcoach")).toEqual([]);
   });
 
   it("invites free, and keeps planning real clients behind Pro", async () => {

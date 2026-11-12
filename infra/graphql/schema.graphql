@@ -204,7 +204,8 @@ type Query {
   coachInvite(code: String!): String
   "FIT-130: who coaches me, and whom I coach."
   myCoaches: [Person!]!
-  myClients: [Person!]!
+  "FIT-240: whom I coach; a new coach gets a sample client. FIT-445: none for an account with a coach, or with sample false."
+  myClients(sample: Boolean): [Person!]!
   "FIT-339: my client invites not used yet, newest first."
   myInvites: [ClientInvite!]!
   "FIT-132: replies on logged sessions: a day's thread, or all of them; mine, or a client's (uid) for their coach."

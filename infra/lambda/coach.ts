@@ -63,10 +63,15 @@ export async function hasCoachPlan(uid: string) {
 /** Whether a coach may see and change this client: linked. */
 export const canCoach = isCoachOf;
 
-/** The dashboard's Clients. FIT-240: a coach with no clients gets the sample client first. */
-export async function myClients(coach: string, now = new Date()) {
+/**
+ * The dashboard's Clients. FIT-240: a coach with no clients gets the sample client first. FIT-445: not an account with a
+ * coach of its own (a client is never handed one), nor when the caller asks without (`sample` false: the app's check of
+ * whether someone is a coach, which must not make them one).
+ */
+export async function myClients(coach: string, now = new Date(), sample = true) {
   const clients = await list(coach, "CLIENT#");
-  if (!clients.length && (await ensureSample(coach, now.toISOString().slice(0, 10)))) return list(coach, "CLIENT#");
+  if (clients.length || !sample || (await coached(coach))) return clients;
+  if (await ensureSample(coach, now.toISOString().slice(0, 10))) return list(coach, "CLIENT#");
   return clients;
 }
 
@@ -267,7 +272,8 @@ export async function handler(event: AppSyncResolverEvent<Record<string, string>
       case "coachInvite": return await inviteName(args.code);
       case "acceptCoach": return await accept(me, args.code, identity.claims);
       case "myCoaches": return await list(me, "COACH#");
-      case "myClients": return await myClients(me);
+      // FIT-445: older apps and the dashboard send no `sample`, and keep getting one.
+      case "myClients": return await myClients(me, new Date(), (args as Record<string, unknown>).sample !== false);
       case "unlinkCoach": return await unlink(args.uid, me, me);
       case "removeClient": return await unlink(me, args.uid, me);
       case "myInvites": return await myInvites(me);

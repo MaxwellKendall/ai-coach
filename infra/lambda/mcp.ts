@@ -15,7 +15,7 @@ import * as progress from "./progress.ts";
 import { clock, distanceName, goalMeters, meters, MILE, miles, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
-import { comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, NAME_NEEDED, list as linked, postComment, type Person } from "./coach.ts";
+import { coached, comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, NAME_NEEDED, list as linked, postComment, type Person } from "./coach.ts";
 import { HAS_PLAN, onSale, planRecord } from "./coachPlan.ts";
 import { giftedUntil } from "./gifts.ts";
 import { ensureSample, isSample } from "./sample.ts";
@@ -58,6 +58,8 @@ export interface Store {
   coachPlan(uid: string): Promise<boolean>;
   /** FIT-240: makes the coach's sample client the first time (sample.ts); whether it made one now. */
   sample(coach: string, today: string): Promise<boolean>;
+  /** FIT-445: whether the account has a coach of its own; a client is never handed a sample client. */
+  coached(uid: string): Promise<boolean>;
   /** FIT-327: when their trial began (their first call that asks, kept), and whether they have Pro: either plan, or a gift. */
   access(uid: string, now: Date): Promise<Access>;
   /** FIT-327: whether lifter Pro is on sale (Stripe's keys and both prices exist); nothing is held back until it is. */
@@ -131,6 +133,7 @@ export const dynamoStore: Store = {
   async comment(coach, client, day, text) { await postComment(coach, undefined, client, day, text); },
   coachPlan: hasCoachPlan,
   sample: ensureSample,
+  coached,
   async access(uid, now) {
     // PROTRIAL, not FIT-190's TRIAL: everyone gets the 14 days, including accounts whose old trial ran out while Pro was off sale.
     const trial = await db.send(new UpdateCommand({
@@ -960,11 +963,11 @@ async function needsPro(tool: string, account: Account, store: Store) {
     + `How Pro works: ${ORIGIN}/coaches. Once it's on, coaching works here on their next request; there's nothing to reconnect.`);
 }
 
-/** FIT-240: the clients a coach sees here. One with no clients gets the sample client first. */
+/** FIT-240: the clients a coach sees here. One with no clients gets the sample client first; FIT-445: not a client. */
 async function roster(account: Account, store: Store, today: string) {
   const coach = account.uid;
   let clients = await store.clients(coach);
-  if (!clients.length && (await store.sample(coach, today))) clients = await store.clients(coach);
+  if (!clients.length && !(await store.coached(coach)) && (await store.sample(coach, today))) clients = await store.clients(coach);
   return { clients, paid: await store.coachPlan(coach) };
 }
 

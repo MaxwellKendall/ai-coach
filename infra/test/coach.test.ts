@@ -288,4 +288,20 @@ describe("coaching is free, with any number of clients (FIT-284)", () => {
     expect(await as("sam", "myClients")).toEqual([]);
     expect(table.has("USER#sam|CLIENT#sample-mike-sam")).toBe(false);
   });
+
+  // FIT-445: a client, or a solo lifter the app checks on, is never made a coach by being handed Mike.
+  it("gives no sample client to an account with a coach, or when asked without one", async () => {
+    plan(undefined);
+    const { code } = (await as("sam", "createClientInvite")) as { code: string };
+    await coach.accept("ann", code, undefined, now);
+    expect(await as("ann", "myClients")).toEqual([]);
+    expect(await coach.myClients("ann", now)).toEqual([]);
+    expect(table.has("USER#ann|SAMPLE")).toBe(false);
+    expect([...table.keys()].some((k) => k.startsWith("USER#sample-mike-ann|"))).toBe(false);
+    // A lifter with no coach, asked with sample false (the app's check), gets none either; the default still makes one.
+    expect(await coach.handler({ identity: { sub: "lee" }, info: { fieldName: "myClients" }, arguments: { sample: false } } as any)).toEqual([]);
+    expect(table.has("USER#lee|SAMPLE")).toBe(false);
+    const [sample] = (await as("lee", "myClients")) as { uid: string }[];
+    expect(sample.uid).toBe("sample-mike-lee");
+  });
 });
