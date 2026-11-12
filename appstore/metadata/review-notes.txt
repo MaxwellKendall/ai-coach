@@ -13,15 +13,15 @@ Coach mode is in this build. Sign out, tap I'm a coach, and sign in as {{COACH_E
 
 Invite codes, one use, 14 days: {{INVITE_CODES}}
 
-Subscriptions and how to reach the paywalls (to verify once FIT-437 ships):
+Subscriptions and how to reach the paywalls:
 
-Barbrabell has three tiers. Free includes the athlete app, the coach dashboard (unlimited clients, planning, messaging, and import), and the basic connector tools for reading and logging. Paid plans can be purchased in the iPhone app (StoreKit) or on the web (Stripe). A purchase in either store unlocks the same plan everywhere. Sandbox purchases work for App Review.
+Barbrabell has three tiers. Free includes the athlete app, the coach dashboard (unlimited clients, planning, messaging, and import), and the basic connector tools for reading and logging. Paid plans can be purchased in the iPhone app (StoreKit) or on the web (Stripe). A purchase in either store unlocks the same plan everywhere. Sandbox purchases of Lifter Pro may not complete until the App Store server entitlement is deployed; the paywall itself is in this build.
 
-Lifter Pro is $5.99 a month or $39.99 a year, with a 14-day free trial on both. It unlocks AI-designed training weeks for self-coached lifters. To reach the Lifter Pro paywall (to verify once FIT-437 ships): sign out, and on the first screen tap Train on my own, answer the questions, and pick a program. The Lifter Pro paywall is the subscription offer for AI-designed weeks. The sheet shows the price, the billing period, the trial, auto-renew terms, Restore Purchases, and links to the Terms of Use and the Privacy Policy.
+Lifter Pro is $5.99 a month or $39.99 a year, with a 14-day free trial on both. It unlocks AI-designed training weeks for self-coached lifters and the full connector tools. Onboarding no longer ends on a paywall. To reach the Lifter Pro paywall: sign out, tap Train on my own, answer the questions, and pick a program (that path stays free). Then open the Program tab, swipe to the Next week card, and tap Plan my next week. The Lifter Pro paywall is the subscription offer for AI-designed weeks. You can also open it from You (the person icon) via the Lifter Pro row. The sheet shows the price, the billing period, the trial, auto-renew terms, Restore Purchases, and links to the Terms of Use and the Privacy Policy.
 
-Coach Pro is $19.99 a month or $199 a year. It unlocks the exhaustive connector tools for coaches. To reach the Coach Pro paywall (to verify once FIT-437 ships): sign in as {{COACH_EMAIL}}. The Coach Pro paywall is the subscription offer on a Pro-only coach feature. That sheet shows the price, the billing period, auto-renew terms, Restore Purchases, and the same Terms of Use and Privacy Policy links.
+Coach Pro is $19.99 a month or $199 a year. It is deferred for this launch and is not required to review Lifter Pro. In this build, a coach can still open the Coach Pro paywall from You (the person icon) via the Coach Pro row. That sheet shows the price, the billing period, auto-renew terms, Restore Purchases, and the same Terms of Use and Privacy Policy links.
 
-Without an account the free path is still there: Train on my own, the short questions, and a ready-made program.
+Without an account the free path is still there: Train on my own, the short questions, and a ready-made program. That path does not end on a paywall.
 
 Run mode uses location only while a run is recording, including with the phone locked, and saves the run to Apple Health. Heart rate shows only when an Apple Watch or AirPods measure it.
 
