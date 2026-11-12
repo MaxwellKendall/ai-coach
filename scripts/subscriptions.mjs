@@ -393,7 +393,8 @@ export function formatRemote(remote) {
     const shown = group.localization ? `${group.localization.locale} "${group.localization.name}"` : "no en-US name";
     lines.push(`Group ${group.referenceName} id ${group.id} ${shown}`);
     for (const sub of group.subscriptions || []) {
-      lines.push(`  ${sub.name} ${sub.productId} id ${sub.id} ${sub.state} USA ${sub.usaPrice ?? "none"} prices ${sub.priceCount} intro ${introSummary(sub.introductoryOffers)} localized ${sub.localizations?.length || 0}`);
+      const loc = (sub.localizations || []).find((item) => item.locale === "en-US");
+    lines.push(`  ${sub.name} ${sub.productId} id ${sub.id} ${sub.state} USA ${sub.usaPrice ?? "none"} prices ${sub.priceCount} intro ${introSummary(sub.introductoryOffers)} ${loc ? `${loc.locale} "${loc.name}" / "${loc.description}"` : "no en-US localization"}`);
     }
   }
   if (!remote.groups?.length) lines.push("No subscription groups.");
@@ -411,8 +412,8 @@ function introSummary(offers) {
 
 function isAlreadyThere(error) {
   const code = error?.body?.errors?.[0]?.code || "";
-  const detail = `${code} ${error?.body?.errors?.[0]?.detail || ""} ${error?.message || ""}`.toLowerCase();
-  return error?.status === 409 || detail.includes("already exists") || detail.includes("duplicate") || detail.includes("conflict");
+  const detail = `${code} ${error?.body?.errors?.[0]?.detail || ""}`.toLowerCase();
+  return code.includes("DUPLICATE") || detail.includes("already exists") || detail.includes("duplicate");
 }
 
 function isUnsupportedTerritory(error) {
@@ -566,24 +567,57 @@ async function setUsaPrice(client, id, action) {
     pointId = nearestPricePoint(points.map((row) => ({ id: row.id, customerPrice: row.attributes?.customerPrice })), action.priceUSD).id;
   }
   const priced = await existingPriceTerritories(client, id);
+  await ensureAvailability(client, id);
   if (!priced.has("USA")) await postPrice(client, id, pointId, "USA");
-  const equalized = await pages(client, `/v1/subscriptionPricePoints/${pointId}/equalizations?limit=200`);
+  const equalized = await pages(client, `/v1/subscriptionPricePoints/${pointId}/equalizations?include=territory&limit=200`);
   let posted = 0;
   for (const row of equalized) {
-    const territory = row.relationships?.territory?.data?.id;
+    const territory = territoryFromPricePoint(row);
     if (!territory || territory === "USA" || priced.has(territory)) continue;
     await postPrice(client, id, row.id, territory);
     posted += 1;
     if (posted % 25 === 0) console.log(`Equalized ${posted} territories on ${action.productId}.`);
   }
-  console.log(`Price ${action.priceUSD} set on ${action.productId}. Newly posted territories: ${posted + (priced.has("USA") ? 0 : 1)}.`);
+  console.log(`Price ${action.priceUSD} set on ${action.productId}. Equalization rows ${equalized.length}. Newly posted territories: ${posted + (priced.has("USA") ? 0 : 1)}.`);
+}
+
+function territoryFromPricePoint(row) {
+  const related = row.relationships?.territory?.data?.id;
+  if (related) return related;
+  try {
+    const decoded = JSON.parse(Buffer.from(row.id, "base64url").toString("utf8"));
+    return decoded.t || null;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureAvailability(client, id) {
+  const territories = await pages(client, "/v1/territories?limit=200");
+  try {
+    await client.post("/v1/subscriptionAvailabilities", {
+      data: {
+        type: "subscriptionAvailabilities",
+        attributes: { availableInNewTerritories: true },
+        relationships: {
+          subscription: { data: { type: "subscriptions", id } },
+          availableTerritories: { data: territories.map((row) => ({ type: "territories", id: row.id })) },
+        },
+      },
+    });
+    console.log(`Availability set in ${territories.length} territories.`);
+  } catch (error) {
+    if (commerceBlock(error).blocked) throw error;
+    if (isAlreadyThere(error)) return;
+    throw error;
+  }
 }
 
 async function existingPriceTerritories(client, id) {
-  const rows = await pages(client, `/v1/subscriptions/${id}/prices?include=territory&limit=200`);
+  const rows = await pages(client, `/v1/subscriptions/${id}/prices?include=territory,subscriptionPricePoint&limit=200`);
   const territories = new Set();
   for (const row of rows) {
-    const territory = row.relationships?.territory?.data?.id;
+    const territory = row.relationships?.territory?.data?.id || territoryFromPricePoint({ id: row.relationships?.subscriptionPricePoint?.data?.id });
     if (territory) territories.add(territory);
   }
   return territories;
@@ -614,6 +648,7 @@ function priceBody(subscriptionId, pricePointId, territory) {
 }
 
 async function setIntro(client, id, action) {
+  await ensureAvailability(client, id);
   const existing = await pages(client, `/v1/subscriptions/${id}/introductoryOffers?include=territory&limit=200`);
   const have = new Set(existing.map((row) => row.relationships?.territory?.data?.id).filter(Boolean));
   const territories = await pages(client, "/v1/territories?limit=200");
