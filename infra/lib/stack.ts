@@ -617,6 +617,9 @@ export class AICoachStack extends Stack {
         responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
         functionAssociations: [{ function: appPaths, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       };
+      // One origin object for /cards/* and /review/*, so adding the review behavior does not
+      // insert a third Cards origin and renumber later CloudFront origins and OACs.
+      const cardsOrigin = origins.S3BucketOrigin.withOriginAccessControl(cards);
       const web = new cloudfront.Distribution(this, "Web", {
         domainNames: props.web.hosts,
         certificate,
@@ -634,7 +637,7 @@ export class AICoachStack extends Stack {
         },
         additionalBehaviors: {
           "/cards/*": {
-            origin: origins.S3BucketOrigin.withOriginAccessControl(cards),
+            origin: cardsOrigin,
             viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           },
@@ -647,7 +650,7 @@ export class AICoachStack extends Stack {
           },
           // App Review demo video and other /review/ objects, uploaded by hand to the cards bucket like /exercises/*.
           "/review/*": {
-            origin: origins.S3BucketOrigin.withOriginAccessControl(cards),
+            origin: cardsOrigin,
             viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           },
