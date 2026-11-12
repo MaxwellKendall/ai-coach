@@ -10,8 +10,8 @@ Progress — your lifts over time, worked out from what you actually logged.
 
 Not coached yet? The app still works on its own. Tap "Train on my own" on the first screen, pick a ready-made program, and log your training, runs and check-ins without an account.
 
-Coaches can open My Clients in the app to see who needs them, reply, and change a session. Programming tools and billing stay on the web.
+Coaches can open My Clients in the app to see who needs them, reply, and change a session. Programming tools stay on the web.
 
-barbrabell is free. There is nothing to buy in the app and there are no ads.
+The app is free to download and has no ads. Lifter Pro and Coach Pro are optional auto-renewable subscriptions, bought in the app. Each paywall shows the price, the period, the trial when there is one, and these terms before you subscribe. Cancel in Settings › Apple ID › Subscriptions.
 
 Terms of Use: https://barbrabell.com/terms

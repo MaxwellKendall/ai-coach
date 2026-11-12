@@ -34,7 +34,9 @@ npm run release
 
 It bumps `CURRENT_PROJECT_VERSION`, commits, archives, uploads, refreshes the prod review account, records the demo video, and sets the listing from `appstore/`. It then stops.
 
-**Stop and ask** if it warns that Pro's subscriptions are attached to the version (FIT-386). Version 1.0 ships without them.
+**Stop** if it says the Paid Apps agreement is not active. The Account Holder signs that under Business. Apple does not expose the signature through the API.
+
+**Stop before submit** if a subscription is not ready to submit, or a paywall screenshot is missing. The command attaches Coach Pro and Lifter Pro to the version; it does not remove products. The first real write to App Store Connect, and submit, wait for the author's yes.
 
 ## 3. The video link
 

@@ -3,7 +3,7 @@
 // `--dry-run` does the local checks and the read-only App Store Connect calls, and does not upload,
 // change the listing, refresh the prod review account, deploy the video, or submit.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Asc, loadAscEnv } from "./asc.mjs";
@@ -16,9 +16,19 @@ import {
   parseArgs,
   redact,
   reviewNotes,
-  subscriptionWarning,
   videoHostingNote,
 } from "./release-lib.mjs";
+import {
+  REVIEW_REPLY,
+  applySubscriptionPlan,
+  assertSubscriptions,
+  formatPlan,
+  loadRemote,
+  paidAgreementStatus,
+  planSubscriptions,
+  reviewSubmissionPlan,
+  withTiers,
+} from "./subscriptions.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 process.chdir(root);
@@ -41,6 +51,8 @@ const listing = {
 const hidden = [process.env.DEMO_PASSWORD, process.env.ASC_CONTACT_PHONE].filter(Boolean);
 
 const failures = [];
+const notReady = [];
+let subscriptionPlan;
 function fail(message) {
   const text = redact(message, hidden);
   failures.push(text);
@@ -121,19 +133,15 @@ try {
   asc = new Asc(loadAscEnv(), { dryRun });
   store = await readStore(asc, review.bundleId);
 } catch (error) {
-  fail(`App Store Connect: ${error.message}`);
+  fail(agreementFailure(error));
 }
 if (store) reportStore(store);
-
-const warning = store ? subscriptionWarning(store.subscriptions, store.reviewItems) : { warn: false, lines: [] };
-if (warning.warn) {
-  console.log(`\n${warning.lines.join("\n")}`);
-  failures.push(warning.lines[0]);
-} else if (store) {
-  const names = store.subscriptions.map((sub) => `${sub.name} ${sub.state}`).join(", ");
-  console.log(names
-    ? `\nSubscriptions on the app record, none in a state that submits with this version: ${names}.\nFIT-386: confirm Version ${marketing}'s In-App Purchases and Subscriptions section is empty. A first subscription added only on that page is not always visible to the API.`
-    : "\nNo subscriptions returned for this app.");
+if (store && asc) {
+  try {
+    subscriptionPlan = await prepareSubscriptions(asc, store.app.id);
+  } catch (error) {
+    fail(agreementFailure(error));
+  }
 }
 
 if (!dryRun && !failures.length) {
@@ -235,10 +243,14 @@ if (store && asc && notes) {
 }
 
 if (submit) {
-  if (dryRun || failures.length) console.log("\nWould create the review submission and set it submitted. Not sent.");
-  else {
+  if (dryRun || failures.length || notReady.length) {
+    console.log("\nWould submit the version and these subscriptions together, then set the submission submitted:");
+    for (const item of subscriptionPlan?.submit || []) console.log(`  ${item.name} (${item.productId}) ${item.state}`);
+    console.log(`Note to App Review: ${REVIEW_REPLY}`);
+    console.log("Not sent.");
+  } else {
     try {
-      await sendToReview(asc, store);
+      await sendToReview(asc, store, subscriptionPlan);
       console.log("Submitted for review.");
     } catch (error) {
       fail(`Submit: ${error.message}`);
@@ -251,10 +263,50 @@ if (submit) {
 
 console.log("\n---");
 console.log(dryRun ? "Dry run complete." : "Release command finished.");
+if (notReady.length) {
+  console.log("Not ready to submit:");
+  for (const item of notReady) console.log(`- ${item}`);
+  process.exitCode = 1;
+}
 if (failures.length) {
   console.log("Needs attention:");
   for (const item of failures) console.log(`- ${item}`);
   process.exitCode = 1;
+}
+
+function agreementFailure(error) {
+  const code = error.body?.errors?.[0]?.code || "";
+  const agreement = paidAgreementStatus({ readOk: false, errorCode: code });
+  if (agreement.stop && code) return agreement.message;
+  return `App Store Connect: ${error.message}`;
+}
+
+async function prepareSubscriptions(client, appId) {
+  const catalog = JSON.parse(readFileSync("appstore/subscriptions.json", "utf8"));
+  assertSubscriptions(catalog);
+  const remote = await loadRemote(client, appId);
+  const priced = await withTiers(client, catalog, remote);
+  const plan = planSubscriptions(priced, remote, { screenshotExists: (path) => existsSync(path) });
+  const agreement = paidAgreementStatus({ readOk: true });
+  console.log(`\n${agreement.message}`);
+  console.log(formatPlan(plan).join("\n"));
+  if (plan.warnings.length) {
+    console.log(plan.warnings.join("\n"));
+    notReady.push(...plan.warnings);
+  }
+  console.log("On submit, the version and these subscriptions go in one review submission.");
+  for (const item of plan.submit) console.log(`  ${item.name} (${item.productId}) ${item.state}`);
+  if (!dryRun && !failures.length) {
+    const groupIds = new Map(remote.groups.map((group) => [group.referenceName, group.id]));
+    const created = await applySubscriptionPlan(client, plan, { appId, groupIds });
+    for (const item of plan.submit) {
+      if (!item.id && created.get(item.productId)) item.id = created.get(item.productId);
+    }
+    console.log("Subscriptions were created or updated. No product was deleted.");
+  } else {
+    console.log(dryRun ? "Dry run does not create or change subscriptions, prices, offers, or screenshots." : "Subscriptions were not changed.");
+  }
+  return plan;
 }
 
 async function readStore(client, bundleId) {
@@ -518,7 +570,7 @@ async function writeReviewDetails(client, versionId, reviewText, phone, preview)
   }
 }
 
-async function sendToReview(client, found) {
+async function sendToReview(client, found, subs) {
   const open = found.submissions.find((item) => !["COMPLETE", "COMPLETED"].includes(item.state));
   if (open && ["WAITING_FOR_REVIEW", "IN_REVIEW"].includes(open.state)) {
     throw new Error(`A review submission is already ${open.state}.`);
@@ -528,15 +580,51 @@ async function sendToReview(client, found) {
   let submissionId = open?.id;
   if (!submissionId) {
     const made = await client.post("/v1/reviewSubmissions", {
-      data: { type: "reviewSubmissions", relationships: { app: { data: { type: "apps", id: found.app.id } } } },
+      data: {
+        type: "reviewSubmissions",
+        attributes: { platform: "IOS" },
+        relationships: { app: { data: { type: "apps", id: found.app.id } } },
+      },
     });
     submissionId = made.data.id;
+  }
+  const listed = await client.get(`/v1/reviewSubmissions/${submissionId}/items?include=appStoreVersion,subscriptionVersion`);
+  const existingItems = (listed.data || []).filter((item) => item.type === "reviewSubmissionItems").map((item) => ({
+    appStoreVersionId: item.relationships?.appStoreVersion?.data?.id || null,
+    subscriptionVersionId: item.relationships?.subscriptionVersion?.data?.id || null,
+  }));
+  const adding = reviewSubmissionPlan({ existingItems, versionId: version.id, subscriptions: subs?.submit || [] });
+  if (adding.addAppVersion) {
     await client.post("/v1/reviewSubmissionItems", {
       data: {
         type: "reviewSubmissionItems",
         relationships: {
           reviewSubmission: { data: { type: "reviewSubmissions", id: submissionId } },
           appStoreVersion: { data: { type: "appStoreVersions", id: version.id } },
+        },
+      },
+    });
+  } else {
+    console.log("The version is already on the review submission.");
+  }
+  for (const item of adding.subscriptions) {
+    if (!item.id) throw new Error(`${item.productId} has no subscription to submit.`);
+    let versionId = item.versionId;
+    if (!versionId) {
+      const made = await client.post("/v1/subscriptionVersions", {
+        data: {
+          type: "subscriptionVersions",
+          relationships: { subscription: { data: { type: "subscriptions", id: item.id } } },
+        },
+      });
+      versionId = made.data.id;
+    }
+    await client.post("/v1/reviewSubmissionItems", {
+      data: {
+        type: "reviewSubmissionItems",
+        relationships: {
+          reviewSubmission: { data: { type: "reviewSubmissions", id: submissionId } },
+          subscriptionVersion: { data: { type: "subscriptionVersions", id: versionId } },
         },
       },
     });

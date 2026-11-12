@@ -1,4 +1,4 @@
-Barbrabell is free. This version sells nothing in the app. Pro's subscriptions are not part of this submission.
+We've added a Terms of Use link to the description and the paywall, and the subscriptions are now offered in the app with the required terms.
 
 Demo video: {{VIDEO_URL}}
 
@@ -11,10 +11,14 @@ Coach mode is in this build. Sign out, tap I'm a coach, and sign in as {{COACH_E
 
 Invite codes, one use, 14 days: {{INVITE_CODES}}
 
-Without an account: on the first screen tap Train on my own, answer the short questions, and pick a ready-made program.
+How to reach the paywalls:
+
+Lifter Pro is $5.99 a month or $39.99 a year, with a 14-day free trial. Sign out. On the first screen tap Train on my own, answer the questions, and pick a program. The Lifter Pro paywall is the subscription offer for the AI-designed weeks. Opening a day on Program without a subscription shows it again, and so does sending a message in the coach tab. The sheet shows the price, the trial, Restore Purchases, and links to the Terms of Use and the privacy policy.
+
+Coach Pro is $19.99 a month or $199 a year. Sign in as {{COACH_EMAIL}}. Coach Pro is the subscription offer where a coach opens a Pro-only feature. That sheet shows the price, Restore Purchases, and the same Terms of Use and privacy policy links.
+
+Without an account the free path is still there: Train on my own, the short questions, and a ready-made program.
 
 Run mode uses location only while a run is recording, including with the phone locked, and saves the run to Apple Health. Heart rate shows only when an Apple Watch or AirPods measure it.
-
-Nothing in the app is unlocked by a payment. Coaches pay on the web.
 
 Terms of Use: https://barbrabell.com/terms

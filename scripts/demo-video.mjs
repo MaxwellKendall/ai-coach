@@ -136,14 +136,12 @@ if (await run("xcodebuild", ["build-for-testing", "-scheme", "ReviewDemo", "-con
   process.exit(1);
 }
 
-exec("rm", ["-rf", resolve(outDir, "result.xcresult")]);
 const recorder = spawn("xcrun", ["simctl", "io", udid, "recordVideo", "--codec", "h264", "--force", rawPath], { stdio: "ignore" });
 await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
 const testCode = await run("xcodebuild", [
   "test-without-building", "-scheme", "ReviewDemo", "-configuration", "Release",
   "-destination", destination, "-derivedDataPath", "build/dd",
   "-only-testing:AICoachUITests/ReviewDemoUITests/testReviewPath",
-  "-resultBundlePath", "build/review/result.xcresult",
 ]);
 recorder.kill("SIGINT");
 await new Promise((resolvePromise) => recorder.on("close", resolvePromise));

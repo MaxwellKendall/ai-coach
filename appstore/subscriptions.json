@@ -1,0 +1,70 @@
+{
+  "groups": [
+    {
+      "referenceName": "initial",
+      "displayName": "Lifter Pro",
+      "products": [
+        {
+          "productId": "com.maxwellkendall.aicoach.pro.monthly",
+          "name": "Lifter Pro Monthly",
+          "period": "ONE_MONTH",
+          "priceUSD": "5.99",
+          "introductoryOffer": { "mode": "FREE_TRIAL", "duration": "TWO_WEEKS", "periods": 1 },
+          "localization": {
+            "locale": "en-US",
+            "name": "Lifter Pro",
+            "description": "AI-designed training weeks"
+          },
+          "reviewNote": "Lifter Pro, monthly. A lifter without a coach taps Train on my own, answers the questions, and picks a program. The paywall offers this subscription, with the price, the 14-day free trial, Restore Purchases, and the Terms of Use.",
+          "screenshot": "appstore/screenshots/lifter-pro.png"
+        },
+        {
+          "productId": "com.maxwellkendall.aicoach.pro.yearly",
+          "name": "Lifter Pro Annual",
+          "period": "ONE_YEAR",
+          "priceUSD": "39.99",
+          "introductoryOffer": { "mode": "FREE_TRIAL", "duration": "TWO_WEEKS", "periods": 1 },
+          "localization": {
+            "locale": "en-US",
+            "name": "Lifter Pro",
+            "description": "AI-designed training weeks"
+          },
+          "reviewNote": "Lifter Pro, yearly, with the same 14-day free trial. Same paywall as the monthly plan: Train on my own, then the subscription offer.",
+          "screenshot": "appstore/screenshots/lifter-pro.png"
+        }
+      ]
+    },
+    {
+      "referenceName": "Coach Pro",
+      "displayName": "Coach Pro",
+      "products": [
+        {
+          "productId": "com.maxwellkendall.aicoach.coach.monthly",
+          "name": "Coach Pro Monthly",
+          "period": "ONE_MONTH",
+          "priceUSD": "19.99",
+          "localization": {
+            "locale": "en-US",
+            "name": "Coach Pro",
+            "description": "Pro tools for a coach"
+          },
+          "reviewNote": "Coach Pro, monthly. Sign in as a coach. The paywall is the subscription offer on a Pro-only coach feature. It shows the price, Restore Purchases, and the Terms of Use.",
+          "screenshot": "appstore/screenshots/coach-pro.png"
+        },
+        {
+          "productId": "com.maxwellkendall.aicoach.coach.yearly",
+          "name": "Coach Pro Annual",
+          "period": "ONE_YEAR",
+          "priceUSD": "199",
+          "localization": {
+            "locale": "en-US",
+            "name": "Coach Pro",
+            "description": "Pro tools for a coach"
+          },
+          "reviewNote": "Coach Pro, yearly. Same coach paywall as the monthly plan.",
+          "screenshot": "appstore/screenshots/coach-pro.png"
+        }
+      ]
+    }
+  ]
+}

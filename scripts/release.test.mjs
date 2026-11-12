@@ -8,7 +8,6 @@ import {
   parseArgs,
   redact,
   reviewNotes,
-  subscriptionWarning,
   TERMS_LINE,
 } from "./release-lib.mjs";
 
@@ -58,25 +57,12 @@ test("redact removes a secret without touching the rest of the line", () => {
   assert.equal(redact("Password: secret-value\nok", ["secret-value"]), "Password: ••••\nok");
 });
 
-test("FIT-386 warns when a subscription is ready to submit or named on a review item", () => {
-  const quiet = subscriptionWarning(
-    [{ name: "Pro Annual", productId: "pro.yearly", state: "APPROVED", onVersion: false }],
-    [{ id: "item-1", kind: "appStoreVersion" }],
-  );
-  assert.equal(quiet.warn, false);
-
-  const ready = subscriptionWarning(
-    [{ name: "Pro Monthly", productId: "pro.monthly", state: "READY_TO_SUBMIT", onVersion: false }],
-    [],
-  );
-  assert.equal(ready.warn, true);
-  assert.match(ready.lines[0], /FIT-386/);
-
-  const onVersion = subscriptionWarning(
-    [{ name: "Pro Annual", productId: "pro.yearly", state: "APPROVED", onVersion: true }],
-    [],
-  );
-  assert.equal(onVersion.warn, true);
+test("review notes tell Apple how to reach each paywall and include the reply", () => {
+  const template = readFileSync(new URL("../appstore/metadata/review-notes.txt", import.meta.url), "utf8");
+  assert.match(template, /Lifter Pro/);
+  assert.match(template, /Coach Pro/);
+  assert.match(template, /Terms of Use link to the description and the paywall/);
+  assert.equal(template.includes("sells nothing"), false);
 });
 
 test("the committed demo secrets file has no password", () => {

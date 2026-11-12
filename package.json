@@ -5,6 +5,6 @@
   "scripts": {
     "release": "node scripts/release.mjs",
     "demo-video": "node scripts/demo-video.mjs",
-    "test:release": "node --test scripts/release.test.mjs"
+    "test:release": "node --test scripts/release.test.mjs scripts/subscriptions.test.mjs"
   }
 }

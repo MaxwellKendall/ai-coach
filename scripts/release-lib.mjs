@@ -10,15 +10,6 @@ export const EDITABLE_VERSION_STATES = new Set([
   "INVALID_BINARY",
 ]);
 
-/** States in which a subscription would go out with the next submission (FIT-386). */
-export const ATTACHED_SUBSCRIPTION_STATES = new Set([
-  "READY_TO_SUBMIT",
-  "WAITING_FOR_REVIEW",
-  "IN_REVIEW",
-  "PENDING_BINARY_APPROVAL",
-  "DEVELOPER_ACTION_NEEDED",
-]);
-
 const LIMITS = { description: 4000, promotional: 170, whatsNew: 4000, keywords: 100 };
 
 export function parseArgs(argv) {
@@ -71,23 +62,6 @@ export function redact(text, secrets) {
     if (secret && secret.length >= 4) out = out.split(secret).join("••••");
   }
   return out;
-}
-
-/**
- * Subscriptions that would ride with this version. `onVersion` is set when a version relationship
- * points at one; review items are submission items whose relationship is a subscription or in-app purchase.
- */
-export function subscriptionWarning(subscriptions, reviewItems) {
-  const attached = subscriptions.filter((s) => s.onVersion || ATTACHED_SUBSCRIPTION_STATES.has(s.state));
-  const viaReview = reviewItems.filter((item) => item.kind === "subscription" || item.kind === "inAppPurchase");
-  const lines = [];
-  if (attached.length || viaReview.length) {
-    lines.push("Warning (FIT-386): version 1.0 must ship without Pro's subscriptions.");
-    for (const sub of attached) lines.push(`- ${sub.name} (${sub.productId}) ${sub.onVersion ? "on the version" : sub.state}`);
-    for (const item of viaReview) lines.push(`- review submission item ${item.id} is a ${item.kind}`);
-    lines.push("Remove them from the version's In-App Purchases and Subscriptions before submitting.");
-  }
-  return { warn: lines.length > 0, lines, attached, viaReview };
 }
 
 export function videoHostingNote() {
