@@ -139,29 +139,49 @@ export async function deleted(uid: string): Promise<boolean> {
   return Item !== undefined;
 }
 
+const ATTEMPTS = 5;
+
 /**
- * Links the subscription to the account unless it's another's, and only while the account isn't deleted; the account
- * it's linked to, or undefined if this one is deleted. On GSI1 under the account, so deleting the account deletes the
- * link (deleteAccount).
+ * Links the subscription to the account unless it's a live account's, and only while this account isn't deleted; the
+ * account it's linked to, or undefined if this one is deleted. On GSI1 under the account, so deleting the account
+ * deletes the link (deleteAccount).
+ *
+ * A link to a deleted account is taken over: deleteAccount finds links through GSI1, read eventually consistently, so
+ * one written just before the marker can outlive the deletion. The takeover is conditioned on the old link still being
+ * that account's and on its marker (never removed), so it can't take a live account's subscription.
+ *
+ * Only a failed condition is read as an answer. Any other cancellation (a conflicting transaction, throttling) is
+ * tried again, then SaveError, so a notification is answered 500 and Apple sends it again.
  */
 export async function link(originalTransactionId: string, uid: string, now = new Date()): Promise<string | undefined> {
-  try {
-    await db.send(new TransactWriteCommand({ TransactItems: [
-      { ConditionCheck: { TableName: TABLE(), Key: deletedAccountKey(uid), ConditionExpression: "attribute_not_exists(PK)" } },
-      { Put: {
-        TableName: TABLE(),
-        Item: { ...linkKey(originalTransactionId), uid, createdAt: now.toISOString(), GSI1PK: `USER#${uid}`, GSI1SK: `APPSTORETXN#${originalTransactionId}` },
-        ConditionExpression: "attribute_not_exists(PK) OR #uid = :uid",
-        ExpressionAttributeNames: { "#uid": "uid" },
-        ExpressionAttributeValues: { ":uid": uid },
-      } },
-    ] }));
-    return uid;
-  } catch (error) {
-    if (!(error instanceof TransactionCanceledException)) throw error;
-    if (error.CancellationReasons?.[0]?.Code === "ConditionalCheckFailed") return undefined;
-    return (await linkedUid(originalTransactionId))!;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const current = await linkedUid(originalTransactionId);
+    if (current === uid) return uid;
+    if (current && !(await deleted(current))) return current;
+    try {
+      await db.send(new TransactWriteCommand({ TransactItems: [
+        { ConditionCheck: { TableName: TABLE(), Key: deletedAccountKey(uid), ConditionExpression: "attribute_not_exists(PK)" } },
+        { Put: {
+          TableName: TABLE(),
+          Item: { ...linkKey(originalTransactionId), uid, createdAt: now.toISOString(), GSI1PK: `USER#${uid}`, GSI1SK: `APPSTORETXN#${originalTransactionId}` },
+          ...(current
+            ? { ConditionExpression: "#uid = :old", ExpressionAttributeNames: { "#uid": "uid" }, ExpressionAttributeValues: { ":old": current } }
+            : { ConditionExpression: "attribute_not_exists(PK)" }),
+        } },
+        // A takeover: the old owner is deleted (the marker stays for good).
+        ...(current ? [{ ConditionCheck: { TableName: TABLE(), Key: deletedAccountKey(current), ConditionExpression: "attribute_exists(PK)" } }] : []),
+      ] }));
+      return uid;
+    } catch (error) {
+      if (!(error instanceof TransactionCanceledException)) throw error;
+      const codes = (error.CancellationReasons ?? []).map((r) => r.Code ?? "None");
+      if (codes[0] === "ConditionalCheckFailed") return undefined;
+      // The link changed since it was read (or a transient failure): read it again.
+      if (codes.some((c) => c !== "None" && c !== "ConditionalCheckFailed")) console.error("App Store link write cancelled", originalTransactionId, codes.join(","));
+    }
   }
+  console.error("App Store link write lost every attempt", originalTransactionId);
+  throw new SaveError("Couldn't link the App Store subscription; try again.");
 }
 
 export type Outcome = { saved: boolean; uid?: string; kind?: Kind; ignored?: string };
@@ -199,19 +219,21 @@ export async function handleNotification(signedPayload: string | undefined, opti
   if (!made) return { status: 200, outcome: { saved: false, ignored: "product" } };
   const otid = made.state.originalTransactionId;
   let uid = await linkedUid(otid);
+  const token = txn.appAccountToken?.toLowerCase();
   if (!uid) {
-    const token = txn.appAccountToken?.toLowerCase();
     // Until the app registers it, a purchase without the account's token can't be placed; registering saves its state then.
     if (!token || !UUID.test(token)) {
       console.error("App Store subscription with no account", otid, type);
       return { status: 200, outcome: { saved: false, ignored: "no account" } };
     }
-    // Bought by an account since deleted: released until another account restores it.
-    const linked = await link(otid, token, now);
-    if (!linked) return { status: 200, outcome: { saved: false, ignored: "account deleted" } };
-    uid = linked;
   }
   try {
+    if (!uid) {
+      // Bought by an account since deleted: released until another account restores it.
+      const linked = await link(otid, token as string, now);
+      if (!linked) return { status: 200, outcome: { saved: false, ignored: "account deleted" } };
+      uid = linked;
+    }
     const result = await saveState(uid, made.kind, { source: "appstore", state: made.state });
     if (result === "saved") return { status: 200, outcome: { saved: true, uid, kind: made.kind } };
     return { status: 200, outcome: { saved: false, uid, kind: made.kind, ignored: result === "deleted" ? "account deleted" : "older than the state kept" } };
@@ -241,10 +263,11 @@ export async function registerPurchase(uid: string, transaction: string | undefi
   const made = stateFrom(undefined, undefined, txn, renewal, Number(txn.signedDate), now)!;
   const otid = made.state.originalTransactionId;
   const token = txn.appAccountToken?.toLowerCase();
-  // The account that bought it, unless that account is deleted: then whoever restores it now takes it.
-  const owner = (await linkedUid(otid)) ?? (token && token !== uid && !(await deleted(token)) ? token : undefined);
-  if (owner && owner !== uid) throw new PurchaseError("That subscription belongs to another Barbrabell account. Sign in with that account to use it.");
-  if ((await link(otid, uid, now)) !== uid) throw new PurchaseError("That subscription belongs to another Barbrabell account. Sign in with that account to use it.");
+  const another = "That subscription belongs to another Barbrabell account. Sign in with that account to use it.";
+  // Not linked yet: the account that bought it, unless that account is deleted; then whoever restores it now takes it.
+  // Linked: link() keeps a live account's link and takes over a deleted one's.
+  if (!(await linkedUid(otid)) && token && token !== uid && !(await deleted(token))) throw new PurchaseError(another);
+  if ((await link(otid, uid, now)) !== uid) throw new PurchaseError(another);
   // Older than what's kept (a stale transaction the app held) is fine: the plan kept is shown.
   await saveState(uid, made.kind, { source: "appstore", state: made.state });
   // On sale: it was just sold in the App Store, whatever Stripe has.

@@ -21,6 +21,8 @@ function holds(condition: string | undefined, item: Record<string, any> | undefi
     const name = (s: string) => s.replace(/#\w+/g, (n) => names[n]);
     const missing = clause.match(/^attribute_not_exists\((.+)\)$/);
     if (missing) return get(item, name(missing[1])) === undefined;
+    const exists = clause.match(/^attribute_exists\((.+)\)$/);
+    if (exists) return get(item, name(exists[1])) !== undefined;
     const [left, right] = clause.split(" = ");
     return item !== undefined && get(item, name(left)) === values[right];
   });
@@ -46,6 +48,8 @@ function update(input: any, write = true) {
 }
 /** Writes that lose every race: each UpdateCommand or plan TransactWrite fails its condition while this is > 0. */
 let conflicts = 0;
+/** Cancellations DynamoDB makes for reasons other than a condition: the next link writes are cancelled with these. */
+let linkCancels: string[][] = [];
 const send = vi.fn(async (command: any) => {
   const input = command.input;
   const name = command.constructor.name;
@@ -56,6 +60,10 @@ const send = vi.fn(async (command: any) => {
     return update(input), {};
   }
   if (name === "TransactWriteCommand") {
+    if (linkCancels.length && input.TransactItems.some((t: any) => String(t.Put?.Item.PK).startsWith("APPSTORETXN#"))) {
+      const codes = linkCancels.shift()!;
+      throw new TransactionCanceledException({ message: "cancelled", $metadata: {}, CancellationReasons: codes.map((Code) => ({ Code })) });
+    }
     // All conditions first, as DynamoDB does; none is written if any fails.
     const reasons = input.TransactItems.map((t: any) => {
       try {
@@ -164,6 +172,7 @@ const apple = async (otid = "2000", kind: "pro" | "coach" = "pro", uid = SAM) =>
 beforeEach(() => {
   items.clear();
   conflicts = 0;
+  linkCancels = [];
   send.mockClear();
   cognitoSend.mockClear();
   keys.mockReset();
@@ -563,6 +572,54 @@ describe("FIT-437 review: deleting the account releases its App Store subscripti
     await notify(notification("SUBSCRIBED", { txn: { originalTransactionId: "5000" }, info: { originalTransactionId: "5000" } }));
     items.delete("APPSTORETXN#5000|APPSTORETXN");
     await expect(registerPurchase(ALEX, jws(transaction({ originalTransactionId: "5000" })), undefined, options())).rejects.toThrow("another Barbrabell account");
+  });
+});
+
+describe("FIT-437 review: a link left over by a deletion, and link writes DynamoDB cancels", () => {
+  const remove = (uid: string) => deleteAccount({ identity: { sub: uid, username: uid } } as never);
+  const linkItem = () => items.get("APPSTORETXN#2000|APPSTORETXN");
+
+  it("a link GSI1 missed during the deletion doesn't keep the subscription from a new account", async () => {
+    await notify(notification("SUBSCRIBED"));
+    const leftover = structuredClone(linkItem());
+    await remove(SAM);
+    // GSI1 is eventually consistent: the link written just before the marker wasn't found, so it survived.
+    items.set("APPSTORETXN#2000|APPSTORETXN", leftover!);
+    later(30);
+    expect((await notify(notification("DID_RENEW"))).outcome).toMatchObject({ saved: false, ignored: "account deleted" });
+    const out = await registerPurchase(ALEX, jws(transaction()), undefined, options());
+    expect(out).toMatchObject({ kind: "pro", plan: { status: "active", source: "appstore" } });
+    expect(linkItem()).toMatchObject({ uid: ALEX, GSI1PK: `USER#${ALEX}` });
+    later(30);
+    expect((await notify(notification("DID_RENEW"))).outcome).toMatchObject({ saved: true, uid: ALEX });
+  });
+
+  it("the takeover needs the old owner's deletion marker: a live owner's link is never taken", async () => {
+    await notify(notification("SUBSCRIBED"));
+    // Another account's restore must not take it, even with a token that isn't SAM's.
+    await expect(registerPurchase(ALEX, jws(transaction({ appAccountToken: ALEX })), undefined, options())).rejects.toThrow("another Barbrabell account");
+    expect(linkItem()?.uid).toBe(SAM);
+  });
+
+  it("a cancellation for a transaction conflict or throttling is retried, not read as a deleted account", async () => {
+    linkCancels = [["None", "TransactionConflict"], ["ThrottlingError", "None"]];
+    expect(await notify(notification("SUBSCRIBED"))).toEqual({ status: 200, outcome: { saved: true, uid: SAM, kind: "pro" } });
+    expect(linkItem()?.uid).toBe(SAM);
+  });
+
+  it("a link write cancelled every time is a 500, so Apple sends it again; nothing reported as deleted", async () => {
+    linkCancels = Array.from({ length: 5 }, () => ["None", "TransactionConflict"]);
+    expect(await notify(notification("SUBSCRIBED"))).toMatchObject({ status: 500, outcome: { saved: false, ignored: "not saved" } });
+    expect(linkItem()).toBeUndefined();
+    expect(await plan()).toBeUndefined();
+    // Apple's retry goes through.
+    expect((await notify(notification("SUBSCRIBED"))).outcome).toMatchObject({ saved: true, uid: SAM });
+  });
+
+  it("registration fails (and can be tried again) when the link write keeps being cancelled", async () => {
+    linkCancels = Array.from({ length: 5 }, () => ["None", "ProvisionedThroughputExceeded"]);
+    await expect(registerPurchase(SAM, jws(transaction()), undefined, options())).rejects.toThrow("try again");
+    await expect(registerPurchase(SAM, jws(transaction()), undefined, options())).resolves.toMatchObject({ kind: "pro" });
   });
 });
 
