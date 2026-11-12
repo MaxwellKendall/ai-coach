@@ -7,7 +7,7 @@ import { oauth, unauthorized, type AuthStore, type Config } from "./oauth.ts";
 import { docsPage } from "./mcpDocs.ts";
 import { MAX_UNITS, push } from "./sync.ts";
 import {
-  addDays, AREAS, isHardRun, isRun, checkLoads, runTime, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
+  addDays, AREAS, isHardRun, isRun, checkLoads, runTime, unknownMaxes, catalog, exerciseBody, isOwn, MUSCLES, PATTERNS, slugFor, useAccountExercises, type ExerciseFields, dailyRows, describeDaily, weighIns, type DailyInput, bestBy, bySlug, cautions, checkDay, dayOf, EQUIPMENT, goalBody, mergeProfile, missing, STYLES, WEEKDAYS, describeLog, describeSession, isSession, diff, encode, epoch, find, goalsOf, logOf, loggedSets, logRows,
   exactly, maxOf, nameOf, planOf, profileOf, resolve, sessionRows, swapOptions, weekday, weeklySets, withSessionNote, type ExerciseInput, type GoalInput, type PlanRow,
   type ProfileInput, type SetInput, type Units,
 } from "./training.ts";
@@ -569,7 +569,7 @@ function context(units: Units, today: string, back: number, ahead: number, tz: s
   for (let i = 0; i <= ahead; i++) {
     const day = addDays(today, i);
     const s = describeSession(planOf(units, day));
-    const done = logOf(units, day).some((r) => r.kind === "workout");
+    const done = logOf(units, day).some(isSession);
     if (s.lines.length) out.push(`${weekday(day)} ${day}${s.title ? ` — ${s.title}` : ""}${done ? " (logged)" : ""}:`, ...s.lines.map((l) => `  ${l}`));
   }
   if (out.length === planned) out.push(needs.length ? "  Nothing yet." : "  Nothing planned. Propose the coming days with propose_week.");
@@ -744,7 +744,7 @@ function describeProgram(units: Units, today: string, tz: string) {
     const days = Array.from({ length: 7 }, (_, d) => addDays(sunday, d));
     const plans = days.map((d) => planOf(units, d));
     const sessions = plans.filter((p) => p.some((r) => r.kind === "workout")).length;
-    const done = days.filter((d) => logOf(units, d).some((r) => r.kind === "workout")).length;
+    const done = days.filter((d) => logOf(units, d).some(isSession)).length;
     const mi = weekMiles(units, sunday, (d) => planOf(units, d));
     const planned = sessions ? `${sessions} session(s), ${weeklySets(plans)} sets planned${mi ? `, ${mi} mi of running` : ""}${done ? `, ${done} logged` : ""}` : "Not planned yet";
     out.push(`Week ${i + 1} · ${sunday}${i === now ? " (this week)" : ""} · ${title(w)}: ${why(w)} Aim about ${weeklyTarget(w, profile)} working sets. ${planned}.`);
@@ -786,7 +786,7 @@ export async function propose(uid: string, caller: string, tz: string, today: st
     });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date ?? "")) throw new Error(`Not a date: ${d.date}. Use YYYY-MM-DD.`);
     if (d.date < today) throw new Error(`${d.date} is past; plan today or later.`);
-    if (logOf(units, d.date).some((r) => r.kind === "workout")) throw new Error(`${d.date} is already logged, so its plan stays as it was done: leave it out and propose the other days.`);
+    if (logOf(units, d.date).some(isSession)) throw new Error(`${d.date} is already logged, so its plan stays as it was done: leave it out and propose the other days.`);
     const before = planOf(units, d.date);
     const rows = d.exercises.length ? sessionRows(before, d.title ?? "Workout", d.exercises, startOf(units, d.date, tz), reason) : before.filter((r) => r.kind !== "workout");
     // FIT-377: the coach's note on the session, shown with it on their Today and in workout mode.
@@ -989,7 +989,7 @@ export async function applyProposal(id: string, uid: string, account: Account, s
   if (proposal.problems?.length && !allowProblems) throw new Error(`That proposal breaks the plan rules; fix these and propose again:\n${proposal.problems.map((p: string) => `- ${p}`).join("\n")}`);
   const days = proposal.days as { day: string; rows: string }[];
   const units = await store.units(uid);
-  const logged = days.filter((d) => logOf(units, d.day).some((r) => r.kind === "workout")).map((d) => d.day);
+  const logged = days.filter((d) => logOf(units, d.day).some(isSession)).map((d) => d.day);
   if (logged.length) throw new Error(`${logged.join(", ")} has been logged since; propose again without it.`);
   for (const d of days) await store.put(uid, `undo#${d.day}`, { body: units.get(`plan#${d.day}`) ?? null }, 14);
   await store.write(uid, days.map((d) => ({ key: `plan#${d.day}`, body: JSON.parse(d.rows).length ? d.rows : null })), account.agent, account.uid);
@@ -1088,12 +1088,12 @@ export async function callTool(name: string, args: Args, account: Account, store
       const units = await store.units(uid);
       if (day > today) throw new Error("That day hasn't happened yet: log it on the day, or plan it with propose_session.");
       const existing = logOf(units, day);
-      if (existing.some((r) => r.kind === "workout" && !isRun(r)) && !args.replace) {
+      if (existing.some((r) => isSession(r) && !isRun(r)) && !args.replace) {
         throw new Error(`${day} is already logged:\n${describeLog(existing).lines.join("\n")}\nPass replace: true to replace it, or add_note to add context.`);
       }
       const plan = planOf(units, day);
       const made = logRows(plan, startOf(units, day, tz), { sets: args.sets as SetInput[] | undefined, as_planned: args.as_planned, rpe: args.rpe, effort: args.effort, note: args.note });
-      await store.write(uid, [{ key: `log#${day}`, body: encode([...existing.filter((r) => r.kind !== "workout" || isRun(r)), ...made]) }], account.agent);
+      await store.write(uid, [{ key: `log#${day}`, body: encode([...existing.filter((r) => !isSession(r) || isRun(r)), ...made]) }], account.agent);
       const l = describeLog(made);
       return `Logged ${weekday(day)} ${day}:\n${l.lines.join("\n")}${l.note ? `\nNote: ${l.note}` : ""}\nIt shows on their phone at its next sync.`;
     }
@@ -1194,7 +1194,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     case "undo": {
       const saved = await store.get(uid, `undo#${day}`);
       if (!saved || saved.used) throw new Error(`Nothing to undo on ${day}: undo puts back a day apply changed in the last 14 days, once. To change it now, propose_session.`);
-      if (logOf(await store.units(uid), day).some((r) => r.kind === "workout")) throw new Error(`${day} has been logged since; it can't be put back.`);
+      if (logOf(await store.units(uid), day).some(isSession)) throw new Error(`${day} has been logged since; it can't be put back.`);
       await store.write(uid, [{ key: `plan#${day}`, body: saved.body }], account.agent, account.uid);
       await store.put(uid, `undo#${day}`, { used: true }, 1);
       const written = await store.get(uid, `written#${day}`);

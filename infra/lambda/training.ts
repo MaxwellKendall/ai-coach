@@ -231,6 +231,9 @@ export const goalsOf = (units: Units): (Goal & { id: string })[] =>
 const working = (r: PlanRow) => r.kind === "workout" && r.note !== WARMUP;
 /** FIT-178: a run in the plan, which the sets and load rules leave alone. */
 export const isRun = (r: { template?: string }) => !!r.template && RUNS.includes(r.template);
+/** FIT-343: a goal's test (GoalUpdate.marker in the app): a max, reps or a timed run. FIT-349: its own entry, not the day's session. */
+export const isTest = (r: { kind: string; measurements?: { metric: string }[] }) => r.kind === "workout" && !!r.measurements?.some((m) => m.metric === "test");
+export const isSession = (r: { kind: string; measurements?: { metric: string }[] }) => r.kind === "workout" && !isTest(r);
 const lifting = (r: PlanRow) => working(r) && !isRun(r);
 /** A run that's hard work: tempo, intervals or a race (its kind is the row's note). */
 export const isHardRun = (r: PlanRow) => isRun(r) && /^(tempo|intervals|race)/i.test(r.note);
@@ -300,8 +303,8 @@ export function warmupLines(plan: PlanRow[]) {
 
 /** "Back Squat 205×5 @7, 205×5 @8" per exercise, and the session's note. */
 export function describeLog(log: LogRow[]) {
-  const sets = log.filter((r) => r.kind === "workout" && r.template && !RUNS.includes(r.template));
-  const runs = log.filter((r) => r.kind === "workout" && r.template && RUNS.includes(r.template)).map((r) => {
+  const sets = log.filter((r) => isSession(r) && r.template && !RUNS.includes(r.template));
+  const runs = log.filter((r) => isSession(r) && r.template && RUNS.includes(r.template)).map((r) => {
     const d = value(r.measurements, "distance_m"), t = value(r.measurements, "duration_s"), hr = value(r.measurements, "hr_avg");
     return `${nameOf(r.template)}: ${d ? miles(d) : ""}${d && t ? " in " : ""}${t ? clock(t) : ""}${d && t ? ` (${pace(t, d)})` : ""}${hr ? `, HR ${hr}` : ""}${r.note ? ` · ${r.note}` : ""}`;
   });
@@ -313,10 +316,16 @@ export function describeLog(log: LogRow[]) {
     const one = `${load ? `${load}×` : ""}${reps ?? (sec !== undefined ? `${sec}s` : "?")}${rpe ? ` @${rpe}` : ""}`;
     byExercise.set(s.template!, [...(byExercise.get(s.template!) ?? []), one]);
   }
-  const summary = log.find((r) => r.kind === "workout" && !r.template);
-  const notes = [...new Set(log.filter((r) => r.kind === "workout" && !r.template && r.note).map((r) => r.note))];
+  const tests = log.filter(isTest).map((r) => {
+    const d = value(r.measurements, "distance_m"), t = value(r.measurements, "duration_s");
+    const load = value(r.measurements, "load_lb"), reps = value(r.measurements, "reps");
+    const result = d !== undefined && t !== undefined ? `${miles(d)} in ${clock(t)}` : load !== undefined ? `${load}×${reps ?? 1}` : `${reps ?? 0} reps`;
+    return `Test, ${nameOf(r.template)}: ${result}${r.note ? ` · ${r.note}` : ""}`;
+  });
+  const summary = log.find((r) => isSession(r) && !r.template);
+  const notes = [...new Set(log.filter((r) => isSession(r) && !r.template && r.note).map((r) => r.note))];
   return {
-    lines: [...[...byExercise].map(([slug, list]) => `${nameOf(slug)}: ${list.join(", ")}`), ...runs],
+    lines: [...[...byExercise].map(([slug, list]) => `${nameOf(slug)}: ${list.join(", ")}`), ...runs, ...tests],
     note: notes.join(" "),
     effort: summary ? value(summary.measurements, "effort") : undefined,
   };

@@ -89,7 +89,8 @@ function trainingDays(units: Map<string, string>) {
   const planned: string[] = [], done: string[] = [];
   for (const key of units.keys()) {
     const day = /^(plan|log)#(.+)$/.exec(key);
-    if (!day || !rows(units, key).some((r) => r.kind === "workout")) continue;
+    // FIT-349: a goal's test (GoalUpdate.marker in the app) isn't a session.
+    if (!day || !rows(units, key).some((r) => r.kind === "workout" && !r.measurements?.some((m) => m.metric === "test"))) continue;
     (day[1] === "plan" ? planned : done).push(day[2]);
   }
   return { planned, done };

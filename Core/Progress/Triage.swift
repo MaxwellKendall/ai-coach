@@ -183,9 +183,10 @@ enum Triage {
 
     static func week(_ units: [String: String], comments: [Comment], names: [String: String], coach: String, today: String) -> Week {
         var planned: [String] = [], done: [String] = []
+        // FIT-349: a goal's test (GoalUpdate.marker) isn't a session.
         for key in units.keys {
             let parts = key.split(separator: "#", maxSplits: 1)
-            guard parts.count == 2, ["plan", "log"].contains(parts[0]), rows(units, key).contains(where: { $0.kind == "workout" }) else { continue }
+            guard parts.count == 2, ["plan", "log"].contains(parts[0]), rows(units, key).contains(where: { $0.kind == "workout" && !($0.measurements ?? []).contains { $0.metric == "test" } }) else { continue }
             if parts[0] == "plan" { planned.append(String(parts[1])) } else { done.append(String(parts[1])) }
         }
         let start = sunday(of: today), end = add(7, to: start)

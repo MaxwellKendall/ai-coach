@@ -210,6 +210,23 @@ describe("mcp", () => {
     expect(await callTool("add_note", { note: "Slept 5 h." }, me, store, now)).toMatch(/Knee fine today Slept 5 h\./);
   });
 
+  it("FIT-349: a goal's test is its own entry, not the day's session", async () => {
+    const units = data();
+    const test = { id: "T", kind: "workout", at: at("2026-10-17"), template: "back-squat", measurements: [{ metric: "load_lb", value: 250, unit: "lb" }, { metric: "reps", value: 1, unit: "reps" }, { metric: "test", value: 1, unit: "" }], note: "" };
+    units.me["log#2026-10-17"] = encode([test]);
+    const store = memory({}, units);
+    expect(await callTool("get_context", {}, me, store, now)).not.toMatch(/2026-10-17 — .*\(logged\)/);
+    const day = await callTool("get_day", {}, me, store, now);
+    expect(day).toMatch(/Test, Back Squat: 250×1/);
+    expect(day).not.toMatch(/^\s*Back Squat: 250×1/m);
+    expect(await callTool("propose_session", { title: "Lower", reason: "Lighter after the test", exercises: [{ exercise: "back-squat", sets: 3, reps: 5 }] }, me, store, now)).toMatch(/Proposal/);
+    await callTool("log_session", { as_planned: true, rpe: 7 }, me, store, now);
+    const log = JSON.parse(units.me["log#2026-10-17"]);
+    expect(log.filter((r: { id: string }) => r.id === "T")).toHaveLength(1);
+    await callTool("log_session", { as_planned: true, replace: true }, me, store, now);
+    expect(JSON.parse(units.me["log#2026-10-17"]).filter((r: { id: string }) => r.id === "T")).toHaveLength(1);
+  });
+
   // FIT-324: the app's ready-made program rides on the profile; a coach's profile write keeps it.
   it("keeps the ready-made program the app put on the profile", async () => {
     const units = data();

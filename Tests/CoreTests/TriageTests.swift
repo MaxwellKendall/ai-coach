@@ -36,6 +36,14 @@ struct TriageTests {
         #expect(week(onTrack) == Triage.Week(done: 2, planned: 3, lastSession: "2026-10-14", flags: []))
     }
 
+    /// FIT-349: a goal's test logged on a day isn't that day's session.
+    @Test func aTestIsntASession() {
+        let tested = units(plan("2026-10-12"), plan("2026-10-14"), log("2026-10-12"),
+                           log("2026-10-14", measurements: [["metric": "load_lb", "value": 250, "unit": "lb"], ["metric": "test", "value": 1, "unit": ""]]))
+        #expect(week(tested).done == 1)
+        #expect(week(tested).lastSession == "2026-10-12")
+    }
+
     @Test func flagsMissedSessions() {
         #expect(week(missing).flags == [.init(kind: .missed, text: "Missed 2 sessions this past week")])
     }
