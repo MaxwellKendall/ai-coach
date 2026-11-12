@@ -1,4 +1,5 @@
 import { ACCESS_SECONDS, REFRESH_DAYS } from "./oauth.ts";
+import { MANAGE, PLANS, priceLine, TRIAL_DAYS } from "../../shared/plans.ts";
 import { esc, html, layout, type Page, type Site } from "./sharePages.ts";
 
 /**
@@ -10,7 +11,7 @@ import { esc, html, layout, type Page, type Site } from "./sharePages.ts";
 export const SUPPORT_EMAIL = "maxwell.n.kendall@gmail.com";
 
 /** The date the policy and terms last changed in substance. */
-export const UPDATED = "October 23, 2026";
+export const UPDATED = "November 12, 2026";
 
 export function legalRoute(path: string, site: Site): Page | undefined {
   if (path === "/privacy") return html(privacyPage(site));
@@ -100,9 +101,10 @@ function termsPage(site: Site) {
     <h2>Your account and your data</h2>
     <p>You're responsible for what you do with your account. What you log is yours: you give us permission to store it and show it to you, to the coach you link with, to the agents you connect, and to whoever you share a link with, so the service works. The <a href="/privacy">privacy policy</a> says how.</p>
 
-    <h2>Coaches</h2>
-    <p>The iPhone app is free. Pro for your own training, which adds planning from an agent after a 14-day trial, is $5.99 a month or $39.99 a year, billed through Stripe and renewed until you cancel from Billing on the dashboard; it runs to the end of the period you paid for.</p>
-    <p>Coaching is free, with any number of clients. Pro for coaches, which adds the full connector for coaching from an agent, is $19.99 a month or $199 a year, billed through Stripe and renewed until you cancel. You can cancel or change it from Billing on the dashboard; it runs to the end of the period you paid for, and coaching stays free after it. A coach invites only people who've agreed to be coached, and uses their data only to coach them. Clients use ${app} free.</p>
+    <h2>Plans and subscriptions</h2>
+    <p>The iPhone app is free. ${PLANS.lifter.name}, for your own training, adds AI planning (from an agent, and AI-designed weeks in the app) after a ${TRIAL_DAYS}-day free trial, and is ${priceLine("lifter")}.</p>
+    <p>Coaching is free, with any number of clients. ${PLANS.coach.name}, which adds the full connector for coaching from an agent, is ${priceLine("coach")}. A coach invites only people who've agreed to be coached, and uses their data only to coach them. Clients use ${app} free.</p>
+    <p>You can buy either plan in the iPhone app, as an App Store subscription billed to your Apple ID, or on the web, billed through Stripe. Wherever you buy it, it works in the app, on the dashboard and in the connector for the account you're signed in to. It renews automatically until you cancel, and runs to the end of the period you paid for; the free tier stays free after it. An App Store subscription is managed and cancelled ${MANAGE.appStore}, at least 24 hours before it renews, and Apple's terms cover its payments and refunds. A web subscription is managed and cancelled ${MANAGE.web}.</p>
 
     <h2>Agents</h2>
     <p>The agent you connect (Claude, ChatGPT or another) is a separate service under its maker's terms. It proposes changes, and you or your coach decide what's saved. We aren't responsible for what an agent says.</p>

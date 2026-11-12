@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { associationFile, route, winWords, type Site, type Store, type Win } from "../lambda/sharePages.ts";
+import { TRIAL_DAYS } from "../../shared/plans.ts";
 
 const site: Site = { appName: "Barbrabell", origin: "https://example.com", appId: "TEAM.com.example.app" };
 const win: Win = {
@@ -183,6 +184,21 @@ describe("the coach landing page (FIT-217)", () => {
       expect(page.body).toContain("Training yourself?");
       expect(page.body).toContain('<a class="button" href="/claude">Connect Claude</a>');
     }
+  });
+
+  it("FIT-437: /pricing lists Free, Lifter Pro and Coach Pro, sold in the app or on the web, cancelled where bought", async () => {
+    const page = await route("/pricing", {} as Store, site);
+    expect(page.status).toBe(200);
+    for (const text of ["<h2>Free</h2>", "<h2>Lifter Pro</h2>", "<h2>Coach Pro</h2>", "unlimited clients, planning, messaging and import",
+      "$5.99", "$39.99 a year", "$19.99", "$199 a year", `Free for your first ${TRIAL_DAYS} days`,
+      "Buy it in the app or on the web", "Settings › your name › Subscriptions", "from Billing on the dashboard"]) {
+      expect(page.body).toContain(text);
+    }
+    // Referrals come later (FIT-437): nothing promises them yet.
+    expect(page.body).not.toMatch(/referr/i);
+    const home = await route("/", {} as Store, site);
+    expect(home.body).toContain('href="/pricing"');
+    expect(home.body).toContain("in the iPhone app or on the web");
   });
 
   it("links the App Store for clients once there's a listing", async () => {

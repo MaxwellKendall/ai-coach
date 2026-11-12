@@ -11,7 +11,7 @@ All scope, decisions and status live in Linear. **Read Linear before building an
 
 - Workspace team: **Fitness Planner** (key `FIT`)
 - Project: **AI Coach App** (`P-FIT-12`): https://linear.app/custom-voice-app/project/ai-coach-app-a83b6b0b9285
-- Milestone: **Coach pilot ready for New Year's** is the only active one (author, 2026-10-22). Coaches are the customers: a web dashboard, plus the MCP for programming in Claude. Athletes get an always-free, simple app; Pro, in-app AI, voice and groups are hidden in the app behind one flag (FIT-215). Pro is sold on the web only: coach Pro, and lifter Pro for planning from the connector (FIT-312, FIT-327). Everything else was cancelled, not deleted. The older milestones (M1–M4, Meals, Realtime, Agent-first) hold only finished or cancelled work
+- Milestone: **Coach pilot ready for New Year's** is the only active one (author, 2026-10-22). Coaches are the customers: a web dashboard, plus the MCP for programming in Claude. Athletes get an always-free, simple app; in-app AI, voice and groups are hidden in the app behind one flag (FIT-215). Three tiers (FIT-437, 2026-11-12): Free; Lifter Pro, AI planning for self-coached lifters from the connector and AI-designed weeks (FIT-327, FIT-426); and Coach Pro, the exhaustive MCP (FIT-312). Both Pro plans are sold in the iPhone app (StoreKit) and on the web (Stripe), and one server entitlement makes either store's Pro work everywhere: app, dashboard and MCP. Prices and the trial length live in `shared/plans.ts` and `appstore/subscriptions.json`. Everything else was cancelled, not deleted. The older milestones (M1–M4, Meals, Realtime, Agent-first) hold only finished or cancelled work
 
 **Workflow per issue**
 1. Read the issue, its parent/sub-issues and its blockers. Only start issues whose blockers are Done.
@@ -139,7 +139,7 @@ xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 P
 
 ## 9. Build order for the coach pilot
 
-1. **FIT-215** the free, simple athlete app, with Pro sold only on the web (FIT-327)
+1. **FIT-215** the free, simple athlete app, with Pro sold in the app and on the web (FIT-437, reversing FIT-327's web-only rule)
 2. **FIT-194** coach access in the MCP → **FIT-196** coach roster tools
 3. **FIT-197** coach features on prod
 4. **FIT-201** first launch: sign in and join your coach → **FIT-202** a coach-written week, start to finish → **FIT-204** check-in

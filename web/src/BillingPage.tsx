@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Config, User } from "./auth";
-import { billing, hasPlan, planView, PRICES, signedInAs, type CoachPlan, type PlanKind } from "./billing";
+import { APP_STORE_NOTE, billing, hasPlan, planView, PRICES, signedInAs, type CoachPlan, type PlanKind } from "./billing";
 
 /**
  * FIT-144: Pro, the coach plan (FIT-284): start it through Stripe Checkout, or manage it in Stripe's customer portal.
@@ -28,6 +28,7 @@ export function BillingPage({ config, me }: { config: Config; me: User }) {
       {!plans && !error && <p className="muted">Loading…</p>}
       {plans && (!hasPlan(plans.coach) || hasLifter) && <PlanCard config={config} kind="lifter" plan={plans.lifter} />}
       {plans && <PlanCard config={config} kind="coach" plan={plans.coach} />}
+      {plans && <p className="muted">{APP_STORE_NOTE}</p>}
     </>
   );
 }

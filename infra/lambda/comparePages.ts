@@ -1,3 +1,4 @@
+import { PLANS, priceLine, TRIAL_DAYS } from "../../shared/plans.ts";
 import { esc, html, layout, START, type Page, type Site } from "./sharePages.ts";
 
 /**
@@ -32,7 +33,7 @@ export interface Rival {
 }
 
 const US = {
-  price: "Free, with any number of clients; clients are free too. Pro, $19.99 a month or $199 a year, adds AI programming in Claude or ChatGPT.",
+  price: `Free, with any number of clients; clients are free too. ${PLANS.coach.name}, ${priceLine("coach")}, adds AI programming in Claude or ChatGPT.`,
   ai: "With Pro, the Claude or ChatGPT you already use writes and changes each client's week from what they logged. You say apply and it's on their phone, with undo. Without it, you write their weeks on the dashboard.",
   clients: "A free iPhone app: today's session, sets to check off, progress. No AI account needed.",
 };
@@ -361,7 +362,7 @@ export function compareRoute(path: string, served: Site): Page | undefined {
 const text = (body: string): Page => ({ status: 200, type: "text/plain; charset=utf-8", body });
 
 /** The public pages worth indexing; shared items and the dashboard aren't. */
-export const indexed = ["/", "/claude", "/pro", "/compare", ...rivals.map((r) => `/compare/${r.slug}`), "/docs", "/privacy", "/terms", "/support"];
+export const indexed = ["/", "/claude", "/pro", "/pricing", "/compare", ...rivals.map((r) => `/compare/${r.slug}`), "/docs", "/privacy", "/terms", "/support"];
 
 function sitemap(site: Site) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -383,11 +384,13 @@ function llms(site: Site) {
 - A web dashboard shows who trained, who's slipping and who reported pain.
 - With Pro, coaches bring existing programs over by pasting a spreadsheet, CSV, PDF or screenshot into the assistant.
 - Not included: client payments, nutrition plans, video messaging, branded apps, and an Android client app.
-- Lifters training without a coach get the iPhone app free. Planning from Claude is free for 14 days, then needs Pro ($5.99 a month or $39.99 a year); logging from Claude stays free.
+- Lifters training without a coach get the iPhone app free. AI planning (from Claude, and AI-designed weeks in the app) is free for ${TRIAL_DAYS} days, then needs ${PLANS.lifter.name} (${priceLine("lifter")}); logging from Claude stays free.
+- Both paid plans can be bought in the iPhone app (App Store) or on the web (Stripe), and work in the app, the dashboard and the connector whichever store was used. Cancel where you bought it.
 
 ## Pages
 
 - [For coaches](${site.origin}/): what it is, price, how to start
+- [Pricing](${site.origin}/pricing): Free, ${PLANS.lifter.name} and ${PLANS.coach.name}
 - [Connect Claude](${site.origin}/claude): the connector address and steps
 - [Connector docs](${site.origin}/docs): every tool the connector offers
 - [Compare](${site.origin}/compare): ${app} against ${rivals.map((r) => r.name).join(", ")}
@@ -412,7 +415,7 @@ function hub(site: Site) {
       <h2>Why ${app}</h2>
       <ul>
         <li><b>Free.</b> Programs, the client app and any number of clients cost nothing. Most tools charge more as your roster grows.</li>
-        <li><b>Pay only for the AI.</b> Pro, $19.99 a month: the assistant reads every set, note and sore knee, and proposes the next week.</li>
+        <li><b>Pay only for the AI.</b> ${PLANS.coach.name}, ${PLANS.coach.month} a month: the assistant reads every set, note and sore knee, and proposes the next week.</li>
         <li><b>Nothing to finish elsewhere.</b> Say apply and it's on the client's phone, with undo.</li>
         <li><b>Simple for clients.</b> Today's session, sets to check off, progress. No AI account.</li>
       </ul>
@@ -434,7 +437,7 @@ function rivalPage(r: Rival, site: Site) {
   const faq = [
     {
       q: `Is ${site.appName} cheaper than ${r.name}?`,
-      a: r.at ? `At 20 clients, ${site.appName} is free and ${r.name} is ${r.at[1]}. ${site.appName} has no client cap; Pro, which adds AI programming, is $19.99 a month.` : `${site.appName} is free for any number of clients; Pro, which adds AI programming, is $19.99 a month. ${r.name}: ${r.price}`,
+      a: r.at ? `At 20 clients, ${site.appName} is free and ${r.name} is ${r.at[1]}. ${site.appName} has no client cap; ${PLANS.coach.name}, which adds AI programming, is ${PLANS.coach.month} a month.` : `${site.appName} is free for any number of clients; ${PLANS.coach.name}, which adds AI programming, is ${PLANS.coach.month} a month. ${r.name}: ${r.price}`,
     },
     {
       q: `Can I move my clients from ${r.name} to ${site.appName}?`,

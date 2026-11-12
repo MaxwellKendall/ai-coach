@@ -15,8 +15,8 @@ describe("the coach plan on Billing (FIT-144)", () => {
 
   it("says when an active plan renews, or ends", () => {
     const renews = "2026-11-17T12:00:00.000Z";
-    expect(planView(plan({ status: "active", interval: "year", renews }))).toMatchObject({ title: "Pro for coaches, yearly", action: "manage", detail: expect.stringMatching(/^Renews /) });
-    expect(planView(plan({ status: "trialing", interval: "month", renews, cancelsAtEnd: true }))).toMatchObject({ title: "Pro for coaches, monthly", detail: expect.stringMatching(/^Ends /) });
+    expect(planView(plan({ status: "active", interval: "year", renews }))).toMatchObject({ title: "Coach Pro, yearly", action: "manage", detail: expect.stringMatching(/^Renews /) });
+    expect(planView(plan({ status: "trialing", interval: "month", renews, cancelsAtEnd: true }))).toMatchObject({ title: "Coach Pro, monthly", detail: expect.stringMatching(/^Ends /) });
   });
 
   it("asks for a new card when a payment failed, and offers a fresh start once it's ended", () => {
@@ -50,13 +50,13 @@ describe("FIT-241: Billing says which account the plan is for", () => {
 describe("FIT-327: lifter Pro on Billing", () => {
   it("offers its own prices and says what stays free", () => {
     const view = planView(plan({}), "lifter");
-    expect(view).toMatchObject({ title: "Pro for your training", action: "start" });
+    expect(view).toMatchObject({ title: "Lifter Pro", action: "start" });
     expect(view.detail).toContain("$5.99/month or $39.99/year");
     expect(view.detail).toMatch(/stay free/);
   });
 
   it("is managed once started, and offered again once it's ended", () => {
-    expect(planView(plan({ status: "active", interval: "year", renews: "2026-11-17T12:00:00.000Z" }), "lifter")).toMatchObject({ title: "Pro for your training, yearly", action: "manage" });
+    expect(planView(plan({ status: "active", interval: "year", renews: "2026-11-17T12:00:00.000Z" }), "lifter")).toMatchObject({ title: "Lifter Pro, yearly", action: "manage" });
     expect(planView(plan({ status: "canceled" }), "lifter")).toMatchObject({ action: "start", detail: expect.stringContaining("plan from Claude") });
   });
 

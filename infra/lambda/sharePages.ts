@@ -7,6 +7,8 @@
  * CloudFront will serve it from what the app saved.
  */
 
+import { MANAGE, PLANS, priceLine, TRIAL_DAYS } from "../../shared/plans.ts";
+
 export type CardStyle = "dark" | "paper";
 
 export interface Win {
@@ -303,6 +305,7 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
   if (path === "/claude" && site.mcpUrl) return html(claudePage(site, site.mcpUrl));
   if (path === "/pro" && site.mcpUrl) return html(proPage(site));
   if (path === "/pro/thanks" && site.mcpUrl) return { ...html(proThanksPage(site)), noStore: true };
+  if (path === "/pricing") return html(pricingPage(site));
   if (path === "/" || path === "/coaches") return html(homePage(site));
   return { ...html(missingPage(site)), status: 404 };
 }
@@ -645,7 +648,8 @@ function homePage(site: Site) {
       <section class="block price-block">
         <h2>Price</h2>
         <p class="price"><b>Free</b><span>any number of clients, no card</span></p>
-        <p class="lede">Clients are free too. <b>Pro</b> is $19.99 a month or $199 a year: Claude programs and reviews your whole roster from what each client logged. Cancel any time from Billing.</p>
+        <p class="lede">Clients are free too. <b>Pro</b> is ${priceLine("coach")}: Claude programs and reviews your whole roster from what each client logged. Buy it in the iPhone app or on the web; it works in both, and you cancel where you bought it.</p>
+        <div class="actions"><a class="button" href="/pricing">See every plan</a></div>
       </section>
       <section class="block">
         <h2>What you need</h2>
@@ -671,7 +675,7 @@ function homePage(site: Site) {
       </section>
       <section class="block">
         <h2>Training yourself?</h2>
-        <p class="lede">The iPhone app is free for you too. Or connect Claude and say “Set me up”: it asks about your goals, writes your program, and logs your sessions. Planning from Claude is free for 14 days, then needs <a href="/pro">Pro</a>; logging stays free.</p>
+        <p class="lede">The iPhone app is free for you too. Or connect Claude and say “Set me up”: it asks about your goals, writes your program, and logs your sessions. Planning from Claude is free for ${TRIAL_DAYS} days, then needs <a href="/pro">Pro</a>; logging stays free.</p>
         <div class="actions"><a class="button" href="/claude">Connect Claude</a></div>
       </section>`,
   });
@@ -755,7 +759,7 @@ function claudePage(site: Site, mcpUrl: string) {
 
 /**
  * FIT-327: lifter Pro, where the connector's refusal points. The iPhone app and /claude don't link here (App Review
- * 3.1.1(a), FIT-59); buying happens in Billing on the dashboard.
+ * 3.1.1(a), FIT-59). FIT-437: buying happens in Billing on the dashboard or in the iPhone app's own paywall.
  */
 function proPage(site: Site) {
   const app = esc(site.appName);
@@ -763,7 +767,7 @@ function proPage(site: Site) {
     title: `${site.appName} Pro: your plan changes when your week does`,
     description: `Your own Claude plans your training, replans it when life gets in the way, and reviews your week. ${site.appName}'s app and logging stay free.`,
     path: "/pro",
-    body: `
+    body: `${pricingStyle}
       <section class="hero">
         <p class="eyebrow">Pro, for your own training</p>
         <h1>Your plan changes when your week does.</h1>
@@ -772,16 +776,16 @@ function proPage(site: Site) {
       </section>
       <section class="block price-block">
         <h2>Price</h2>
-        <p class="price"><b>$5.99</b><span>a month, or $39.99 a year</span></p>
-        <p class="lede">Planning from Claude is free for your first 14 days, with no card. Pro renews until you cancel, which you can do any time from Billing.</p>
+        <p class="price"><b>${PLANS.lifter.month}</b><span>a month, or ${PLANS.lifter.year} a year</span></p>
+        <p class="lede">Planning is free for your first ${TRIAL_DAYS} days, with no card. Buy Pro here or in the ${app} iPhone app: either way it works in the app, on the dashboard and in Claude. It renews until you cancel, ${MANAGE.web} if you bought it here, or ${MANAGE.appStore} if you bought it in the app.</p>
       </section>
       <section class="block">
         <h2>What's in it</h2>
         <ul class="needs">
-          <li><b>With Pro</b><span>Claude writes and changes your program and sessions, and reviews your week.</span></li>
+          <li><b>With Pro</b><span>Claude writes and changes your program and sessions, and reviews your week. In the app, your weeks are designed for you too.</span></li>
           <li><b>Free without it</b><span>The ${app} iPhone app with its ready-made programs. From Claude: logging, your plan, progress and goals.</span></li>
           <li><b>What you need</b><span>Your own Claude, with ${app} added as a connector, using the same sign-in as your Pro. Claude's own usage is on your Claude account.</span></li>
-          <li><b>Coaching clients?</b><span><a href="/coaches">Pro for coaches</a> programs your whole roster, and includes your own training.</span></li>
+          <li><b>Coaching clients?</b><span><a href="/coaches">${PLANS.coach.name}</a> programs your whole roster, and includes your own training. <a href="/pricing">Every plan</a></span></li>
         </ul>
       </section>`,
   });
@@ -799,6 +803,93 @@ function proThanksPage(site: Site) {
       <p class="fine">To change your card or plan, or cancel, open Billing on the dashboard.</p></section>`,
   });
 }
+
+/**
+ * FIT-437: the three tiers side by side. Both paid plans are sold in the iPhone app and on the web, and count
+ * everywhere. Like /pro, nothing the iPhone app opens links here (App Review 3.1.1(a), FIT-59).
+ */
+function pricingPage(site: Site) {
+  const app = esc(site.appName);
+  const tiers = [
+    {
+      name: "Free",
+      price: "$0",
+      per: "always",
+      who: "For athletes and coaches",
+      items: [
+        `The ${app} iPhone app: follow your program and log every set`,
+        "The coach dashboard: unlimited clients, planning, messaging and import",
+        "The connector in Claude or ChatGPT for reading and logging",
+      ],
+      cta: { href: START, label: "Start free" },
+    },
+    {
+      name: PLANS.lifter.name,
+      price: PLANS.lifter.month,
+      per: `a month, or ${PLANS.lifter.year} a year`,
+      who: "For lifters coaching themselves",
+      items: [
+        `Free for your first ${TRIAL_DAYS} days`,
+        "AI planning from the connector: Claude writes and changes your program and reviews your week",
+        "AI-designed weeks in the app",
+      ],
+      cta: { href: "/pro", label: `About ${PLANS.lifter.name}` },
+    },
+    {
+      name: PLANS.coach.name,
+      price: PLANS.coach.month,
+      per: `a month, or ${PLANS.coach.year} a year`,
+      who: "For coaches",
+      items: [
+        "The full connector: Claude programs, changes and reviews your whole roster",
+        "Bring in programs from a spreadsheet, CSV, PDF or screenshot through Claude",
+        "Includes your own training",
+      ],
+      cta: { href: START, label: "Start free, add Pro later" },
+    },
+  ];
+  return layout(site, {
+    title: `${site.appName} pricing: free, ${PLANS.lifter.name} and ${PLANS.coach.name}`,
+    description: `${site.appName} is free for athletes and for coaches with any number of clients. ${PLANS.lifter.name} is ${priceLine("lifter")}; ${PLANS.coach.name} is ${priceLine("coach")}.`,
+    path: "/pricing",
+    body: `${pricingStyle}
+      <section class="hero">
+        <p class="eyebrow">Pricing</p>
+        <h1>Free to train. Free to coach.</h1>
+        <p class="lede">Pay only when you want the AI to do the planning.</p>
+      </section>
+      <section class="block tiers">${tiers.map((t) => `
+        <div class="tier">
+          <h2>${esc(t.name)}</h2>
+          <p class="who">${esc(t.who)}</p>
+          <p class="price"><b>${esc(t.price)}</b><span>${esc(t.per)}</span></p>
+          <ul>${t.items.map((i) => `<li>${i}</li>`).join("")}</ul>
+          <div class="actions"><a class="button" href="${esc(t.cta.href)}">${esc(t.cta.label)}</a></div>
+        </div>`).join("")}
+      </section>
+      <section class="block">
+        <h2>Buy it in the app or on the web</h2>
+        <ul class="needs">
+          <li><b>Works everywhere</b><span>Whichever you buy, and wherever you buy it, Pro works in the iPhone app, on the dashboard and in the connector. Sign in with the same account in each.</span></li>
+          <li><b>Bought in the iPhone app</b><span>It's an App Store subscription. Manage or cancel it ${MANAGE.appStore}.</span></li>
+          <li><b>Bought on the web</b><span>It's billed through Stripe. Manage or cancel it ${MANAGE.web}.</span></li>
+          <li><b>Renewal</b><span>Pro renews until you cancel, and runs to the end of the period you paid for. Free stays free after it.</span></li>
+        </ul>
+        <p class="fine">Claude's or ChatGPT's own usage is on your account with them. See the <a href="/terms">terms</a>.</p>
+      </section>`,
+  });
+}
+
+const pricingStyle = `<style>
+.tiers{display:grid;gap:14px}
+.tier{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:10px}
+.tier h2{margin:0}.tier .who{color:var(--muted);font-size:15px}
+.tier ul{padding-left:18px;display:grid;gap:6px;font-size:15px;flex:1}
+.tier .actions{max-width:none}
+.price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.price b{font:700 36px/1 var(--round);letter-spacing:-.02em}.price span{color:var(--muted)}
+.needs{list-style:none;display:grid;gap:14px}
+.needs li{display:flex;flex-direction:column}.needs span{color:var(--muted);font-size:15px}
+</style>`;
 
 export function missingPage(site: Site) {
   return layout(site, {

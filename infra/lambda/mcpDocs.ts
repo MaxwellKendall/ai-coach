@@ -1,3 +1,4 @@
+import { PLANS, TRIAL_DAYS } from "../../shared/plans.ts";
 import { esc, layout, type Site } from "./sharePages.ts";
 
 /**
@@ -84,14 +85,14 @@ export function docsPage(site: Site, mcpUrl: string, tools: Tool[], prompts: Pro
       <section class="block doc">
         <h2>Training yourself</h2>
         <ul>
-          <li>Logging, reading your plan and progress, goals, and apply and undo are free. Planning (propose_session, propose_week, set_program) and get_week_review are free for 14 days from your first use, then need <a href="/pro">${esc(site.appName)} Pro</a>.</li>
+          <li>Logging, reading your plan and progress, goals, and apply and undo are free. Planning (propose_session, propose_week, set_program) and get_week_review are free for ${TRIAL_DAYS} days from your first use, then need <a href="/pro">${PLANS.lifter.name}</a>, bought in the iPhone app or on the web.</li>
         </ul>
       </section>
       <section class="block doc">
         <h2>Coaching</h2>
         <ul>
           <li>Coaching is free, with any number of clients, on the dashboard at <a href="/app">${esc(new URL(mcpUrl).host)}/app</a>. Clients' training in the app is free too.</li>
-          <li>Here, reading a client, notes, listing clients and inviting are free. Planning and changing a client's training (proposals, apply and undo, their program, goals and swaps) and the roster and weekly reviews are ${esc(site.appName)} Pro, from Billing on the dashboard. A sample client takes every tool, so you can try Pro first.</li>
+          <li>Here, reading a client, notes, listing clients and inviting are free. Planning and changing a client's training (proposals, apply and undo, their program, goals and swaps) and the roster and weekly reviews are ${PLANS.coach.name}, bought in the iPhone app or from Billing on the dashboard. A sample client takes every tool, so you can try Pro first.</li>
           <li>Invite a client with a link or code (from Claude or the dashboard). They accept in the free app; they need no AI account.</li>
           <li>You can read a client's training and plan it: their goals, profile, program, sessions, logs and notes. Logging and sharing stay theirs.</li>
           <li>Clients can stop sharing with you any time in the app. You can stop coaching one on the dashboard.</li>

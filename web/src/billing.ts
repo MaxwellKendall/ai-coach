@@ -1,5 +1,6 @@
 import type { Config, User } from "./auth";
 import { gql } from "./sync";
+import { MANAGE, PLANS } from "../../shared/plans";
 
 // FIT-144: the coach plan (FIT-133: $19.99/month or $199/year), bought and managed through Stripe. FIT-284: it's Pro,
 // the exhaustive coach MCP; coaching itself is free.
@@ -30,16 +31,19 @@ export const billing = {
 };
 
 export const PRICES = {
-  coach: { month: "$19.99/month", year: "$199/year" },
-  lifter: { month: "$5.99/month", year: "$39.99/year" },
+  coach: { month: `${PLANS.coach.month}/month`, year: `${PLANS.coach.year}/year` },
+  lifter: { month: `${PLANS.lifter.month}/month`, year: `${PLANS.lifter.year}/year` },
 };
+
+/** FIT-437: Pro bought in the iPhone app shows here too, but Apple bills it, so it's managed there. */
+export const APP_STORE_NOTE = `Bought Pro in the iPhone app? It works here and in Claude too. Manage or cancel it ${MANAGE.appStore}.`;
 
 /** FIT-148: Stripe's statuses that still have the plan, as the server's check (coachPlan.ts HAS_PLAN). */
 export const hasPlan = (plan: CoachPlan) => ["active", "trialing", "past_due"].includes(plan.status);
 
 /** What Billing says about the plan, and which button it offers: start one, or manage the one there is. */
 export function planView(plan: CoachPlan, kind: PlanKind = "coach"): { title: string; detail: string; action: "start" | "manage" | "none" } {
-  const name = kind === "coach" ? "Pro for coaches" : "Pro for your training";
+  const name = PLANS[kind].name;
   const free = kind === "coach" ? "Coaching here is free, with any number of clients." : "The app and logging from Claude stay free.";
   const prices = `${PRICES[kind].month} or ${PRICES[kind].year}`;
   const adds = kind === "coach" ? "Pro lets Claude program and review your whole roster." : "Pro lets Claude plan and change your training and review your week.";
