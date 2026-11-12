@@ -148,11 +148,11 @@ struct WelcomeView: View {
                 .modifier(Rise(shown: entered, step: 1))
             exampleCard.padding(.top, 22).modifier(Rise(shown: entered, step: 2))
             VStack(spacing: 10) {
-                doorButton("Train on my own", "Your number, by your date", primary: true) {
+                doorButton("Train on my own", "Your number, by your date", primary: true, id: "welcome.own") {
                     if profiles.first?.programStart == nil { withAnimation(.settle) { picking = true } } else { onDone() }
                 }
                 .modifier(Rise(shown: entered, step: 3))
-                doorButton("I’m a coach", "More clients, not more hours", opens: .coach) { door = .coach }
+                doorButton("I’m a coach", "More clients, not more hours", opens: .coach, id: "welcome.coach") { door = .coach }
                     .modifier(Rise(shown: entered, step: 4))
             }
             .padding(.top, 28)
@@ -166,6 +166,7 @@ struct WelcomeView: View {
                     .contentShape(.rect)
             }
             .buttonStyle(DoorStyle())
+            .accessibilityIdentifier("welcome.join")
             .padding(.top, 12)
             .modifier(Rise(shown: entered, step: 5))
         }
@@ -231,7 +232,7 @@ struct WelcomeView: View {
 
     /// `opens` names the screen behind the door, whose title this one's travels into.
     private func doorButton(_ title: String, _ detail: String, primary: Bool = false, opens: Door? = nil,
-                            action: @escaping () -> Void) -> some View {
+                            id: String? = nil, action: @escaping () -> Void) -> some View {
         Button { withAnimation(.settle, action) } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -249,6 +250,7 @@ struct WelcomeView: View {
             .contentShape(.rect)
         }
         .buttonStyle(DoorStyle())
+        .accessibilityIdentifier(id ?? title)
     }
 
     /// FIT-296's coach door: sign in, then coach mode (FIT-298); the dashboard keeps import, programs and billing.
@@ -271,6 +273,7 @@ struct WelcomeView: View {
                     Text("Go to My Clients").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
                         .foregroundStyle(Plate.current.onAccent).background(.tint, in: .rect(cornerRadius: 18))
                 }
+                .accessibilityIdentifier("welcome.clients")
                 Button("Train on my own too") {
                     UserDefaults.standard.set(account.user?.uid, forKey: Roster.coachingKey)
                     if profiles.first?.programStart == nil { withAnimation(.settle) { picking = true } } else { onDone() }

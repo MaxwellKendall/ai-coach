@@ -1,0 +1,17 @@
+barbrabell is for people who are coached.
+
+Your coach writes your week. You open the app, see today's session, and log each set as you go. Your coach sees what you did and adjusts what comes next.
+
+Today — your session, ready to start. Nothing to set up.
+Log in seconds — check off a lift, or open the session and log each set. The weights and reps your coach planned are already filled in.
+Runs — track a run with GPS and a map, saved to Apple Health.
+Check in — weight, sleep and a note your coach reads.
+Progress — your lifts over time, worked out from what you actually logged.
+
+Not coached yet? The app still works on its own. Tap "Train on my own" on the first screen, pick a ready-made program, and log your training, runs and check-ins without an account.
+
+Coaches can open My Clients in the app to see who needs them, reply, and change a session. Programming tools and billing stay on the web.
+
+barbrabell is free. There is nothing to buy in the app and there are no ads.
+
+Terms of Use: https://barbrabell.com/terms

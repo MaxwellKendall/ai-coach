@@ -27,10 +27,12 @@ struct AccountView: View {
                         dismiss()
                     }
                 }
+                .accessibilityIdentifier("account.signOut")
             }
             Section {
                 Button("Delete Account", role: .destructive) { confirmingDelete = true }
                     .disabled(deleting)
+                    .accessibilityIdentifier("account.delete")
             } footer: {
                 Text(failure ?? "Removes your account, your group memberships, everything you shared and the copy of your program kept with your account. Workouts on this iPhone stay.")
                     .foregroundStyle(failure == nil ? Color.secondary : Color.red)

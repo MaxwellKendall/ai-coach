@@ -686,6 +686,7 @@ struct TodayScreen: View {
                         .foregroundStyle(Color(.systemBackground)).background(Color.ink, in: .rect(cornerRadius: 18))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("today.save")
                 } else {
                     // A planned run comes first: run mode tracks it and saves it to Apple Health. Lifts beside it are checked off or started below.
                     if plan.ran.isEmpty, let run = runs(plan.items).first {

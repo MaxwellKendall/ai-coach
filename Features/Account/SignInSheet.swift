@@ -56,6 +56,7 @@ struct SignInButtons: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .disabled(working != nil)
+                    .accessibilityIdentifier("signin.email")
             }
             if let failure {
                 Text(failure).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
@@ -72,10 +73,12 @@ struct SignInButtons: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.next)
+                .accessibilityIdentifier("signin.emailField")
             SecureField("Password", text: $password)
                 .textContentType(.password)
                 .submitLabel(.go)
                 .onSubmit(signInWithEmail)
+                .accessibilityIdentifier("signin.passwordField")
             Button(action: signInWithEmail) {
                 Group { if signingInWithEmail { ProgressView() } else { Text("Sign In") } }
                     .font(.body.weight(.medium))
@@ -84,6 +87,7 @@ struct SignInButtons: View {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
             .disabled(email.isEmpty || password.isEmpty || signingInWithEmail || working != nil)
+            .accessibilityIdentifier("signin.submit")
         }
         .textFieldStyle(.roundedBorder)
     }

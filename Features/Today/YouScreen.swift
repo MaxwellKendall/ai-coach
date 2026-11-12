@@ -115,6 +115,7 @@ struct YouScreen: View {
                                     if let email = user.email { Text(email).font(.footnote).foregroundStyle(.secondary) }
                                 }
                             } icon: { Image(systemName: "person.crop.circle") }
+                            .accessibilityIdentifier("you.account")
                         }
                     }
                 }

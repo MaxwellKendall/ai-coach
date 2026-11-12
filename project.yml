@@ -124,6 +124,18 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+  # FIT-431: the review-demo recording. Not in the AICoach scheme, so the ordinary test run stays the unit tests.
+  AICoachUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests/UITests]
+    dependencies:
+      - target: AICoach
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach.uitests
+        TEST_TARGET_NAME: AICoach
 schemes:
   AICoach:
     build:
@@ -142,3 +154,10 @@ schemes:
         AICoachEvals: [test]
     test:
       targets: [AICoachEvals]
+  ReviewDemo:
+    build:
+      targets:
+        AICoach: all
+        AICoachUITests: [test]
+    test:
+      targets: [AICoachUITests]

@@ -8,3 +8,5 @@ On-device AI coach for training and nutrition: **Goals → Plan → Log → Prog
 ```bash
 xcodegen generate && open AICoach.xcodeproj
 ```
+
+App Store: [RELEASE.md](RELEASE.md) (`npm run release`).
