@@ -612,7 +612,8 @@ struct TodayScreen: View {
         case .plan where planning:
             VStack(spacing: 12) {
                 ProgressView().controlSize(.large)
-                Text("Your coach is planning this week").font(.headline)
+                // FIT-445: only a Pro lifter's week is designed here (a coach's client gets the coach's), so no "coach".
+                Text("Planning your week").font(.headline)
                 Text("Usually under a minute.").font(.subheadline).foregroundStyle(Color.inkMuted)
             }
             .frame(maxWidth: .infinity).padding(.top, 80)
