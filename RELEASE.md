@@ -56,10 +56,17 @@ npm run revenue
 
 That is `node scripts/revenue.mjs`. It loads the gitignored `.env` at the repo root the same way the release command does (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`).
 
-Optional variables in the same `.env`:
+Secrets are loaded in this order (already-set environment variables win; values are never printed):
+
+1. `~/.config/agents/secrets.env` (preferred shared file)
+2. `~/.config/secrets.env` (fallback shared file)
+3. the gitignored `.env` at the repo root (same file the release command uses for `ASC_KEY_ID`, `ASC_ISSUER_ID`, and `ASC_KEY_PATH`)
+
+Optional variables:
 
 * `ASC_VENDOR_NUMBER` — the vendor number from App Store Connect → Payments and Financial Reports. Required to download Sales, Subscription, and Subscription Event reports. The API key also needs the Sales and Trends / Finance role; a 403 is reported exactly and is not treated as zero revenue.
-* `STRIPE_READONLY_KEY` — a restricted live key with read-only access to subscriptions. When this is unset, Stripe is skipped and the output records status `missing`. Do not put the full `aicoach/prod/stripe` secret here.
+* `STRIPE_READONLY_KEY` — a restricted organization or live read-only key. Organization keys (`sk_org_…`) are sent with a `Stripe-Context` header per account (`Stripe-Account` is tried only if that fails). When this is unset, Stripe is skipped and the output records status `missing`. Do not put the full `aicoach/prod/stripe` secret here, and do not fetch it from AWS.
+* `STRIPE_ACCOUNT_BARBRABELL` and `STRIPE_ACCOUNT_REMIX` — the Stripe account ids to query, one request set per app.
 
 Output (gitignored):
 

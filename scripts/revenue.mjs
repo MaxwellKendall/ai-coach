@@ -1,15 +1,20 @@
 /** Read-only revenue pull for Barbrabell and Remix (FIT-444).
  *
- * Reads ASC_KEY_ID, ASC_ISSUER_ID, and ASC_KEY_PATH from the gitignored `.env`
- * at runtime (via load-env.mjs). Never prints, copies, or returns the .p8.
- * Optional: ASC_VENDOR_NUMBER (Sales and Trends), STRIPE_READONLY_KEY.
+ * Loads secrets from ~/.config/agents/secrets.env first, then
+ * ~/.config/secrets.env, then the gitignored worktree `.env`. Variables
+ * already set in the process environment take precedence. Never prints,
+ * copies, or returns the .p8 or API keys, and never fetches AWS secrets.
+ *
+ * Optional: ASC_VENDOR_NUMBER (Sales and Trends), STRIPE_READONLY_KEY,
+ * STRIPE_ACCOUNT_BARBRABELL, STRIPE_ACCOUNT_REMIX.
  *
  * GET only against Apple and Stripe. Writes JSON under revenue-out/ (gitignored).
  *
  *   node scripts/revenue.mjs
  *   npm run revenue
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { loadAscEnv, signJwt } from "./asc.mjs";
@@ -17,7 +22,31 @@ import { loadEnv } from "./load-env.mjs";
 
 export const ASC_BASE = "https://api.appstoreconnect.apple.com";
 export const STRIPE_BASE = "https://api.stripe.com/v1";
+export const STRIPE_API_VERSION = "2025-08-27.basil";
 export const OUTPUT_DIR = "revenue-out";
+export const STRIPE_ACCOUNT_ENV = {
+  Barbrabell: "STRIPE_ACCOUNT_BARBRABELL",
+  Remix: "STRIPE_ACCOUNT_REMIX",
+};
+
+export function secretEnvPaths(home = homedir(), cwd = process.cwd()) {
+  return [
+    resolve(home, ".config/agents/secrets.env"),
+    resolve(home, ".config/secrets.env"),
+    resolve(cwd, ".env"),
+  ];
+}
+
+/** Load shared secrets first, then the worktree .env. Does not override existing env vars. Never prints values. */
+export function loadRevenueEnv({ home = homedir(), cwd = process.cwd(), env = process.env } = {}) {
+  const found = [];
+  for (const path of secretEnvPaths(home, cwd)) {
+    if (!existsSync(path)) continue;
+    loadEnv(path, env);
+    found.push(path);
+  }
+  return found;
+}
 export const NORTH_STAR_MRR = 1000;
 export const NORTH_STAR_DATE = "2027-03-01";
 export const BARBRABELL = { product: "Barbrabell", bundleId: "com.maxwellkendall.aicoach", appleId: "6821439066" };
@@ -239,13 +268,31 @@ export function combinedMrr({ appStore, stripe }) {
   } else {
     missing.push(appStore?.reason || "App Store subscription reports not available");
   }
-  if (stripe?.available && stripe.mode === "live") {
-    parts.push(`Stripe live ${usd(stripe.mrrUsd)}`);
-    total += stripe.mrrUsd || 0;
-  } else if (stripe?.available && stripe.mode === "test") {
+  const accounts = stripe?.accounts || {};
+  const hasAccounts = Object.keys(accounts).length > 0;
+  if (stripe?.mode === "test") {
     missing.push("Stripe key is test-mode; excluded from combined live MRR");
-  } else {
+  } else if (!hasAccounts && !stripe?.available) {
     missing.push(stripe?.reason || "Stripe live MRR unavailable");
+  } else {
+    for (const product of ["Barbrabell", "Remix"]) {
+      const a = accounts[product];
+      if (!a) {
+        missing.push(`Stripe ${product} not returned`);
+        continue;
+      }
+      if (!a.available || a.mrr == null) {
+        missing.push(`Stripe ${product}: ${a.reason || "MRR unknown"}`);
+        continue;
+      }
+      if ((a.currency || "usd") !== "usd") {
+        missing.push(`Stripe ${product} MRR is ${a.currency}, not combined with USD`);
+        parts.push(`Stripe ${product} ${a.mrr.toFixed(2)} ${a.currency}`);
+        continue;
+      }
+      parts.push(`Stripe ${product} ${usd(a.mrr)}`);
+      total += a.mrr;
+    }
   }
   if (missing.length) return { total: null, reason: missing.join("; "), breakdown: parts.join(" + ") || "none" };
   return { total, reason: null, breakdown: parts.join(" + ") };
@@ -254,7 +301,7 @@ export function combinedMrr({ appStore, stripe }) {
 export function stripeKeyMode(key) {
   if (!key) return null;
   if (key.startsWith("sk_test") || key.startsWith("rk_test")) return "test";
-  if (key.startsWith("sk_live") || key.startsWith("rk_live")) return "live";
+  if (key.startsWith("sk_live") || key.startsWith("rk_live") || key.startsWith("sk_org")) return "live";
   return "unknown";
 }
 
@@ -263,7 +310,155 @@ export function stripeMissingStatus(env = process.env) {
   return {
     available: false,
     status: "missing",
-    reason: "STRIPE_READONLY_KEY is unset. Skipping Stripe. Set a restricted live read-only key in the gitignored .env to enable this source.",
+    reason: "STRIPE_READONLY_KEY is unset. Skipping Stripe. Set a restricted organization or live read-only key in ~/.config/agents/secrets.env, ~/.config/secrets.env, or the gitignored .env.",
+    accounts: {},
+  };
+}
+
+export function stripeErrorSummary(json, status) {
+  const err = json?.error || {};
+  const type = err.type || "unknown_error";
+  const code = err.code ? `, code: ${err.code}` : "";
+  return `HTTP ${status} (Stripe error type: ${type}${code})`;
+}
+
+export function stripeHeaders(accountId, { headerName = "Stripe-Context", apiVersion = STRIPE_API_VERSION } = {}) {
+  const headers = { "Stripe-Version": apiVersion };
+  if (accountId) headers[headerName] = accountId;
+  return headers;
+}
+
+export function couponFromDiscount(discount) {
+  if (!discount || typeof discount === "string") return { coupon: null, unexpanded: Boolean(discount) };
+  return { coupon: discount.coupon || discount.source?.coupon || null, unexpanded: false };
+}
+
+export function applyDiscounts(amountCents, discounts = []) {
+  let amount = amountCents;
+  let unexpanded = false;
+  for (const discount of discounts) {
+    const { coupon, unexpanded: missing } = couponFromDiscount(discount);
+    if (missing || (discount && !coupon)) {
+      unexpanded = true;
+      continue;
+    }
+    if (!coupon) continue;
+    if (coupon.percent_off != null) amount *= (1 - Number(coupon.percent_off) / 100);
+    else if (coupon.amount_off != null) amount -= Number(coupon.amount_off);
+  }
+  return { amountCents: Math.max(0, amount), unexpanded };
+}
+
+export function collectDiscounts(subscription, item) {
+  const list = [];
+  if (Array.isArray(subscription?.discounts)) list.push(...subscription.discounts);
+  else if (subscription?.discount) list.push(subscription.discount);
+  if (Array.isArray(item?.discounts)) list.push(...item.discounts);
+  return list;
+}
+
+export function monthlyCents({ unitAmount, interval, intervalCount = 1, quantity = 1, discounts = [] }) {
+  const qty = quantity || 1;
+  const count = intervalCount || 1;
+  const { amountCents, unexpanded } = applyDiscounts((unitAmount ?? 0) * qty, discounts);
+  let monthly = null;
+  if (interval === "month") monthly = amountCents / count;
+  else if (interval === "year") monthly = amountCents / (12 * count);
+  else if (interval === "week") monthly = (amountCents * (52 / count)) / 12;
+  else if (interval === "day") monthly = (amountCents * (365 / count)) / 12;
+  return { monthlyCents: monthly, unexpanded, unknownInterval: monthly == null };
+}
+
+export function planName(item) {
+  const price = item?.price || {};
+  const product = price.product;
+  if (product && typeof product === "object") return product.name || price.nickname || price.id || "unknown price";
+  return price.nickname || price.id || "unknown price";
+}
+
+export function summarizeStripeSubscriptions(subscriptions, { nowSec = Math.floor(Date.now() / 1000), windowStart } = {}) {
+  const start = windowStart ?? nowSec - 30 * 24 * 3600;
+  let active = 0;
+  let pastDue = 0;
+  let trialing = 0;
+  const byPlan = {};
+  const byCurrency = {};
+  const unknown = [];
+  for (const sub of subscriptions) {
+    if (sub.status === "trialing") trialing += 1;
+    if (sub.status === "active") active += 1;
+    if (sub.status === "past_due") pastDue += 1;
+    const contributes = sub.status === "active" || sub.status === "past_due";
+    for (const item of sub.items?.data || []) {
+      const price = typeof item.price === "object" && item.price ? item.price : {};
+      const name = planName(item);
+      if (!byPlan[name]) byPlan[name] = { active: 0, pastDue: 0, trialing: 0, mrr: 0, currency: price.currency || "usd" };
+      const plan = byPlan[name];
+      if (sub.status === "active") plan.active += 1;
+      if (sub.status === "past_due") plan.pastDue += 1;
+      if (sub.status === "trialing") plan.trialing += 1;
+      if (!contributes) continue;
+      const currency = price.currency || "usd";
+      plan.currency = currency;
+      if (typeof item.price === "string") {
+        unknown.push({ id: sub.id, reason: "price not expanded" });
+        continue;
+      }
+      const { monthlyCents: monthly, unexpanded, unknownInterval } = monthlyCents({
+        unitAmount: price.unit_amount,
+        interval: price.recurring?.interval,
+        intervalCount: price.recurring?.interval_count,
+        quantity: item.quantity,
+        discounts: collectDiscounts(sub, item),
+      });
+      if (unexpanded) unknown.push({ id: sub.id, reason: "discount not expanded" });
+      if (unknownInterval) unknown.push({ id: sub.id, reason: `interval ${price.recurring?.interval || "none"}` });
+      if (monthly == null || unexpanded) continue;
+      const major = monthly / 100;
+      plan.mrr += major;
+      byCurrency[currency] = (byCurrency[currency] || 0) + major;
+    }
+  }
+  const currencies = Object.keys(byCurrency);
+  let currency = null;
+  let mrr = 0;
+  let mrrUnknownReason = null;
+  if (unknown.length) {
+    mrr = null;
+    mrrUnknownReason = `${unknown.length} paid subscription item(s) could not be converted (${[...new Set(unknown.map((u) => u.reason))].join("; ")})`;
+  } else if (currencies.length > 1) {
+    mrr = null;
+    currency = null;
+    mrrUnknownReason = `mixed currencies: ${currencies.join(", ")}`;
+  } else {
+    currency = currencies[0] || "usd";
+    mrr = byCurrency[currency] || 0;
+  }
+  return {
+    active,
+    pastDue,
+    trialing,
+    subscriptionCount: subscriptions.length,
+    byPlan,
+    byCurrency,
+    currency,
+    mrr,
+    mrrUnknownReason,
+    last30Days: {
+      canceled: subscriptions.filter((s) => s.status === "canceled" && (s.canceled_at || 0) >= start).length,
+    },
+  };
+}
+
+/** @deprecated Use summarizeStripeSubscriptions. Kept for the paid-item math tests. */
+export function stripeMrr(subscriptions) {
+  const summary = summarizeStripeSubscriptions(subscriptions);
+  return {
+    mrrUsd: summary.currency === "usd" ? (summary.mrr ?? 0) : 0,
+    active: summary.active + summary.pastDue,
+    trialing: summary.trialing,
+    byPlan: Object.fromEntries(Object.entries(summary.byPlan).map(([k, v]) => [k, v.active + v.pastDue + v.trialing])),
+    unknownCount: summary.mrrUnknownReason ? 1 : 0,
   };
 }
 
@@ -341,14 +536,38 @@ export function formatDashboardComment(report) {
   lines.push("");
   lines.push("## Stripe");
   const st = report.stripe;
-  if (!st?.available) {
-    lines.push(`Unavailable: ${st?.reason || "no access"} (status: ${st?.status || "missing"}).`);
+  if (st?.reason && !Object.keys(st.accounts || {}).length) {
+    lines.push(`Unavailable: ${st.reason} (status: ${st.status || "missing"}).`);
   } else {
-    if (st.warning) lines.push(`Warning: ${st.warning}`);
-    lines.push(`Mode: ${st.mode}. Active (incl. past_due): ${st.active}. Trialing: ${st.trialing}. MRR from price amounts (USD): ${usd(st.mrrUsd)}.`);
-    if (st.byPlan) lines.push(`By plan: ${Object.entries(st.byPlan).map(([k, v]) => `${k}: ${v}`).join("; ")}.`);
-    if (st.last30Days) {
-      lines.push(`Last 30 days: created ${st.last30Days.created}, canceled ${st.last30Days.canceled}, trials started ${st.last30Days.trialsStarted}, trial converted to active ${st.last30Days.trialConvertedToActive}.`);
+    if (st?.warning) lines.push(`Warning: ${st.warning}`);
+    if (st?.headerUsed) lines.push(`Requests used the \`${st.headerUsed}\` header (API version ${st.apiVersion || STRIPE_API_VERSION}).`);
+    for (const product of ["Barbrabell", "Remix"]) {
+      const a = st?.accounts?.[product];
+      lines.push(`### ${product}`);
+      if (!a) {
+        lines.push("- UNKNOWN: no Stripe result for this app.");
+        continue;
+      }
+      if (!a.available) {
+        lines.push(`- UNKNOWN: ${a.reason || "unavailable"} (status: ${a.status || "error"}).`);
+        continue;
+      }
+      const mrrText = a.mrr == null
+        ? `UNKNOWN (${a.mrrUnknownReason || "could not compute"})`
+        : `${a.mrr.toFixed(2)} ${a.currency || "usd"}`;
+      lines.push(`- MRR: ${mrrText}`);
+      lines.push(`- Active subscriptions: ${a.active}${a.pastDue ? ` (plus ${a.pastDue} past_due, included in MRR)` : ""}`);
+      lines.push(`- Trialing: ${a.trialing}`);
+      const plans = Object.entries(a.byPlan || {});
+      if (!plans.length) lines.push("- By plan: none");
+      else {
+        lines.push("- By plan/price:");
+        for (const [name, v] of plans) {
+          const planMrr = v.mrr != null ? `${Number(v.mrr).toFixed(2)} ${v.currency || a.currency || "usd"}` : "UNKNOWN";
+          lines.push(`  - ${name}: ${v.active} active, ${v.trialing} trialing${v.pastDue ? `, ${v.pastDue} past_due` : ""}; MRR ${planMrr}`);
+        }
+      }
+      if (a.last30Days) lines.push(`- Cancellations in the last 30 days: ${a.last30Days.canceled}`);
     }
   }
   lines.push("");
@@ -604,96 +823,136 @@ export async function pullSalesReports(token, vendorNumber, startDate, endDate) 
   return { status: overall, message: overallMessage, reports };
 }
 
-export function stripeMrr(subscriptions) {
-  let mrrUsd = 0;
-  let active = 0;
-  let trialing = 0;
-  const byPlan = {};
-  const unknown = [];
-  for (const sub of subscriptions) {
-    if (sub.status === "trialing") trialing += 1;
-    if (sub.status === "active" || sub.status === "past_due") active += 1;
-    if (sub.status === "active" || sub.status === "trialing" || sub.status === "past_due") {
-      for (const item of sub.items?.data || []) {
-        const price = item.price || {};
-        const amount = (price.unit_amount ?? 0) / 100;
-        const interval = price.recurring?.interval;
-        const count = price.recurring?.interval_count || 1;
-        const qty = item.quantity || 1;
-        const nickname = price.nickname || price.id || "unknown price";
-        if (price.currency && price.currency !== "usd") {
-          unknown.push({ id: sub.id, reason: `non-usd ${price.currency}` });
-          continue;
-        }
-        let monthly = 0;
-        if (interval === "month") monthly = (amount / count) * qty;
-        else if (interval === "year") monthly = (amount / (12 * count)) * qty;
-        else if (interval === "week") monthly = (amount * (52 / count) / 12) * qty;
-        else if (interval === "day") monthly = (amount * (365 / count) / 12) * qty;
-        else unknown.push({ id: sub.id, reason: `interval ${interval || "none"}` });
-        mrrUsd += monthly;
-        byPlan[nickname] = (byPlan[nickname] || 0) + 1;
-      }
-    }
-  }
-  return { mrrUsd, active, trialing, byPlan, unknownCount: unknown.length };
+export async function stripeRequest(key, path, { accountId, headerName = "Stripe-Context", apiVersion = STRIPE_API_VERSION } = {}) {
+  const headers = {
+    Authorization: `Bearer ${key}`,
+    ...stripeHeaders(accountId, { headerName, apiVersion }),
+  };
+  const res = await fetch(STRIPE_BASE + path, { method: "GET", headers });
+  const json = await res.json().catch(() => ({}));
+  return { status: res.status, json, headerName };
 }
 
-async function stripeGet(key, path) {
-  const res = await fetch(STRIPE_BASE + path, { headers: { Authorization: `Bearer ${key}` } });
-  const json = await res.json();
-  if (!res.ok) {
-    const err = new Error(`Stripe GET ${path} failed: ${json?.error?.message || res.status}`);
-    err.status = res.status;
-    throw err;
-  }
-  return json;
+export async function stripeRequestWithFallback(key, path, { accountId, apiVersion = STRIPE_API_VERSION } = {}) {
+  const first = await stripeRequest(key, path, { accountId, headerName: "Stripe-Context", apiVersion });
+  if (first.status >= 200 && first.status < 300) return { ...first, headerUsed: "Stripe-Context" };
+  const second = await stripeRequest(key, path, { accountId, headerName: "Stripe-Account", apiVersion });
+  if (second.status >= 200 && second.status < 300) return { ...second, headerUsed: "Stripe-Account" };
+  return {
+    ...first,
+    headerUsed: "Stripe-Context",
+    error: stripeErrorSummary(first.json, first.status),
+  };
 }
 
-async function stripeAll(key, path) {
+// price.product is a fourth expand level and Stripe rejects it (property_expansion_max_depth).
+const SUB_EXPAND = "expand[]=data.items.data.price&expand[]=data.discounts&expand[]=data.items.data.discounts";
+
+export async function stripeListSubscriptions(key, { accountId, apiVersion } = {}) {
   const items = [];
   let startingAfter = null;
+  let headerUsed = "Stripe-Context";
   for (let i = 0; i < 50; i++) {
-    const url = path + (path.includes("?") ? "&" : "?") + "limit=100" + (startingAfter ? `&starting_after=${startingAfter}` : "");
-    const page = await stripeGet(key, url);
-    items.push(...(page.data || []));
-    if (!page.has_more) break;
+    const qs = `/subscriptions?status=all&limit=100&${SUB_EXPAND}` + (startingAfter ? `&starting_after=${startingAfter}` : "");
+    const page = await stripeRequestWithFallback(key, qs, { accountId, apiVersion });
+    if (page.status < 200 || page.status >= 300) {
+      const err = new Error(page.error || stripeErrorSummary(page.json, page.status));
+      err.status = page.status;
+      err.headerUsed = page.headerUsed;
+      throw err;
+    }
+    headerUsed = page.headerUsed;
+    items.push(...(page.json.data || []));
+    if (!page.json.has_more) break;
     startingAfter = items.at(-1)?.id;
     if (!startingAfter) break;
   }
-  return items;
+  await attachProductNames(key, items, { accountId, apiVersion });
+  return { subscriptions: items, headerUsed };
 }
 
-export async function pullStripe(env = process.env) {
+async function attachProductNames(key, subscriptions, { accountId, apiVersion } = {}) {
+  const ids = new Set();
+  for (const sub of subscriptions) {
+    for (const item of sub.items?.data || []) {
+      const product = item.price?.product;
+      if (typeof product === "string") ids.add(product);
+    }
+  }
+  const names = {};
+  for (const id of ids) {
+    const page = await stripeRequestWithFallback(key, `/products/${id}`, { accountId, apiVersion });
+    if (page.status >= 200 && page.status < 300 && page.json?.name) names[id] = page.json.name;
+  }
+  for (const sub of subscriptions) {
+    for (const item of sub.items?.data || []) {
+      const product = item.price?.product;
+      if (typeof product === "string" && names[product] && item.price) {
+        item.price.product = { id: product, name: names[product] };
+      }
+    }
+  }
+}
+
+export async function pullStripeAccount(key, { product, accountId, mode, nowSec, apiVersion } = {}) {
+  if (!accountId) {
+    return {
+      product,
+      available: false,
+      status: "missing",
+      reason: `${STRIPE_ACCOUNT_ENV[product] || "account id"} is unset for ${product}.`,
+    };
+  }
+  try {
+    const { subscriptions, headerUsed } = await stripeListSubscriptions(key, { accountId, apiVersion });
+    const summary = summarizeStripeSubscriptions(subscriptions, { nowSec });
+    return {
+      product,
+      available: true,
+      status: "ok",
+      mode,
+      headerUsed,
+      ...summary,
+    };
+  } catch (e) {
+    return {
+      product,
+      available: false,
+      status: e.status === 401 || e.status === 403 ? "forbidden" : "error",
+      reason: e.message,
+      httpStatus: e.status || null,
+    };
+  }
+}
+
+export async function pullStripe(env = process.env, { now = new Date(), apiVersion = env.STRIPE_API_VERSION || STRIPE_API_VERSION } = {}) {
   const missing = stripeMissingStatus(env);
   if (missing) return missing;
   const key = env.STRIPE_READONLY_KEY;
   const mode = stripeKeyMode(key);
-  try {
-    const subscriptions = await stripeAll(key, "/subscriptions?status=all");
-    const windowStart = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
-    const summary = stripeMrr(subscriptions);
-    return {
-      available: true,
-      status: "ok",
-      mode,
-      warning: mode === "test" ? "These numbers are from a test-mode key and are not a live revenue baseline." : null,
-      subscriptionCount: subscriptions.length,
-      ...summary,
-      last30Days: {
-        created: subscriptions.filter((s) => (s.created || 0) >= windowStart).length,
-        canceled: subscriptions.filter((s) => s.status === "canceled" && (s.canceled_at || 0) >= windowStart).length,
-        trialsStarted: subscriptions.filter((s) => (s.trial_start || 0) >= windowStart).length,
-        trialConvertedToActive: subscriptions.filter((s) => s.trial_end && s.trial_end <= Math.floor(Date.now() / 1000) && s.status === "active" && (s.trial_start || 0) >= windowStart).length,
-      },
-    };
-  } catch (e) {
-    return { available: false, status: "error", mode, reason: e.message };
+  const nowSec = Math.floor(now.getTime() / 1000);
+  const accounts = {};
+  const headerUsed = new Set();
+  for (const product of ["Barbrabell", "Remix"]) {
+    const accountId = env[STRIPE_ACCOUNT_ENV[product]];
+    const result = await pullStripeAccount(key, { product, accountId, mode, nowSec, apiVersion });
+    accounts[product] = result;
+    if (result.headerUsed) headerUsed.add(result.headerUsed);
   }
+  const ok = Object.values(accounts).filter((a) => a.available);
+  return {
+    available: ok.length > 0,
+    status: ok.length === 2 ? "ok" : ok.length ? "partial" : "error",
+    mode,
+    apiVersion,
+    headerUsed: [...headerUsed].join(", ") || null,
+    warning: mode === "test" ? "These numbers are from a test-mode key and are not a live revenue baseline." : null,
+    accounts,
+  };
 }
 
-export async function runPull({ env = process.env, now = new Date() } = {}) {
-  loadEnv();
+export async function runPull({ env = process.env, now = new Date(), home, cwd } = {}) {
+  const secretFilesFound = loadRevenueEnv({ home, cwd, env });
   const generatedAt = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     dateStyle: "medium",
@@ -704,11 +963,14 @@ export async function runPull({ env = process.env, now = new Date() } = {}) {
     generatedAt,
     window,
     sources: {
+      secretFilesFound,
       ascKeyIdSet: Boolean(env.ASC_KEY_ID),
       ascIssuerIdSet: Boolean(env.ASC_ISSUER_ID),
       ascKeyPathSet: Boolean(env.ASC_KEY_PATH),
       vendorNumberSet: Boolean(env.ASC_VENDOR_NUMBER),
       stripeKeySet: Boolean(env.STRIPE_READONLY_KEY),
+      stripeAccountBarbrabellSet: Boolean(env.STRIPE_ACCOUNT_BARBRABELL),
+      stripeAccountRemixSet: Boolean(env.STRIPE_ACCOUNT_REMIX),
     },
     asc: {},
     stripe: {},
@@ -748,7 +1010,7 @@ export async function runPull({ env = process.env, now = new Date() } = {}) {
     report.asc.catalogError = e.message;
     report.metrics.appStore = { available: false, reason: e.message };
   }
-  report.stripe = await pullStripe(env);
+  report.stripe = await pullStripe(env, { now });
   report.metrics.combinedMrr = combinedMrr({ appStore: report.metrics.appStore, stripe: report.stripe });
   report.comment = formatDashboardComment(report);
   return report;

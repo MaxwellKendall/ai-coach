@@ -1,21 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   BARBRABELL,
   REMIX_BUNDLE,
+  applyDiscounts,
   classifyReportError,
   combinedMrr,
   dateDaysAgo,
   durationMonths,
   formatDashboardComment,
+  loadRevenueEnv,
   matchesApp,
+  monthlyCents,
   num,
   parseTsv,
   reportWindow,
+  stripeErrorSummary,
+  stripeHeaders,
   stripeKeyMode,
   stripeMissingStatus,
   stripeMrr,
   summarizeSalesProceeds,
+  summarizeStripeSubscriptions,
   summarizeSubscriptionEvents,
   summarizeSubscriptionSnapshot,
   usd,
@@ -116,9 +125,60 @@ test("Stripe is skipped cleanly when STRIPE_READONLY_KEY is unset", () => {
   assert.equal(missing.available, false);
   assert.equal(missing.status, "missing");
   assert.match(missing.reason, /STRIPE_READONLY_KEY is unset/);
-  assert.equal(stripeMissingStatus({ STRIPE_READONLY_KEY: "rk_live_example" }), null);
+  assert.equal(stripeMissingStatus({ STRIPE_READONLY_KEY: "sk_org_example" }), null);
+  assert.equal(stripeKeyMode("sk_org_example"), "live");
   assert.equal(stripeKeyMode("rk_live_example"), "live");
   assert.equal(stripeKeyMode("sk_test_example"), "test");
+});
+
+test("stripe error summaries use status and type, not a key", () => {
+  const text = stripeErrorSummary({ error: { type: "invalid_request_error", code: "account_invalid", message: "nope" } }, 403);
+  assert.equal(text, "HTTP 403 (Stripe error type: invalid_request_error, code: account_invalid)");
+  assert.equal(text.includes("sk_"), false);
+});
+
+test("organization requests send Stripe-Context and a Stripe-Version", () => {
+  const headers = stripeHeaders("acct_barbrabell");
+  assert.equal(headers["Stripe-Context"], "acct_barbrabell");
+  assert.equal(headers["Stripe-Version"], "2025-08-27.basil");
+  assert.equal(headers["Stripe-Account"], undefined);
+});
+
+test("discounts apply percent-off and amount-off, and yearly is divided by 12", () => {
+  assert.equal(applyDiscounts(2000, [{ coupon: { percent_off: 50 } }]).amountCents, 1000);
+  assert.equal(applyDiscounts(2000, [{ coupon: { amount_off: 250 } }]).amountCents, 1750);
+  const yearly = monthlyCents({ unitAmount: 5999, interval: "year", intervalCount: 1, quantity: 2, discounts: [{ coupon: { percent_off: 50 } }] });
+  assert.equal(yearly.unexpanded, false);
+  assert.equal(yearly.monthlyCents, (5999 * 2 * 0.5) / 12);
+});
+
+test("summarizeStripeSubscriptions counts plans, trials, cancellations, and USD MRR", () => {
+  const nowSec = 1_800_000_000;
+  const summary = summarizeStripeSubscriptions([
+    { status: "active", items: { data: [{ quantity: 1, price: { unit_amount: 1999, currency: "usd", product: { name: "Coach Pro Monthly" }, recurring: { interval: "month", interval_count: 1 } } }] } },
+    { status: "active", items: { data: [{ quantity: 1, price: { unit_amount: 3999, currency: "usd", product: { name: "Lifter Pro Annual" }, recurring: { interval: "year", interval_count: 1 } } }] } },
+    { status: "trialing", items: { data: [{ quantity: 1, price: { unit_amount: 1999, currency: "usd", product: { name: "Coach Pro Monthly" }, recurring: { interval: "month", interval_count: 1 } } }] } },
+    { status: "canceled", canceled_at: nowSec - 2 * 24 * 3600, items: { data: [{ quantity: 1, price: { unit_amount: 1999, currency: "usd", recurring: { interval: "month", interval_count: 1 } } }] } },
+  ], { nowSec, windowStart: nowSec - 30 * 24 * 3600 });
+  assert.equal(summary.active, 2);
+  assert.equal(summary.trialing, 1);
+  assert.equal(summary.last30Days.canceled, 1);
+  assert.equal(summary.currency, "usd");
+  assert.equal(summary.mrr, 19.99 + 39.99 / 12);
+  assert.equal(summary.byPlan["Coach Pro Monthly"].active, 1);
+  assert.equal(summary.byPlan["Coach Pro Monthly"].trialing, 1);
+  assert.equal(summary.byPlan["Lifter Pro Annual"].active, 1);
+});
+
+test("an empty Stripe account is $0 MRR, not unknown", () => {
+  const summary = summarizeStripeSubscriptions([]);
+  assert.equal(summary.active, 0);
+  assert.equal(summary.trialing, 0);
+  assert.equal(summary.subscriptionCount, 0);
+  assert.equal(summary.mrr, 0);
+  assert.equal(summary.currency, "usd");
+  assert.equal(summary.mrrUnknownReason, null);
+  assert.equal(summary.last30Days.canceled, 0);
 });
 
 test("stripeMrr converts monthly and yearly items and ignores other statuses", () => {
@@ -135,16 +195,43 @@ test("stripeMrr converts monthly and yearly items and ignores other statuses", (
 test("combinedMrr stays unknown when a source is missing and never invents a total", () => {
   const unknown = combinedMrr({
     appStore: { available: false, reason: "HTTP 403: The API key in use does not allow this request" },
-    stripe: { available: false, status: "missing", reason: "STRIPE_READONLY_KEY is unset" },
+    stripe: { available: false, status: "missing", reason: "STRIPE_READONLY_KEY is unset", accounts: {} },
   });
   assert.equal(unknown.total, null);
   assert.match(unknown.reason, /403/);
   assert.match(unknown.reason, /STRIPE_READONLY_KEY/);
   const ok = combinedMrr({
     appStore: { available: true, snapshotDate: "2026-11-11", byProduct: { Barbrabell: { mrrCustomerUSD: 10, mrrUnknownDurationRows: 0 }, Remix: { mrrCustomerUSD: 5, mrrUnknownDurationRows: 0 } } },
-    stripe: { available: true, mode: "live", mrrUsd: 7 },
+    stripe: {
+      available: true,
+      mode: "live",
+      accounts: {
+        Barbrabell: { available: true, mrr: 4, currency: "usd" },
+        Remix: { available: true, mrr: 3, currency: "usd" },
+      },
+    },
   });
   assert.equal(ok.total, 22);
+});
+
+test("loadRevenueEnv reads the agents file first and does not override existing env", () => {
+  const root = mkdtempSync(join(tmpdir(), "revenue-env-"));
+  const agentsDir = join(root, ".config/agents");
+  const configDir = join(root, ".config");
+  const cwd = join(root, "repo");
+  mkdirSync(agentsDir, { recursive: true });
+  mkdirSync(cwd, { recursive: true });
+  writeFileSync(join(agentsDir, "secrets.env"), "STRIPE_READONLY_KEY=from-agents\nSTRIPE_ACCOUNT_BARBRABELL=acct_agents\n");
+  writeFileSync(join(configDir, "secrets.env"), "STRIPE_READONLY_KEY=from-config\nSTRIPE_ACCOUNT_REMIX=acct_config\n");
+  writeFileSync(join(cwd, ".env"), "STRIPE_READONLY_KEY=from-worktree\nASC_VENDOR_NUMBER=from-worktree\n");
+  const env = { ALREADY_SET: "keep-me", STRIPE_READONLY_KEY: "from-process" };
+  const found = loadRevenueEnv({ home: root, cwd, env });
+  assert.equal(env.STRIPE_READONLY_KEY, "from-process");
+  assert.equal(env.STRIPE_ACCOUNT_BARBRABELL, "acct_agents");
+  assert.equal(env.STRIPE_ACCOUNT_REMIX, "acct_config");
+  assert.equal(env.ASC_VENDOR_NUMBER, "from-worktree");
+  assert.equal(env.ALREADY_SET, "keep-me");
+  assert.equal(found.length, 3);
 });
 
 test("the dashboard comment lists unknown MRR and the exact missing sources", () => {
