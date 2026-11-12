@@ -32,9 +32,17 @@ extension Cloud {
     /// FIT-445: `sample` false asks the server not to make a sample client: the launch's check of whether this account
     /// coaches anyone must not make it a coach.
     @MainActor static func myClients(sample: Bool = true) async throws -> [Person] {
-        if sample { return try await run("query { myClients { uid name since } }", at: "myClients", query: true) }
-        return try await run("query { myClients(sample: false) { uid name since } }", at: "myClients", query: true)
+        let legacy = "query { myClients { uid name since } }"
+        if sample { return try await run(legacy, at: "myClients", query: true) }
+        do {
+            return try await run("query { myClients(sample: false) { uid name since } }", at: "myClients", query: true)
+        } catch {
+            // A server from before FIT-445 refuses `sample`: the old query, with any sample client it makes left out.
+            return withoutSample(try await run(legacy, at: "myClients", query: true))
+        }
     }
+
+    static func withoutSample(_ people: [Person]) -> [Person] { people.filter { !$0.isSample } }
 
     /// FIT-339: invites not used yet, newest first.
     @MainActor static func myInvites() async throws -> [ClientInvite] {

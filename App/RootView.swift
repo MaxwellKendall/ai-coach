@@ -55,15 +55,15 @@ struct RootView: View {
     /// FIT-445: coach, coached client or lifter on their own, and so the tabs. FIT-381: Today, Program and Progress come
     /// with a program of their own ("Train on my own too", or Program on You), a planned day, or a coach of their own.
     private var mode: AppMode {
-        var chose = account.user.map { $0.uid == coachUID } ?? false
-        var realClients = roster.clients.contains { !$0.person.isSample }
+        var coach = account.user.map { $0.uid == coachUID } ?? false
         #if DEBUG
-        // `-sampleClients YES`: a made-up roster, which (like the server's Mike) never makes a client a coach.
-        if Roster.sample { chose = true; realClients = false }
+        // `-sampleClients YES`: a coach with a made-up roster. A client with one stands for a sample client left from
+        // before FIT-445, which the launch's check now clears, so it never makes them a coach.
+        if Roster.sample && pro.coaches.isEmpty { coach = true }
         #endif
-        return AppMode(choseCoaching: chose, coached: !pro.coaches.isEmpty, realClients: realClients,
-                       trains: profiles.first?.programStart != nil || !planned.isEmpty || !pro.coaches.isEmpty)
+        return AppMode(coach: coach, trains: trains)
     }
+    private var trains: Bool { profiles.first?.programStart != nil || !planned.isEmpty || !pro.coaches.isEmpty }
 
     /// FIT-297: the plate colour picked on You (design system v2); Blue 20 until one is picked.
     static var accent: Color { Plate.current.accent }
@@ -82,21 +82,6 @@ struct RootView: View {
         .onChange(of: mode.coach, initial: true) { _, coach in if coach { tab = .clients } }
         // FIT-445: never left on a tab that isn't there for them.
         .onChange(of: mode.tabs, initial: true) { _, _ in if let other = mode.replacing(tab) { tab = other } }
-        .task(id: account.user?.uid) {
-            guard let user = account.user else { return }
-            let chose = coachUID == user.uid
-            // A coach already, with no coach of their own: nothing to find out.
-            if chose && pro.coaches.isEmpty { return }
-            // FIT-445: asked without a sample, and a sample doesn't count, so this never makes anyone a coach. A server
-            // from before FIT-445 refuses `sample`; the coach door still sets coach mode until it's deployed.
-            guard let clients = try? await Cloud.myClients(sample: false) else { return }
-            if clients.contains(where: { !$0.isSample }) {
-                coachUID = user.uid
-            } else if chose, !pro.coaches.isEmpty {
-                // FIT-445: a client this check made a coach of the sample client, before it asked without one.
-                coachUID = ""
-            }
-        }
         .onChange(of: tab) { _, new in if new != .coach { lastTab = new } }
         // FIT-430: signing out, or deleting the account, goes back to the three doors; the next account's door decides
         // coach mode. Only a signed-in account going away: the launch's restore starts from nil.
@@ -170,6 +155,8 @@ struct RootView: View {
             await pro.refreshWebPro(signedIn: account.user != nil)
             // FIT-130: and from a coach, while coached.
             await pro.refreshCoaches(signedIn: account.user != nil)
+            // After the coaches, so a client's saved coach mode is checked knowing they train with one.
+            await checkCoaching()
             await checkOffers()
         }
         // FIT-220: a tapped coaching notification. A changed week is fetched first; a day in this week opens on Today
@@ -399,6 +386,29 @@ struct RootView: View {
         let report = ["planning": String(describing: error), "day": planDay.ISO8601Format()]
         if let data = try? JSONEncoder().encode(report) { Diagnostics.keep(data) }
         Task { await Diagnostics.send() }
+    }
+
+    /// FIT-298: someone with real clients is a coach, whichever door they came in by. FIT-445: asked without a sample
+    /// client, and a sample doesn't count, so this never makes anyone a coach; and coach mode saved before FIT-445,
+    /// when it did, is checked once (`AppMode.keepsSavedCoaching`).
+    private func checkCoaching() async {
+        guard let user = account.user, coachUID != user.uid else { return }
+        let saved = UserDefaults.standard
+        let legacy = saved.string(forKey: Roster.legacyCoachingKey) == user.uid
+        // A coach who doesn't train keeps it at once, offline too.
+        if legacy && AppMode.keepsSavedCoaching(clients: [], invites: 0, trains: trains) {
+            coachUID = user.uid
+            return saved.removeObject(forKey: Roster.legacyCoachingKey)
+        }
+        guard let clients = try? await Cloud.myClients(sample: false) else { return }
+        if AppMode.coaches(clients) {
+            coachUID = user.uid
+        } else if legacy {
+            // Unanswered, it's asked again next launch.
+            guard let invites = try? await Cloud.myInvites() else { return }
+            if AppMode.keepsSavedCoaching(clients: clients, invites: invites.count, trains: trains) { coachUID = user.uid }
+        }
+        if legacy { saved.removeObject(forKey: Roster.legacyCoachingKey) }
     }
 
     /// FIT-131: the oldest program a coach sent that hasn't been answered, if any.

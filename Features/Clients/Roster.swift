@@ -28,7 +28,10 @@ final class Roster {
 
     /// FIT-298: someone who came in by "I'm a coach", or has clients: the Clients tab shows. FIT-352: kept as that
     /// account's uid, not a flag for the phone, so another account signed in here isn't shown Clients.
-    static let coachingKey = "coachingUID"
+    /// FIT-445: a new key, written only by what really makes a coach; `legacyCoachingKey` is checked once, then dropped.
+    static let coachingKey = "coachUID"
+    /// Before FIT-445 the sample client made anyone a coach here: `AppMode.keepsSavedCoaching` decides what stays.
+    static let legacyCoachingKey = "coachingUID"
 
     private(set) var clients: [Client] = []
     /// FIT-339: invites sent and not used yet.
@@ -149,7 +152,7 @@ final class Roster {
         do {
             let people = try await Cloud.myClients()
             // FIT-445: a real client makes a coach; the sample client is only there to try coaching on.
-            if people.contains(where: { !$0.isSample }) { UserDefaults.standard.set(coach, forKey: Self.coachingKey) }
+            if AppMode.coaches(people) { UserDefaults.standard.set(coach, forKey: Self.coachingKey) }
             let today = SyncUnits.day(.now)
             // All at once: one after another, ten clients took 13 s on prod.
             let fetched = try await withThrowingTaskGroup(of: (Int, [String: String], [Triage.Comment]).self) { group in
