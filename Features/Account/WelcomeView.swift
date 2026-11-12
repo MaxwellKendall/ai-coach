@@ -9,7 +9,20 @@ struct WelcomeView: View {
     @Environment(Pro.self) private var pro
     @Bindable private var navigator = Navigator.shared
     @Query private var profiles: [Profile]
+    /// FIT-414: false while the launch splash still covers this screen; the promise rises in once it's lifting.
+    var revealed = true
     var onDone: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    /// The chosen door's title travels into the next screen's title, and back.
+    @Namespace private var titles
+    /// The promise, its proof and the doors have risen in, once.
+    @State private var entered = false
+    /// Which lift the example card shows, and whether its target has counted up from the start.
+    @State private var example = 0
+    @State private var counted = false
+    /// An invite code that isn't one shakes the field.
+    @State private var shakes = 0
 
     @State private var typed = ""
     /// The invite being answered: the link the app was opened with, or the code typed.
@@ -39,9 +52,10 @@ struct WelcomeView: View {
             } else if intake {
                 IntakeView(onDone: onDone)
             } else if picking {
-                ProgramPicker(onDone: onDone)
+                // Train on my own goes forward into the picker, as a push would.
+                ProgramPicker(onDone: onDone).motionTransition(.push(from: .trailing))
             } else {
-                welcome
+                welcome.motionTransition(.push(from: .trailing))
             }
         }
         #if DEBUG
@@ -69,21 +83,27 @@ struct WelcomeView: View {
     private var welcomeContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 24)
-            if door == nil && code == nil {
-                doors
-            } else if door == .coach {
-                coachDoor
-            } else if account.user == nil {
-                signIn
-            } else if let code {
-                invite(code)
-            } else {
-                join
+            // What's left gets out of the way at once; what's behind the chosen door rises in under its title, which
+            // travels there from the door.
+            Group {
+                if door == nil && code == nil {
+                    doors
+                } else if door == .coach {
+                    coachDoor
+                } else if account.user == nil {
+                    signIn
+                } else if let code {
+                    invite(code)
+                } else {
+                    join
+                }
             }
+            .motionTransition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 16)), removal: .opacity.animation(.out)))
             Spacer(minLength: 24)
             if door != nil && code == nil {
                 Button("Back") { withAnimation(.settle) { door = nil } }
                     .font(.subheadline).foregroundStyle(Color.inkMuted).frame(maxWidth: .infinity).padding(.bottom, 8)
+                    .transition(.opacity)
             }
             #if DEBUG
             BackendPicker().font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity)
@@ -106,9 +126,11 @@ struct WelcomeView: View {
         .task(id: account.user == nil ? nil : code) { await lookUp() }
     }
 
-    private func title(_ text: String, _ detail: String) -> some View {
+    /// `door` names the door this screen opened from, whose title travels up into this one.
+    private func title(_ text: String, _ detail: String, from door: Door? = nil) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(text).font(.display(30)).fixedSize(horizontal: false, vertical: true)
+                .matchedGeometryEffect(id: door.map { travel($0, "screen") } ?? text, in: titles, properties: .position, anchor: .topLeading)
             // Whole even with the keyboard up for Sign in with email (FIT-229).
             Text(detail).font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
@@ -120,20 +142,18 @@ struct WelcomeView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Hit your number by the date you set.").font(.display(34))
                 .fixedSize(horizontal: false, vertical: true)
+                .modifier(Rise(shown: entered, step: 0))
             Text("A free plan from your own lifts, that moves when life does.").font(.body).foregroundStyle(Color.inkMuted)
                 .padding(.top, 10)
-            HStack(alignment: .firstTextBaseline) {
-                Text("Back Squat").font(.subheadline).foregroundStyle(Color.inkMuted)
-                Spacer()
-                Text("225 → \(Text("250 lb").foregroundStyle(Plate.current.mark))").font(.display(24, weight: .semibold, relativeTo: .title2))
-            }
-            .padding(16).background(Color.fill, in: .rect(cornerRadius: 18)).padding(.top, 22)
-            .accessibilityLabel("For example, Back Squat from 225 to 250 pounds")
+                .modifier(Rise(shown: entered, step: 1))
+            exampleCard.padding(.top, 22).modifier(Rise(shown: entered, step: 2))
             VStack(spacing: 10) {
                 doorButton("Train on my own", "Your number, by your date", primary: true) {
                     if profiles.first?.programStart == nil { withAnimation(.settle) { picking = true } } else { onDone() }
                 }
-                doorButton("I’m a coach", "More clients, not more hours") { door = .coach }
+                .modifier(Rise(shown: entered, step: 3))
+                doorButton("I’m a coach", "More clients, not more hours", opens: .coach) { door = .coach }
+                    .modifier(Rise(shown: entered, step: 4))
             }
             .padding(.top, 28)
             // FIT-382 (author): joining a coach is the quiet way in, a link under the doors; most clients come by the
@@ -141,19 +161,82 @@ struct WelcomeView: View {
             Button { withAnimation(.settle) { door = .athlete } } label: {
                 Text("Have a coach? \(Text("Join them").foregroundStyle(Plate.current.mark).fontWeight(.semibold))")
                     .font(.subheadline).foregroundStyle(Color.inkMuted)
+                    .matchedGeometryEffect(id: travel(.athlete, "door"), in: titles, properties: .position, anchor: .topLeading)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DoorStyle())
             .padding(.top, 12)
+            .modifier(Rise(shown: entered, step: 5))
+        }
+        .onAppear { if revealed { entered = true } }
+        .onChange(of: revealed) { _, now in if now { entered = true } }
+        .task(id: entered) { await cycleExamples() }
+    }
+
+    /// The id a door's title and its screen's title share, so one travels into the other; with Reduce Motion on, each
+    /// end has its own and the screens only fade.
+    private func travel(_ door: Door, _ end: String) -> String { reduceMotion ? "\(door)-\(end)" : "\(door)" }
+
+    /// The promise's proof: a lift's start and the number it reaches, counting up, with a line rising under it. It
+    /// moves on to another lift every few seconds, and holds still with Reduce Motion or VoiceOver on.
+    private var exampleCard: some View {
+        let lift = Self.examples[example]
+        return HStack(alignment: .firstTextBaseline) {
+            Text(lift.name).font(.subheadline).foregroundStyle(Color.inkMuted)
+                .contentTransition(.opacity)
+            Spacer()
+            HStack(spacing: 0) {
+                Text("\(lift.from) → ").contentTransition(.numericText(value: Double(lift.from)))
+                Text("\(counted ? lift.to : lift.from)").foregroundStyle(Plate.current.mark)
+                    .contentTransition(.numericText(value: Double(counted ? lift.to : lift.from)))
+                Text(" lb").foregroundStyle(Plate.current.mark)
+            }
+            .font(.display(24, weight: .semibold, relativeTo: .title2)).monospacedDigit()
+            .overlay(alignment: .bottomTrailing) {
+                RisingLine().trim(from: 0, to: counted ? 1 : 0)
+                    .stroke(Plate.current.mark, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .frame(width: 56, height: 10).offset(y: 14)
+            }
+        }
+        .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 22)
+        .background(Color.fill, in: .rect(cornerRadius: 18))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("For example, \(lift.name) from \(lift.from) to \(lift.to) pounds")
+    }
+
+    static let examples: [(name: String, from: Int, to: Int)] = [("Back Squat", 225, 250), ("Bench Press", 185, 205), ("Deadlift", 315, 345)]
+
+    private func cycleExamples() async {
+        guard entered else { return }
+        guard !reduceMotion, !voiceOver else { counted = true; return }
+        // Counts up once the card has risen in.
+        guard await pause(.milliseconds(350)) else { return }
+        withAnimation(.reveal) { counted = true }
+        while true {
+            guard await pause(.seconds(3.5)) else { return }
+            withAnimation(.settle) {
+                counted = false
+                example = (example + 1) % Self.examples.count
+            }
+            guard await pause(.milliseconds(350)) else { return }
+            withAnimation(.reveal) { counted = true }
         }
     }
 
-    private func doorButton(_ title: String, _ detail: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
+    /// False once the screen's gone (the task cancelled).
+    private func pause(_ duration: Duration) async -> Bool {
+        do { try await Task.sleep(for: duration); return true } catch { return false }
+    }
+
+    /// `opens` names the screen behind the door, whose title this one's travels into.
+    private func doorButton(_ title: String, _ detail: String, primary: Bool = false, opens: Door? = nil,
+                            action: @escaping () -> Void) -> some View {
         Button { withAnimation(.settle, action) } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.headline)
+                        .matchedGeometryEffect(id: opens.map { travel($0, "door") } ?? title, in: titles, properties: .position, anchor: .topLeading)
                     Text(detail).font(.subheadline).opacity(primary ? 0.85 : 1)
                         .foregroundStyle(primary ? AnyShapeStyle(Plate.current.onAccent) : AnyShapeStyle(Color.inkMuted))
                 }
@@ -165,7 +248,7 @@ struct WelcomeView: View {
             .background(primary ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.fill), in: .rect(cornerRadius: 18))
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DoorStyle())
     }
 
     /// FIT-296's coach door: sign in, then coach mode (FIT-298); the dashboard keeps import, programs and billing.
@@ -173,13 +256,14 @@ struct WelcomeView: View {
         if account.user == nil {
             VStack(alignment: .leading, spacing: 0) {
                 title("Take on more clients without working more hours",
-                      "Free for any number of clients. Bring the sheets you program in today, and see who needs you first.")
+                      "Free for any number of clients. Bring the sheets you program in today, and see who needs you first.", from: .coach)
                 if account.isAvailable { SignInButtons {} }
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 title("Your clients, in your pocket",
-                      "See who needs you, reply to their notes, change a session and invite clients, here. Import programs and billing are on barbrabell.com.")
+                      "See who needs you, reply to their notes, change a session and invite clients, here. Import programs and billing are on barbrabell.com.",
+                      from: .coach)
                 Button {
                     UserDefaults.standard.set(account.user?.uid, forKey: Roster.coachingKey)
                     onDone()
@@ -199,7 +283,7 @@ struct WelcomeView: View {
     private var signIn: some View {
         VStack(alignment: .leading, spacing: 0) {
             title(code == nil ? "Get stronger with your coach in your pocket" : "Sign in to join your coach",
-                  "Your coach writes every session and sees every set you log. Free for you.")
+                  "Your coach writes every session and sees every set you log. Free for you.", from: code == nil ? .athlete : nil)
             if account.isAvailable { SignInButtons {} }
         }
     }
@@ -239,7 +323,7 @@ struct WelcomeView: View {
 
     private var join: some View {
         VStack(alignment: .leading, spacing: 0) {
-            title("Join your coach", "Open the invite link your coach sent, or type its code.")
+            title("Join your coach", "Open the invite link your coach sent, or type its code.", from: .athlete)
             HStack(spacing: 10) {
                 TextField("Invite code", text: $typed)
                     .textInputAutocapitalization(.characters)
@@ -248,6 +332,8 @@ struct WelcomeView: View {
                     .padding(.horizontal, 16)
                     .frame(minHeight: 54)
                     .background(Color.fill, in: .capsule)
+                    .modifier(Shake(trigger: shakes))
+                    .sensoryFeedback(.error, trigger: shakes)
                     .onSubmit(submit)
                 // Apple's paste button reads the clipboard only when tapped, so there's no permission prompt.
                 PasteButton(payloadType: String.self) { pasted in
@@ -302,6 +388,7 @@ struct WelcomeView: View {
     private func submit() {
         guard let code = InviteLink.coach(typed: typed) else {
             failure = "That isn’t an invite code. It’s the 6 letters and numbers your coach sent, also at the end of their link."
+            shakes += 1
             return
         }
         failure = nil
@@ -338,5 +425,39 @@ struct WelcomeView: View {
                 failure = error.localizedDescription
             }
         }
+    }
+}
+
+/// FIT-414: one of Welcome's parts rising into place, in order, the first time the screen shows. With Reduce Motion on
+/// it fades in where it is.
+private struct Rise: ViewModifier {
+    let shown: Bool
+    let step: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : 14)
+            .animation(.settle.staggered(step * 2), value: shown)
+    }
+}
+
+/// A door gives a little under the finger.
+private struct DoorStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.modifier(Pressed(pressed: configuration.isPressed))
+    }
+}
+
+/// The example card's line, rising like the plan reveal's.
+private struct RisingLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addCurve(to: CGPoint(x: rect.maxX, y: rect.minY),
+                      control1: CGPoint(x: rect.width * 0.45, y: rect.maxY),
+                      control2: CGPoint(x: rect.width * 0.55, y: rect.minY))
+        return path
     }
 }
