@@ -26,7 +26,8 @@ final class ReviewDemoUITests: XCTestCase {
 
         signIn(app, email: email)
         XCTAssertTrue(waitForToday(app), "Sign-in did not open the coached week. \(failureOnScreen(app))")
-        // A signed-in account with no clients of their own is handed a sample client (FIT-240), which opens Clients.
+        // FIT-445: a client sees no Clients tab, sample client or not.
+        XCTAssertFalse(app.tabBars.buttons["Clients"].exists, "A client was shown the coach's Clients tab")
         // The coached week is the Today tab. The week strip also has a control named Today, so the query is the tab.
         let tab = app.tabBars.buttons["Today"]
         if tab.waitForExistence(timeout: 5), !tab.isSelected {

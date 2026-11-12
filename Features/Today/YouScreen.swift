@@ -63,6 +63,7 @@ struct YouScreen: View {
                             }
                         }
                         .tint(.primary)
+                        .accessibilityIdentifier("you.program")
                     }
                 }
                 // FIT-126: signed out, a way in: the account keeps the program backed up and on the web.
@@ -97,6 +98,7 @@ struct YouScreen: View {
                 if pro.coaches.isEmpty, account.isAvailable {
                     Section {
                         Button { joining = true } label: { Label("Join Your Coach", systemImage: "person.2") }
+                            .accessibilityIdentifier("you.joinCoach")
                     }
                 }
                 // FIT-59: the policy, the terms, and a way to reach us or report a problem (guideline 1.2).

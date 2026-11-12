@@ -6,8 +6,8 @@ struct AICoachApp: App {
     let container: ModelContainer
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var account = Account()
-    /// FIT-83: whether this Apple ID has Pro.
-    @State private var pro = Pro()
+    /// FIT-83: whether this Apple ID has Pro. Made in `init`, after a UI test's role has cleared the defaults it reads.
+    @State private var pro: Pro
     @Environment(\.scenePhase) private var scenePhase
     /// FIT-369: You's Appearance.
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
@@ -15,6 +15,10 @@ struct AICoachApp: App {
     init() {
         // FIT-304: a workout ends with the app; its Live Activity shouldn't outlive it.
         WorkoutActivity.endAll()
+        #if DEBUG
+        DebugRole.prepare()
+        #endif
+        _pro = State(initialValue: Pro())
         do {
             container = AppSchema.shared
             try Seeder.seed(container.mainContext, remembering: .standard)
@@ -31,6 +35,7 @@ struct AICoachApp: App {
                 }
                 try container.mainContext.save()
             }
+            try DebugRole.seed(container.mainContext)
             #endif
         } catch {
             fatalError("Could not open the data store: \(error)")

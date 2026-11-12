@@ -64,6 +64,10 @@ final class Account {
 
     /// Reads the signed-in user from the keychain-backed session. No network when signed out.
     func refresh() async {
+        #if DEBUG
+        // FIT-445: a UI test's role is signed out, whatever the simulator's keychain holds, so nothing reaches the server.
+        if UserDefaults.standard.bool(forKey: "uiTesting") { user = nil; restored = true; return }
+        #endif
         guard isAvailable, (try? await Amplify.Auth.fetchAuthSession())?.isSignedIn == true,
               let current = try? await Amplify.Auth.getCurrentUser() else {
             user = nil

@@ -8,6 +8,12 @@ enum AppSchema {
 
     /// The app's store, one per process: the app and its intents (FIT-65) share it. A Debug build on prod has its own.
     @MainActor static let shared: ModelContainer = {
+        #if DEBUG
+        // FIT-445: a UI test's role starts from an empty store every launch (App/DebugRole.swift).
+        if UserDefaults.standard.bool(forKey: "uiTesting") {
+            do { return try container(inMemory: true) } catch { fatalError("Could not open the data store: \(error)") }
+        }
+        #endif
         do { return try container(url: Backend.current.store) } catch { fatalError("Could not open the data store: \(error)") }
     }()
 

@@ -125,6 +125,18 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
   # FIT-431: the review-demo recording. Not in the AICoach scheme, so the ordinary test run stays the unit tests.
+  # FIT-445: each role's tabs and key screens, from DEBUG launch arguments; no account, no secrets, no server.
+  AICoachRoleUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests/RoleUITests]
+    dependencies:
+      - target: AICoach
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach.roleuitests
+        TEST_TARGET_NAME: AICoach
   AICoachUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -161,3 +173,10 @@ schemes:
         AICoachUITests: [test]
     test:
       targets: [AICoachUITests]
+  RoleUITests:
+    build:
+      targets:
+        AICoach: all
+        AICoachRoleUITests: [test]
+    test:
+      targets: [AICoachRoleUITests]
