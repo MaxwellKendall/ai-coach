@@ -7,6 +7,11 @@ struct BackendPicker: View {
     @State private var switching: Backend?
 
     var body: some View {
+        // FIT-446: the demo shows no debug rows.
+        if !DebugRole.demo { picker }
+    }
+
+    private var picker: some View {
         LabeledContent {
             Picker("Backend", selection: Binding(get: { Backend.current }, set: { switching = $0 == Backend.current ? nil : $0 })) {
                 ForEach(Backend.allCases, id: \.self) { Text($0.rawValue.capitalized) }

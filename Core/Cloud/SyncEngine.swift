@@ -32,6 +32,9 @@ final class SyncEngine {
     }()
 
     func start(uid: String, context: ModelContext) {
+        #if DEBUG
+        if DebugRole.demo { return }
+        #endif
         guard self.uid != uid else { return sync() }
         stop()
         self.uid = uid

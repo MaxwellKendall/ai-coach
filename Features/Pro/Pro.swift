@@ -119,6 +119,15 @@ final class Pro {
     /// Buys `product` for the signed-in account (its uid is the purchase's appAccountToken), then registers it with
     /// the server so the plan is on the account at once: the web and Claude see it too.
     func buy(_ product: Product, with purchase: PurchaseAction) async throws -> Bought {
+        #if DEBUG
+        // FIT-446: the demo's purchase is local: xcodebuild's UI-test runs leave the app on the real sandbox, which
+        // asks for an Apple Account, and the demo has none. It's the same switch as `-pro YES`, and a demo launch starts without it.
+        if DebugRole.demo {
+            UserDefaults.standard.set(true, forKey: "pro")
+            await refresh()
+            return .bought
+        }
+        #endif
         var options: Set<Product.PurchaseOption> = []
         if let token = uid.flatMap(UUID.init(uuidString:)) { options.insert(.appAccountToken(token)) }
         switch try await purchase(product, options: options) {

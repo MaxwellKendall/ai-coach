@@ -134,6 +134,9 @@ enum Cloud {
 
     static func run<R: Decodable & Sendable>(_ document: String, _ variables: sending [String: Any]? = nil, at path: String,
                                           as type: R.Type = R.self, query: Bool = false) async throws -> R {
+        #if DEBUG
+        if DebugRole.demo { throw Failure(message: "Demo mode has no server.") }
+        #endif
         let request = GraphQLRequest<R>(document: document, variables: variables, responseType: R.self, decodePath: path)
         let result: GraphQLResponse<R>
         if query {

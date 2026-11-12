@@ -66,6 +66,12 @@ final class Account {
     func refresh() async {
         #if DEBUG
         // FIT-445: a UI test's role is signed out, whatever the simulator's keychain holds, so nothing reaches the server.
+        // FIT-446: `-demo YES` is signed in as a local account, with no network: its uid is a fixed UUID, the purchase's token.
+        if DebugRole.demo {
+            user = User(uid: "00000000-0000-4000-8000-000000000446", name: "Demo Lifter", email: nil, provider: nil)
+            restored = true
+            return
+        }
         if UserDefaults.standard.bool(forKey: "uiTesting") { user = nil; restored = true; return }
         #endif
         guard isAvailable, (try? await Amplify.Auth.fetchAuthSession())?.isSignedIn == true,

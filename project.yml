@@ -182,6 +182,9 @@ schemes:
       targets:
         AICoach: all
         AICoachUITests: [test]
+    # FIT-446: the demo's purchase completes locally, in the simulator.
+    run:
+      storeKitConfiguration: AICoach.storekit
     test:
       targets: [AICoachUITests]
   RoleUITests:

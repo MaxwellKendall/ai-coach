@@ -39,11 +39,11 @@ struct YouScreen: View {
                         ForEach(Appearance.allCases) { appearance in Text(appearance.name).tag(appearance.rawValue) }
                     } label: { Label("Appearance", systemImage: "circle.lefthalf.filled") }
                     #if DEBUG
-                    if Pilot.inAppAI {
+                    if Pilot.inAppAI, !DebugRole.demo {
                         NavigationLink { VoiceLogView() } label: { Label("Spoken attempts", systemImage: "waveform") }
                     }
                     // Pro without buying, kept across launches, for the author's own phone (`-pro YES` lasts one launch).
-                    if Pilot.sellsPro {
+                    if Pilot.sellsPro, !DebugRole.demo {
                         Toggle(isOn: Binding(get: { UserDefaults.standard.bool(forKey: "pro") }, set: { on in
                             UserDefaults.standard.set(on, forKey: "pro")
                             Task { await pro.refresh() }

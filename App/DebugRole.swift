@@ -12,6 +12,10 @@ import Synchronization
 /// YES` is a client with a sample roster.
 enum DebugRole {
     static var uiTesting: Bool { UserDefaults.standard.bool(forKey: "uiTesting") }
+    /// FIT-446: `-demo YES` is the App Review demo: no debug rows or banners, and already signed in as a local demo
+    /// account (`Account.demo`), so a purchase goes straight to StoreKit. Nothing reaches the server: `Cloud.run` and
+    /// `SyncEngine` refuse in it. Works alongside `-uiTesting YES -role …`.
+    static var demo: Bool { UserDefaults.standard.bool(forKey: "demo") }
     static var role: String? { uiTesting ? UserDefaults.standard.string(forKey: "role") : nil }
     /// FIT-426: `-aiWeeks YES` designs a Pro lifter's weeks with `StubDesigner`, so a UI test sees an AI week without
     /// a network or a model; without it, a UI test's weeks stay code planned.
@@ -21,6 +25,7 @@ enum DebugRole {
 
     /// Before anything reads the defaults or the saved roster.
     @MainActor static func prepare() {
+        if demo { UserDefaults.standard.removeObject(forKey: "pro") }
         guard uiTesting else { return }
         if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
         try? FileManager.default.removeItem(at: Roster.savedURL)
