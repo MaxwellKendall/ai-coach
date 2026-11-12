@@ -162,8 +162,15 @@ final class RoleUITests: XCTestCase {
         XCTAssertFalse(app.buttons["paywall.buy"].exists, "A paywall showed")
         shot(app, "solo-pro-today")
         openTab(app, "Program")
-        XCTAssertFalse(app.buttons["program.planNextWeek"].exists, "A Pro lifter was offered Plan my next week")
         shot(app, "solo-pro-program")
+        // FIT-426: Lifter Pro has the AI design next week: Plan my next week, on the Next week card, with no paywall.
+        let plan = app.buttons["program.planNextWeek"]
+        for _ in 0..<3 where !plan.isHittable {
+            app.swipeLeft()
+            Thread.sleep(forTimeInterval: 1)
+        }
+        XCTAssertTrue(plan.waitForExistence(timeout: 10) && plan.isHittable, "A Pro lifter has no Plan my next week")
+        XCTAssertFalse(app.buttons["paywall.buy"].exists, "A paywall showed")
         openTab(app, "Today")
         openYou(app)
         let row = app.buttons["you.lifterPro"]
