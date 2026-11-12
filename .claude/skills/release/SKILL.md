@@ -36,7 +36,9 @@ It bumps `CURRENT_PROJECT_VERSION`, commits, archives, uploads, refreshes the pr
 
 **Stop** if it says the Paid Apps agreement is not active. The Account Holder signs that under Business. Apple does not expose the signature through the API.
 
-**Stop before submit** if a subscription is not ready to submit, or a paywall screenshot is missing. The command attaches Coach Pro and Lifter Pro to the version; it does not remove products. The first real write to App Store Connect, and submit, wait for the author's yes.
+**Stop before submit** if a subscription is not ready to submit, or a paywall screenshot is missing. The command attaches Coach Pro and Lifter Pro to the version; it does not remove products. Submit waits for the author's yes.
+
+`npm run release -- products` is the products-only write. Run it only when the author has explicitly said to apply the subscription plan. It still does not upload a build, edit the listing, mint invites, upload paywall screenshots, or submit.
 
 ## 3. The video link
 

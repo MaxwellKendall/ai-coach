@@ -13,10 +13,11 @@ import {
 
 const yaml = readFileSync(new URL("../project.yml", import.meta.url), "utf8");
 
-test("parseArgs accepts submit and --dry-run together", () => {
-  assert.deepEqual(parseArgs(["--dry-run"]), { dryRun: true, submit: false, help: false });
-  assert.deepEqual(parseArgs(["submit"]), { dryRun: false, submit: true, help: false });
-  assert.deepEqual(parseArgs(["submit", "--dry-run"]), { dryRun: true, submit: true, help: false });
+test("parseArgs accepts submit, products, and --dry-run", () => {
+  assert.deepEqual(parseArgs(["--dry-run"]), { dryRun: true, submit: false, products: false, help: false });
+  assert.deepEqual(parseArgs(["submit"]), { dryRun: false, submit: true, products: false, help: false });
+  assert.deepEqual(parseArgs(["submit", "--dry-run"]), { dryRun: true, submit: true, products: false, help: false });
+  assert.deepEqual(parseArgs(["products", "--dry-run"]), { dryRun: true, submit: false, products: true, help: false });
 });
 
 test("build number increments and the marketing version is readable", () => {

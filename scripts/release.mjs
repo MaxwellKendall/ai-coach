@@ -22,7 +22,9 @@ import {
   REVIEW_REPLY,
   applySubscriptionPlan,
   assertSubscriptions,
+  commerceBlock,
   formatPlan,
+  formatRemote,
   loadRemote,
   paidAgreementStatus,
   planSubscriptions,
@@ -34,10 +36,14 @@ const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 process.chdir(root);
 loadEnv();
 
-const { dryRun, submit, help } = parseArgs(process.argv.slice(2));
+const { dryRun, submit, products, help } = parseArgs(process.argv.slice(2));
 if (help) {
-  console.log("npm run release [--dry-run] [submit]\n\nStops with a version ready for review. submit sends it to App Review.\n--dry-run changes nothing in App Store Connect, prod, or git.");
+  console.log("npm run release [--dry-run] [submit|products]\n\nStops with a version ready for review. submit sends it to App Review.\nproducts writes the subscriptions in appstore/subscriptions.json and stops. No build, listing, invites, screenshots, or submission.\n--dry-run changes nothing in App Store Connect, prod, or git.");
   process.exit(0);
+}
+if (products && submit) {
+  console.error("products does not submit. Run it without submit.");
+  process.exit(1);
 }
 
 const review = JSON.parse(readFileSync("appstore/review.json", "utf8"));
@@ -49,6 +55,11 @@ const listing = {
   keywords: readFileSync("appstore/metadata/keywords.txt", "utf8").trim(),
 };
 const hidden = [process.env.DEMO_PASSWORD, process.env.ASC_CONTACT_PHONE].filter(Boolean);
+
+if (products) {
+  await runProducts();
+  process.exit(process.exitCode || 0);
+}
 
 const failures = [];
 const notReady = [];
@@ -275,10 +286,84 @@ if (failures.length) {
 }
 
 function agreementFailure(error) {
-  const code = error.body?.errors?.[0]?.code || "";
-  const agreement = paidAgreementStatus({ readOk: false, errorCode: code });
-  if (agreement.stop && code) return agreement.message;
+  const block = commerceBlock(error);
+  if (block.blocked) return block.exact;
   return `App Store Connect: ${error.message}`;
+}
+
+async function runProducts() {
+  console.log(dryRun
+    ? "Products dry run. No App Store Connect writes, no build, no listing, no invites, no screenshots, no submission."
+    : "Products only. Writing subscriptions. No build, listing, invites, screenshots, or submission.");
+  console.log(`${git(["rev-parse", "--abbrev-ref", "HEAD"])} @ ${git(["log", "-1", "--oneline"])}`);
+  const dirty = git(["status", "--porcelain"]);
+  if (!dryRun) {
+    if (dirty) {
+      console.error("The working tree is not clean.");
+      process.exitCode = 1;
+      return;
+    }
+    const fetched = capture("git", ["fetch", "origin", "main"]);
+    if (fetched.code !== 0) {
+      console.error("Could not fetch origin/main.");
+      process.exitCode = 1;
+      return;
+    }
+    const head = git(["rev-parse", "HEAD"]);
+    const main = git(["rev-parse", "origin/main"]);
+    if (head !== main) {
+      console.error("HEAD is not origin/main. Commit to main before writing subscriptions.");
+      process.exitCode = 1;
+      return;
+    }
+    console.log("Preflight: this commit is origin/main, and the tree is clean.");
+  } else if (dirty) {
+    console.log("Preflight: the working tree is not clean. Dry run continues.");
+  }
+
+  let asc;
+  let store;
+  try {
+    asc = new Asc(loadAscEnv(), { dryRun });
+    store = await readStore(asc, review.bundleId);
+  } catch (error) {
+    failProducts(error);
+    return;
+  }
+  reportStore(store);
+  try {
+    const catalog = JSON.parse(readFileSync("appstore/subscriptions.json", "utf8"));
+    assertSubscriptions(catalog);
+    const remote = await loadRemote(asc, store.app.id);
+    console.log("\nRead from App Store Connect:");
+    console.log(formatRemote(remote).join("\n"));
+    const priced = await withTiers(asc, catalog, remote);
+    const plan = planSubscriptions(priced, remote, { screenshots: false });
+    if (plan.actions.some((action) => action.type === "setScreenshot" || /delete/i.test(action.type))) {
+      throw new Error("products mode planned a screenshot upload or a delete.");
+    }
+    console.log(`\n${paidAgreementStatus({ readOk: true }).message}`);
+    console.log(formatPlan(plan).join("\n"));
+    if (dryRun) {
+      console.log("Dry run does not create or change subscriptions.");
+      return;
+    }
+    const groupIds = new Map(remote.groups.map((group) => [group.referenceName, group.id]));
+    await applySubscriptionPlan(asc, plan, { appId: store.app.id, groupIds, screenshots: false });
+    console.log("Subscriptions were created or updated. No product was deleted. Paywall screenshots were not uploaded.");
+    const after = await loadRemote(asc, store.app.id);
+    console.log("\nRead back:");
+    console.log(formatRemote(after).join("\n"));
+  } catch (error) {
+    failProducts(error);
+  }
+}
+
+function failProducts(error) {
+  const block = commerceBlock(error);
+  if (block.blocked) console.error("Stopped. App Store Connect returned an agreement or tax error.");
+  console.error(block.exact);
+  process.exitCode = 1;
 }
 
 async function prepareSubscriptions(client, appId) {

@@ -71,6 +71,18 @@ export function nearestPricePoint(points, target) {
  * missing-agreement code means the Paid Apps agreement is not active. Any other
  * successful read did not see that block.
  */
+/** Agreement, tax, or banking failures stop a real write. `exact` is the API text, with no secrets added. */
+export function commerceBlock(error) {
+  const errors = error?.body?.errors || [];
+  const exact = errors.length
+    ? errors.map((item) => [item.status, item.code, item.title, item.detail].filter(Boolean).join(" ")).join("; ")
+    : (error?.message || "App Store Connect request failed");
+  const code = errors[0]?.code || "";
+  const blob = `${code} ${errors[0]?.title || ""} ${errors[0]?.detail || ""}`.toUpperCase();
+  const blocked = code === AGREEMENT_CODE || /\b(AGREEMENT|TAX|BANKING|BANK)\b/.test(blob);
+  return { blocked, exact, code };
+}
+
 export function paidAgreementStatus({ readOk = false, errorCode = "" } = {}) {
   if (errorCode === AGREEMENT_CODE) {
     return {
@@ -93,10 +105,30 @@ export function paidAgreementStatus({ readOk = false, errorCode = "" } = {}) {
   };
 }
 
-function sameIntro(remote, wanted) {
-  if (!wanted) return true;
-  return (remote.introductoryOffers || []).some((offer) =>
-    offer.duration === wanted.duration && offer.offerMode === wanted.mode && offer.numberOfPeriods === wanted.periods);
+function matchingIntros(offers, wanted) {
+  return (offers || []).filter((offer) =>
+    offer.duration === wanted.duration && offer.offerMode === wanted.mode && Number(offer.numberOfPeriods) === Number(wanted.periods));
+}
+
+/**
+ * The yearly trial is already on the app: a broad set of matching offers is left alone.
+ * A product with no offer, or a stopped run that posted only a few, still needs the rest.
+ */
+export function introNeedsWrite(existing, wanted, territoryCount) {
+  if (!wanted) return false;
+  const n = matchingIntros(existing?.introductoryOffers, wanted).length;
+  if (n === 0) return true;
+  if (!territoryCount || n >= territoryCount - 5) return false;
+  return (existing?.priceCount || 0) < 40;
+}
+
+/** USA price differs, or a previous run equalized only a few territories. A broad price list is left alone. */
+export function priceNeedsWrite(existing, product, territoryCount) {
+  const target = product.tier || product.priceUSD;
+  if (!sameMoney(existing?.usaPrice, target)) return true;
+  const n = existing?.priceCount || 0;
+  if (!territoryCount) return false;
+  return n > 0 && n < 40;
 }
 
 function sameLocalization(remote, wanted) {
@@ -109,7 +141,7 @@ function sameLocalization(remote, wanted) {
  * Never emits a delete. An existing product id is updated in place, even if it
  * lives in a different group: App Store Connect will not move it.
  */
-export function planSubscriptions(desired, remote, { screenshotExists = () => false } = {}) {
+export function planSubscriptions(desired, remote, { screenshotExists = () => false, screenshots = true } = {}) {
   const actions = [];
   const warnings = [];
   const submit = [];
@@ -126,13 +158,15 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
     if (!existingGroup) {
       actions.push({ type: "createGroup", referenceName: group.referenceName, displayName: group.displayName });
       byName.set(group.referenceName, { referenceName: group.referenceName, subscriptions: [], planned: true });
-    } else if (group.displayName && existingGroup.localization && existingGroup.localization.name !== group.displayName) {
+    } else if (group.displayName && existingGroup.localization?.locale === "en-US" && existingGroup.localization.name !== group.displayName) {
       actions.push({
         type: "renameGroup",
         id: existingGroup.localization.id,
         referenceName: group.referenceName,
         name: group.displayName,
       });
+    } else if (group.displayName && (!existingGroup.localization || existingGroup.localization.locale !== "en-US")) {
+      actions.push({ type: "createGroupLocalization", groupId: existingGroup.id, referenceName: group.referenceName, name: group.displayName });
     }
 
     for (const product of group.products) {
@@ -155,7 +189,7 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
           name: product.localization.name, localizationName: product.localization.name, localizationDescription: product.localization.description,
         });
         actions.push({ type: "setReviewNote", productId: product.productId, reviewNote: product.reviewNote });
-        noteScreenshot(product, null, screenshotExists, seenShots, actions, warnings);
+        if (screenshots) noteScreenshot(product, null, screenshotExists, seenShots, actions, warnings);
         warnings.push(`${product.name} (${product.productId}) is not on the app yet, so it is not ready to submit.`);
         submit.push({ productId: product.productId, name: product.name, state: "MISSING", versionId: null });
         continue;
@@ -169,19 +203,17 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
       if ((existing.reviewNote || "") !== (product.reviewNote || "")) {
         actions.push({ type: "setReviewNote", id: existing.id, productId: product.productId, reviewNote: product.reviewNote });
       }
-      if (product.tier && !sameMoney(existing.usaPrice, product.tier)) {
+      if (priceNeedsWrite(existing, product, remote.territoryCount || 0)) {
         actions.push({
           type: "setPrice",
           id: existing.id,
           productId: product.productId,
           priceUSD: product.priceUSD,
-          tier: product.tier,
-          pricePointId: product.pricePointId || null,
+          tier: product.tier || existing.usaPrice || null,
+          pricePointId: product.pricePointId || existing.usaPricePointId || null,
         });
-      } else if (!product.tier && !sameMoney(existing.usaPrice, product.priceUSD)) {
-        actions.push({ type: "setPrice", id: existing.id, productId: product.productId, priceUSD: product.priceUSD, tier: null });
       }
-      if (product.introductoryOffer && !sameIntro(existing, product.introductoryOffer)) {
+      if (introNeedsWrite(existing, product.introductoryOffer, remote.territoryCount || 0)) {
         actions.push({
           type: "setIntro", id: existing.id, productId: product.productId,
           duration: product.introductoryOffer.duration, periods: product.introductoryOffer.periods,
@@ -195,7 +227,7 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
           name: product.localization.name, localizationName: product.localization.name, localizationDescription: product.localization.description,
         });
       }
-      if (!existing.hasScreenshot) noteScreenshot(product, existing.id, screenshotExists, seenShots, actions, warnings);
+      if (screenshots && !existing.hasScreenshot) noteScreenshot(product, existing.id, screenshotExists, seenShots, actions, warnings);
       const ready = SUBMITTABLE_STATES.has(existing.state);
       if (!ready) warnings.push(`${product.name} (${product.productId}) is ${existing.state}, not ready to submit.`);
       submit.push({
@@ -232,6 +264,7 @@ export function formatPlan(plan) {
     switch (action.type) {
       case "createGroup": return `Would create subscription group ${action.referenceName} (${action.displayName}).`;
       case "renameGroup": return `Would rename the ${action.referenceName} group to ${action.name}.`;
+      case "createGroupLocalization": return `Would add an en-US name ${action.name} on group ${action.referenceName}.`;
       case "createProduct": return `Would create ${action.name} (${action.productId}) in ${action.group} at $${action.priceUSD}.`;
       case "updateName": return `Would rename ${action.productId} to ${action.name}.`;
       case "setReviewNote": return `Would set the subscription review note on ${action.productId}.`;
@@ -284,14 +317,21 @@ export async function loadRemote(client, appId) {
       subscriptions,
     });
   }
-  return { groups };
+  let territoryCount = 0;
+  try {
+    territoryCount = (await pages(client, "/v1/territories?limit=200")).length;
+  } catch (error) {
+    if (commerceBlock(error).blocked) throw error;
+  }
+  return { groups, territoryCount };
 }
 
 async function readSubscription(client, sub) {
   const id = sub.id;
-  const [prices, offers, localizations, versions, shot] = await Promise.all([
+  const [prices, priceRows, offerRows, localizations, versions, shot] = await Promise.all([
     client.get(`/v1/subscriptions/${id}/prices?filter[territory]=USA&include=subscriptionPricePoint&limit=5`).catch(() => ({ data: [] })),
-    client.get(`/v1/subscriptions/${id}/introductoryOffers?limit=20`).catch(() => ({ data: [] })),
+    pages(client, `/v1/subscriptions/${id}/prices?limit=200`).catch(() => []),
+    pages(client, `/v1/subscriptions/${id}/introductoryOffers?include=territory&limit=200`).catch(() => []),
     client.get(`/v1/subscriptions/${id}/subscriptionLocalizations?limit=10`).catch(() => ({ data: [] })),
     client.get(`/v1/subscriptions/${id}/versions?limit=5`).catch(() => ({ data: [] })),
     client.get(`/v1/subscriptions/${id}/appStoreReviewScreenshot`).catch(() => ({ data: null })),
@@ -305,9 +345,14 @@ async function readSubscription(client, sub) {
     state: sub.attributes?.state || "UNKNOWN",
     reviewNote: sub.attributes?.reviewNote || "",
     usaPrice: point?.attributes?.customerPrice || null,
+    usaPricePointId: point?.id || null,
+    priceCount: priceRows.length,
     hasScreenshot: Boolean(shot.data),
     versionId: version?.id || null,
-    introductoryOffers: (offers.data || []).map((item) => item.attributes || {}),
+    introductoryOffers: offerRows.map((item) => ({
+      ...(item.attributes || {}),
+      territoryId: item.relationships?.territory?.data?.id || null,
+    })),
     localizations: (localizations.data || []).map((item) => ({
       id: item.id,
       locale: item.attributes?.locale,
@@ -330,6 +375,7 @@ export async function withTiers(client, desired, remote) {
       if (!existing) continue;
       if (sameMoney(existing.usaPrice, product.priceUSD)) {
         product.tier = existing.usaPrice;
+        product.pricePointId = existing.usaPricePointId || null;
         continue;
       }
       const points = await pages(client, `/v1/subscriptions/${existing.id}/pricePoints?filter[territory]=USA&limit=200`);
@@ -341,12 +387,47 @@ export async function withTiers(client, desired, remote) {
   return copy;
 }
 
+export function formatRemote(remote) {
+  const lines = [`Territories: ${remote.territoryCount || "unknown"}.`];
+  for (const group of remote.groups || []) {
+    const shown = group.localization ? `${group.localization.locale} "${group.localization.name}"` : "no en-US name";
+    lines.push(`Group ${group.referenceName} id ${group.id} ${shown}`);
+    for (const sub of group.subscriptions || []) {
+      lines.push(`  ${sub.name} ${sub.productId} id ${sub.id} ${sub.state} USA ${sub.usaPrice ?? "none"} prices ${sub.priceCount} intro ${introSummary(sub.introductoryOffers)} localized ${sub.localizations?.length || 0}`);
+    }
+  }
+  if (!remote.groups?.length) lines.push("No subscription groups.");
+  return lines;
+}
+
+function introSummary(offers) {
+  const rows = offers || [];
+  if (!rows.length) return "none";
+  const first = rows[0];
+  const territories = new Set(rows.map((offer) => offer.territoryId).filter(Boolean));
+  const where = territories.size ? `${territories.size} territories` : `${rows.length} offers`;
+  return `${first.offerMode || "offer"} ${first.duration || ""} x${first.numberOfPeriods ?? "?"} in ${where}`;
+}
+
+function isAlreadyThere(error) {
+  const code = error?.body?.errors?.[0]?.code || "";
+  const detail = `${code} ${error?.body?.errors?.[0]?.detail || ""} ${error?.message || ""}`.toLowerCase();
+  return error?.status === 409 || detail.includes("already exists") || detail.includes("duplicate") || detail.includes("conflict");
+}
+
+function isUnsupportedTerritory(error) {
+  const detail = `${error?.body?.errors?.[0]?.detail || ""} ${error?.message || ""}`.toLowerCase();
+  return detail.includes("not available") || detail.includes("not supported") || detail.includes("ineligible");
+}
+
 /** Create or update what the plan names. Refuses a dry-run client. Does not delete products. */
-export async function applySubscriptionPlan(client, plan, { appId, groupIds: knownGroups = new Map() } = {}) {
+export async function applySubscriptionPlan(client, plan, { appId, groupIds: knownGroups = new Map(), screenshots = true } = {}) {
   if (client.dryRun) throw new Error("Refusing to change subscriptions during a dry run.");
   const productIds = new Map();
   const groupIds = new Map(knownGroups);
-  for (const action of plan.actions) {
+  const actions = screenshots ? plan.actions : plan.actions.filter((action) => action.type !== "setScreenshot");
+  for (const action of actions) {
+    console.log(`Applying ${action.type} ${action.productId || action.referenceName || ""}`.trim());
     if (action.type === "createGroup") {
       const made = await client.post("/v1/subscriptionGroups", {
         data: {
@@ -373,21 +454,21 @@ export async function applySubscriptionPlan(client, plan, { appId, groupIds: kno
       });
       continue;
     }
-    if (action.type === "createProduct") {
-      const groupId = groupIds.get(action.group) || action.groupId;
-      const made = await client.post("/v1/subscriptions", {
+    if (action.type === "createGroupLocalization" && action.groupId) {
+      await client.post("/v1/subscriptionGroupLocalizations", {
         data: {
-          type: "subscriptions",
-          attributes: {
-            name: action.name,
-            productId: action.productId,
-            familySharable: false,
-            subscriptionPeriod: action.period,
-          },
-          relationships: { group: { data: { type: "subscriptionGroups", id: groupId } } },
+          type: "subscriptionGroupLocalizations",
+          attributes: { locale: "en-US", name: action.name },
+          relationships: { subscriptionGroup: { data: { type: "subscriptionGroups", id: action.groupId } } },
         },
       });
+      continue;
+    }
+    if (action.type === "createProduct") {
+      const groupId = groupIds.get(action.group) || action.groupId;
+      const made = await createSubscription(client, groupId, action);
       productIds.set(action.productId, made.data.id);
+      console.log(`Created ${action.productId} id ${made.data.id}`);
       continue;
     }
     const id = action.id || productIds.get(action.productId);
@@ -404,23 +485,7 @@ export async function applySubscriptionPlan(client, plan, { appId, groupIds: kno
     } else if (action.type === "setIntro") {
       await setIntro(client, id, action);
     } else if (action.type === "setLocalization") {
-      if (action.localizationId) {
-        await client.patch(`/v1/subscriptionLocalizations/${action.localizationId}`, {
-          data: {
-            type: "subscriptionLocalizations",
-            id: action.localizationId,
-            attributes: { name: action.localizationName, description: action.localizationDescription },
-          },
-        });
-      } else {
-        await client.post("/v1/subscriptionLocalizations", {
-          data: {
-            type: "subscriptionLocalizations",
-            attributes: { locale: "en-US", name: action.localizationName, description: action.localizationDescription },
-            relationships: { subscription: { data: { type: "subscriptions", id } } },
-          },
-        });
-      }
+      await writeLocalization(client, id, action);
     } else if (action.type === "setScreenshot") {
       await uploadScreenshot(client, id, action.screenshot);
     }
@@ -437,18 +502,100 @@ export function reviewSubmissionPlan({ existingItems = [], versionId, subscripti
   };
 }
 
+async function createSubscription(client, groupId, action) {
+  const attributes = {
+    name: action.name,
+    productId: action.productId,
+    familySharable: false,
+    subscriptionPeriod: action.period,
+    groupLevel: action.period === "ONE_YEAR" ? 1 : 2,
+    availableInAllTerritories: true,
+  };
+  try {
+    return await client.post("/v1/subscriptions", subscriptionBody(groupId, attributes));
+  } catch (error) {
+    if (commerceBlock(error).blocked) throw error;
+    const detail = error.message || "";
+    if (!/availableInAllTerritories|groupLevel/.test(detail)) throw error;
+    delete attributes.availableInAllTerritories;
+    delete attributes.groupLevel;
+    return client.post("/v1/subscriptions", subscriptionBody(groupId, attributes));
+  }
+}
+
+function subscriptionBody(groupId, attributes) {
+  return {
+    data: {
+      type: "subscriptions",
+      attributes,
+      relationships: { group: { data: { type: "subscriptionGroups", id: groupId } } },
+    },
+  };
+}
+
+async function writeLocalization(client, id, action) {
+  const attributes = { name: action.localizationName, description: action.localizationDescription };
+  if (action.localizationId) {
+    await client.patch(`/v1/subscriptionLocalizations/${action.localizationId}`, {
+      data: { type: "subscriptionLocalizations", id: action.localizationId, attributes },
+    });
+    return;
+  }
+  const body = {
+    data: {
+      type: "subscriptionLocalizations",
+      attributes: { locale: "en-US", ...attributes },
+      relationships: { subscription: { data: { type: "subscriptions", id } } },
+    },
+  };
+  try {
+    await client.post("/v1/subscriptionLocalizations", body);
+  } catch (error) {
+    if (commerceBlock(error).blocked) throw error;
+    if (isAlreadyThere(error)) return;
+    const detail = error.message || "";
+    if (error.status !== 404 && !/v2|deprecated|subscription version/i.test(detail)) throw error;
+    await client.post("/v2/subscriptionLocalizations", body);
+  }
+}
+
 async function setUsaPrice(client, id, action) {
   let pointId = action.pricePointId;
   if (!pointId) {
     const points = await pages(client, `/v1/subscriptions/${id}/pricePoints?filter[territory]=USA&limit=200`);
     pointId = nearestPricePoint(points.map((row) => ({ id: row.id, customerPrice: row.attributes?.customerPrice })), action.priceUSD).id;
   }
-  await client.post("/v1/subscriptionPrices", priceBody(id, pointId, "USA"));
+  const priced = await existingPriceTerritories(client, id);
+  if (!priced.has("USA")) await postPrice(client, id, pointId, "USA");
   const equalized = await pages(client, `/v1/subscriptionPricePoints/${pointId}/equalizations?limit=200`);
+  let posted = 0;
   for (const row of equalized) {
     const territory = row.relationships?.territory?.data?.id;
-    if (!territory || territory === "USA") continue;
-    await client.post("/v1/subscriptionPrices", priceBody(id, row.id, territory));
+    if (!territory || territory === "USA" || priced.has(territory)) continue;
+    await postPrice(client, id, row.id, territory);
+    posted += 1;
+    if (posted % 25 === 0) console.log(`Equalized ${posted} territories on ${action.productId}.`);
+  }
+  console.log(`Price ${action.priceUSD} set on ${action.productId}. Newly posted territories: ${posted + (priced.has("USA") ? 0 : 1)}.`);
+}
+
+async function existingPriceTerritories(client, id) {
+  const rows = await pages(client, `/v1/subscriptions/${id}/prices?include=territory&limit=200`);
+  const territories = new Set();
+  for (const row of rows) {
+    const territory = row.relationships?.territory?.data?.id;
+    if (territory) territories.add(territory);
+  }
+  return territories;
+}
+
+async function postPrice(client, id, pricePointId, territory) {
+  try {
+    await client.post("/v1/subscriptionPrices", priceBody(id, pricePointId, territory));
+  } catch (error) {
+    if (commerceBlock(error).blocked) throw error;
+    if (isAlreadyThere(error)) return;
+    throw error;
   }
 }
 
@@ -467,19 +614,36 @@ function priceBody(subscriptionId, pricePointId, territory) {
 }
 
 async function setIntro(client, id, action) {
+  const existing = await pages(client, `/v1/subscriptions/${id}/introductoryOffers?include=territory&limit=200`);
+  const have = new Set(existing.map((row) => row.relationships?.territory?.data?.id).filter(Boolean));
   const territories = await pages(client, "/v1/territories?limit=200");
+  let posted = 0;
+  let skipped = 0;
   for (const territory of territories) {
-    await client.post("/v1/subscriptionIntroductoryOffers", {
-      data: {
-        type: "subscriptionIntroductoryOffers",
-        attributes: { duration: action.duration, offerMode: "FREE_TRIAL", numberOfPeriods: action.periods || 1 },
-        relationships: {
-          subscription: { data: { type: "subscriptions", id } },
-          territory: { data: { type: "territories", id: territory.id } },
+    if (have.has(territory.id)) continue;
+    try {
+      await client.post("/v1/subscriptionIntroductoryOffers", {
+        data: {
+          type: "subscriptionIntroductoryOffers",
+          attributes: { duration: action.duration, offerMode: "FREE_TRIAL", numberOfPeriods: action.periods || 1 },
+          relationships: {
+            subscription: { data: { type: "subscriptions", id } },
+            territory: { data: { type: "territories", id: territory.id } },
+          },
         },
-      },
-    });
+      });
+      posted += 1;
+      if (posted % 25 === 0) console.log(`Introductory offer posted for ${posted} territories on ${action.productId}.`);
+    } catch (error) {
+      if (commerceBlock(error).blocked) throw error;
+      if (isAlreadyThere(error) || isUnsupportedTerritory(error)) {
+        skipped += 1;
+        continue;
+      }
+      throw error;
+    }
   }
+  console.log(`Introductory offer on ${action.productId}: posted ${posted}, already present or unsupported ${skipped + have.size}.`);
 }
 
 async function uploadScreenshot(client, id, path) {

@@ -2,6 +2,8 @@
 
 `npm run release` takes `main` to an App Store Connect version that is ready for review, then stops. `npm run release -- submit` creates the review submission. `npm run release -- --dry-run` runs the local steps and the read-only App Store Connect calls, and does not upload a build, change the listing, refresh the prod review account, deploy the video, or submit.
 
+`npm run release -- products` writes only the subscriptions in `appstore/subscriptions.json`, then stops. It does not bump the build, upload, change the version or the listing, mint invites, refresh the review account, record the video, upload paywall screenshots, or submit. It runs when this commit is `origin/main` and the tree is clean. `npm run release -- --dry-run products` prints the plan and writes nothing.
+
 The command is plain `xcodebuild` plus a small App Store Connect client (`scripts/asc.mjs`) that signs its own JWT. Fastlane is not used.
 
 ## One-time steps

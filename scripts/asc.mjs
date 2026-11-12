@@ -40,7 +40,7 @@ export class Asc {
     this.planned = [];
   }
 
-  async request(method, path, body) {
+  async request(method, path, body, attempt = 0) {
     if (method !== "GET" && method !== "HEAD" && this.dryRun) {
       this.planned.push({ method, path });
       return { dryRun: true };
@@ -56,6 +56,11 @@ export class Asc {
       try { json = JSON.parse(text); } catch { json = { raw: text.slice(0, 200) }; }
     }
     if (!res.ok) {
+      if ((res.status === 429 || res.status === 503) && attempt < 5) {
+        const wait = Number(res.headers.get("retry-after")) || 2 ** attempt;
+        await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+        return this.request(method, path, body, attempt + 1);
+      }
       const detail = json.errors?.map((e) => `${e.status} ${e.code || ""} ${e.title}: ${e.detail}`).join("; ")
         || text.slice(0, 400);
       const error = new Error(`${method} ${path} failed: ${detail}`);

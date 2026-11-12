@@ -17,6 +17,7 @@ export function parseArgs(argv) {
   return {
     dryRun: args.includes("--dry-run"),
     submit: args.includes("submit"),
+    products: args.includes("products"),
     help: args.includes("--help") || args.includes("-h"),
   };
 }
