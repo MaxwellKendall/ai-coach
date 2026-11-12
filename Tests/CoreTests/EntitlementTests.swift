@@ -117,4 +117,20 @@ struct EntitlementTests {
         #expect(PaywallView.stillFree(.coach).contains("free"))
         #expect(PaywallView.stillFree(.lifter).contains("free"))
     }
+
+    /// FIT-437: the approved Lifter Pro paywall copy (.git/paywall-copy.md), word for word.
+    @Test func lifterPaywallSaysTheApprovedCopy() {
+        #expect(PaywallView.lifterTrialButton(days: 14) == "Start 14-day free trial")
+        #expect(PaywallView.lifterTrialButton(days: nil) == "Subscribe")
+        #expect(PaywallView.lifterYearlyLine(year: "$39.99", perMonth: "$3.33", trial: true) == "$39.99/yr after (about $3.33/mo)")
+        #expect(PaywallView.lifterYearlyLine(year: "$39.99", perMonth: "$3.33", trial: false) == "$39.99/yr (about $3.33/mo)")
+        #expect(PaywallView.lifterMonthlyLine(month: "$5.99") == "Monthly, $5.99/mo")
+        let terms = PaywallView.lifterRenewalTerms(year: "$39.99", month: "$5.99", trialDays: 14)
+        for part in ["renews automatically", "$39.99/year", "$5.99/month", "14-day free trial"] { #expect(terms.contains(part)) }
+        #expect(!PaywallView.lifterRenewalTerms(year: "$39.99", month: "$5.99", trialDays: nil).contains("free trial"))
+        let perMonth = (Decimal(string: "39.99")! / 12).formatted(.currency(code: "USD").locale(Locale(identifier: "en_US")))
+        #expect(perMonth == "$3.33")
+        #expect(StoreProducts.lifterYearly == "com.maxwellkendall.aicoach.pro.yearly")
+        #expect(StoreProducts.lifterMonthly == "com.maxwellkendall.aicoach.pro.monthly")
+    }
 }

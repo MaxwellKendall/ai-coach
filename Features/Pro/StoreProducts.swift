@@ -26,9 +26,14 @@ enum StoreProducts {
     static let coachYearly = "com.maxwellkendall.aicoach.coach.yearly"
     static let all = Plan.allCases.flatMap(\.products)
 
-    /// Lifter Pro's free trial. Unconfirmed by the author (FIT-437); the same length is in subscriptions.json and
-    /// AICoach.storekit, and the paywall reads the App Store's offer when it has one.
+    /// Lifter Pro's free trial: 14 days, confirmed against the live catalog (FIT-437, 2026-11-12). The same length is in
+    /// subscriptions.json and AICoach.storekit, and the paywall reads the App Store's offer when it has one.
     static let trialDays = 14
+
+    /// The approved paywall copy's prices, shown only when StoreKit has no product to read them from.
+    static let lifterYearlyFallback = "$39.99"
+    static let lifterMonthlyFallback = "$5.99"
+    static let lifterPerMonthFallback = "$3.33"
 
     static func plan(of productID: String) -> Plan? {
         Plan.allCases.first { $0.products.contains(productID) }

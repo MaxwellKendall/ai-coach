@@ -1,8 +1,9 @@
 import SwiftUI
 import StoreKit
 
-/// FIT-83, FIT-120, FIT-437: a plan's offer, reached only from You's plan rows (AppMode.offers). Lifter Pro, AI-designed
-/// weeks (FIT-426) for a lifter on their own, never shown by itself after onboarding or picking a program; Coach Pro,
+/// FIT-83, FIT-120, FIT-437: a plan's offer (AppMode.offers). Lifter Pro, AI-designed weeks (FIT-426) for a lifter on
+/// their own, appears at AI-planning entry points (Program's "Plan my next week", You's plan row), never after onboarding
+/// or picking a program; its layout is the approved copy: yearly first with the trial, monthly smaller. Coach Pro,
 /// coaching from Claude (the exhaustive MCP, FIT-284), in coach mode. Each shows
 /// what the plan adds, the App Store's monthly and yearly prices, the free trial when there is one, the auto-renew
 /// terms, Restore Purchases, and the terms and privacy links App Review asks for (guideline 3.1.2). With the plan
@@ -33,13 +34,19 @@ struct PaywallView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    header
-                    VStack(alignment: .leading, spacing: 16) {
-                        ForEach(Self.benefits(plan), id: \.title) { benefit in row(benefit) }
+                    if plan == .lifter {
+                        lifterHeader
+                    } else {
+                        header
+                        VStack(alignment: .leading, spacing: 16) {
+                            ForEach(Self.benefits(plan), id: \.title) { benefit in row(benefit) }
+                        }
+                        Text(Self.stillFree(plan)).font(.footnote).foregroundStyle(Color.inkMuted)
                     }
-                    Text(Self.stillFree(plan)).font(.footnote).foregroundStyle(Color.inkMuted)
                     if pro.has(plan) {
                         subscribed
+                    } else if plan == .lifter {
+                        lifterOffer
                     } else {
                         offer
                     }
@@ -74,7 +81,76 @@ struct PaywallView: View {
         .padding(.top, 16)
     }
 
+    private var lifterHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Lifter Pro").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            Text("Your next week, written for you").font(.display(34, weight: .bold)).tracking(-0.4)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("paywall.headline")
+            Text("Pro builds every week from your last one, your goal, and your gym. Works in Claude too.")
+                .font(.title3).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 16)
+    }
+
     // MARK: The offer
+
+    private var yearly: Product? { products.first { $0.id == plan.yearly } }
+    private var monthly: Product? { products.first { $0.id == plan.monthly } }
+    private var yearPrice: String { yearly?.displayPrice ?? StoreProducts.lifterYearlyFallback }
+    private var monthPrice: String { monthly?.displayPrice ?? StoreProducts.lifterMonthlyFallback }
+    private var perMonth: String {
+        yearly.map { ($0.price / 12).formatted($0.priceFormatStyle) } ?? StoreProducts.lifterPerMonthFallback
+    }
+    private var yearlyTrial: Product.SubscriptionOffer? {
+        guard trialEligible, let offer = yearly?.subscription?.introductoryOffer, offer.paymentMode == .freeTrial else { return nil }
+        return offer
+    }
+
+    /// Lifter Pro: yearly leads with the trial, monthly is the smaller way out.
+    @ViewBuilder private var lifterOffer: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !loaded {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+            } else if products.isEmpty {
+                Text("The App Store isn't answering. Check your connection and try again.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Button("Try Again") { Task { await load() } }
+            } else {
+                let trialDays = yearlyTrial.map { Self.days($0.period) }
+                Button {
+                    if account.user == nil, account.isAvailable { signingIn = true } else if let yearly { Task { await buy(yearly) } }
+                } label: {
+                    Group {
+                        if working { ProgressView() } else {
+                            Text(trialEligible ? Self.lifterTrialButton(days: trialDays ?? StoreProducts.trialDays) : Self.lifterTrialButton(days: nil))
+                        }
+                    }
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(.primary)
+                .disabled(working || yearly == nil)
+                .accessibilityIdentifier("paywall.buy")
+                Text(Self.lifterYearlyLine(year: yearPrice, perMonth: perMonth, trial: trialEligible))
+                    .font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("paywall.yearly.price")
+                Text(Self.lifterRenewalTerms(year: yearPrice, month: monthPrice, trialDays: trialEligible ? (trialDays ?? StoreProducts.trialDays) : nil))
+                    .font(.footnote).foregroundStyle(Color.inkMuted).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("paywall.terms.renewal")
+                Button {
+                    if account.user == nil, account.isAvailable { signingIn = true } else if let monthly { Task { await buy(monthly) } }
+                } label: {
+                    Text(Self.lifterMonthlyLine(month: monthPrice)).font(.subheadline).frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(.secondary)
+                .disabled(working || monthly == nil)
+                .accessibilityIdentifier("paywall.monthly")
+            }
+            if let message {
+                Text(message).font(.footnote).foregroundStyle(.red).accessibilityIdentifier("paywall.message")
+            }
+        }
+    }
 
     @ViewBuilder private var offer: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -324,6 +400,23 @@ struct PaywallView: View {
         case .year: value * 365
         @unknown default: StoreProducts.trialDays
         }
+    }
+
+    // The approved Lifter Pro copy (.git/paywall-copy.md), built only here so tests can pin it.
+    nonisolated static func lifterTrialButton(days: Int?) -> String {
+        days.map { "Start \($0)-day free trial" } ?? "Subscribe"
+    }
+
+    nonisolated static func lifterYearlyLine(year: String, perMonth: String, trial: Bool) -> String {
+        trial ? "\(year)/yr after (about \(perMonth)/mo)" : "\(year)/yr (about \(perMonth)/mo)"
+    }
+
+    nonisolated static func lifterMonthlyLine(month: String) -> String { "Monthly, \(month)/mo" }
+
+    nonisolated static func lifterRenewalTerms(year: String, month: String, trialDays: Int?) -> String {
+        let prices = "Lifter Pro is \(year)/year, or \(month)/month on the monthly plan."
+        let start = trialDays.map { "After the \($0)-day free trial, \(prices)" } ?? prices
+        return "\(start) It renews automatically until cancelled; cancel at least 24 hours before renewal in Settings › Apple Account › Subscriptions. Payment is charged to your Apple Account."
     }
 
     /// Auto-renewal said plainly, as App Review asks (guideline 3.1.2).
