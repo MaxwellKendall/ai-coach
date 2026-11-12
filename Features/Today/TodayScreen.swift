@@ -41,7 +41,7 @@ struct TodayScreen: View {
     @State private var live: WorkoutDraft?
     @State private var tracking: RunTarget?
     @State private var you = false
-    /// FIT-325: the picker, from a finished program's card.
+    /// FIT-325: the picker, from a finished program's card. FIT-445: or from a solo lifter's empty week.
     @State private var picking = false
     /// FIT-204: today's check-in sheet.
     @State private var checkingIn: CheckInDay?
@@ -145,6 +145,12 @@ struct TodayScreen: View {
     /// FIT-201: coached, with no session planned from this Monday on.
     private var awaitingCoach: Bool {
         !pro.coaches.isEmpty && !planned.contains { $0.kind == .workout && $0.date >= week[0] }
+    }
+
+    /// FIT-445: on their own with no program and nothing planned: in the pilot the app plans nothing without one
+    /// (`WeekSource.of`), so every day would be a rest day with no way on from Today.
+    private var needsProgram: Bool {
+        pro.coaches.isEmpty && profiles.first?.programStart == nil && !planned.contains { $0.kind == .workout && $0.date >= week[0] }
     }
 
     private var thisWeeksPlan: Plan? { plans.first { $0.weekStart == week[0] } }
@@ -618,6 +624,15 @@ struct TodayScreen: View {
             }
         case .plan(let plan): planView(plan, isToday: isToday)
         case .done(let done): doneCard(done)
+        case .rest where needsProgram:
+            VStack(alignment: .leading, spacing: 8) {
+                Text("No program yet").font(.display(28))
+                Text("Pick a program and your weeks plan themselves.").foregroundStyle(Color.inkMuted)
+                Button("Pick a program") { picking = true }
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("today.pickProgram")
+                    .padding(.top, 8)
+            }
         // FIT-332: a later week nobody has planned yet isn't seven rest days.
         case .rest where notPlannedYet(day):
             VStack(alignment: .leading, spacing: 8) {
