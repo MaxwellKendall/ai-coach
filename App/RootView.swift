@@ -61,7 +61,7 @@ struct RootView: View {
         // before FIT-445, which the launch's check now clears, so it never makes them a coach.
         if Roster.sample && pro.coaches.isEmpty { coach = true }
         #endif
-        return AppMode(coach: coach, trains: trains)
+        return AppMode(coach: coach, trains: trains, coached: !pro.coaches.isEmpty)
     }
     private var trains: Bool { profiles.first?.programStart != nil || !planned.isEmpty || !pro.coaches.isEmpty }
 
@@ -78,6 +78,7 @@ struct RootView: View {
         }
         .environment(coach)
         .environment(roster)
+        .environment(\.appMode, mode)
         // FIT-298: a coach opens on their clients; one who has clients is a coach, whichever door they came in by.
         .onChange(of: mode.coach, initial: true) { _, coach in if coach { tab = .clients } }
         // FIT-445: never left on a tab that isn't there for them.
@@ -143,7 +144,7 @@ struct RootView: View {
             }
             .tint(Self.accent)
         }
-        .sheet(isPresented: Binding(get: { Pilot.sellsPro && pro.paywall }, set: { pro.paywall = $0 })) { PaywallView(plan: .lifter) }
+        .sheet(isPresented: Binding(get: { Pilot.sellsPro && pro.paywall && mode.offers(.lifter) }, set: { pro.paywall = $0 })) { PaywallView(plan: .lifter) }
         .sheet(item: Binding(get: { onboarding == nil ? navigator.gift.map(GiftRef.init) : nil },
                              set: { if $0 == nil { navigator.gift = nil } })) { ref in
             NavigationStack { RedeemGiftView(code: ref.id) }.tint(Self.accent)

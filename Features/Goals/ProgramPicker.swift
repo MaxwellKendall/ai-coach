@@ -216,7 +216,6 @@ private struct KitList: View {
 /// other program, are below it.
 private struct ProgramChoice: View {
     @Environment(\.modelContext) private var context
-    @Environment(Pro.self) private var pro
     @Query private var profiles: [Profile]
     @Query private var templates: [Template]
     @State var have: Set<String>
@@ -232,8 +231,6 @@ private struct ProgramChoice: View {
     @State private var failure: String?
     /// Following a program already: starting one begins again at week 1, so it's asked first.
     @State private var confirming = false
-    /// FIT-437: a first program started without Lifter Pro: the offer of AI-designed weeks, then Today either way.
-    @State private var offering = false
 
     private var matches: [ReadyProgram] { ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted) }
     private var program: ReadyProgram? { selected ?? matches.first }
@@ -273,7 +270,6 @@ private struct ProgramChoice: View {
         }
         // Equipment changed here: the best program for it, as the questions would have picked.
         .onChange(of: have) { withAnimation(.settle) { select(matches.first) } }
-        .sheet(isPresented: $offering, onDismiss: onStart) { PaywallView(plan: .lifter) }
     }
 
     /// FIT-297: the outcome first: the plan's promise from their own set and the line to it, then the program.
@@ -389,10 +385,8 @@ private struct ProgramChoice: View {
         do {
             // FIT-281: the recent sets, while they're of this program's lifts (FIT-323: each of Strength Waves' four).
             let starts = recent.filter { program.recentLifts.contains($0.exercise) }
-            let first = profile.programSlug == nil
             try Planner.start(program, days: trainingDays, equipment: equipment, starts: starts, profile: profile, in: context)
-            // A lifter training themselves gets code-planned weeks free; Lifter Pro has the AI design them (FIT-426).
-            if first, pro.coaches.isEmpty, !pro.lifterPro { offering = true } else { onStart() }
+            onStart()
         } catch {
             failure = "Couldn’t start the program. Try again."
         }

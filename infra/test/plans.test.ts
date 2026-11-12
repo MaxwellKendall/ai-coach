@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PLANS, TRIAL_DAYS } from "../../shared/plans.ts";
-import { TRIAL_DAYS as MCP_TRIAL_DAYS } from "../lambda/mcp.ts";
 import { legalRoute } from "../lambda/legalPages.ts";
 
 type Product = { productId: string; priceUSD: string; introductoryOffer?: { mode: string; duration: string } };
@@ -20,8 +19,8 @@ describe("the tiers the site describes (FIT-437)", () => {
     expect(PLANS.coach.year).toBe(price("com.maxwellkendall.aicoach.coach.yearly"));
   });
 
-  it("one trial length: the copy's, the connector's and the App Store's free trial", () => {
-    expect(MCP_TRIAL_DAYS).toBe(TRIAL_DAYS);
+  // The connector's trial imports TRIAL_DAYS too (infra/lambda/mcp.ts).
+  it("one trial length: the copy's and the App Store's free trial", () => {
     for (const id of ["com.maxwellkendall.aicoach.pro.monthly", "com.maxwellkendall.aicoach.pro.yearly"]) {
       const offer = product(id).introductoryOffer!;
       expect(offer.mode).toBe("FREE_TRIAL");

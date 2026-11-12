@@ -18,15 +18,8 @@ struct YouScreen: View {
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
     /// FIT-437: Lifter Pro's or Coach Pro's offer, or how to manage it.
     @State private var plan: StoreProducts.Plan?
-    @AppStorage(Roster.coachingKey) private var coachUID = ""
-    private var coaching: Bool {
-        #if DEBUG
-        if Roster.sample { return true }
-        #endif
-        return account.user.map { $0.uid == coachUID } ?? false
-    }
-    /// No coach of their own, and training (a coach with no program of their own isn't offered Lifter Pro).
-    private var trainsThemselves: Bool { pro.coaches.isEmpty && (!coaching || profiles.first?.programStart != nil) }
+    /// FIT-445: coach, coached client or lifter on their own, from RootView.
+    @Environment(\.appMode) private var mode
 
     var body: some View {
         NavigationStack {
@@ -77,13 +70,14 @@ struct YouScreen: View {
                         .accessibilityIdentifier("you.program")
                     }
                 }
-                // FIT-437: the two plans: Lifter Pro for someone training themselves, Coach Pro for a coach.
-                if Pilot.sellsPro, trainsThemselves || coaching {
+                // FIT-437: the two plans, each where it's for (AppMode.offers): Lifter Pro's AI planning for a lifter on
+                // their own, Coach Pro for a coach in coach mode. A coach's client sees neither.
+                if Pilot.sellsPro, mode.offers(.lifter) || mode.offers(.coach) {
                     Section {
-                        if trainsThemselves {
+                        if mode.offers(.lifter) {
                             planRow(.lifter, "AI-Designed Weeks", "sparkles")
                         }
-                        if coaching {
+                        if mode.offers(.coach) {
                             planRow(.coach, "Coach from Claude", "person.3")
                         }
                     }

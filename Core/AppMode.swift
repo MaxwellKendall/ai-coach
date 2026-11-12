@@ -1,3 +1,5 @@
+import SwiftUI
+
 /// The app's tabs (FIT-64). The coach sits in the slot iOS 26 keeps for Search.
 enum AppTab: Hashable {
     case clients, today, program, progress, groups, coach
@@ -11,6 +13,8 @@ struct AppMode: Equatable, Sendable {
     var coach: Bool
     /// FIT-381: a program of their own, anything planned, or a coach of their own.
     var trains: Bool
+    /// A coach of their own (FIT-130).
+    var coached = false
 
     /// Whom `Cloud.myClients` found: coaching anyone but the server's sample client (FIT-240) makes a coach.
     static func coaches(_ clients: [Cloud.Person]) -> Bool { clients.contains { !$0.isSample } }
@@ -28,10 +32,24 @@ struct AppMode: Equatable, Sendable {
         (coach ? [.clients] : []) + (!coach || trains ? [.today, .program, .progress] : [])
     }
 
+    /// FIT-437: whose paywall this person can reach. Lifter Pro only for a lifter on their own: never a coach's client,
+    /// and never in coach mode, even for a coach who trains. Coach Pro only in coach mode.
+    func offers(_ plan: StoreProducts.Plan) -> Bool {
+        switch plan {
+        case .lifter: !coach && !coached
+        case .coach: coach
+        }
+    }
+
     /// The tab to show when `selected` isn't in the bar any more; nil when it still is. The coach and groups tabs
     /// aren't this type's to hide.
     func replacing(_ selected: AppTab) -> AppTab? {
         guard selected != .coach, selected != .groups, !tabs.contains(selected) else { return nil }
         return tabs.first
     }
+}
+
+extension EnvironmentValues {
+    /// FIT-437: RootView's mode, for the screens it presents (You's plans).
+    @Entry var appMode = AppMode(coach: false, trains: false)
 }

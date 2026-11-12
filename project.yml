@@ -133,7 +133,11 @@ targets:
   AICoachRoleUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [Tests/RoleUITests]
+    sources:
+      - Tests/RoleUITests
+      # FIT-437: the paywalls' products, from SKTestSession(configurationFileNamed: "AICoach").
+      - path: AICoach.storekit
+        buildPhase: resources
     dependencies:
       - target: AICoach
     settings:

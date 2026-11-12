@@ -21,6 +21,7 @@ import { giftedUntil } from "./gifts.ts";
 import { ensureSample, isSample } from "./sample.ts";
 import { fingerprint } from "./programStats.ts";
 import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
+import { TRIAL_DAYS } from "../../shared/plans.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
 /**
@@ -925,7 +926,6 @@ const signedInLine = (account: Account) => account.who ? `${agentName(account)} 
 // ---- FIT-327: lifter Pro (FIT-312, author 2026-11-04), FIT-190's gate back for someone training themselves ----
 
 export type Access = { trialStart: string; pro: boolean };
-export const TRIAL_DAYS = 14;
 /** What Pro adds to their own training (business model v2). Logging, reading, progress, goals, apply and undo stay free. */
 export const LIFTER_PRO_TOOLS = new Set(["propose_session", "propose_week", "set_program", "get_week_review"]);
 

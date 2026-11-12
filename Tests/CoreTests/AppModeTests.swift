@@ -60,4 +60,19 @@ struct AppModeTests {
         #expect(AppMode.keepsSavedCoaching(clients: [mike], invites: 1, trains: true))
         #expect(AppMode.keepsSavedCoaching(clients: [mike], invites: 0, trains: false))
     }
+
+    /// FIT-437: Lifter Pro's paywall for a lifter on their own; Coach Pro's in coach mode; a coach's client sees neither.
+    @Test func eachPaywallIsForItsRole() {
+        let solo = AppMode(coach: false, trains: true)
+        #expect(solo.offers(.lifter) && !solo.offers(.coach))
+        let client = AppMode(coach: false, trains: true, coached: true)
+        #expect(!client.offers(.lifter) && !client.offers(.coach))
+        for trains in [false, true] {
+            let coach = AppMode(coach: true, trains: trains)
+            #expect(coach.offers(.coach) && !coach.offers(.lifter))
+        }
+        // Coached and a coach too: Coach Pro in coach mode, never Lifter Pro.
+        let both = AppMode(coach: true, trains: true, coached: true)
+        #expect(both.offers(.coach) && !both.offers(.lifter))
+    }
 }

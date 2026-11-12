@@ -1,8 +1,9 @@
 import SwiftUI
 import StoreKit
 
-/// FIT-83, FIT-120, FIT-437: a plan's offer. Lifter Pro, where a lifter training themselves starts a program (AI-designed
-/// weeks, FIT-426); Coach Pro, where a coach reaches coaching from Claude (the exhaustive MCP, FIT-284). Each shows
+/// FIT-83, FIT-120, FIT-437: a plan's offer, reached only from You's plan rows (AppMode.offers). Lifter Pro, AI-designed
+/// weeks (FIT-426) for a lifter on their own, never shown by itself after onboarding or picking a program; Coach Pro,
+/// coaching from Claude (the exhaustive MCP, FIT-284), in coach mode. Each shows
 /// what the plan adds, the App Store's monthly and yearly prices, the free trial when there is one, the auto-renew
 /// terms, Restore Purchases, and the terms and privacy links App Review asks for (guideline 3.1.2). With the plan
 /// already, it's how to manage it: Apple's sheet for the App Store's, the web's Billing for Stripe's.

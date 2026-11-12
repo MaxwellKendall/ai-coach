@@ -1,3 +1,4 @@
+import StoreKitTest
 import XCTest
 
 /// FIT-445: what each role sees: its tabs, and that its key screens open with something on them. Each test launches
@@ -25,6 +26,24 @@ final class RoleUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         openYou(app)
         shot(app, "coach-you")
+        // FIT-437: Coach Pro, in coach mode only; no Lifter Pro.
+        XCTAssertFalse(app.buttons["you.lifterPro"].exists, "A coach is offered Lifter Pro")
+    }
+
+    /// FIT-437: in coach mode, You's Coach from Claude (Coach Pro's MCP) opens Coach Pro's paywall.
+    @MainActor
+    func testCoachReachesTheCoachProPaywall() throws {
+        let session = try storeKit()
+        defer { _ = session }
+        let app = launch("coach")
+        XCTAssertEqual(tabs(app), ["Clients"])
+        openYou(app)
+        let row = app.buttons["you.coachPro"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "You has no Coach Pro for a coach")
+        shot(app, "coach-you-plans")
+        row.tap()
+        assertPaywall(app, "Coach Pro", prices: ["$19.99/month", "$199.00/year"], trial: false)
+        shot(app, "coach-coach-pro-paywall")
     }
 
     @MainActor
@@ -50,6 +69,10 @@ final class RoleUITests: XCTestCase {
         // A coach's client picks no program of their own, and has a coach already.
         XCTAssertFalse(app.buttons["you.program"].exists, "You offers a client a program of their own")
         XCTAssertFalse(app.buttons["you.joinCoach"].exists, "You offers a client Join Your Coach")
+        // FIT-437: a coach's client never sees a paywall, nor a way to one.
+        XCTAssertFalse(app.buttons["you.lifterPro"].exists, "You offers a client Lifter Pro")
+        XCTAssertFalse(app.buttons["you.coachPro"].exists, "You offers a client Coach Pro")
+        XCTAssertFalse(app.otherElements["paywall.lifter"].exists || app.otherElements["paywall.coach"].exists, "A client saw a paywall")
         shot(app, "client-you")
     }
 
@@ -93,14 +116,43 @@ final class RoleUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["What’s your goal?"].waitForExistence(timeout: 10), "Pick a program did not open the picker")
     }
 
-    /// FIT-327: lifter Pro is sold on the web; in the app it looks like Free, with no paywall (FIT-215).
+    /// FIT-437: Lifter Pro's AI planning is reached from You, never by itself: not on Today, not after picking a program.
+    /// A free lifter's paywall has both prices, the trial, the renewal terms, Restore and the Terms and Privacy links.
     @MainActor
-    func testSoloProLooksLikeFree() {
+    func testSoloFreeReachesTheLifterProPaywall() throws {
+        let session = try storeKit()
+        defer { _ = session }
+        let app = launch("solo", ["-trialEligible", "YES"])
+        XCTAssertTrue(app.buttons["Check off as done"].firstMatch.waitForExistence(timeout: 15), "Today has no session")
+        XCTAssertFalse(app.buttons["paywall.buy"].exists, "A paywall showed by itself")
+        openYou(app)
+        let row = app.buttons["you.lifterPro"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "You has no Lifter Pro for a lifter on their own")
+        XCTAssertFalse(app.buttons["you.coachPro"].exists, "A lifter is offered Coach Pro")
+        shot(app, "solo-free-you-plans")
+        row.tap()
+        assertPaywall(app, "Lifter Pro", prices: ["$5.99/month", "$39.99/year"], trial: true)
+        shot(app, "solo-free-lifter-pro-paywall")
+    }
+
+    /// FIT-437: a Pro lifter sees no paywall: You says Lifter Pro, and opening it says they have it, with no offer.
+    @MainActor
+    func testSoloProSeesNoPaywall() {
         let app = launch("soloPro")
         XCTAssertEqual(tabs(app), athlete)
         XCTAssertTrue(app.buttons["Check off as done"].firstMatch.waitForExistence(timeout: 15), "Today has no session")
-        XCTAssertFalse(app.staticTexts["Barbrabell Pro"].exists, "A paywall showed")
+        XCTAssertFalse(app.buttons["paywall.buy"].exists, "A paywall showed")
         shot(app, "solo-pro-today")
+        openYou(app)
+        let row = app.buttons["you.lifterPro"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "You has no Lifter Pro row")
+        XCTAssertTrue(row.label.contains("Lifter Pro"), "You doesn't say they have Lifter Pro: \(row.label)")
+        shot(app, "solo-pro-you")
+        row.tap()
+        XCTAssertTrue(app.staticTexts["You have Lifter Pro"].waitForExistence(timeout: 10), "Lifter Pro isn't shown as theirs")
+        XCTAssertFalse(app.buttons["paywall.buy"].exists, "A Pro lifter was offered Lifter Pro")
+        XCTAssertFalse(app.buttons["paywall.yearly"].exists, "A Pro lifter was shown the prices")
+        shot(app, "solo-pro-lifter-pro-unlocked")
     }
 
     @MainActor
@@ -113,6 +165,36 @@ final class RoleUITests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// The App Store's products from AICoach.storekit, for as long as the returned session lives.
+    private func storeKit() throws -> SKTestSession {
+        let session = try SKTestSession(configurationFileNamed: "AICoach")
+        session.resetToDefaultState()
+        session.clearTransactions()
+        session.disableDialogs = true
+        return session
+    }
+
+    /// What App Review looks for on a paywall (guideline 3.1.2), once its products load.
+    @MainActor
+    private func assertPaywall(_ app: XCUIApplication, _ name: String, prices: [String], trial: Bool) {
+        XCTAssertTrue(app.buttons["paywall.yearly"].waitForExistence(timeout: 30), "\(name)'s products didn't load")
+        XCTAssertTrue(app.staticTexts[name].exists, "No \(name) title")
+        for price in prices {
+            XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", price)).firstMatch.exists,
+                          "No price \(price)")
+        }
+        // The yearly option says its free trial ("2 weeks free"), and only Lifter Pro has one.
+        let yearly = app.buttons["paywall.yearly"].label
+        XCTAssertEqual(yearly.contains(" free"), trial, trial ? "No free trial shown: \(yearly)" : "A free trial shown for a plan without one")
+        let terms = app.staticTexts["paywall.terms.renewal"]
+        XCTAssertTrue(terms.exists, "No renewal terms")
+        XCTAssertTrue(terms.label.localizedCaseInsensitiveContains("renew"), "The terms don't say it renews: \(terms.label)")
+        XCTAssertTrue(app.buttons["paywall.buy"].exists, "No buy button")
+        XCTAssertTrue(app.buttons["paywall.restore"].exists, "No Restore Purchases")
+        XCTAssertTrue(app.buttons["paywall.terms"].exists || app.links["paywall.terms"].exists, "No Terms of Use link")
+        XCTAssertTrue(app.buttons["paywall.privacy"].exists || app.links["paywall.privacy"].exists, "No Privacy Policy link")
+    }
 
     @MainActor
     private func launch(_ role: String?, _ extra: [String] = []) -> XCUIApplication {
