@@ -52,19 +52,19 @@ enum EvalModel {
     /// Dollars per million tokens in and out, standard tier, short prompts (2026-10-10): Claude from
     /// platform.claude.com/docs/en/about-claude/pricing, OpenAI from developers.openai.com/api/docs/pricing, Gemini from
     /// ai.google.dev/gemini-api/docs/pricing (Flash rates through 2026). Thinking and reasoning tokens bill as output.
-    static let prices: [String: (input: Double, output: Double)] = [
-        "claude-haiku-5-5": (0.10, 0.50), "claude-sonnet-5-5": (2, 10), "claude-opus-5-5": (4, 20), "claude-fable-5-1": (10, 50),
+    static let prices: [String: (input: Double, output: Double)] = ClaudeModel.prices.merging([
+        "claude-sonnet-5-5": (2, 10), "claude-opus-5-5": (4, 20), "claude-fable-5-1": (10, 50),
         "gpt-6-luna": (0.10, 0.50), "gpt-6-sol": (2, 10), "gpt-6.1-sol": (2, 10), "gpt-6-astra": (10, 50), "gpt-5.6-luna": (0.20, 1.20),
         "gpt-5-nano": (0.05, 0.40), "gpt-5-mini": (0.25, 2),
         "gemini-2.5-flash-lite": (0.10, 0.40), "gemini-3.1-flash-lite": (0.25, 1.50), "gemini-3.8-flash": (0.75, 3.75),
         "gemini-3.6-flash": (0.75, 3.75), "gemini-3.1-pro-preview": (2, 12), "gemini-2.5-pro": (1.25, 10),
-    ]
+    ]) { core, _ in core }
 
     /// What the model's requests so far cost, in dollars: 0 on-device, nil for a model without a price here.
     static func cost(_ model: any AIModel) -> Double? {
         guard let model = model as? any MeteredModel else { return 0 }
         guard let price = prices[model.model] else { return nil }
-        let used = model.usage.tokens.withLock { $0 }
+        let used = model.usage.snapshot
         return (Double(used.input) * price.input + Double(used.output) * price.output) / 1_000_000
     }
 

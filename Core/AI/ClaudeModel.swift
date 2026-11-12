@@ -24,6 +24,16 @@ struct ClaudeModel: AIModel {
         Session(model: self, tools: tools, instructions: instructions)
     }
 
+    /// FIT-426: dollars per million tokens in and out for the model the app uses, standard tier (2026-10-10, from
+    /// platform.claude.com/docs/en/about-claude/pricing). The evals add the models they compare.
+    static let prices: [String: (input: Double, output: Double)] = ["claude-haiku-5-5": (0.10, 0.50)]
+
+    /// What tokens in and out cost on a model, in dollars; nil for a model without a price.
+    static func cost(model: String, input: Int, output: Int) -> Double? {
+        guard let price = prices[model] else { return nil }
+        return (Double(input) * price.input + Double(output) * price.output) / 1_000_000
+    }
+
     // MARK: Session
 
     final class Session: AISession {
@@ -192,6 +202,8 @@ protocol ClaudeTransport: Sendable {
 /// Tokens a model's requests used: the evals' cost per model.
 final class TokenUsage: Sendable {
     let tokens = Mutex<(input: Int, output: Int, requests: Int)>((0, 0, 0))
+
+    var snapshot: (input: Int, output: Int, requests: Int) { tokens.withLock { $0 } }
 
     func add(input: Double?, output: Double?) {
         tokens.withLock {

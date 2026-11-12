@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 /// Builds a week's Plan from the profile, catalog and log history by running the domain generators,
@@ -102,17 +103,35 @@ enum Planner {
         return brief
     }
 
+    /// FIT-426: redesigns on request ("Plan my next week" again) on top of the automatic design: at most 3 a week.
+    static let redesignsPerWeek = 2
+
+    /// FIT-426: whether a week can be designed again on request: not a coach's week, and under the cap. A week not
+    /// saved yet can.
+    static func canRedesign(_ plan: Plan?) -> Bool {
+        guard let plan else { return true }
+        return !isCoached(plan) && plan.designs < 1 + redesignsPerWeek
+    }
+
+    private static let log = Logger(subsystem: "AICoach", category: "design")
+
+    /// Designs the week once, or with `force` again on request while `canRedesign`. Returns whether the model's week
+    /// landed; when it didn't, the week stays as it was.
+    @discardableResult
     static func design(weekOf date: Date = .now, in context: ModelContext, model: any AIModel = OnDeviceModel(),
-                       calendar: Calendar = .current) async {
+                       force: Bool = false, calendar: Calendar = .current) async -> Bool {
         let monday = Week.start(of: date, calendar: calendar)
         guard model.isAvailable, !designing.weeks.contains(monday),
-              let plan = try? plan(weekOf: monday, in: context), plan.designedBy == nil, !isCoached(plan),
+              let plan = try? plan(weekOf: monday, in: context), !isCoached(plan),
+              force ? canRedesign(plan) : plan.designedBy == nil,
               let profile = try? context.fetch(FetchDescriptor<Profile>()).first, profile.isComplete,
               let templates = try? context.fetch(FetchDescriptor<Template>()),
               let entries = try? context.fetch(FetchDescriptor<LogEntry>()),
-              var request = designRequest(weekOf: monday, in: context, calendar: calendar) else { return }
+              var request = designRequest(weekOf: monday, in: context, calendar: calendar) else { return false }
         designing.weeks.insert(monday)
         defer { designing.weeks.remove(monday) }
+        let meter = claude(model)
+        let before = meter?.usage.snapshot
         if request.brief == nil, let program = profile.programWeek(of: monday, calendar: calendar) {
             request.brief = await writeBrief(for: request, profile: profile, model: model)?.phase(program.week.phase)
         }
@@ -120,23 +139,46 @@ enum Planner {
         request.progression = await Progression.decided(request, by: Progression.Rules(tier: AgeTier.of(age: profile.age)))
         let result = await ProgramDesigner.week(request, model: model)
         // The week may have been planned again while the model worked; that plan gets its own turn.
-        guard let current = try? self.plan(weekOf: monday, in: context), current.id == plan.id else { return }
-        land(result, on: plan, entries: entries, templates: templates, in: context, calendar: calendar)
+        guard let current = try? self.plan(weekOf: monday, in: context), current.id == plan.id else { return false }
+        var spent = (tokens: 0, cost: 0.0)
+        if let meter, let before {
+            let after = meter.usage.snapshot
+            let input = after.input - before.input, output = after.output - before.output
+            spent = (input + output, ClaudeModel.cost(model: meter.model, input: input, output: output) ?? 0)
+        }
+        log.info("""
+            week \(monday.formatted(.iso8601.year().month().day()), privacy: .public) \(result.source.rawValue, privacy: .public) \
+            \(spent.tokens) tokens $\(String(format: "%.4f", spent.cost), privacy: .public) \(String(format: "%.1f", result.seconds), privacy: .public) s
+            """)
+        return land(result, on: plan, force: force, spent: spent, entries: entries, templates: templates, in: context,
+                    calendar: calendar)
     }
 
-    /// A designed week replaces the plan's, but for days done or pinned; the plan is marked designed either way.
-    private static func land(_ result: ProgramDesigner.Result, on plan: Plan, entries: [LogEntry], templates: [Template],
-                             in context: ModelContext, calendar: Calendar) {
-        guard plan.designedBy == nil else { return }
+    /// The Claude model behind a model, whose tokens a design's cost is read from.
+    private static func claude(_ model: any AIModel) -> ClaudeModel? {
+        (model as? ClaudeModel) ?? ((model as? FallbackModel)?.primary as? ClaudeModel)
+    }
+
+    /// A designed week replaces the plan's, but for days done or pinned. The first landing marks the plan designed
+    /// either way; a forced one that falls back leaves the week as it was. What it cost is added either way.
+    @discardableResult
+    private static func land(_ result: ProgramDesigner.Result, on plan: Plan, force: Bool = false,
+                             spent: (tokens: Int, cost: Double) = (0, 0), entries: [LogEntry], templates: [Template],
+                             in context: ModelContext, calendar: Calendar) -> Bool {
+        guard force || plan.designedBy == nil else { return false }
+        plan.designTokens += spent.tokens
+        plan.designCostUSD += spent.cost
         if result.source == .model {
             let done = Set(entries.filter { $0.kind == .workout }.map { calendar.startOfDay(for: $0.timestamp) })
             let pinned = Set(plan.items.filter { $0.kind == .workout && $0.pinned }.map { calendar.startOfDay(for: $0.date) })
             _ = try? replan(plan, with: result.week.workouts, keep: done.union(pinned), templates: templates, in: context,
                             calendar: calendar)
             plan.warnings = result.week.warnings
+            plan.designs += 1
         }
-        plan.designedBy = result.source.rawValue
+        if result.source == .model || plan.designedBy == nil { plan.designedBy = result.source.rawValue }
         try? context.save()
+        return result.source == .model
     }
 
     /// Onboarding's first week, when Start was tapped before its design came back: Today says the coach is planning
@@ -149,7 +191,10 @@ enum Planner {
         designing.weeks.insert(monday)
         let done = await design.value
         designing.weeks.remove(monday)
-        guard let done else { return await self.design(weekOf: monday, in: context, model: model, calendar: calendar) }
+        guard let done else {
+            await self.design(weekOf: monday, in: context, model: model, calendar: calendar)
+            return
+        }
         guard let profile = try? context.fetch(FetchDescriptor<Profile>()).first,
               let templates = try? context.fetch(FetchDescriptor<Template>()),
               let entries = try? context.fetch(FetchDescriptor<LogEntry>()),

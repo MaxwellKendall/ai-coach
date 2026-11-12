@@ -13,6 +13,12 @@ final class Plan {
     /// FIT-74: who planned the week's training: "model" once the on-device model designed it, "fallback" when it
     /// couldn't; nil while it's TrainingGenerator's week waiting for the model.
     var designedBy: String?
+    /// FIT-426: the model's designs of this week that landed, the automatic one included; redesigns on request stop at
+    /// `1 + Planner.redesignsPerWeek`.
+    var designs = 0
+    /// FIT-426: what designing this week cost through our server, every try summed, fallbacks too (they use tokens).
+    var designTokens = 0
+    var designCostUSD = 0.0
     var createdAt: Date
     var updatedAt: Date
 
