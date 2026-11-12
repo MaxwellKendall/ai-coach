@@ -240,6 +240,8 @@ struct TodayScreen: View {
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
         .sheet(item: $sheet, content: sheetView)
         .sheet(isPresented: $you) { YouScreen().tint(RootView.accent) }
+        // FIT-430: signed out from You, the welcome screen takes over.
+        .onChange(of: account.user == nil) { _, signedOut in if signedOut { you = false } }
         .sheet(isPresented: $conversing) {
             NavigationStack {
                 CoachConversation()

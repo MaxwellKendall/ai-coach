@@ -84,6 +84,15 @@ struct RootView: View {
             coachUID = user.uid
         }
         .onChange(of: tab) { _, new in if new != .coach { lastTab = new } }
+        // FIT-430: signing out, or deleting the account, goes back to the three doors; the next account's door decides
+        // coach mode. Only a signed-in account going away: the launch's restore starts from nil.
+        .onChange(of: account.user?.uid) { old, new in
+            guard Pilot.simple, old != nil, new == nil else { return }
+            coachUID = ""
+            tab = .today
+            welcomed = false
+            welcoming = true
+        }
         // FIT-65: Talk to Coach opens the coach, which starts listening; without Apple Intelligence, Today.
         .onChange(of: navigator.coach, initial: true) { _, wanted in
             guard wanted else { return }
