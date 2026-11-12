@@ -12,14 +12,17 @@ struct GoalCard: View {
     let start: Date
     let end: Date
     /// FIT-278: the goal's own date when it has one, else the program's.
-    private var due: Date { goal.deadline ?? end }
+    private var due: Date { Self.deadline(goal, start: start) ?? end }
+
+    /// The goal's own date. FIT-350: one on or before the card's start (a program started after it) can't be aimed at,
+    /// so the card runs to the program's end instead, rather than reading "Starting" forever and the whole gap "a week".
+    static func deadline(_ goal: Goal, start: Date) -> Date? { goal.deadline.flatMap { $0 > start ? $0 : nil } }
     /// This week of the program, 0-based.
     let current: Int
     let sets: [LoggedSet]
     let weighIns: [DatedValue]
     /// The next planned workout with the goal's exercise.
     let next: Date?
-    let setTarget: (Double) -> Void
     /// FIT-343: record a test toward it. FIT-346: change its target and date, or drop it.
     let update: () -> Void
     let change: () -> Void
@@ -28,7 +31,7 @@ struct GoalCard: View {
     /// or forecast, only now → target and the trend.
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private var dated: Bool { !weeks.isEmpty || goal.deadline != nil }
+    private var dated: Bool { !weeks.isEmpty || Self.deadline(goal, start: start) != nil }
 
     var body: some View {
         ScrollView { content }
@@ -40,17 +43,19 @@ struct GoalCard: View {
     }
 
     /// Where the goal started, where it stands and its pace, as the card shows them; Progress's overview (FIT-370) uses
-    /// the same, so the two never disagree.
+    /// the same, so the two never disagree. FIT-350: no `now` and no pace while nothing says where they start (no
+    /// baseline and nothing logged), rather than a goal that reads as starting at its target and on pace.
     static func standing(_ goal: Goal, weeks: [ProgramWeek], start: Date, end: Date, current: Int, sets: [LoggedSet],
-                         weighIns: [DatedValue]) -> (from: Double, now: Double, pace: GoalProgress.Pace?) {
+                         weighIns: [DatedValue]) -> (from: Double, now: Double?, pace: GoalProgress.Pace?) {
         let logged = GoalProgress.current(goal.metric, sets: sets, weighIns: weighIns, since: start)
-        let from = goal.baseline ?? logged ?? goal.target
+        guard let from = goal.baseline ?? logged, from != goal.target || logged != nil else { return (goal.target, nil, nil) }
         let now = GoalProgress.standing(goal.metric, logged: logged, from: from)
-        let dated = !weeks.isEmpty || goal.deadline != nil
-        let pace: GoalProgress.Pace? = goal.deadline == nil && !weeks.isEmpty
+        let deadline = Self.deadline(goal, start: start)
+        let dated = !weeks.isEmpty || deadline != nil
+        let pace: GoalProgress.Pace? = deadline == nil && !weeks.isEmpty
             ? GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, week: current, weeks: weeks)
             : GoalProgress.pace(goal.metric, from: from, now: now, target: goal.target, started: start, today: .now,
-                                by: dated ? goal.deadline ?? end : nil)
+                                by: dated ? deadline ?? end : nil)
         return (from, now, pace)
     }
 
@@ -65,8 +70,56 @@ struct GoalCard: View {
         .accessibilityLabel("More for this goal")
     }
 
-    var content: some View {
+    @ViewBuilder var content: some View {
         let (from, now, pace) = Self.standing(goal, weeks: weeks, start: start, end: end, current: current, sets: sets, weighIns: weighIns)
+        if let now { started(from: from, now: now, pace: pace) } else { unstarted }
+    }
+
+    /// FIT-350: nothing yet says where they start: the target, and the way to a first number.
+    private var unstarted: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(option.name).font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                more
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Goal").font(.title3).foregroundStyle(.secondary)
+                Text(format(goal.target))
+                if !option.shownUnit.isEmpty { Text(option.shownUnit).font(.title3).foregroundStyle(.secondary) }
+            }
+            .font(.display(34, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .padding(.top, 6)
+            Text(option.measure == .body ? "Log a weigh-in to see where you start."
+                 : "Log the lift, or record a test, to see where you start.")
+                .font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
+            if let by = goal.setBy { Text("Set by \(by)").font(.footnote).foregroundStyle(.secondary).padding(.top, 2) }
+            updateButton
+            if let next {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Next chance").foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                    Text(chance(next)).fontWeight(.semibold)
+                }
+                .padding(.vertical, 11)
+                .padding(.top, 18)
+            }
+        }
+        .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
+    }
+
+    private var updateButton: some View {
+        Button(action: update) {
+            Label("Update", systemImage: "plus.circle.fill").font(.subheadline.weight(.semibold))
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .padding(.top, 12)
+        .accessibilityHint(option.measure == .body ? "Log a weigh-in" : "Record a test: a max, reps or a timed run")
+    }
+
+    private func started(from: Double, now: Double, pace: GoalProgress.Pace?) -> some View {
         let trend = GoalProgress.standingTrend(goal.metric, GoalProgress.trend(goal.metric, sets: sets, weighIns: weighIns, since: start), from: from)
         let forecast = dated ? GoalProgress.forecast(from: from, now: now, target: goal.target, started: start, today: .now, end: due) : nil
         let lines = GoalChart.Lines(plan: plan(from: from), logged: [DatedValue(date: start, value: from)] + trend,
@@ -101,13 +154,7 @@ struct GoalCard: View {
             Text(line(from: from, now: now)).font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
             // FIT-376: a goal the coach set says so, until it's changed here.
             if let by = goal.setBy { Text("Set by \(by)").font(.footnote).foregroundStyle(.secondary).padding(.top, 2) }
-            Button(action: update) {
-                Label("Update", systemImage: "plus.circle.fill").font(.subheadline.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .padding(.top, 12)
-            .accessibilityHint(option.measure == .body ? "Log a weigh-in" : "Record a test: a max, reps or a timed run")
+            updateButton
             details(lines, from: from, now: now, forecast: forecast)
         }
         .padding(EdgeInsets(top: 22, leading: 22, bottom: 18, trailing: 22))
@@ -115,17 +162,20 @@ struct GoalCard: View {
 
     private func details(_ lines: GoalChart.Lines, from: Double, now: Double, forecast: Double?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            GoalChart(lines: lines)
-                .frame(height: 150)
-                .padding(.top, 18)
-                .accessibilityLabel("\(option.name) from \(format(from)) to \(format(now)), goal \(format(goal.target))\(dated ? " by \(day(due))" : "")")
-            HStack(spacing: 14) {
-                legend("Logged", StrokeStyle(lineWidth: 2), .primary)
-                if !lines.plan.isEmpty { legend("Plan", StrokeStyle(lineWidth: 2, dash: [3, 3]), Color(.systemGray3)) }
-                if forecast != nil { legend("At this rate", StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]), .secondary) }
+            // FIT-350: a line needs two points; one is only the start, already said above.
+            if lines.logged.count >= 2 {
+                GoalChart(lines: lines)
+                    .frame(height: 150)
+                    .padding(.top, 18)
+                    .accessibilityLabel("\(option.name) from \(format(from)) to \(format(now)), goal \(format(goal.target))\(dated ? " by \(day(due))" : "")")
+                HStack(spacing: 14) {
+                    legend("Logged", StrokeStyle(lineWidth: 2), .primary)
+                    if lines.plan.count >= 2 { legend("Plan", StrokeStyle(lineWidth: 2, dash: [3, 3]), Color(.systemGray3)) }
+                    if forecast != nil { legend("At this rate", StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]), .secondary) }
+                }
+                .font(.caption).foregroundStyle(.secondary)
+                .padding(.top, 10)
             }
-            .font(.caption).foregroundStyle(.secondary)
-            .padding(.top, 10)
             VStack(spacing: 0) {
                 ForEach(facts(from: from, now: now, forecast: forecast), id: \.0) { fact in
                     HStack(alignment: .firstTextBaseline) {
@@ -138,16 +188,6 @@ struct GoalCard: View {
                 }
             }
             .padding(.top, 8)
-            HStack {
-                Text("Target").foregroundStyle(.secondary)
-                Spacer(minLength: 24)
-                Nudge(label: "\(format(goal.target)) \(option.shownUnit)",
-                      lessLabel: option.measure == .time ? "A faster target" : "Lower the target",
-                      moreLabel: option.measure == .time ? "A slower target" : "Raise the target",
-                      less: { setTarget(goal.target - option.step) }, more: { setTarget(goal.target + option.step) })
-                    .frame(maxWidth: 220)
-            }
-            .padding(.top, 12)
         }
     }
 
@@ -164,7 +204,7 @@ struct GoalCard: View {
     /// FIT-342: without program weeks, a straight line to the goal's date, or none without a date.
     private func plan(from: Double) -> [DatedValue] {
         guard !weeks.isEmpty else {
-            return goal.deadline == nil ? [] : [DatedValue(date: start, value: from), DatedValue(date: due, value: goal.target)]
+            return Self.deadline(goal, start: start) == nil ? [] : [DatedValue(date: start, value: from), DatedValue(date: due, value: goal.target)]
         }
         return [DatedValue(date: start, value: from)] + weeks.indices.map { index in
             DatedValue(date: min(ProgramPlan.monday(index + 1, start: start), end),
@@ -172,16 +212,17 @@ struct GoalCard: View {
         }.filter { $0.date <= due }
     }
 
-    /// "29 lb up since Aug 10 · 45% there".
+    /// FIT-350: the gap left first. "50 lb to go · 29 lb up since Aug 10", "1:10 to go", "Goal reached".
     private func line(from: Double, now: Double) -> String {
         let moved = abs(now - from)
-        let percent = Int((GoalProgress.fraction(goal.metric, from: from, now: now, target: goal.target) * 100).rounded())
-        guard moved > 0 else { return "Started at \(format(from)) on \(day(start))" }
-        if option.measure == .time {
-            return "\(Running.clock(moved)) \(now < from ? "faster" : "slower") since \(day(start)) · \(percent)% there"
-        }
-        let direction = (now < from) ? "down" : "up"
-        return "\(Coach.number(moved)) \(goal.unit) \(direction) since \(day(start)) · \(percent)% there"
+        let there = GoalProgress.fraction(goal.metric, from: from, now: now, target: goal.target) >= 1
+        let time = option.measure == .time
+        let left = time ? Running.clock(abs(goal.target - now)) : "\(format(abs(goal.target - now))) \(goal.unit)"
+        let gap = there ? "Goal reached" : "\(left) to go"
+        guard moved > 0 else { return gap }
+        let since = time ? "\(Running.clock(moved)) \(now < from ? "faster" : "slower")"
+            : "\(Coach.number(moved)) \(goal.unit) \(now < from ? "down" : "up")"
+        return "\(gap) · \(since) since \(day(start))"
     }
 
     private func facts(from: Double, now: Double, forecast: Double?) -> [(String, String)] {
@@ -190,7 +231,7 @@ struct GoalCard: View {
         let perWeek = GoalProgress.perWeek(now: now, target: goal.target, today: .now, end: due)
         let there = GoalProgress.fraction(goal.metric, from: from, now: now, target: goal.target) >= 1
         let needed = option.measure == .time ? "\(Running.clock(abs(perWeek))) faster a week" : "\(Coach.number(abs(perWeek))) \(goal.unit) a week"
-        if there || dated { facts.append(("To get there", there ? "Already there" : needed)) }
+        if there || (dated && due > .now) { facts.append(("To get there", there ? "Already there" : needed)) }
         if option.measure == .time {
             // FIT-179: the run behind the predicted time.
             if let run = GoalProgress.best(goal.metric, sets: sets, since: start), let meters = run.value("distance_m"), let seconds = run.value("duration_s") {

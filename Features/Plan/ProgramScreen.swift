@@ -686,7 +686,6 @@ struct ProgramScreen: View {
                 GoalCard(goal: item.goal, option: option, weeks: program?.weeks ?? [], start: spans[position - 1].start,
                          end: spans[position - 1].end, current: program?.current ?? 0,
                          sets: sets, weighIns: weighIns, next: (option.exercise ?? (option.measure == .time ? Running.outdoor : nil)).flatMap(nextWorkout),
-                         setTarget: { setTarget(item.goal, $0) },
                          update: { updating = item.goal }, change: { changing = item.goal })
                 }
             }
@@ -790,11 +789,6 @@ struct ProgramScreen: View {
         try? context.save()
         goalIndex = 0
         toast = Toast(text: "Goal dropped.")
-    }
-
-    private func setTarget(_ goal: Goal, _ target: Double) {
-        goal.target = max(0, target)
-        goal.updatedAt = .now
     }
 }
 
