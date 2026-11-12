@@ -108,7 +108,11 @@ targets:
   AICoachTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [Tests/CoreTests]
+    sources:
+      - Tests/CoreTests
+      # FIT-437: SKTestSession(configurationFileNamed: "AICoach") finds it in the test bundle.
+      - path: AICoach.storekit
+        buildPhase: resources
     dependencies:
       - target: AICoach
     settings:
@@ -140,7 +144,10 @@ targets:
   AICoachUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [Tests/UITests]
+    sources:
+      - Tests/UITests
+      - path: AICoach.storekit
+        buildPhase: resources
     dependencies:
       - target: AICoach
     settings:

@@ -42,7 +42,7 @@ struct WeeklyReviewScreen: View {
             paragraph = await WeekSummary.write(report.facts)
             writing = false
         }
-        .sheet(isPresented: $paywall) { PaywallView() }
+        .sheet(isPresented: $paywall) { PaywallView(plan: .lifter) }
         .sheet(isPresented: $sharing) { if let recap { RecapShareSheet(recap: recap) } }
     }
 

@@ -1,21 +1,20 @@
 import Foundation
 import StoreKit
+import SwiftUI
 import UserNotifications
 
 /// FIT-83: the Pro subscription. The one place that answers "is this person Pro?" for the app; the proxy checks the
 /// same App Store transaction on its side (FIT-102). Entitlements come from StoreKit 2, so a purchase, a renewal, a
 /// refund or a purchase on another device of the same Apple ID shows up here without the app doing anything.
 /// FIT-120: Pro runs the program; free keeps logging, progress and groups. FIT-122: or a year of it, as a gift.
+/// FIT-437: two plans, kept apart: Lifter Pro (AI planning for someone training themselves) and Coach Pro (the
+/// exhaustive coach MCP). Each is had from the App Store here, or from the server's plan, which both stores write.
 @MainActor @Observable
 final class Pro {
-    nonisolated static let annual = "com.maxwellkendall.aicoach.pro.yearly"
-    nonisolated static let monthly = "com.maxwellkendall.aicoach.pro.monthly"
-    nonisolated static let products = [annual, monthly]
-    /// The annual plan's free trial (author, 2026-10-12): two training weeks, the second one adapted to the first.
-    nonisolated static let trialDays = 14
+    nonisolated static let trialDays = StoreProducts.trialDays
 
-    /// An App Store subscription (or its trial) is in force.
-    private(set) var subscribed = false
+    /// The App Store entitlements in force on this Apple Account, verified, from the last refresh.
+    private(set) var store: [StoreEntitlement] = []
     /// FIT-122: Pro from a gift redeemed on the account, until then. Kept on the phone so it holds offline.
     private(set) var giftUntil: Date? = UserDefaults.standard.object(forKey: giftKey) as? Date
     /// FIT-130: the coaches this account has; a coached client has Pro while linked (free during the beta).
@@ -23,8 +22,17 @@ final class Pro {
         .flatMap { try? JSONDecoder().decode([Cloud.Person].self, from: $0) } ?? []
     /// The App Store has answered once since launch, so a paywall isn't shown to a subscriber before it knows.
     private(set) var checked = false
-    /// FIT-327: lifter Pro bought on the web (Stripe), from the server. Kept on the phone so it holds offline.
+    /// FIT-327: lifter Pro on the account, from the server: bought on the web (Stripe), or (FIT-437) in the App Store
+    /// on any device. Kept on the phone so it holds offline.
     private(set) var webPro = UserDefaults.standard.bool(forKey: webProKey)
+    /// FIT-437: Coach Pro on the account, from the server, either store.
+    private(set) var serverCoachPro = UserDefaults.standard.bool(forKey: coachProKey)
+    /// FIT-437: which store the server's plan is from ("stripe" or "appstore"), so Manage opens the right one.
+    private(set) var sources: [StoreProducts.Plan: String] = [:]
+
+    /// The two plans as of now, from the App Store, the server and gifts.
+    var access: Access { Access.of(store: store, serverLifter: webPro, serverCoach: serverCoachPro, giftUntil: giftUntil) }
+
     /// FIT-422: Pro for someone training themselves, however it was bought: the App Store, a gift or the web. Unlike
     /// `active`, it's never everyone during the pilot and never comes with a coach. It decides who gets AI-designed weeks.
     var lifterPro: Bool {
@@ -32,28 +40,45 @@ final class Pro {
         // `-pro YES`, or You › Pro (debug).
         if UserDefaults.standard.bool(forKey: "pro") { return true }
         #endif
-        return subscribed || webPro || giftUntil.map { $0 > .now } == true
+        return access.lifter
     }
+    /// FIT-437: Coach Pro, the exhaustive MCP; coaching itself is free.
+    var coachPro: Bool {
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "coachPro") { return true }
+        #endif
+        return access.coach
+    }
+    func has(_ plan: StoreProducts.Plan) -> Bool { plan == .lifter ? lifterPro : coachPro }
+    /// The plan is the App Store's on this Apple Account, so Apple's sheet manages it; otherwise it's the web's.
+    func inAppStore(_ plan: StoreProducts.Plan) -> Bool {
+        store.contains { StoreProducts.plan(of: $0.productID) == plan } || sources[plan] == "appstore"
+    }
+
     /// FIT-422: where this person's weeks come from.
     func weekSource(hasProgram: Bool) -> WeekSource? {
         WeekSource.of(lifterPro: lifterPro, coached: !coaches.isEmpty, hasProgram: hasProgram)
     }
-    /// FIT-215: while Pro isn't sold, everyone has what it gated.
-    var active: Bool { !Pilot.sellsPro || subscribed || giftUntil.map { $0 > .now } == true || !coaches.isEmpty }
-    /// When the free trial ends, while in one.
-    private(set) var trialEnds: Date?
-    /// Whether this Apple Account can still have the free trial; someone whose Pro lapsed can't.
-    private(set) var trialEligible = true
-    /// The App Store gave the annual plan: offline, or before App Store Connect has it, the store's sheet has nothing.
-    private(set) var storeAnswered = true
+    /// FIT-215: in the pilot, everyone has what the first Pro gated (FIT-120's coach, sharing, redesigns); FIT-437's
+    /// plans gate only AI planning (`lifterPro`) and the coach MCP (`coachPro`).
+    var active: Bool { Pilot.simple || lifterPro || !coaches.isEmpty }
+    /// When Lifter Pro's free trial ends, while in one.
+    var trialEnds: Date? { access.trialEnds }
+    /// Whether this Apple Account can still have Lifter Pro's free trial; someone whose Pro lapsed can't. Asked by
+    /// the paywall, not at launch: asking can bring up the App Store's sign-in, which belongs where buying is.
+    var trialEligible = true
     /// When the app is showing the paywall; any screen can ask for it.
     var paywall = false
+    /// The signed-in account, whose uid is each purchase's appAccountToken and to whom purchases are registered.
+    private(set) var uid: String?
     private var updates: Task<Void, Never>?
 
     init() {
         guard Pilot.sellsPro else { return }
+        // Renewals, refunds, Ask to Buy approvals and purchases on other devices, registered as they come.
         updates = Task { [weak self] in
-            for await update in Transaction.updates {
+            for await update in StoreKit.Transaction.updates {
+                await self?.register(update)
                 if case .verified(let transaction) = update { await transaction.finish() }
                 await self?.refresh()
             }
@@ -65,32 +90,96 @@ final class Pro {
         if active { action() } else { paywall = true }
     }
 
-    /// Whether a Pro subscription is in force now: verified, not revoked, not expired.
+    /// The App Store's entitlements now: verified ones of our products.
     func refresh() async {
-        // FIT-215: no StoreKit while Pro isn't sold.
         guard Pilot.sellsPro else { return }
-        var active = false
-        var trialEnds: Date?
-        for await entitlement in Transaction.currentEntitlements {
-            guard case .verified(let transaction) = entitlement, Self.products.contains(transaction.productID),
-                  transaction.revocationDate == nil else { continue }
-            if let expires = transaction.expirationDate, expires < .now { continue }
-            active = true
-            if transaction.offer?.type == .introductory { trialEnds = transaction.expirationDate }
-        }
-        #if DEBUG
-        // `-pro YES`, or You › Pro (debug): Pro without buying, for trying Pro's screens.
-        if UserDefaults.standard.bool(forKey: "pro") { active = true }
-        #endif
-        subscribed = active
+        store = await Self.storeEntitlements()
         checked = true
-        self.trialEnds = trialEnds
-        let annual = try? await Product.products(for: [Self.annual]).first
-        storeAnswered = annual != nil
-        if let subscription = annual?.subscription {
-            trialEligible = await subscription.isEligibleForIntroOffer
-        }
         await remind()
+    }
+
+    nonisolated static func storeEntitlements() async -> [StoreEntitlement] {
+        var found: [StoreEntitlement] = []
+        for await entitlement in StoreKit.Transaction.currentEntitlements {
+            guard case .verified(let transaction) = entitlement, StoreProducts.plan(of: transaction.productID) != nil else { continue }
+            found.append(StoreEntitlement(transaction))
+        }
+        return found
+    }
+
+    // MARK: Buying (FIT-437)
+
+    enum Bought: Equatable { case bought, pending, cancelled }
+
+    struct Failure: LocalizedError {
+        var message: String
+        var errorDescription: String? { message }
+    }
+
+    /// Buys `product` for the signed-in account (its uid is the purchase's appAccountToken), then registers it with
+    /// the server so the plan is on the account at once: the web and Claude see it too.
+    func buy(_ product: Product, with purchase: PurchaseAction) async throws -> Bought {
+        var options: Set<Product.PurchaseOption> = []
+        if let token = uid.flatMap(UUID.init(uuidString:)) { options.insert(.appAccountToken(token)) }
+        switch try await purchase(product, options: options) {
+        case .success(let result):
+            guard case .verified(let transaction) = result else {
+                throw Failure(message: "The App Store couldn't confirm that purchase. Nothing was added; try again.")
+            }
+            let problem = await register(result)
+            await transaction.finish()
+            await refresh()
+            if let problem { throw Failure(message: problem) }
+            return .bought
+        case .pending:
+            // Ask to Buy, or a payment to confirm; Transaction.updates brings it when it's approved.
+            return .pending
+        case .userCancelled:
+            return .cancelled
+        @unknown default:
+            return .cancelled
+        }
+    }
+
+    /// Restore Purchases: the App Store's purchases for this Apple Account, back on the phone and on the account.
+    func restore() async throws {
+        try await AppStore.sync()
+        await refresh()
+        if let problem = await registerCurrent() { throw Failure(message: problem) }
+        await refreshServerPlans(signedIn: uid != nil)
+    }
+
+    /// Signed in or out. Signed in, the App Store's subscriptions on this phone are registered to the account (a
+    /// purchase made signed out, or on another device), then the server's plans are read.
+    func signedIn(_ uid: String?) async {
+        self.uid = uid
+        if uid != nil { _ = await registerCurrent() }
+        await refreshServerPlans(signedIn: uid != nil)
+    }
+
+    @discardableResult
+    private func registerCurrent() async -> String? {
+        var problem: String?
+        for await entitlement in StoreKit.Transaction.currentEntitlements {
+            if let said = await register(entitlement) { problem = said }
+        }
+        return problem
+    }
+
+    /// Registers a verified transaction of ours with the server; what went wrong, if anything. Signed out, it waits
+    /// for sign-in. Xcode's local StoreKit testing signs with its own certificate, which the server rightly refuses.
+    @discardableResult
+    private func register(_ result: VerificationResult<StoreKit.Transaction>) async -> String? {
+        guard uid != nil, case .verified(let transaction) = result, let plan = StoreProducts.plan(of: transaction.productID),
+              transaction.environment != .xcode else { return nil }
+        let renewal = await transaction.subscriptionStatus?.renewalInfo.jwsRepresentation
+        do {
+            let status = try await Cloud.registerAppStorePurchase(transaction: result.jwsRepresentation, renewalInfo: renewal)
+            setServerPlan(plan, Cloud.hasPlan(status.status), source: status.source)
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     // MARK: Coaches (FIT-130)
@@ -115,20 +204,36 @@ final class Pro {
         UserDefaults.standard.set(try? JSONEncoder().encode(coaches), forKey: Self.coachesKey)
     }
 
-    // MARK: Pro bought on the web (FIT-327)
+    // MARK: The server's plans (FIT-327, FIT-437)
 
     private static let webProKey = "pro.web"
+    private static let coachProKey = "pro.coachServer"
 
-    /// The account's lifter Pro from Stripe; signed out, none. Offline, the last answer stands.
-    func refreshWebPro(signedIn: Bool) async {
-        guard signedIn else { return setWebPro(false) }
-        guard let status = try? await Cloud.proPlanStatus() else { return }
-        setWebPro(Cloud.hasPlan(status))
+    /// The account's Lifter Pro and Coach Pro as the server has them (either store); signed out, none. Offline, the
+    /// last answer stands.
+    func refreshServerPlans(signedIn: Bool) async {
+        guard signedIn else {
+            setWebPro(false)
+            setServerPlan(.coach, false, source: nil)
+            return
+        }
+        if let plan = try? await Cloud.proPlan() { setServerPlan(.lifter, Cloud.hasPlan(plan.status), source: plan.source) }
+        if let plan = try? await Cloud.coachPlan() { setServerPlan(.coach, Cloud.hasPlan(plan.status), source: plan.source) }
     }
 
     func setWebPro(_ on: Bool) {
         webPro = on
         UserDefaults.standard.set(on, forKey: Self.webProKey)
+    }
+
+    func setServerPlan(_ plan: StoreProducts.Plan, _ on: Bool, source: String?) {
+        sources[plan] = on ? source : nil
+        switch plan {
+        case .lifter: setWebPro(on)
+        case .coach:
+            serverCoachPro = on
+            UserDefaults.standard.set(on, forKey: Self.coachProKey)
+        }
     }
 
     // MARK: Gifts (FIT-122)
@@ -180,8 +285,8 @@ final class Pro {
         if let trialEnds, let reminder = Self.reminderDate(trialEnds: trialEnds) {
             date = reminder
             content.title = "Your free trial ends in 2 days"
-            content.body = "Pro renews on \(trialEnds.formatted(.dateTime.month(.wide).day())). To cancel, go to Settings › Apple Account › Subscriptions."
-        } else if !subscribed, let giftUntil, let reminder = Self.giftReminderDate(until: giftUntil) {
+            content.body = "Lifter Pro renews on \(trialEnds.formatted(.dateTime.month(.wide).day())). To cancel, go to Settings › Apple Account › Subscriptions."
+        } else if !access.lifterInStore, let giftUntil, let reminder = Self.giftReminderDate(until: giftUntil) {
             date = reminder
             content.title = "Your gift of Pro ends in 2 weeks"
             content.body = "It runs until \(giftUntil.formatted(.dateTime.month(.wide).day())). Subscribe in the app to keep your coach planning."
@@ -192,5 +297,48 @@ final class Pro {
         let trigger = UNCalendarNotificationTrigger(dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date),
                                                     repeats: false)
         try? await center.add(UNNotificationRequest(identifier: Self.reminderID, content: content, trigger: trigger))
+    }
+}
+
+/// FIT-437: one verified App Store entitlement, as deciding the plans needs it.
+struct StoreEntitlement: Equatable, Sendable {
+    var productID: String
+    var expires: Date?
+    var revoked: Bool = false
+    /// In the introductory offer: Lifter Pro's free trial.
+    var trial: Bool = false
+}
+
+extension StoreEntitlement {
+    init(_ transaction: StoreKit.Transaction) {
+        self.init(productID: transaction.productID, expires: transaction.expirationDate, revoked: transaction.revocationDate != nil,
+                  trial: transaction.offer?.type == .introductory)
+    }
+}
+
+/// FIT-437: who has which plan. Lifter Pro and Coach Pro are separate: one never brings the other. Each is had from an
+/// App Store subscription of its group that's neither revoked nor expired, or the server's plan (Stripe on the web, or
+/// the App Store on another device, in grace or billing retry as the server counts it). A gift is Lifter Pro.
+struct Access: Equatable, Sendable {
+    var lifter = false
+    var coach = false
+    /// Lifter Pro from an App Store subscription on this Apple Account.
+    var lifterInStore = false
+    var trialEnds: Date?
+
+    static func of(store: [StoreEntitlement], serverLifter: Bool, serverCoach: Bool, giftUntil: Date?, now: Date = .now) -> Access {
+        var access = Access()
+        for entitlement in store where !entitlement.revoked && entitlement.expires.map({ $0 > now }) != false {
+            switch StoreProducts.plan(of: entitlement.productID) {
+            case .lifter?:
+                access.lifterInStore = true
+                if entitlement.trial { access.trialEnds = entitlement.expires }
+            case .coach?: access.coach = true
+            case nil: break
+            }
+        }
+        access.lifter = access.lifterInStore || serverLifter || giftUntil.map { $0 > now } == true
+        access.coach = access.coach || serverCoach
+        return access
     }
 }

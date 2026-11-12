@@ -6,7 +6,9 @@ import Testing
 struct PilotTests {
     @Test func thePilotIsFreeAndSimple() {
         #expect(Pilot.simple)
-        #expect(!Pilot.sellsPro)
+        // FIT-437: Lifter Pro and Coach Pro are sold; the rest stays hidden.
+        #expect(Pilot.sellsPro)
+        #expect(!Pilot.gifts)
         #expect(!Pilot.inAppAI)
         #expect(!Pilot.groups)
     }
@@ -31,9 +33,10 @@ struct PilotTests {
         #expect(!pro.paywall)
     }
 
+    /// FIT-437: the App Store is no longer skipped (StoreKitTests drive it), so this checks the pilot's own switch:
+    /// gifts stay hidden, and what the first Pro gated stays free.
     @Test func refreshingDoesNotTurnProOff() async {
         let pro = Pro()
-        await pro.refresh()
         await pro.refreshGift(signedIn: true)
         #expect(pro.active)
         #expect(pro.giftUntil == nil)

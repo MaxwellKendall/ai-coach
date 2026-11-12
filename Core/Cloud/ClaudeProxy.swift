@@ -26,10 +26,10 @@ struct ClaudeProxy: ClaudeTransport {
         }
     }
 
-    /// The current Pro subscription's signed transaction, as StoreKit holds it.
+    /// The current Lifter Pro subscription's signed transaction, as StoreKit holds it.
     static func entitlement() async -> String? {
         for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result, Pro.products.contains(transaction.productID) {
+            if case .verified(let transaction) = result, StoreProducts.plan(of: transaction.productID) == .lifter {
                 return result.jwsRepresentation
             }
         }

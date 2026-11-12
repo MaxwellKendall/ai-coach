@@ -176,10 +176,31 @@ enum Cloud {
         return until.flatMap(date)
     }
 
-    /// FIT-327: the status of the account's lifter Pro: "none", or Stripe's (trialing, active, past_due, canceled…).
-    @MainActor static func proPlanStatus() async throws -> String {
-        struct Plan: Decodable, Sendable { var status: String }
-        return try await run("query { proPlan { status } }", at: "proPlan", as: Plan.self, query: true).status
+    /// FIT-327, FIT-437: a plan on the account. `status` is "none", or Stripe's words (trialing, active, past_due,
+    /// canceled…), which the server uses for the App Store's too; `source` is the store it's from, stripe or appstore.
+    struct Plan: Decodable, Sendable {
+        var status: String
+        var source: String?
+    }
+
+    /// FIT-327: the account's Lifter Pro.
+    @MainActor static func proPlan() async throws -> Plan {
+        try await run("query { proPlan { status source } }", at: "proPlan", as: Plan.self, query: true)
+    }
+
+    /// FIT-437: the account's Coach Pro.
+    @MainActor static func coachPlan() async throws -> Plan {
+        try await run("query { coachPlan { status source } }", at: "coachPlan", as: Plan.self, query: true)
+    }
+
+    /// FIT-437: an App Store purchase or restore (StoreKit 2's jwsRepresentation, and its renewal info's), registered to
+    /// the signed-in account; its plan now. Refused when the subscription is another account's.
+    @MainActor static func registerAppStorePurchase(transaction: String, renewalInfo: String?) async throws -> Plan {
+        struct Registered: Decodable, Sendable { var plan: Plan }
+        var variables: [String: Any] = ["t": transaction]
+        if let renewalInfo { variables["r"] = renewalInfo }
+        return try await run("mutation($t: String!, $r: String) { registerAppStorePurchase(transaction: $t, renewalInfo: $r) { kind plan { status source } } }",
+                             variables, at: "registerAppStorePurchase", as: Registered.self).plan
     }
 
     /// Stripe's statuses that still have the plan, as the server counts them (infra/lambda/coachPlan.ts HAS_PLAN): a

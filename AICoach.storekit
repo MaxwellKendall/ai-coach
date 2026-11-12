@@ -12,7 +12,7 @@
     {
       "id": "21500001",
       "localizations": [],
-      "name": "Pro",
+      "name": "Lifter Pro",
       "subscriptions": [
         {
           "adHocOffers": [],
@@ -22,21 +22,21 @@
           "groupNumber": 1,
           "internalID": "6750000001",
           "introductoryOffer": {
-            "internalID": "6750000011",
+            "internalID": "67500000011",
             "numberOfPeriods": 1,
             "paymentMode": "free",
             "subscriptionPeriod": "P2W"
           },
           "localizations": [
             {
-              "description": "Unlimited week redesigns and your coach's weekly take.",
-              "displayName": "Pro, yearly",
+              "description": "AI-designed training weeks",
+              "displayName": "Lifter Pro",
               "locale": "en_US"
             }
           ],
           "productID": "com.maxwellkendall.aicoach.pro.yearly",
           "recurringSubscriptionPeriod": "P1Y",
-          "referenceName": "Pro Annual",
+          "referenceName": "Lifter Pro Annual",
           "subscriptionGroupID": "21500001",
           "type": "RecurringSubscription"
         },
@@ -47,18 +47,72 @@
           "familyShareable": false,
           "groupNumber": 2,
           "internalID": "6750000002",
-          "introductoryOffer": null,
+          "introductoryOffer": {
+            "internalID": "67500000021",
+            "numberOfPeriods": 1,
+            "paymentMode": "free",
+            "subscriptionPeriod": "P2W"
+          },
           "localizations": [
             {
-              "description": "Unlimited week redesigns and your coach's weekly take.",
-              "displayName": "Pro, monthly",
+              "description": "AI-designed training weeks",
+              "displayName": "Lifter Pro",
               "locale": "en_US"
             }
           ],
           "productID": "com.maxwellkendall.aicoach.pro.monthly",
           "recurringSubscriptionPeriod": "P1M",
-          "referenceName": "Pro Monthly",
+          "referenceName": "Lifter Pro Monthly",
           "subscriptionGroupID": "21500001",
+          "type": "RecurringSubscription"
+        }
+      ]
+    },
+    {
+      "id": "21500002",
+      "localizations": [],
+      "name": "Coach Pro",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "199.00",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6750000003",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Pro tools for a coach",
+              "displayName": "Coach Pro",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.maxwellkendall.aicoach.coach.yearly",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Coach Pro Annual",
+          "subscriptionGroupID": "21500002",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "19.99",
+          "familyShareable": false,
+          "groupNumber": 2,
+          "internalID": "6750000004",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Pro tools for a coach",
+              "displayName": "Coach Pro",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.maxwellkendall.aicoach.coach.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Coach Pro Monthly",
+          "subscriptionGroupID": "21500002",
           "type": "RecurringSubscription"
         }
       ]

@@ -143,7 +143,7 @@ struct RootView: View {
             }
             .tint(Self.accent)
         }
-        .sheet(isPresented: Binding(get: { Pilot.sellsPro && pro.paywall }, set: { pro.paywall = $0 })) { PaywallView() }
+        .sheet(isPresented: Binding(get: { Pilot.sellsPro && pro.paywall }, set: { pro.paywall = $0 })) { PaywallView(plan: .lifter) }
         .sheet(item: Binding(get: { onboarding == nil ? navigator.gift.map(GiftRef.init) : nil },
                              set: { if $0 == nil { navigator.gift = nil } })) { ref in
             NavigationStack { RedeemGiftView(code: ref.id) }.tint(Self.accent)
@@ -151,8 +151,9 @@ struct RootView: View {
         // FIT-122: Pro from a gift is the account's.
         .task(id: account.user?.uid) {
             await pro.refreshGift(signedIn: account.user != nil)
-            // FIT-422: lifter Pro bought on the web decides who gets AI-designed weeks.
-            await pro.refreshWebPro(signedIn: account.user != nil)
+            // FIT-422: lifter Pro decides who gets AI-designed weeks. FIT-437: the App Store's purchases on this phone are
+            // registered to the account, and the server's plans (either store) read.
+            await pro.signedIn(account.user?.uid)
             // FIT-130: and from a coach, while coached.
             await pro.refreshCoaches(signedIn: account.user != nil)
             // After the coaches, so a client's saved coach mode is checked knowing they train with one.
@@ -219,7 +220,7 @@ struct RootView: View {
                 await checkOffers()
                 // FIT-383: coaching that ended on another device, or by the coach, goes without a relaunch.
                 await pro.refreshCoaches(signedIn: account.user != nil)
-                await pro.refreshWebPro(signedIn: account.user != nil)
+                await pro.refreshServerPlans(signedIn: account.user != nil)
             }
         }
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).

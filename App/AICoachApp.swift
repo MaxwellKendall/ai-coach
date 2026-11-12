@@ -42,9 +42,22 @@ struct AICoachApp: App {
         }
     }
 
+    /// `-paywall lifter` or `-paywall coach` (Debug): that plan's paywall alone, for its review screenshot (FIT-437).
+    @ViewBuilder private var root: some View {
+        #if DEBUG
+        if let plan = UserDefaults.standard.string(forKey: "paywall").flatMap(StoreProducts.Plan.init(rawValue:)) {
+            PaywallView(plan: plan)
+        } else {
+            RootView()
+        }
+        #else
+        RootView()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
-            RootView()
+            root
                 .onChange(of: appearance, initial: true) { _, raw in Appearance.apply(raw) }
                 .environment(account)
                 .environment(pro)

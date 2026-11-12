@@ -16,6 +16,17 @@ struct YouScreen: View {
     @State private var choosing = false
     @AppStorage(Plate.key) private var plate = Plate.blue.rawValue
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
+    /// FIT-437: Lifter Pro's or Coach Pro's offer, or how to manage it.
+    @State private var plan: StoreProducts.Plan?
+    @AppStorage(Roster.coachingKey) private var coachUID = ""
+    private var coaching: Bool {
+        #if DEBUG
+        if Roster.sample { return true }
+        #endif
+        return account.user.map { $0.uid == coachUID } ?? false
+    }
+    /// No coach of their own, and training (a coach with no program of their own isn't offered Lifter Pro).
+    private var trainsThemselves: Bool { pro.coaches.isEmpty && (!coaching || profiles.first?.programStart != nil) }
 
     var body: some View {
         NavigationStack {
@@ -64,6 +75,17 @@ struct YouScreen: View {
                         }
                         .tint(.primary)
                         .accessibilityIdentifier("you.program")
+                    }
+                }
+                // FIT-437: the two plans: Lifter Pro for someone training themselves, Coach Pro for a coach.
+                if Pilot.sellsPro, trainsThemselves || coaching {
+                    Section {
+                        if trainsThemselves {
+                            planRow(.lifter, "AI-Designed Weeks", "sparkles")
+                        }
+                        if coaching {
+                            planRow(.coach, "Coach from Claude", "person.3")
+                        }
                     }
                 }
                 // FIT-126: signed out, a way in: the account keeps the program backed up and on the web.
@@ -131,11 +153,24 @@ struct YouScreen: View {
             }
             .sheet(isPresented: $joining) { WelcomeView { joining = false } }
             .sheet(isPresented: $choosing) { ProgramPicker { choosing = false }.tint(RootView.accent) }
+            .sheet(item: $plan) { plan in PaywallView(plan: plan) }
             .sheet(isPresented: $signingIn) {
                 SignInSheet(reason: "Sign in to back up your program and see it on the web.")
             }
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+    }
+
+    private func planRow(_ plan: StoreProducts.Plan, _ title: String, _ symbol: String) -> some View {
+        Button { self.plan = plan } label: {
+            LabeledContent {
+                Text(pro.has(plan) ? plan.name : plan.hasTrial && pro.trialEligible ? "Try Free" : "Upgrade")
+            } label: {
+                Label(title, systemImage: symbol)
+            }
+        }
+        .tint(.primary)
+        .accessibilityIdentifier("you.\(plan.rawValue)Pro")
     }
 
     private func stop(_ coach: Cloud.Person) {
