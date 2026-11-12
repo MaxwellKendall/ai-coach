@@ -15,8 +15,8 @@ import * as progress from "./progress.ts";
 import { clock, distanceName, goalMeters, meters, MILE, miles, OUTDOOR_RUN, pace as runPace, RUNS, seconds } from "./running.ts";
 import { listed as listedPrompts, render as renderPrompt } from "./prompts.ts";
 import { programPayload, programSessions, recapPayload, sessionPayload, winPayload, type Brief } from "./sharing.ts";
-import { coached, comments, createInvite, hasCoachPlan, INVITE_DAYS, isCoachOf, NAME_NEEDED, list as linked, postComment, type Person } from "./coach.ts";
-import { hasPlan, onSale } from "./coachPlan.ts";
+import { coached, comments, createInvite, INVITE_DAYS, isCoachOf, NAME_NEEDED, list as linked, postComment, type Person } from "./coach.ts";
+import { hasEitherPlan, onSale } from "./coachPlan.ts";
 import { giftedUntil } from "./gifts.ts";
 import { ensureSample, isSample } from "./sample.ts";
 import { fingerprint } from "./programStats.ts";
@@ -55,8 +55,8 @@ export interface Store {
   /** FIT-196: a client's session threads (FIT-132), and a coach's reply on one, shown in the app as the coach's. */
   comments(coach: string, client: string): Promise<Comment[]>;
   comment(coach: string, client: string, day: string, text: string): Promise<void>;
-  /** FIT-284: whether they have Pro, the coach plan: the coach tools. */
-  coachPlan(uid: string): Promise<boolean>;
+  /** FIT-284, FIT-437: whether they have the full connector: Lifter Pro or Coach Pro from either store, or a gift. */
+  fullConnector(uid: string, now: Date): Promise<boolean>;
   /** FIT-240: makes the coach's sample client the first time (sample.ts); whether it made one now. */
   sample(coach: string, today: string): Promise<boolean>;
   /** FIT-445: whether the account has a coach of its own; a client is never handed a sample client. */
@@ -132,7 +132,10 @@ export const dynamoStore: Store = {
   invite: (coach) => createInvite(coach, undefined),
   comments: (coach, client) => comments(coach, client),
   async comment(coach, client, day, text) { await postComment(coach, undefined, client, day, text); },
-  coachPlan: hasCoachPlan,
+  async fullConnector(uid, now) {
+    const [plan, gift] = await Promise.all([hasEitherPlan(uid, now), giftedUntil(uid, now)]);
+    return plan || gift !== undefined;
+  },
   sample: ensureSample,
   coached,
   async access(uid, now) {
@@ -141,9 +144,8 @@ export const dynamoStore: Store = {
       TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROTRIAL" },
       UpdateExpression: "SET startedAt = if_not_exists(startedAt, :n)", ExpressionAttributeValues: { ":n": now.toISOString() }, ReturnValues: "ALL_NEW",
     }));
-    // FIT-437: either plan from either store (Stripe or the App Store).
-    const [plan, gift, coach] = await Promise.all([hasPlan(uid, "pro", now), giftedUntil(uid, now), hasCoachPlan(uid)]);
-    return { trialStart: trial.Attributes!.startedAt, pro: plan || gift !== undefined || coach };
+    // FIT-437: either plan from either store (Stripe or the App Store), or a gift.
+    return { trialStart: trial.Attributes!.startedAt, pro: await dynamoStore.fullConnector(uid, now) };
   },
   onSale: () => onSale("pro"),
   async unshare(uid, id) {
@@ -954,8 +956,8 @@ function lifterPaywall(tool: string, account: Account) {
  * coach MCP is what Pro buys). The athlete tools stay free. FIT-237: the tools say so and point to the coach page, with
  * no price or Checkout link: ChatGPT's directory lets a tool explain a plan gate but not sell one.
  */
-async function needsPro(tool: string, account: Account, store: Store) {
-  if (await store.coachPlan(account.uid)) return;
+async function needsPro(tool: string, account: Account, store: Store, now: Date) {
+  if (await store.fullConnector(account.uid, now)) return;
   const agent = agentName(account);
   const signedIn = signedInLine(account);
   throw new Error(`${tool} for a client is part of Barbrabell Pro, which this account doesn't have: Pro lets ${agent} plan, change and review every client's training. `
@@ -965,11 +967,11 @@ async function needsPro(tool: string, account: Account, store: Store) {
 }
 
 /** FIT-240: the clients a coach sees here. One with no clients gets the sample client first; FIT-445: not a client. */
-async function roster(account: Account, store: Store, today: string) {
+async function roster(account: Account, store: Store, today: string, now: Date) {
   const coach = account.uid;
   let clients = await store.clients(coach);
   if (!clients.length && !(await store.coached(coach)) && (await store.sample(coach, today))) clients = await store.clients(coach);
-  return { clients, paid: await store.coachPlan(coach) };
+  return { clients, paid: await store.fullConnector(coach, now) };
 }
 
 /** What a coach is told about a sample client in their list, and, without Pro, what Pro adds. */
@@ -1007,7 +1009,7 @@ export async function callTool(name: string, args: Args, account: Account, store
   const { tz } = account;
   if (args.client !== undefined && !CLIENT_TOOLS.has(name)) throw new Error(`${name} is the client's own to do, so it takes no client.`);
   const client = await clientOf(account, args.client, store);
-  if (client && !isSample(client.uid) && PRO_CLIENT_TOOLS.has(name)) await needsPro(name, account, store);
+  if (client && !isSample(client.uid) && PRO_CLIENT_TOOLS.has(name)) await needsPro(name, account, store, now);
   if (!client && LIFTER_PRO_TOOLS.has(name)) {
     const access = await store.access(account.uid, now);
     if (!access.pro && trialDaysLeft(access, now) <= 0 && (await store.onSale())) throw new Error(lifterPaywall(name, account));
@@ -1024,7 +1026,7 @@ export async function callTool(name: string, args: Args, account: Account, store
       const text = context(units, today, Math.min(args.days_back ?? 21, 120), Math.min(args.days_ahead ?? 7, 28), tz);
       if (client) return `Client: ${shownName(client)}, coached by them since ${client.since.slice(0, 10)}. Everything below is the client's.\n\n${text}`;
       const clients = await store.clients(uid);
-      const paid = clients.length > 0 && (await store.coachPlan(uid));
+      const paid = clients.length > 0 && (await store.fullConnector(uid, now));
       const shown = clients.length ? `\n\nThey coach ${clients.length} client${clients.length === 1 ? "" : "s"}: ${clients.map((p) => `${shownName(p)} [${p.uid}]`).join("; ")}. To read or plan a client's training, pass client to the tool; everything above is their own.${sampleNote(clients, paid)}` : "";
       const note = (await store.onSale()) ? trialNote(await store.access(uid, now), now) : undefined;
       return `${text}${shown}${note ? `\n\n${note}` : ""}`;
@@ -1048,8 +1050,8 @@ export async function callTool(name: string, args: Args, account: Account, store
     }
     case "list_clients":
     case "roster_review": {
-      const { clients, paid } = await roster(account, store, today);
-      if (name === "roster_review" && !clients.every((c) => isSample(c.uid))) await needsPro(name, account, store);
+      const { clients, paid } = await roster(account, store, today, now);
+      if (name === "roster_review" && !clients.every((c) => isSample(c.uid))) await needsPro(name, account, store, now);
       if (!clients.length) return "They have no clients yet. invite_client makes an invite link to send one.";
       const rows = await Promise.all(clients.map(async (c) => {
         if (!(await store.coachOf(uid, c.uid))) return undefined;

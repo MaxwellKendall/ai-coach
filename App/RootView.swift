@@ -333,11 +333,8 @@ struct RootView: View {
             .tint(Self.accent)
         }
         .fullScreenCover(item: $onboarding) { profile in
-            // FIT-83: Pro's trial is offered once the program has just been shown.
-            OnboardingView(profile: profile) { started in
-                onboarding = nil
-                if started, !pro.active { pro.paywall = true }
-            }
+            // FIT-437: never a paywall after onboarding; Lifter Pro is offered only where AI planning is (You).
+            OnboardingView(profile: profile) { _ in onboarding = nil }
                 .interactiveDismissDisabled()
                 .tint(Self.accent)
         }

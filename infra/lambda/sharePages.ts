@@ -830,7 +830,7 @@ function pricingPage(site: Site) {
       who: "For lifters coaching themselves",
       items: [
         `Free for your first ${TRIAL_DAYS} days`,
-        "AI planning from the connector: Claude writes and changes your program and reviews your week",
+        "The full connector: Claude writes and changes your program and reviews your week",
         "AI-designed weeks in the app",
       ],
       cta: { href: "/pro", label: `About ${PLANS.lifter.name}` },

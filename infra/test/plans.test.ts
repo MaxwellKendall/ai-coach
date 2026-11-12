@@ -28,6 +28,25 @@ describe("the tiers the site describes (FIT-437)", () => {
     }
   });
 
+  // The app can't import shared/plans.ts, so its copies are held to it here: StoreProducts.trialDays (the paywall's
+  // fallback and its timeline) and AICoach.storekit's free trial (the simulator's App Store).
+  it("one trial length: the app's and the StoreKit configuration's too", () => {
+    const swift = readFileSync(new URL("../../Features/Pro/StoreProducts.swift", import.meta.url), "utf8");
+    expect(Number(swift.match(/static let trialDays = (\d+)/)?.[1])).toBe(TRIAL_DAYS);
+    const storekit = JSON.parse(readFileSync(new URL("../../AICoach.storekit", import.meta.url), "utf8")) as {
+      subscriptionGroups: { subscriptions: { productID: string; introductoryOffer: { paymentMode: string; subscriptionPeriod: string } | null }[] }[];
+    };
+    const ISO_DAYS: Record<string, number> = { P3D: 3, P1W: 7, P2W: 14, P1M: 30 };
+    for (const sub of storekit.subscriptionGroups.flatMap((g) => g.subscriptions)) {
+      if (sub.productID.includes(".pro.")) {
+        expect(sub.introductoryOffer?.paymentMode, sub.productID).toBe("free");
+        expect(ISO_DAYS[sub.introductoryOffer!.subscriptionPeriod], sub.productID).toBe(TRIAL_DAYS);
+      } else {
+        expect(sub.introductoryOffer, sub.productID).toBeNull();
+      }
+    }
+  });
+
   it("the terms price both plans, say they're sold in the app and on the web, and where each is cancelled", () => {
     const body = legalRoute("/terms", { appName: "Barbrabell", origin: "https://example.com", appId: "T.x" })!.body;
     expect(body).toContain("$5.99 a month or $39.99 a year");

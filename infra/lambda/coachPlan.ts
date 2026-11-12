@@ -102,6 +102,15 @@ export async function hasPlan(uid: string, kind: Kind, now = new Date()): Promis
   return effective(await planRecord(uid, kind), now).has;
 }
 
+/**
+ * FIT-437 (author, 2026-11-12): the full connector is either plan's. Lifter Pro has it as much as Coach Pro does,
+ * whichever store sold it; Free keeps the basic tools for reading and logging.
+ */
+export async function hasEitherPlan(uid: string, now = new Date()): Promise<boolean> {
+  const [lifter, coach] = await Promise.all([hasPlan(uid, "pro", now), hasPlan(uid, "coach", now)]);
+  return lifter || coach;
+}
+
 /** FIT-189: whether a Stripe event replaces the Stripe subscription kept (plan.ts supersedes). */
 export function replaces(kept: PlanRecord | undefined, event: PlanRecord): boolean {
   return supersedes(kept && { id: kept.subscription, has: stripeHas(kept), eventAt: kept.eventAt },

@@ -128,7 +128,7 @@ vi.mock("../lambda/gifts.ts", () => ({ stripeConfig: () => keys(), giftedUntil: 
 
 const { handleNotification, registerPurchase, statusOf, PurchaseError } = await import("../lambda/appStore.ts");
 const { handler: notifications } = await import("../lambda/appStoreNotifications.ts");
-const { hasPlan, planRecord, saveSubscription, start } = await import("../lambda/coachPlan.ts");
+const { hasEitherPlan, hasPlan, planRecord, saveSubscription, start } = await import("../lambda/coachPlan.ts");
 const { hasCoachPlan } = await import("../lambda/coach.ts");
 const { handler: deleteAccount } = await import("../lambda/deleteAccount.ts");
 const { PRODUCTS, productOf } = await import("../lambda/entitlement.ts");
@@ -213,6 +213,15 @@ describe("FIT-437: the App Store's products are the two plans", () => {
     expect(await plan("pro")).toBeUndefined();
     expect(await hasCoachPlan(SAM)).toBe(true);
     expect(await hasPlan(SAM, "pro")).toBe(false);
+  });
+
+  it("either plan, from the App Store, is the full connector (author, 2026-11-12); a lapse takes it away", async () => {
+    expect(await hasEitherPlan(SAM, new Date(clock))).toBe(false);
+    await notify(notification("SUBSCRIBED", { subtype: "INITIAL_BUY", txn: { offerType: 1, offerDiscountType: "FREE_TRIAL", expiresDate: clock + 14 * DAY } }));
+    expect(await hasCoachPlan(SAM)).toBe(false);
+    expect(await hasEitherPlan(SAM, new Date(clock))).toBe(true);
+    later(15);
+    expect(await hasEitherPlan(SAM, new Date(clock))).toBe(false);
   });
 });
 

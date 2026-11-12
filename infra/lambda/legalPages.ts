@@ -103,7 +103,7 @@ function termsPage(site: Site) {
 
     <h2>Plans and subscriptions</h2>
     <p>The iPhone app is free. ${PLANS.lifter.name}, for your own training, adds AI planning (from an agent, and AI-designed weeks in the app) after a ${TRIAL_DAYS}-day free trial, and is ${priceLine("lifter")}.</p>
-    <p>Coaching is free, with any number of clients. ${PLANS.coach.name}, which adds the full connector for coaching from an agent, is ${priceLine("coach")}. A coach invites only people who've agreed to be coached, and uses their data only to coach them. Clients use ${app} free.</p>
+    <p>Coaching is free, with any number of clients. ${PLANS.coach.name} is ${priceLine("coach")}; it, or ${PLANS.lifter.name}, adds the full connector for coaching from an agent. A coach invites only people who've agreed to be coached, and uses their data only to coach them. Clients use ${app} free.</p>
     <p>You can buy either plan in the iPhone app, as an App Store subscription billed to your Apple ID, or on the web, billed through Stripe. Wherever you buy it, it works in the app, on the dashboard and in the connector for the account you're signed in to. It renews automatically until you cancel, and runs to the end of the period you paid for; the free tier stays free after it. An App Store subscription is managed and cancelled ${MANAGE.appStore}, at least 24 hours before it renews, and Apple's terms cover its payments and refunds. A web subscription is managed and cancelled ${MANAGE.web}.</p>
 
     <h2>Agents</h2>

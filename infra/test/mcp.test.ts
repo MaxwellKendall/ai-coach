@@ -34,7 +34,7 @@ function memory(accounts: Record<string, Account>, units: Record<string, Record<
     invites,
     threads,
     paying,
-    async coachPlan(uid) { return paying.has(uid); },
+    async fullConnector(uid) { return paying.has(uid); },
     // FIT-327: not on sale unless a test says so, so nothing is held back from the rest of this file.
     forSale,
     trials,
@@ -1256,6 +1256,26 @@ describe("FIT-327: lifter Pro", () => {
     const unsold = memory({}, { lee: {} });
     unsold.trials.set("lee", now.toISOString());
     await expect(callTool("get_week_review", week, lifter, unsold, later)).resolves.toBeTypeOf("string");
+  });
+
+  // FIT-437 (author, 2026-11-12): the full connector is Lifter Pro's too, not only Coach Pro's (store.fullConnector:
+  // either plan from either store, coachPlan.ts hasEitherPlan). Free keeps reading and logging.
+  it("gives Lifter Pro the full connector, client tools included; Free gets reading only", async () => {
+    const store = memory({}, { ...data(), lee: { profile: encode(profile) } });
+    store.paying.clear();
+    store.forSale.on = true;
+    store.trials.set("lee", now.toISOString());
+    store.links.push({ coach: "lee", client: "me", name: "Sarah" });
+    const plank = { client: "Sarah", date: "2026-11-02", title: "Lower", reason: "r", exercises: [{ exercise: "Plank", sets: 3, seconds: 45 }] };
+    await expect(callTool("get_day", { client: "Sarah", date: "2026-10-16" }, lifter, store, later)).resolves.toBeTypeOf("string");
+    await expect(callTool("get_progress", {}, lifter, store, later)).resolves.toBeTypeOf("string");
+    await expect(callTool("propose_session", plank, lifter, store, later)).rejects.toThrow("Barbrabell Pro");
+    await expect(callTool("roster_review", {}, lifter, store, later)).rejects.toThrow("Barbrabell Pro");
+    await expect(callTool("propose_week", {}, lifter, store, later)).rejects.toThrow("Barbrabell Pro");
+    store.paying.add("lee");
+    await expect(callTool("propose_session", plank, lifter, store, later)).resolves.toMatch(/Proposal/);
+    await expect(callTool("roster_review", {}, lifter, store, later)).resolves.toMatch(/Sarah \[me\]/);
+    await expect(callTool("get_week_review", week, lifter, store, later)).resolves.toBeTypeOf("string");
   });
 
   it("says when the trial is nearly over, then that it's over, with no price", async () => {
