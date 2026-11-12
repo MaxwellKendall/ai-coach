@@ -43,3 +43,27 @@ Paywall screenshots belong in `appstore/screenshots/lifter-pro.png` and `coach-p
 `npm run demo-video` runs step 5 on its own. It resets the iPhone 17 Pro simulator's keychain and uninstalls the app, so the recording starts signed out at the first launch. A signed-in session lives in the keychain and would skip Welcome.
 
 Listing copy lives in `appstore/metadata/`. The App Store name in those files is `barbrabell`.
+
+## Revenue pull (FIT-444)
+
+`npm run revenue` is a read-only pull of App Store Connect catalog data and, when access allows, Sales and Trends plus Stripe. It never writes to Apple or Stripe, and it never prints, copies, or commits the `.p8` or API keys.
+
+From a checkout of this repo (the agent worktree is fine; do not use Maxwell's `~/dev/ai-coach-app` tree):
+
+```bash
+npm run revenue
+```
+
+That is `node scripts/revenue.mjs`. It loads the gitignored `.env` at the repo root the same way the release command does (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`).
+
+Optional variables in the same `.env`:
+
+* `ASC_VENDOR_NUMBER` — the vendor number from App Store Connect → Payments and Financial Reports. Required to download Sales, Subscription, and Subscription Event reports. The API key also needs the Sales and Trends / Finance role; a 403 is reported exactly and is not treated as zero revenue.
+* `STRIPE_READONLY_KEY` — a restricted live key with read-only access to subscriptions. When this is unset, Stripe is skipped and the output records status `missing`. Do not put the full `aicoach/prod/stripe` secret here.
+
+Output (gitignored):
+
+* `revenue-out/YYYY-MM-DD.json`
+* `revenue-out/YYYY-MM-DD.md`
+
+Dates are America/New_York. The markdown is the body to post on [FIT-444](https://linear.app/custom-voice-app/issue/FIT-444/revenue-dashboard). Tests: `npm run test:release` (includes `scripts/revenue.test.mjs`).
