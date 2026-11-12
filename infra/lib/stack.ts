@@ -358,7 +358,8 @@ export class AICoachStack extends Stack {
     }
 
     const deleteAccount = fn("deleteAccount", { USER_POOL_ID: userPool.userPoolId, CARDS_BUCKET: cards.bucketName });
-    table.grant(deleteAccount, "dynamodb:Query", "dynamodb:BatchWriteItem");
+    // DeleteItem: App Store links, deleted only while still the account's (FIT-437).
+    table.grant(deleteAccount, "dynamodb:Query", "dynamodb:BatchWriteItem", "dynamodb:DeleteItem");
     cards.grantDelete(deleteAccount, "cards/*");
     deleteAccount.addToRolePolicy(
       new iam.PolicyStatement({ actions: ["cognito-idp:AdminDeleteUser"], resources: [userPool.userPoolArn] }),

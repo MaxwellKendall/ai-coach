@@ -1,5 +1,5 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { BatchWriteCommand, DynamoDBDocumentClient, paginateQuery } from "@aws-sdk/lib-dynamodb";
+import { ConditionalCheckFailedException, DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { BatchWriteCommand, DeleteCommand, DynamoDBDocumentClient, paginateQuery } from "@aws-sdk/lib-dynamodb";
 import { AdminDeleteUserCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { DeleteObjectsCommand, S3Client } from "@aws-sdk/client-s3";
 import type { AppSyncResolverEvent, AppSyncIdentityCognito } from "aws-lambda";
@@ -82,7 +82,20 @@ export async function handler(event: AppSyncResolverEvent<Record<string, never>>
   const identity = event.identity as AppSyncIdentityCognito;
   await batchWrite([{ PutRequest: { Item: deletedMarker(identity.sub) } }]);
   const keys = await itemsToDelete(identity.sub);
-  await batchWrite(keys.map((Key) => ({ DeleteRequest: { Key } })));
+  const isLink = (k: Key) => k.PK.startsWith("APPSTORETXN#");
+  await batchWrite(keys.filter((k) => !isLink(k)).map((Key) => ({ DeleteRequest: { Key } })));
+  // FIT-437: a link can be taken over by another account between finding it and deleting it (appStore.ts, link), and
+  // BatchWrite can't hold a condition: each is deleted only while it's still this account's.
+  for (const Key of keys.filter(isLink)) {
+    try {
+      await db.send(new DeleteCommand({
+        TableName: TABLE, Key, ConditionExpression: "#uid = :uid",
+        ExpressionAttributeNames: { "#uid": "uid" }, ExpressionAttributeValues: { ":uid": identity.sub },
+      }));
+    } catch (error) {
+      if (!(error instanceof ConditionalCheckFailedException)) throw error;
+    }
+  }
   // FIT-107: the images of what they shared.
   const cards = keys.filter((k) => k.PK.startsWith("SHARE#")).map((k) => ({ Key: `cards/${k.PK.slice(6)}.png` }));
   for (let i = 0; i < cards.length; i += 1000) {

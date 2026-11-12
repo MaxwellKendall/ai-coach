@@ -50,6 +50,8 @@ function update(input: any, write = true) {
 let conflicts = 0;
 /** Cancellations DynamoDB makes for reasons other than a condition: the next link writes are cancelled with these. */
 let linkCancels: string[][] = [];
+/** Runs once, right after deleteAccount's GSI1 query. */
+let afterIndexQuery: (() => Promise<unknown>) | undefined;
 const send = vi.fn(async (command: any) => {
   const input = command.input;
   const name = command.constructor.name;
@@ -85,6 +87,10 @@ const send = vi.fn(async (command: any) => {
     }
     return {};
   }
+  if (name === "DeleteCommand") {
+    if (!holds(input.ConditionExpression, items.get(keyOf(input.Key)), input.ExpressionAttributeNames ?? {}, input.ExpressionAttributeValues ?? {})) throw failed();
+    return items.delete(keyOf(input.Key)), {};
+  }
   if (name === "BatchWriteCommand") {
     for (const request of Object.values(input.RequestItems).flat() as any[]) {
       if (request.PutRequest) items.set(keyOf(request.PutRequest.Item), structuredClone(request.PutRequest.Item));
@@ -103,7 +109,13 @@ vi.mock("@aws-sdk/lib-dynamodb", async (orig) => {
     paginateQuery: async function* (_: unknown, input: any) {
       const v = input.ExpressionAttributeValues;
       const all = [...items.values()];
-      if (input.IndexName === "GSI1") yield { Items: all.filter((i) => i.GSI1PK === v[":u"]) };
+      if (input.IndexName === "GSI1") {
+        yield { Items: all.filter((i) => i.GSI1PK === v[":u"]) };
+        // A write that lands between deleteAccount finding the account's items and deleting them.
+        const hook = afterIndexQuery;
+        afterIndexQuery = undefined;
+        await hook?.();
+      }
       else yield { Items: all.filter((i) => i.PK === v[":pk"] && (!v[":p"] || String(i.SK).startsWith(v[":p"])) && (!v[":f"] || (String(i.SK).startsWith(v[":f"]) && i.uid === v[":uid"]))) };
     },
   };
@@ -173,6 +185,7 @@ beforeEach(() => {
   items.clear();
   conflicts = 0;
   linkCancels = [];
+  afterIndexQuery = undefined;
   send.mockClear();
   cognitoSend.mockClear();
   keys.mockReset();
@@ -592,6 +605,19 @@ describe("FIT-437 review: a link left over by a deletion, and link writes Dynamo
     expect(linkItem()).toMatchObject({ uid: ALEX, GSI1PK: `USER#${ALEX}` });
     later(30);
     expect((await notify(notification("DID_RENEW"))).outcome).toMatchObject({ saved: true, uid: ALEX });
+  });
+
+  it("a link taken over after the deletion found it isn't deleted with the old account", async () => {
+    await notify(notification("SUBSCRIBED"));
+    // A leftover link (a deletion GSI1 missed) is taken over by ALEX just as SAM's second deletion attempt collects it.
+    items.set(`DELETEDACCOUNT#${SAM}|DELETEDACCOUNT`, { PK: `DELETEDACCOUNT#${SAM}`, SK: "DELETEDACCOUNT" });
+    afterIndexQuery = () => registerPurchase(ALEX, jws(transaction()), undefined, options());
+    await remove(SAM);
+    expect(afterIndexQuery).toBeUndefined();
+    expect(linkItem()).toMatchObject({ uid: ALEX, GSI1PK: `USER#${ALEX}` });
+    later(30);
+    expect((await notify(notification("DID_RENEW"))).outcome).toMatchObject({ saved: true, uid: ALEX });
+    expect(await hasPlan(ALEX, "pro", new Date(clock))).toBe(true);
   });
 
   it("the takeover needs the old owner's deletion marker: a live owner's link is never taken", async () => {

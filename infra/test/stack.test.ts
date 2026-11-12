@@ -203,7 +203,7 @@ describe("least privilege", () => {
 
   it("each function gets only the table actions it uses", () => {
     expect(actionsOf(dev, /^postConfirmation/).filter((a) => a.startsWith("dynamodb:"))).toEqual(["dynamodb:PutItem"]);
-    expect(actionsOf(dev, /^deleteAccount/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem", "cognito-idp:AdminDeleteUser"]));
+    expect(actionsOf(dev, /^deleteAccount/)).toEqual(expect.arrayContaining(["dynamodb:Query", "dynamodb:BatchWriteItem", "dynamodb:DeleteItem", "cognito-idp:AdminDeleteUser"]));
     expect(actionsOf(dev, /^deleteAccount/)).not.toContain("dynamodb:PutItem");
     // FIT-220: PutItem only for the one-push-per-window marker; it never writes a user's data in bulk.
     expect(actionsOf(dev, /^push/)).not.toContain("dynamodb:BatchWriteItem");
