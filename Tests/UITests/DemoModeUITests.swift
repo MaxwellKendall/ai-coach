@@ -81,4 +81,27 @@ final class DemoModeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["You have Lifter Pro"].waitForExistence(timeout: 15), "Lifter Pro is not unlocked after buying")
         XCTAssertFalse(app.buttons["paywall.buy"].exists, "A Pro lifter was offered Lifter Pro")
     }
+
+    // Coach and client: the demo shows no debug chrome on You (or on the first screen), and nothing asks to sign in.
+    @MainActor func testDemoCoachHasNoDebugChrome() throws { try assertNoDebugChrome(role: "coach") }
+    @MainActor func testDemoClientHasNoDebugChrome() throws { try assertNoDebugChrome(role: "client") }
+
+    @MainActor
+    private func assertNoDebugChrome(role: String) throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "YES", "-role", role, "-demo", "YES",
+                                "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30) || app.buttons["Account and library"].waitForExistence(timeout: 30), "\(role): no home screen")
+        let debug = NSPredicate(format: "label CONTAINS[c] '(debug)'")
+        XCTAssertFalse(app.descendants(matching: .any).matching(debug).firstMatch.exists, "\(role): home shows a debug row")
+        let you = app.buttons["Account and library"]
+        XCTAssertTrue(you.waitForExistence(timeout: 10), "\(role): no You button")
+        you.tap()
+        XCTAssertTrue(app.staticTexts["You"].waitForExistence(timeout: 10), "\(role): You did not open")
+        XCTAssertFalse(app.descendants(matching: .any).matching(debug).firstMatch.exists, "\(role): You shows a debug row")
+        app.swipeUp()
+        XCTAssertFalse(app.descendants(matching: .any).matching(debug).firstMatch.exists, "\(role): You shows a debug row below the fold")
+        XCTAssertFalse(app.buttons["signin.email"].exists, "\(role): asked to sign in")
+    }
 }
