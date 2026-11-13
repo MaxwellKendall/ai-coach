@@ -242,6 +242,53 @@ final class RoleUITests: XCTestCase {
         XCTAssertTrue(app.buttons["paywall.privacy"].exists || app.links["paywall.privacy"].exists, "No Privacy Policy link")
     }
 
+    /// FIT-453: a swipe that starts on a day pages the week and never opens the day; a clean tap still opens it.
+    @MainActor
+    func testSwipingWeeksFromADayNeverOpensIt() {
+        let app = launch("solo")
+        XCTAssertEqual(tabs(app), athlete)
+        openTab(app, "Program")
+        let this = week(app, "This week"), next = week(app, "Next week")
+        XCTAssertTrue(this.waitForExistence(timeout: 15), "Program has no This week")
+        for round in 1...3 {
+            drag(from: day(app), by: -1)
+            XCTAssertTrue(next.waitForExistence(timeout: 5), "Round \(round): swiping left from a day didn't page to Next week")
+            XCTAssertTrue(app.tabBars.buttons["Program"].isSelected)
+            XCTAssertFalse(this.exists, "Round \(round): This week is still showing")
+            drag(from: day(app), by: 1)
+            // The deck keeps the next card under the top one, so Next week stays in the tree; This week coming back is the check.
+            XCTAssertTrue(this.waitForExistence(timeout: 5), "Round \(round): swiping right from a day opened it instead of paging back")
+        }
+        // A tap is still a tap: it opens the day, which covers the weeks.
+        day(app).tap()
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: this)
+        waitForExpectations(timeout: 5)
+    }
+
+    /// The week card's header: "This week · Nov 9 – Nov 15".
+    @MainActor
+    private func week(_ app: XCUIApplication, _ name: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "\(name) ·")).firstMatch
+    }
+
+    /// A day row on the week card on top (the card underneath isn't hittable).
+    @MainActor
+    private func day(_ app: XCUIApplication) -> XCUIElement {
+        let days = app.buttons.matching(identifier: "program.day")
+        let row = days.allElementsBoundByIndex.first { $0.isHittable }
+        XCTAssertNotNil(row, "The week card has no day to start a swipe on")
+        return row ?? days.firstMatch
+    }
+
+    /// Presses on the element and drags most of the screen's width, left (-1) or right (1), then lets go.
+    @MainActor
+    private func drag(from element: XCUIElement, by direction: CGFloat) {
+        let start = element.coordinate(withNormalizedOffset: CGVector(dx: direction < 0 ? 0.85 : 0.15, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: direction * 260, dy: 0)))
+        Thread.sleep(forTimeInterval: 1)
+    }
+
     @MainActor
     private func launch(_ role: String?, _ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
