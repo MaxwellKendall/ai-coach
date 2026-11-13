@@ -16,21 +16,19 @@ struct HowToSteps: View {
 }
 
 /// FIT-318: the exercise's start and end photos, side by side; nothing while they load or when there are none.
-/// FIT-348: its looping demo clip instead, when it has one.
+/// FIT-348: its looping demo clip instead, when it has one. FIT-447: the photos again if the clip can't load.
 struct HowToPhotos: View {
     let slug: String
 
     static func shows(_ slug: String) -> Bool { ExerciseDemos.url(slug) != nil || !ExercisePhotos.urls(slug).isEmpty }
 
     var body: some View {
+        DemoClip(slug: slug) { photos }
+    }
+
+    @ViewBuilder private var photos: some View {
         let urls = ExercisePhotos.urls(slug)
-        if let demo = ExerciseDemos.url(slug) {
-            LoopingVideo(url: demo)
-                .aspectRatio(1, contentMode: .fit)
-                .clipShape(.rect(cornerRadius: 12))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Video: one rep of the movement")
-        } else if !urls.isEmpty {
+        if !urls.isEmpty {
             HStack(spacing: 8) {
                 ForEach(urls, id: \.self) { url in
                     AsyncImage(url: url) { image in
