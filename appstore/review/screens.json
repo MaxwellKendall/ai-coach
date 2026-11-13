@@ -1,0 +1,1701 @@
+{
+  "screens": [
+    {
+      "id": "AccountView",
+      "title": "Account",
+      "kind": "push",
+      "file": "Features/Account/AccountView.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "YouScreen",
+        "AccountView"
+      ]
+    },
+    {
+      "id": "AddGoalSheet",
+      "title": "Add Goal",
+      "kind": "sheet",
+      "file": "Features/Groups/GroupSheets.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "GroupScreen"
+      ],
+      "path": [
+        "RootView",
+        "GroupScreen",
+        "AddGoalSheet"
+      ]
+    },
+    {
+      "id": "AdjustSheet",
+      "title": "Adjust this week",
+      "kind": "sheet",
+      "file": "Features/Plan/AdjustSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "AdjustSheet"
+      ]
+    },
+    {
+      "id": "AmendSheet",
+      "title": "Amend",
+      "kind": "sheet",
+      "file": "Features/Plan/AmendSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "AmendSheet"
+      ]
+    },
+    {
+      "id": "CatalogScreen",
+      "title": "Catalog",
+      "kind": "push",
+      "file": "Features/Catalog/CatalogScreen.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "YouScreen",
+        "CatalogScreen"
+      ]
+    },
+    {
+      "id": "CelebrationSheet",
+      "title": "Celebration",
+      "kind": "sheet",
+      "file": "Features/Progress/ShareWinSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "CelebrationSheet"
+      ]
+    },
+    {
+      "id": "CheckInSheet",
+      "title": "Check In",
+      "kind": "sheet",
+      "file": "Features/Today/CheckInSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "CheckInSheet"
+      ]
+    },
+    {
+      "id": "ClientProgressScreen",
+      "title": "Client Progress",
+      "kind": "push",
+      "file": "Features/Clients/ClientProgressScreen.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientsScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientProgressScreen"
+      ]
+    },
+    {
+      "id": "ClientScreen",
+      "title": "Client",
+      "kind": "push",
+      "file": "Features/Clients/ClientScreen.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientsScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen"
+      ]
+    },
+    {
+      "id": "ClientScreen.alert.note-on",
+      "title": "Note on …)",
+      "kind": "alert",
+      "file": "Features/Clients/ClientScreen.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "ClientScreen.alert.note-on"
+      ]
+    },
+    {
+      "id": "CoachConversation",
+      "title": "Coach Conversation",
+      "kind": "sheet",
+      "file": "Features/Log/CoachConversation.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "CoachConversation"
+      ]
+    },
+    {
+      "id": "CoachConversation.empty.couldnt-load-your-messages",
+      "title": "Couldn’t load your messages",
+      "kind": "empty",
+      "file": "Features/Log/CoachConversation.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "CoachConversation"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "CoachConversation",
+        "CoachConversation.empty.couldnt-load-your-messages"
+      ]
+    },
+    {
+      "id": "CoachInviteSheet",
+      "title": "Coach Invite",
+      "kind": "sheet",
+      "file": "Features/Account/CoachInviteSheet.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "CoachInviteSheet"
+      ]
+    },
+    {
+      "id": "CoachScreen.alert.couldnt-do-that",
+      "title": "Couldn’t do that",
+      "kind": "alert",
+      "file": "Features/Coach/CoachScreen.swift",
+      "roles": [],
+      "from": [
+        "CoachScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Coach",
+        "CoachScreen.alert.couldnt-do-that"
+      ],
+      "unreachable": "The in-app coach is off while Pilot.simple (LanguageModel.isAvailable needs Pilot.inAppAI)"
+    },
+    {
+      "id": "CopySessionSheet",
+      "title": "Copy a Session",
+      "kind": "sheet",
+      "file": "Features/Clients/CopySessionSheet.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "CopySessionSheet"
+      ]
+    },
+    {
+      "id": "CopySessionSheet.empty.no-sessions-to-copy",
+      "title": "No sessions to copy",
+      "kind": "empty",
+      "file": "Features/Clients/CopySessionSheet.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "CopySessionSheet"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "CopySessionSheet",
+        "CopySessionSheet.empty.no-sessions-to-copy"
+      ]
+    },
+    {
+      "id": "CorrectSetsSheet",
+      "title": "Correct Sets",
+      "kind": "sheet",
+      "file": "Features/Clients/ClientPlanSheets.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "CorrectSetsSheet"
+      ]
+    },
+    {
+      "id": "DayThread",
+      "title": "Day Thread",
+      "kind": "push",
+      "file": "Features/Clients/DayThread.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientsScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "DayThread"
+      ]
+    },
+    {
+      "id": "ExercisePicker",
+      "title": "Exercise Picker",
+      "kind": "sheet",
+      "file": "Features/Plan/ExercisePicker.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "ClientScreen",
+        "SessionList",
+        "WorkoutDetailView",
+        "WorkoutModeView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "ExercisePicker"
+      ]
+    },
+    {
+      "id": "FeelSheet",
+      "title": "Feel",
+      "kind": "sheet",
+      "file": "Features/Log/FeelChoices.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "FeelSheet"
+      ]
+    },
+    {
+      "id": "GoalChangeSheet",
+      "title": "Change Goal",
+      "kind": "sheet",
+      "file": "Features/Plan/GoalChangeSheet.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "ClientProgressScreen",
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "GoalChangeSheet"
+      ]
+    },
+    {
+      "id": "GoalEditor",
+      "title": "New goal",
+      "kind": "sheet",
+      "file": "Features/Goals/GoalEditor.swift",
+      "roles": [],
+      "from": [
+        "GoalsScreen"
+      ],
+      "unreachable": "No route from RootView or a visible tab was found"
+    },
+    {
+      "id": "GoalUpdateSheet",
+      "title": "Update",
+      "kind": "sheet",
+      "file": "Features/Plan/GoalUpdate.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "GoalUpdateSheet"
+      ]
+    },
+    {
+      "id": "GoalsScreen.empty.no-goals-yet",
+      "title": "No goals yet",
+      "kind": "empty",
+      "file": "Features/Goals/GoalsScreen.swift",
+      "roles": [],
+      "from": [
+        "GoalsScreen"
+      ],
+      "unreachable": "No route from RootView or a visible tab was found"
+    },
+    {
+      "id": "GroupScreen",
+      "title": "Group",
+      "kind": "sheet",
+      "file": "Features/Groups/GroupScreen.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "GroupsScreen",
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "GroupScreen"
+      ]
+    },
+    {
+      "id": "GroupsScreen.empty.train-together",
+      "title": "Train Together",
+      "kind": "empty",
+      "file": "Features/Groups/GroupsScreen.swift",
+      "roles": [],
+      "from": [
+        "GroupsScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Groups",
+        "GroupsScreen.empty.train-together"
+      ],
+      "unreachable": "Groups are off while Pilot.simple (Pilot.groups)"
+    },
+    {
+      "id": "HistoryDayView",
+      "title": "History Day",
+      "kind": "push",
+      "file": "Features/Progress/HistoryScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "HistoryScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "HistoryDayView"
+      ]
+    },
+    {
+      "id": "HowToSheet",
+      "title": "How To",
+      "kind": "sheet",
+      "file": "Features/Catalog/HowTo.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "SessionList",
+        "WorkoutDetailView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WorkoutDetailView",
+        "HowToSheet"
+      ]
+    },
+    {
+      "id": "InviteSheet",
+      "title": "Invite",
+      "kind": "sheet",
+      "file": "Features/Clients/ClientsScreen.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientsScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "InviteSheet"
+      ]
+    },
+    {
+      "id": "JoinGroupSheet",
+      "title": "Join Group",
+      "kind": "sheet",
+      "file": "Features/Groups/GroupSheets.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "GroupsScreen",
+        "OnboardingView",
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "JoinGroupSheet"
+      ]
+    },
+    {
+      "id": "JoinSessionSheet",
+      "title": "Join Session",
+      "kind": "sheet",
+      "file": "Features/Today/TrainWithFriend.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "JoinSessionSheet"
+      ]
+    },
+    {
+      "id": "JoinSessionSheet.empty.cant-open-this-session",
+      "title": "Can’t open this session",
+      "kind": "empty",
+      "file": "Features/Today/TrainWithFriend.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "JoinSessionSheet"
+      ],
+      "path": [
+        "RootView",
+        "JoinSessionSheet",
+        "JoinSessionSheet.empty.cant-open-this-session"
+      ]
+    },
+    {
+      "id": "LogCheckSheet",
+      "title": "Check",
+      "kind": "sheet",
+      "file": "Features/Today/LogCheckSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "LogCheckSheet"
+      ]
+    },
+    {
+      "id": "LogChoiceSheet",
+      "title": "Log Choice",
+      "kind": "sheet",
+      "file": "Features/Today/LogChoiceSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "LogChoiceSheet"
+      ]
+    },
+    {
+      "id": "MessageClientsSheet",
+      "title": "Message Clients",
+      "kind": "sheet",
+      "file": "Features/Clients/ClientPlanSheets.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientsScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "MessageClientsSheet"
+      ]
+    },
+    {
+      "id": "MoveSheet",
+      "title": "Move",
+      "kind": "sheet",
+      "file": "Features/Today/MoveSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "MoveSheet"
+      ]
+    },
+    {
+      "id": "NewGoalSheet",
+      "title": "Add a goal",
+      "kind": "sheet",
+      "file": "Features/Plan/NewGoalSheet.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "ClientProgressScreen",
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "NewGoalSheet"
+      ]
+    },
+    {
+      "id": "NewGroupSheet",
+      "title": "New Group",
+      "kind": "sheet",
+      "file": "Features/Groups/GroupSheets.swift",
+      "roles": [],
+      "from": [
+        "GroupsScreen"
+      ],
+      "unreachable": "No route from RootView or a visible tab was found"
+    },
+    {
+      "id": "OnboardingView",
+      "title": "Onboarding",
+      "kind": "cover",
+      "file": "Features/Goals/OnboardingView.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "OnboardingView"
+      ]
+    },
+    {
+      "id": "OnboardingView.alert.couldnt-do-that",
+      "title": "Couldn’t do that",
+      "kind": "alert",
+      "file": "Features/Goals/OnboardingView.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "OnboardingView"
+      ],
+      "path": [
+        "RootView",
+        "OnboardingView",
+        "OnboardingView.alert.couldnt-do-that"
+      ]
+    },
+    {
+      "id": "PaywallView.coach",
+      "title": "Paywall",
+      "kind": "sheet",
+      "file": "Features/Pro/PaywallView.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "YouScreen",
+        "PaywallView.coach"
+      ]
+    },
+    {
+      "id": "PaywallView.lifter",
+      "title": "Paywall",
+      "kind": "sheet",
+      "file": "Features/Pro/PaywallView.swift",
+      "roles": [
+        "solo"
+      ],
+      "from": [
+        "RootView",
+        "WeeklyReviewScreen",
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "PaywallView.lifter"
+      ]
+    },
+    {
+      "id": "PlanDaySheet",
+      "title": "Plan Day",
+      "kind": "sheet",
+      "file": "Features/Clients/ClientPlanSheets.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "PlanDaySheet"
+      ]
+    },
+    {
+      "id": "PlanRunSheet",
+      "title": "Plan Run",
+      "kind": "sheet",
+      "file": "Features/Clients/ClientPlanSheets.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "PlanRunSheet"
+      ]
+    },
+    {
+      "id": "ProfileEditor",
+      "title": "Profile Editor",
+      "kind": "sheet",
+      "file": "Features/Goals/ProfileEditor.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "ClientProgressScreen",
+        "GoalsScreen",
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "YouScreen",
+        "ProfileEditor"
+      ]
+    },
+    {
+      "id": "ProgramChoice",
+      "title": "Program Choice",
+      "kind": "push",
+      "file": "Features/Goals/ProgramPicker.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "ProgramPicker"
+      ],
+      "path": [
+        "RootView",
+        "WelcomeView",
+        "ProgramChoice"
+      ]
+    },
+    {
+      "id": "ProgramOfferSheet",
+      "title": "From \\(coach)",
+      "kind": "sheet",
+      "file": "Features/Plan/ProgramOfferSheet.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "ProgramOfferSheet"
+      ]
+    },
+    {
+      "id": "ProgramPicker",
+      "title": "Program Picker",
+      "kind": "cover",
+      "file": "Features/Goals/ProgramPicker.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "TodayScreen",
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "WelcomeView",
+        "ProgramPicker"
+      ]
+    },
+    {
+      "id": "ProgramScreen.alert.couldnt-do-that",
+      "title": "Couldn’t do that",
+      "kind": "alert",
+      "file": "Features/Plan/ProgramScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "ProgramScreen.alert.couldnt-do-that"
+      ]
+    },
+    {
+      "id": "ProgramScreen.empty.no-goals-yet",
+      "title": "No goals yet",
+      "kind": "empty",
+      "file": "Features/Plan/ProgramScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "ProgramScreen.empty.no-goals-yet"
+      ]
+    },
+    {
+      "id": "ProgramScreen.empty.writes-your-program",
+      "title": "… writes your program",
+      "kind": "empty",
+      "file": "Features/Plan/ProgramScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "ProgramScreen.empty.writes-your-program"
+      ]
+    },
+    {
+      "id": "ProgramStartSheet",
+      "title": "Program Start",
+      "kind": "sheet",
+      "file": "Features/Plan/SharedProgram.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "ProgramStartSheet"
+      ]
+    },
+    {
+      "id": "ProgramStartSheet.empty.cant-start-this-program",
+      "title": "Can’t start this program",
+      "kind": "empty",
+      "file": "Features/Plan/SharedProgram.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "ProgramStartSheet"
+      ],
+      "path": [
+        "RootView",
+        "ProgramStartSheet",
+        "ProgramStartSheet.empty.cant-start-this-program"
+      ]
+    },
+    {
+      "id": "ProposalSheet",
+      "title": "Proposal",
+      "kind": "sheet",
+      "file": "Features/Today/SpokenSheets.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "ProposalSheet"
+      ]
+    },
+    {
+      "id": "RecapShareSheet",
+      "title": "Recap Share",
+      "kind": "sheet",
+      "file": "Features/Progress/Recap.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "WeeklyReviewScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WeeklyReviewScreen",
+        "RecapShareSheet"
+      ]
+    },
+    {
+      "id": "RecentSetStep",
+      "title": "Recent Set Step",
+      "kind": "push",
+      "file": "Features/Goals/ProgramPicker.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "ProgramPicker"
+      ],
+      "path": [
+        "RootView",
+        "WelcomeView",
+        "RecentSetStep"
+      ]
+    },
+    {
+      "id": "RedeemGiftView",
+      "title": "Redeem a gift",
+      "kind": "sheet",
+      "file": "Features/Pro/RedeemGiftView.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView",
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "RedeemGiftView"
+      ]
+    },
+    {
+      "id": "RegenerateSheet",
+      "title": "Regenerate",
+      "kind": "sheet",
+      "file": "Features/Plan/RegenerateSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "RegenerateSheet"
+      ]
+    },
+    {
+      "id": "RepeatWeekSheet",
+      "title": "Repeat This Week",
+      "kind": "sheet",
+      "file": "Features/Clients/ClientPlanSheets.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "RepeatWeekSheet"
+      ]
+    },
+    {
+      "id": "RunDetailView",
+      "title": "Run",
+      "kind": "push",
+      "file": "Features/Run/RunDetailView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "SessionRecordView",
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "RunDetailView"
+      ]
+    },
+    {
+      "id": "RunLogSheet",
+      "title": "Log a run",
+      "kind": "sheet",
+      "file": "Features/Log/RunLogSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "RunModeView",
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "RunLogSheet"
+      ]
+    },
+    {
+      "id": "RunModeView",
+      "title": "Run",
+      "kind": "cover",
+      "file": "Features/Run/RunModeView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "RunModeView"
+      ]
+    },
+    {
+      "id": "RunModeView.alert.location-is-off",
+      "title": "Location is off",
+      "kind": "alert",
+      "file": "Features/Run/RunModeView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "RunModeView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "RunModeView",
+        "RunModeView.alert.location-is-off"
+      ]
+    },
+    {
+      "id": "SessionRecordView",
+      "title": "Session Record",
+      "kind": "push",
+      "file": "Features/Log/SessionRecordView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen",
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "SessionRecordView"
+      ]
+    },
+    {
+      "id": "SessionRecordView.empty.no-sets-logged",
+      "title": "No sets logged",
+      "kind": "empty",
+      "file": "Features/Log/SessionRecordView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "SessionRecordView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "SessionRecordView",
+        "SessionRecordView.empty.no-sets-logged"
+      ]
+    },
+    {
+      "id": "ShareActions.alert.couldnt-make-a-link",
+      "title": "Couldn’t make a link",
+      "kind": "alert",
+      "file": "Features/Progress/ShareActions.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ShareActions"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "ShareWinSheet",
+        "ShareActions.alert.couldnt-make-a-link"
+      ]
+    },
+    {
+      "id": "ShareWinSheet",
+      "title": "Share Win",
+      "kind": "sheet",
+      "file": "Features/Progress/ShareWinSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen",
+        "WinsScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "ShareWinSheet"
+      ]
+    },
+    {
+      "id": "SignInSheet",
+      "title": "Sign In",
+      "kind": "sheet",
+      "file": "Features/Account/SignInSheet.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "GroupsScreen",
+        "OnboardingView",
+        "PaywallView",
+        "RedeemGiftView",
+        "RootView",
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "SignInSheet"
+      ]
+    },
+    {
+      "id": "Splash",
+      "title": "Splash",
+      "kind": "cover",
+      "file": "App/Splash.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "Splash"
+      ]
+    },
+    {
+      "id": "SpokenCheckSheet",
+      "title": "Spoken Check",
+      "kind": "sheet",
+      "file": "Features/Today/SpokenSheets.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "SpokenCheckSheet"
+      ]
+    },
+    {
+      "id": "StartProgramSheet",
+      "title": "Start a Program",
+      "kind": "sheet",
+      "file": "Features/Clients/ClientPlanSheets.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "ClientScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "ClientScreen",
+        "StartProgramSheet"
+      ]
+    },
+    {
+      "id": "SuggestedGoalsView",
+      "title": "Suggested goals",
+      "kind": "sheet",
+      "file": "Features/Goals/SuggestedGoalsView.swift",
+      "roles": [],
+      "from": [
+        "GoalsScreen"
+      ],
+      "unreachable": "No route from RootView or a visible tab was found"
+    },
+    {
+      "id": "SuggestedGoalsView.empty.you-already-have-these-goals",
+      "title": "You already have these goals",
+      "kind": "empty",
+      "file": "Features/Goals/SuggestedGoalsView.swift",
+      "roles": [],
+      "from": [
+        "SuggestedGoalsView"
+      ],
+      "unreachable": "No route from RootView or a visible tab was found"
+    },
+    {
+      "id": "TemplateDetailView",
+      "title": "Template Detail",
+      "kind": "push",
+      "file": "Features/Catalog/TemplateDetailView.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "TemplateList"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "YouScreen",
+        "CatalogScreen",
+        "TemplateDetailView"
+      ]
+    },
+    {
+      "id": "TemplateEditor",
+      "title": "New \\(kind.rawValue)",
+      "kind": "sheet",
+      "file": "Features/Catalog/TemplateEditor.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "CatalogScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "YouScreen",
+        "CatalogScreen",
+        "TemplateEditor"
+      ]
+    },
+    {
+      "id": "TodayScreen.alert.couldnt-do-that",
+      "title": "Couldn’t do that",
+      "kind": "alert",
+      "file": "Features/Today/TodayScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "TodayScreen.alert.couldnt-do-that"
+      ]
+    },
+    {
+      "id": "VoiceLogView",
+      "title": "Spoken attempts",
+      "kind": "push",
+      "file": "Features/Today/VoiceLog.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "YouScreen",
+        "VoiceLogView"
+      ]
+    },
+    {
+      "id": "WeeklyCheckInSheet",
+      "title": "Weekly Check-in",
+      "kind": "sheet",
+      "file": "Features/Today/WeeklyCheckInSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WeeklyCheckInSheet"
+      ]
+    },
+    {
+      "id": "WeeklyReviewScreen",
+      "title": "Weekly Review",
+      "kind": "cover",
+      "file": "Features/Progress/WeeklyReviewScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WeeklyReviewScreen"
+      ]
+    },
+    {
+      "id": "WelcomeView",
+      "title": "Welcome",
+      "kind": "cover",
+      "file": "Features/Account/WelcomeView.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView",
+        "YouScreen"
+      ],
+      "path": [
+        "RootView",
+        "WelcomeView"
+      ]
+    },
+    {
+      "id": "WholeProgramSheet",
+      "title": "Your program",
+      "kind": "sheet",
+      "file": "Features/Plan/WholeProgramSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "WholeProgramSheet"
+      ]
+    },
+    {
+      "id": "WinsScreen.empty.no-wins-yet",
+      "title": "No wins yet",
+      "kind": "empty",
+      "file": "Features/Progress/WinsScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "WinsScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "WinsScreen.empty.no-wins-yet"
+      ]
+    },
+    {
+      "id": "WorkoutDetailView",
+      "title": "Workout Detail",
+      "kind": "push",
+      "file": "Features/Plan/WorkoutDetailView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen",
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WorkoutDetailView"
+      ]
+    },
+    {
+      "id": "WorkoutLogView",
+      "title": "Workout Log",
+      "kind": "sheet",
+      "file": "Features/Log/WorkoutLogView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WorkoutLogView"
+      ]
+    },
+    {
+      "id": "WorkoutModeView",
+      "title": "Workout Mode",
+      "kind": "cover",
+      "file": "Features/Log/WorkoutModeView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WorkoutModeView"
+      ]
+    },
+    {
+      "id": "WorkoutModeView.alert.couldnt-do-that",
+      "title": "Couldn’t do that",
+      "kind": "alert",
+      "file": "Features/Log/WorkoutModeView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "WorkoutModeView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WorkoutModeView",
+        "WorkoutModeView.alert.couldnt-do-that"
+      ]
+    },
+    {
+      "id": "WorkoutNoteSheet",
+      "title": "Note",
+      "kind": "sheet",
+      "file": "Features/Log/WorkoutNoteSheet.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WorkoutNoteSheet"
+      ]
+    },
+    {
+      "id": "YouScreen",
+      "title": "You",
+      "kind": "sheet",
+      "file": "Features/Today/YouScreen.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "ClientsScreen",
+        "TodayScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients",
+        "YouScreen"
+      ]
+    },
+    {
+      "id": "tab.Clients",
+      "title": "Clients",
+      "kind": "tab",
+      "file": "Features/Clients/ClientsScreen.swift",
+      "roles": [
+        "coach"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Clients"
+      ]
+    },
+    {
+      "id": "tab.Coach",
+      "title": "Coach",
+      "kind": "tab",
+      "file": "Features/Coach/CoachScreen.swift",
+      "roles": [],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Coach"
+      ],
+      "unreachable": "The in-app coach is off while Pilot.simple (LanguageModel.isAvailable needs Pilot.inAppAI)"
+    },
+    {
+      "id": "tab.Groups",
+      "title": "Groups",
+      "kind": "tab",
+      "file": "Features/Groups/GroupsScreen.swift",
+      "roles": [],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Groups"
+      ],
+      "unreachable": "Groups are off while Pilot.simple (Pilot.groups)"
+    },
+    {
+      "id": "tab.Program",
+      "title": "Program",
+      "kind": "tab",
+      "file": "Features/Plan/ProgramScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program"
+      ]
+    },
+    {
+      "id": "tab.Progress",
+      "title": "Progress",
+      "kind": "tab",
+      "file": "Features/Plan/ProgramScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Progress"
+      ]
+    },
+    {
+      "id": "tab.Today",
+      "title": "Today",
+      "kind": "tab",
+      "file": "Features/Today/TodayScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today"
+      ]
+    }
+  ]
+}

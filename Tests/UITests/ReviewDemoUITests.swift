@@ -21,10 +21,11 @@ final class ReviewDemoUITests: XCTestCase {
 
         let join = app.buttons["welcome.join"]
         XCTAssertTrue(join.waitForExistence(timeout: 40), "Welcome did not show Join them")
+        DemoScreens.shown("WelcomeView", as: .client)
         hold(2)
         join.tap()
 
-        signIn(app, email: email)
+        signIn(app, email: email, as: .client)
         XCTAssertTrue(waitForToday(app), "Sign-in did not open the coached week. \(failureOnScreen(app))")
         // FIT-445: a client sees no Clients tab, sample client or not.
         XCTAssertFalse(app.tabBars.buttons["Clients"].exists, "A client was shown the coach's Clients tab")
@@ -34,6 +35,7 @@ final class ReviewDemoUITests: XCTestCase {
             tab.tap()
             hold(1.2)
         }
+        DemoScreens.shown("tab.Today", as: .client)
         hold(2.5)
         logOpenSession(app)
         showDeleteAccount(app)
@@ -41,23 +43,26 @@ final class ReviewDemoUITests: XCTestCase {
 
         let coach = app.buttons["welcome.coach"]
         XCTAssertTrue(coach.waitForExistence(timeout: 25), "Coach mode's door did not come back after signing out")
+        DemoScreens.shown("WelcomeView", as: .coach)
         hold(1.2)
         coach.tap()
-        signIn(app, email: coachEmail)
+        signIn(app, email: coachEmail, as: .coach)
         let clients = app.buttons["welcome.clients"]
         XCTAssertTrue(clients.waitForExistence(timeout: 90), "Signing in as the coach did not offer My Clients. \(failureOnScreen(app))")
         hold(1.2)
         clients.tap()
         XCTAssertTrue(app.navigationBars["Clients"].waitForExistence(timeout: 30) || app.staticTexts["Clients"].waitForExistence(timeout: 5),
                       "The coach roster did not open")
+        DemoScreens.shown("tab.Clients", as: .coach)
         _ = app.staticTexts["Sam Rivera"].waitForExistence(timeout: 20)
         hold(3)
     }
 
     @MainActor
-    private func signIn(_ app: XCUIApplication, email: String) {
+    private func signIn(_ app: XCUIApplication, email: String, as role: DemoScreens.Role) {
         let emailButton = app.buttons["signin.email"]
         XCTAssertTrue(emailButton.waitForExistence(timeout: 15), "Sign in with email was not on screen")
+        DemoScreens.shown("SignInSheet", as: role)
         hold(1)
         emailButton.tap()
         let emailField = app.textFields["signin.emailField"]
@@ -119,6 +124,7 @@ final class ReviewDemoUITests: XCTestCase {
         XCTAssertTrue(you.waitForExistence(timeout: 10), "Today has no account button")
         you.tap()
         XCTAssertTrue(app.staticTexts["You"].waitForExistence(timeout: 10), "You did not open")
+        DemoScreens.shown("YouScreen", as: .client)
         hold(1)
         var row = accountRow(app)
         for _ in 0..<4 where !row.exists {
@@ -131,6 +137,7 @@ final class ReviewDemoUITests: XCTestCase {
         row.tap()
         let delete = app.buttons["account.delete"]
         XCTAssertTrue(delete.waitForExistence(timeout: 10), "Delete Account was not on the account screen")
+        DemoScreens.shown("AccountView", as: .client)
         hold(2.2)
     }
 
