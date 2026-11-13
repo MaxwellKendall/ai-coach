@@ -1,0 +1,19 @@
+# FIT-458: screens in appstore/review/screens.json that the review demo doesn't have to show, one per line:
+#   <screen id>  # why
+# Screens behind a tab the pilot hides (Groups, Coach) are already left out by the inventory itself.
+# Keep each reason specific: a screen listed here is one App Review won't see in the video.
+
+# Groups are off while Pilot.simple (Pilot.groups). These open only from a group link or a group notification.
+GroupScreen  # a group's page: Pilot.groups is off
+AddGoalSheet  # adds a group goal, inside GroupScreen
+JoinGroupSheet  # a group invite link: Pilot.groups is off
+JoinSessionSheet  # a "train together" session link, part of groups
+JoinSessionSheet.empty.cant-open-this-session  # the error state of that link
+
+# Gifts are off while Pilot.simple (Pilot.gifts); RedeemGiftView opens only from a gift link.
+RedeemGiftView  # Pilot.gifts is off
+
+# Voice and spoken edits need the in-app model, off while Pilot.simple (Pilot.inAppAI).
+VoiceLogView  # You › Spoken attempts, shown only with Pilot.inAppAI
+SpokenCheckSheet  # the confirm screen after a spoken log
+ProposalSheet  # the confirm screen after a spoken edit to the week

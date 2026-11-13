@@ -2,7 +2,7 @@
 // Credentials are read from .env, compiled into the UI test for that one build, and the stub is restored after.
 // Output is redacted. The compressed file is build/review/demo.mp4.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "./load-env.mjs";
@@ -24,6 +24,10 @@ enum ReviewDemoSecrets {
 const outDir = resolve(root, "build/review");
 const rawPath = resolve(outDir, "raw.mp4");
 const outPath = resolve(outDir, "demo.mp4");
+// FIT-458: the UI test writes each screen it shows here; scripts/screen-coverage.mjs checks it against the inventory.
+const shownPath = resolve(outDir, "screens-shown.txt");
+// Until the demo covers every screen (FIT-459, FIT-460), a gap is reported but doesn't fail the run or the release.
+const requireCoverage = process.argv.includes("--require-coverage");
 
 loadEnv(resolve(root, ".env"));
 const clientEmail = process.env.DEMO_CLIENT_EMAIL || "";
@@ -136,6 +140,8 @@ if (await run("xcodebuild", ["build-for-testing", "-scheme", "ReviewDemo", "-con
   process.exit(1);
 }
 
+rmSync(shownPath, { force: true });
+process.env.TEST_RUNNER_DEMO_SCREENS = shownPath;
 const recorder = spawn("xcrun", ["simctl", "io", udid, "recordVideo", "--codec", "h264", "--force", rawPath], { stdio: "ignore" });
 await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
 const testCode = await run("xcodebuild", [
@@ -158,4 +164,10 @@ const duration = exec("ffprobe", ["-v", "error", "-show_entries", "format=durati
 console.log(`Demo video: ${outPath}`);
 console.log(`Duration: ${Number(duration).toFixed(1)}s`);
 restore();
-process.exit(testCode);
+
+const fresh = await run("node", ["scripts/screen-inventory.mjs", "--check"]);
+const covered = await run("node", ["scripts/screen-coverage.mjs", shownPath]);
+if (fresh !== 0 || covered !== 0) {
+  console.log(requireCoverage ? "The demo does not cover every screen." : "Coverage gaps are reported only; pass --require-coverage to fail on them.");
+}
+process.exit(testCode || (requireCoverage && (fresh || covered)) ? 1 : 0);
