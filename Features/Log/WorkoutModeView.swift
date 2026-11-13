@@ -334,6 +334,12 @@ struct WorkoutModeView: View {
             if let cue = cue(rows) {
                 Text(cue).font(.subheadline).foregroundStyle(Color.inkMuted).padding(.top, 6).lineLimit(3)
             }
+            // FIT-447: the form demo, small, while you set up; nothing when the lift has no clip or it can't load.
+            if exercises.count == 1, ExerciseDemos.url(exercises[0]) != nil {
+                DemoClip(slug: exercises[0], corner: 14) { EmptyView() }
+                    .frame(width: 104, height: 104)
+                    .padding(.top, 12)
+            }
             Spacer(minLength: 12)
             // Weight and reps big, each with − and + under it: a change is a tap, right where it's read.
             HStack(alignment: .top, spacing: 12) {

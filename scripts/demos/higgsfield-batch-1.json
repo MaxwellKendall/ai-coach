@@ -1,0 +1,210 @@
+{
+  "about": "FIT-447: the chosen Higgsfield take for each exercise, keyed by the app's catalog slug. Sources are download-once only: never hotlink them. scripts/higgsfield-demos.py downloads, encodes and uploads them.",
+  "demos": [
+    {
+      "slug": "back-squat",
+      "name": "Barbell Back Squat",
+      "id": "77f0ee12-11ef-4344-8837-c7715e181db9",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261110_205834_77f0ee12-11ef-4344-8837-c7715e181db9.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "bench-press",
+      "name": "Barbell Bench Press",
+      "id": "dc54168f-e8e2-4071-a1b3-e9677fc2720e",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261110_210225_dc54168f-e8e2-4071-a1b3-e9677fc2720e.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "bent-over-barbell-row",
+      "name": "Barbell Bent-Over Row",
+      "id": "b3893129-80a5-411d-ab78-416e19aae8d4",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_022309_b3893129-80a5-411d-ab78-416e19aae8d4.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "chin-up",
+      "name": "Chin-Up",
+      "id": "0e1e1e9c-9255-44a0-a9d2-2c13d667716b",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_135120_0e1e1e9c-9255-44a0-a9d2-2c13d667716b.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "deadlift",
+      "name": "Conventional Deadlift",
+      "id": "719baef8-539d-4312-bd75-332ef35e8e48",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261110_210854_719baef8-539d-4312-bd75-332ef35e8e48.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "dead-bug",
+      "name": "Dead Bug",
+      "id": "bdee8d7e-467a-4bba-a8eb-bd03680c291a",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_132026_bdee8d7e-467a-4bba-a8eb-bd03680c291a.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "dumbbell-bicep-curl",
+      "name": "Dumbbell Bicep Curl",
+      "id": "9a31eedf-8973-4bf8-a095-5596c891027d",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_201332_9a31eedf-8973-4bf8-a095-5596c891027d.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "dumbbell-floor-press",
+      "name": "Dumbbell Floor Press",
+      "id": "ce29f01b-d0bf-4507-ae58-50691770e7be",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_174036_ce29f01b-d0bf-4507-ae58-50691770e7be.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "side-lateral-raise",
+      "name": "Dumbbell Lateral Raise",
+      "id": "ea053623-715a-4ea8-92f0-62c9b993a670",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_022936_ea053623-715a-4ea8-92f0-62c9b993a670.mp4",
+      "style": "older take, pulsing glow",
+      "note": "The catalog's dumbbell lateral raise is side-lateral-raise (the program's slug)."
+    },
+    {
+      "slug": "dumbbell-shoulder-press",
+      "name": "Dumbbell Shoulder Press",
+      "id": "76c052a3-1772-411f-8aad-d5ba9e43ba3f",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_135942_76c052a3-1772-411f-8aad-d5ba9e43ba3f.mp4",
+      "style": "Nov 11 training figure",
+      "note": "Not standing-military-press: that one is the barbell Military Press clip."
+    },
+    {
+      "slug": "split-squat-with-dumbbells",
+      "name": "Dumbbell Split Squat",
+      "id": "f5724fad-769f-412c-b365-74244c746c9b",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_013735_f5724fad-769f-412c-b365-74244c746c9b.mp4",
+      "style": "older take, pulsing glow",
+      "note": "A split squat with both feet on the floor; not a Bulgarian (rear foot raised) split squat. Check the clip."
+    },
+    {
+      "slug": "farmer-carry",
+      "name": "Farmer Carry",
+      "id": "9ce9671e-18c8-4795-ad8d-feb20ab965b2",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_131336_9ce9671e-18c8-4795-ad8d-feb20ab965b2.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "goblet-squat",
+      "name": "Goblet Squat",
+      "id": "0d5e0e5b-93c5-4f73-9e5a-4bb5bb414768",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261110_193716_0d5e0e5b-93c5-4f73-9e5a-4bb5bb414768.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "hammer-curls",
+      "name": "Hammer Curl",
+      "id": "32293ac6-3d9d-46c9-948e-d71ae3727e79",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_175107_32293ac6-3d9d-46c9-948e-d71ae3727e79.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "incline-dumbbell-press",
+      "name": "Incline Dumbbell Press",
+      "id": "833b533f-7835-4391-a3c0-45ba152f774d",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_013229_833b533f-7835-4391-a3c0-45ba152f774d.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "wide-grip-lat-pulldown",
+      "name": "Lat Pulldown",
+      "id": "640a4980-72c7-4712-bfb4-58b09ec76a84",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_190318_640a4980-72c7-4712-bfb4-58b09ec76a84.mp4",
+      "style": "Nov 11 training figure",
+      "note": "The programs' lat pulldown is wide-grip-lat-pulldown."
+    },
+    {
+      "slug": "lying-leg-curls",
+      "name": "Leg Curl",
+      "id": "330c89e3-b46f-4985-94f8-056ca67c25d1",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_184142_330c89e3-b46f-4985-94f8-056ca67c25d1.mp4",
+      "style": "Nov 11 training figure",
+      "note": "Lying leg curl (the programs' slug). If the clip shows a seated machine, use seated-leg-curl instead."
+    },
+    {
+      "slug": "leg-press",
+      "name": "Leg Press",
+      "id": "7542eeda-2178-48ca-b8be-4bd08749da55",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_183339_7542eeda-2178-48ca-b8be-4bd08749da55.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "dumbbell-lunges",
+      "name": "Lunge",
+      "id": "b34a162c-148d-474b-af25-e46c41a5f4f7",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_023450_b34a162c-148d-474b-af25-e46c41a5f4f7.mp4",
+      "style": "older take, pulsing glow",
+      "note": "Ambiguous: the prompt said just \"Lunge\". Mapped to dumbbell-lunges (the programs use it, barbell-lunge and bodyweight-walking-lunge). Change the slug if the clip shows a barbell or no weight."
+    },
+    {
+      "slug": "standing-military-press",
+      "name": "Military Press",
+      "id": "52926e51-1532-47d5-a1a2-08d3eeb99fe5",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261110_211410_52926e51-1532-47d5-a1a2-08d3eeb99fe5.mp4",
+      "style": "older take, pulsing glow",
+      "note": "Barbell, standing."
+    },
+    {
+      "slug": "dumbbell-row",
+      "name": "One-Arm Dumbbell Row",
+      "id": "8c05ae7e-4a1b-4ffb-bde1-6c78707a1442",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261110_220228_8c05ae7e-4a1b-4ffb-bde1-6c78707a1442.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "plank",
+      "name": "Plank",
+      "id": "2d4b4926-578b-4e2c-90a4-dafbb694fdc6",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261110_220952_2d4b4926-578b-4e2c-90a4-dafbb694fdc6.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "pull-up",
+      "name": "Pull-Up",
+      "id": "c5c075e3-6d96-48ce-92b8-34d385380292",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_134103_c5c075e3-6d96-48ce-92b8-34d385380292.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "push-up",
+      "name": "Push-Up",
+      "id": "9a37ba56-cab7-493e-9024-4071e3ed50bc",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_012722_9a37ba56-cab7-493e-9024-4071e3ed50bc.mp4",
+      "style": "older take, pulsing glow"
+    },
+    {
+      "slug": "romanian-deadlift",
+      "name": "Romanian Deadlift",
+      "id": "05d86861-9119-4a83-b4ac-261b6975b167",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_144237_05d86861-9119-4a83-b4ac-261b6975b167.mp4",
+      "style": "Nov 11 training figure",
+      "note": "Barbell RDL. dumbbell-romanian-deadlift stays without a clip unless the clip shows dumbbells."
+    },
+    {
+      "slug": "seated-cable-rows",
+      "name": "Seated Cable Row",
+      "id": "30797675-1704-4d6a-8d36-9ea509b365ea",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_182059_30797675-1704-4d6a-8d36-9ea509b365ea.mp4",
+      "style": "Nov 11 training figure"
+    },
+    {
+      "slug": "standing-calf-raises",
+      "name": "Standing Calf Raise",
+      "id": "df2bf3cd-aca6-40e8-b539-98f4930db867",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_185014_df2bf3cd-aca6-40e8-b539-98f4930db867.mp4",
+      "style": "Nov 11 training figure",
+      "note": "standing-calf-raises, not standing-dumbbell-calf-raise; check which the clip shows."
+    },
+    {
+      "slug": "triceps-pushdown",
+      "name": "Triceps Pushdown",
+      "id": "85bbe182-cc24-4afc-87f9-c844d5bf060a",
+      "source": "https://d8j0ntlcm91z4.cloudfront.net/user_3Lvb5BaOnq4iHyFFHon2pTpYBXH/hf_20261111_193102_85bbe182-cc24-4afc-87f9-c844d5bf060a.mp4",
+      "style": "Nov 11 training figure"
+    }
+  ]
+}

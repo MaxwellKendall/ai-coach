@@ -63,6 +63,11 @@ enum ExerciseDemos {
         return base.appending(path: "exercises/demos/\(slug).mp4")
     }
 
+    /// FIT-447: the clip's first frame, shown while the clip loads (scripts/higgsfield-demos.py uploads it next to it).
+    static func poster(_ slug: String) -> URL? {
+        url(slug)?.deletingPathExtension().appendingPathExtension("jpg")
+    }
+
     static let bundled: Set<String> = Set(Bundle.main.url(forResource: "exercise-demos", withExtension: "json")
         .flatMap { try? JSONDecoder().decode([String].self, from: Data(contentsOf: $0)) } ?? [])
 }
