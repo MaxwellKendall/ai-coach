@@ -22,6 +22,8 @@ struct ProgramScreen: View {
     let tabs: [Tab]
     @State private var selected: Int?
     @State private var goalIndex = 0
+    /// FIT-453: the week decks tell it when they're swiped, so the day a swipe starts on doesn't open.
+    @State private var swipes = SwipeGate()
     /// FIT-233: Add a goal, from Progress › Goals.
     @State private var addingGoal = false
     /// FIT-343: a goal being updated with a test. FIT-346: a goal being changed.
@@ -198,7 +200,7 @@ struct ProgramScreen: View {
             }, phases: profile.programSlug == nil)
             .padding(.horizontal, 22)
             .padding(.top, 12)
-            SwipeDeck(index: index, count: weeks.count) { week in
+            SwipeDeck(index: index, count: weeks.count, gate: swipes) { week in
                 weekCard(week, weeks: weeks, start: start, current: current, profile: profile)
             }
             .padding(.horizontal, 22)
@@ -220,7 +222,7 @@ struct ProgramScreen: View {
         } else {
             let current = mondays.firstIndex(of: this) ?? 0
             SwipeDeck(index: Binding(get: { min(selected ?? current, mondays.count - 1) }, set: { selected = $0 }),
-                      count: mondays.count) { index in
+                      count: mondays.count, gate: swipes) { index in
                 plannedWeekCard(mondays[index], this: this)
             }
             .padding(.horizontal, 22)
@@ -422,6 +424,7 @@ struct ProgramScreen: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("program.day")
                     .accessibilityHint(done(day.date) ? "Shows what you logged" : missed(day.date) ? "Opens the day on Today, to log it" : "Opens the session to change it")
                     if done(day.date) || missed(day.date) {
                         if !typeSize.isAccessibilitySize { status(day.date) }
@@ -429,6 +432,7 @@ struct ProgramScreen: View {
                         let items = dayItems(day.date)
                         let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
                         Button {
+                            guard !swipes.swiping() else { return }
                             // Pinned sessions stay open on Today without Pro (FIT-120), so pinning is Pro too.
                             pro.gate { withAnimation(.settle) { for item in items { item.pinned = !pinned; item.updatedAt = .now } } }
                         } label: {
@@ -474,6 +478,8 @@ struct ProgramScreen: View {
     /// Next week is only a preview until one of its sessions is opened: then it's saved, to be planned again
     /// when it starts, keeping what's pinned (Planner.ensureWeek).
     private func open(_ date: Date, monday: Date) {
+        // FIT-453: the end of a swipe that started on a day isn't a tap on it.
+        guard !swipes.swiping() else { return }
         // FIT-120: the program can be looked through without Pro; running it is Pro.
         guard pro.active else { return pro.paywall = true }
         // FIT-357: a missed day is logged where past days are, on Today, not changed as a plan.

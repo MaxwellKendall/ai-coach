@@ -17,6 +17,8 @@ struct SwipeDeck<Card: View>: View {
     /// A swipe that finished, from the card it started on, before `index` moves. Returns where to go instead
     /// of the next (or previous) card, if somewhere else.
     var swiped: (Int, CardSwipe) -> Int? = { _, _ in nil }
+    /// FIT-453: told when a card moves sideways, so a button on the card can ignore the touch that swiped it.
+    var gate: SwipeGate?
     @ViewBuilder let card: (Int) -> Card
 
     @State private var drag = CGSize.zero
@@ -97,6 +99,7 @@ struct SwipeDeck<Card: View>: View {
                 guard !throwing else { return }
                 let t = value.translation
                 if axis == nil { axis = abs(t.width) > abs(t.height) ? .horizontal : .vertical }
+                if axis == .horizontal { gate?.moved() }
                 travel = axis == .horizontal ? CGSize(width: t.width, height: 0) : CGSize(width: 0, height: t.height)
                 drag = axis == .horizontal ? CGSize(width: resist(t.width, allowed: t.width < 0 ? index < count - 1 : index > 0), height: 0)
                     : CGSize(width: 0, height: pull(t.height))
@@ -172,6 +175,19 @@ struct SwipeDeck<Card: View>: View {
 }
 
 enum CardSwipe: Equatable { case next, back, up, down }
+
+/// FIT-453: the deck's drag runs alongside the card's buttons, and the card moves with the finger, so letting go at the
+/// end of a swipe lands on the same button it started on and taps it. A button on a card checks `swiping` first.
+@MainActor final class SwipeGate {
+    private var movedAt: Date?
+
+    func moved(at date: Date = .now) { movedAt = date }
+
+    /// True while a sideways drag is under way and just after it ends, when its touch-up would tap a button.
+    func swiping(at date: Date = .now) -> Bool {
+        movedAt.map { date.timeIntervalSince($0) < 0.4 } ?? false
+    }
+}
 
 enum CardThrow {
     /// Thrown off that edge, then on to the next card.
