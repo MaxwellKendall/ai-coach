@@ -193,7 +193,160 @@ final class RoleUITests: XCTestCase {
         shot(app, "first-launch-welcome")
     }
 
+    /// FIT-454–456: the first launch for a lifter on their own, end to end. Every question, the name, the strength check
+    /// with only the weakest lift readable, the plan, then the hard paywall with yearly picked; buying opens week 1.
+    /// No sign-in appears anywhere on the way, and the paywall has no way past it.
+    @MainActor
+    func testFirstLaunchQuizStrengthCheckAndHardPaywall() throws {
+        let session = try storeKit()
+        defer { _ = session }
+        let app = launch("new", ["-trialEligible", "YES", "-monetization", "hard"])
+        let start = app.buttons["welcome.own"]
+        XCTAssertTrue(start.waitForExistence(timeout: 30), "Welcome has no Start My Transformation")
+        Thread.sleep(forTimeInterval: 2)
+        shot(app, "start-hero")
+        start.tap()
+        answer(app, "Get stronger")
+        answer(app, "Male")
+        next(app)
+        next(app) // age
+        next(app) // height
+        let weight = app.textFields["start.weight"]
+        XCTAssertTrue(weight.waitForExistence(timeout: 5))
+        weight.typeText("180")
+        next(app)
+        answer(app, "3 days")
+        answer(app, "Average")
+        answer(app, "Moderately active")
+        answer(app, "Commercial gym")
+        next(app) // equipment
+        answer(app, "I’ve plateaued")
+        let name = app.textFields["start.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.typeText("Sam")
+        next(app)
+        XCTAssertTrue(app.staticTexts["Sam, let’s check your strength."].waitForExistence(timeout: 5), "The invite doesn't use the name")
+        app.buttons["start.check"].tap()
+        next(app) // three steps
+        next(app) // all four lifts
+        for (lift, load) in [("bench-press", "135"), ("back-squat", "275"), ("deadlift", "315"), ("standing-military-press", "115")] {
+            type(app, "start.\(lift).weight", load)
+            type(app, "start.\(lift).reps", "5")
+        }
+        shot(app, "start-lifts")
+        app.buttons["start.scores"].tap()
+        XCTAssertTrue(app.staticTexts["Analyzing Sam’s lifts…"].waitForExistence(timeout: 5), "No analysis screen")
+        // Results: the bench is the weakest, the only score readable; the other three are blurred.
+        let weakest = app.descendants(matching: .any)["start.weakest"]
+        XCTAssertTrue(weakest.waitForExistence(timeout: 10), "No results")
+        XCTAssertTrue(weakest.label.hasPrefix("Bench"), "Weakest was \(weakest.label)")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "start.blurred").count, 3)
+        shot(app, "start-results")
+        app.buttons["start.build"].tap()
+        let seePlan = app.buttons["start.seePlan"]
+        XCTAssertTrue(seePlan.waitForExistence(timeout: 10), "The plan isn't ready")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Sam, your'")).firstMatch.exists)
+        shot(app, "start-plan-ready")
+        seePlan.tap()
+        assertStartPaywall(app, name: "Sam")
+        shot(app, "start-paywall")
+        app.buttons["paywall.buy"].tap()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30), "Buying didn't open the app")
+        XCTAssertTrue(app.buttons["Check off as done"].firstMatch.waitForExistence(timeout: 15) || app.staticTexts["Today"].exists)
+        shot(app, "start-week-1")
+    }
+
+    /// Skipping the check still makes a plan, with no results screen, and ends on the same paywall. In freemium (the
+    /// server's switch) it has Not Now, which opens the free app on week 1.
+    @MainActor
+    func testFirstLaunchSkippingTheCheckStillReachesThePaywall() throws {
+        let session = try storeKit()
+        defer { _ = session }
+        let app = launch("new", ["-monetization", "freemium"])
+        let start = app.buttons["welcome.own"]
+        XCTAssertTrue(start.waitForExistence(timeout: 30))
+        Thread.sleep(forTimeInterval: 2)
+        start.tap()
+        answer(app, "Build muscle")
+        answer(app, "Prefer not to say")
+        next(app); next(app); next(app)
+        app.textFields["start.weight"].typeText("150")
+        next(app)
+        answer(app, "4 days")
+        answer(app, "Slim")
+        answer(app, "Very active")
+        answer(app, "Home gym")
+        next(app)
+        answer(app, "I don’t have a program")
+        app.textFields["start.name"].typeText("Alex")
+        next(app)
+        app.buttons["start.skip"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["start.weakest"].waitForExistence(timeout: 3), "Skipping showed results")
+        XCTAssertTrue(app.buttons["start.seePlan"].waitForExistence(timeout: 10), "Skipping didn't make a plan")
+        app.buttons["start.seePlan"].tap()
+        assertStartPaywall(app, name: "Alex", hard: false)
+        shot(app, "start-paywall-freemium")
+        app.buttons["paywall.notNow"].tap()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15), "Not Now didn't open the free app")
+    }
+
     // MARK: Helpers
+
+    /// A one-tap answer on the first launch's quiz; no sign-in is ever on screen.
+    @MainActor
+    private func answer(_ app: XCUIApplication, _ title: String) {
+        let button = app.buttons[title]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "No answer \(title)")
+        assertNoSignIn(app)
+        button.tap()
+    }
+
+    @MainActor
+    private func next(_ app: XCUIApplication) {
+        let button = app.buttons["start.continue"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "No Continue")
+        assertNoSignIn(app)
+        button.tap()
+    }
+
+    @MainActor
+    private func type(_ app: XCUIApplication, _ id: String, _ text: String) {
+        let field = app.textFields[id]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "No field \(id)")
+        // Below the keyboard or the button bar, a tap would land on what covers it.
+        for _ in 0..<3 where !field.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        field.tap()
+        field.typeText(text)
+    }
+
+    @MainActor
+    private func assertNoSignIn(_ app: XCUIApplication) {
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Sign in with' OR label CONTAINS[c] 'Continue with'")).firstMatch.exists,
+                       "Sign-in showed during onboarding")
+    }
+
+    /// FIT-456: the first launch's paywall: their name, yearly picked with a savings badge, the trial, both prices, the renewal
+    /// terms, Restore Purchases, Terms and Privacy, Coach Pro, and no close button or tab bar behind it.
+    @MainActor
+    private func assertStartPaywall(_ app: XCUIApplication, name: String, hard: Bool = true) {
+        let yearly = app.buttons["paywall.yearly"]
+        XCTAssertTrue(yearly.waitForExistence(timeout: 30), "The paywall's products didn't load")
+        XCTAssertEqual(app.staticTexts["paywall.headline"].label, "\(name), unlock your plan")
+        XCTAssertTrue(yearly.isSelected, "Yearly isn't picked")
+        XCTAssertTrue(yearly.label.contains("Save 44%"), "No savings badge: \(yearly.label)")
+        XCTAssertTrue(yearly.label.contains("$39.99/year"))
+        XCTAssertTrue(app.buttons["paywall.monthly"].label.contains("$5.99/month"))
+        let terms = app.staticTexts["paywall.terms.renewal"]
+        XCTAssertTrue(terms.label.localizedCaseInsensitiveContains("renews automatically"), terms.label)
+        XCTAssertTrue(app.buttons["paywall.restore"].exists, "No Restore Purchases")
+        XCTAssertTrue(app.buttons["paywall.terms"].exists || app.links["paywall.terms"].exists, "No Terms of Use link")
+        XCTAssertTrue(app.buttons["paywall.privacy"].exists || app.links["paywall.privacy"].exists, "No Privacy Policy link")
+        XCTAssertTrue(app.buttons["paywall.coachPro"].exists, "No Coach Pro")
+        XCTAssertFalse(app.buttons["paywall.close"].exists, "The paywall has a close button")
+        XCTAssertEqual(app.buttons["paywall.notNow"].exists, !hard, hard ? "The hard paywall can be skipped" : "Freemium has no Not Now")
+        XCTAssertFalse(app.tabBars.firstMatch.exists && app.tabBars.firstMatch.isHittable, "The app is reachable behind the paywall")
+        assertNoSignIn(app)
+    }
 
     /// The App Store's products from AICoach.storekit, for as long as the returned session lives.
     private func storeKit() throws -> SKTestSession {

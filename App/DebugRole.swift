@@ -8,7 +8,7 @@ import Synchronization
 /// RoleUITests and screenshots: a new in-memory store, no defaults from an earlier run, and signed out, so nothing
 /// reaches the server. Each role is the debug switches that already exist: coach is `-sampleClients`, client is
 /// `-coach Sam` with a session of Sam's today, solo is a ready program started today, soloPro is solo with `-pro`.
-/// `-noProgram YES` leaves solo without a program. Other launch arguments still win, so `-role client -sampleClients
+/// `-noProgram YES` leaves solo without a program. new is a first launch, on Welcome. Other launch arguments still win, so `-role client -sampleClients
 /// YES` is a client with a sample roster.
 enum DebugRole {
     static var uiTesting: Bool { UserDefaults.standard.bool(forKey: "uiTesting") }
@@ -34,6 +34,8 @@ enum DebugRole {
         case "coach": defaults["sampleClients"] = true
         case "client": defaults["coach"] = "Sam"
         case "soloPro": defaults["pro"] = true
+        // FIT-454: a first launch, on Welcome, with nothing set up.
+        case "new": defaults["welcomed"] = false
         default: break
         }
         // The registration domain, under the launch arguments.
