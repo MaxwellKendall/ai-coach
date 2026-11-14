@@ -723,12 +723,12 @@
         "coach"
       ],
       "from": [
+        "StartPaywall",
         "YouScreen"
       ],
       "path": [
         "RootView",
-        "tab.Clients",
-        "YouScreen",
+        "StartPaywall",
         "PaywallView.coach"
       ]
     },
@@ -823,7 +823,8 @@
       ],
       "path": [
         "RootView",
-        "WelcomeView",
+        "tab.Today",
+        "ProgramPicker",
         "ProgramChoice"
       ]
     },
@@ -861,7 +862,7 @@
       ],
       "path": [
         "RootView",
-        "WelcomeView",
+        "tab.Today",
         "ProgramPicker"
       ]
     },
@@ -1008,7 +1009,8 @@
       ],
       "path": [
         "RootView",
-        "WelcomeView",
+        "tab.Today",
+        "ProgramPicker",
         "RecentSetStep"
       ]
     },
@@ -1234,6 +1236,7 @@
         "PaywallView",
         "RedeemGiftView",
         "RootView",
+        "WelcomeView",
         "YouScreen"
       ],
       "path": [
@@ -1275,6 +1278,24 @@
         "RootView",
         "tab.Today",
         "SpokenCheckSheet"
+      ]
+    },
+    {
+      "id": "StartPaywall",
+      "title": "Start Paywall",
+      "kind": "cover",
+      "file": "Features/Pro/StartPaywall.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "RootView"
+      ],
+      "path": [
+        "RootView",
+        "StartPaywall"
       ]
     },
     {

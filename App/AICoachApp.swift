@@ -63,6 +63,8 @@ struct AICoachApp: App {
                 .environment(pro)
                 .task { await account.refresh() }
                 .task { await pro.refresh() }
+                // FIT-454: hard paywall or freemium, as the server says.
+                .task { await Monetization.refresh() }
                 // FIT-126: a signed-in account's program and logs sync; signed out, nothing leaves the phone.
                 .onChange(of: account.user?.uid, initial: true) { _, uid in
                     if let uid {

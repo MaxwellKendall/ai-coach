@@ -44,6 +44,8 @@ struct WelcomeView: View {
     /// FIT-296: the door picked on the first screen; an invite link skips it.
     @State private var door: Door?
     enum Door { case athlete, coach }
+    /// FIT-454: Sign In, for an account that already has a program.
+    @State private var restoring = false
 
     var body: some View {
         Group {
@@ -52,8 +54,8 @@ struct WelcomeView: View {
             } else if intake {
                 IntakeView(onDone: onDone)
             } else if picking {
-                // Train on my own goes forward into the picker, as a push would.
-                ProgramPicker(onDone: onDone).motionTransition(.push(from: .trailing))
+                // FIT-454: Start My Transformation goes forward into the quiz, as a push would.
+                StartFlow(onDone: onDone).motionTransition(.push(from: .trailing))
             } else {
                 welcome.motionTransition(.push(from: .trailing))
             }
@@ -137,42 +139,80 @@ struct WelcomeView: View {
         .padding(.bottom, 28)
     }
 
-    /// The promise, its proof, the two doors, each by its outcome, and the way in for a coach's client.
+    /// FIT-454 (spec screen 1): the app in a phone, and Start My Transformation. A coach, a coach's client and an
+    /// account that already exists each have a quiet way in under it.
     private var doors: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Hit your number by the date you set.").font(.display(34))
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 0) {
+            Text("barbrabell").font(.display(22, weight: .heavy)).tracking(-0.3)
                 .modifier(Rise(shown: entered, step: 0))
-            Text("A free plan from your own lifts, that moves when life does.").font(.body).foregroundStyle(Color.inkMuted)
-                .padding(.top, 10)
-                .modifier(Rise(shown: entered, step: 1))
-            exampleCard.padding(.top, 22).modifier(Rise(shown: entered, step: 2))
-            VStack(spacing: 10) {
-                doorButton("Train on my own", "Your number, by your date", primary: true, id: "welcome.own") {
-                    if profiles.first?.programStart == nil { withAnimation(.settle) { picking = true } } else { onDone() }
+            phone.padding(.top, 18).modifier(Rise(shown: entered, step: 1))
+            Button {
+                withAnimation(.settle) { if profiles.first?.programStart == nil { picking = true } else { onDone() } }
+            } label: {
+                Text("Start My Transformation").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.primary)
+            .accessibilityIdentifier("welcome.own")
+            .padding(.top, 24)
+            .modifier(Rise(shown: entered, step: 2))
+            HStack(spacing: 18) {
+                // FIT-382 (author): joining a coach is the quiet way in; most clients come by the coach's invite link,
+                // which skips this screen.
+                Button { withAnimation(.settle) { door = .athlete } } label: {
+                    Text("Have a coach?")
+                        .matchedGeometryEffect(id: travel(.athlete, "door"), in: titles, properties: .position, anchor: .topLeading)
                 }
-                .modifier(Rise(shown: entered, step: 3))
-                doorButton("I’m a coach", "More clients, not more hours", opens: .coach, id: "welcome.coach") { door = .coach }
-                    .modifier(Rise(shown: entered, step: 4))
+                .accessibilityIdentifier("welcome.join")
+                Button { withAnimation(.settle) { door = .coach } } label: {
+                    Text("I’m a coach")
+                        .matchedGeometryEffect(id: travel(.coach, "door"), in: titles, properties: .position, anchor: .topLeading)
+                }
+                .accessibilityIdentifier("welcome.coach")
+                if account.isAvailable, account.user == nil {
+                    Button("Sign In") { restoring = true }.accessibilityIdentifier("welcome.signIn")
+                }
             }
-            .padding(.top, 28)
-            // FIT-382 (author): joining a coach is the quiet way in, a link under the doors; most clients come by the
-            // coach's invite link, which skips this screen.
-            Button { withAnimation(.settle) { door = .athlete } } label: {
-                Text("Have a coach? \(Text("Join them").foregroundStyle(Plate.current.mark).fontWeight(.semibold))")
-                    .font(.subheadline).foregroundStyle(Color.inkMuted)
-                    .matchedGeometryEffect(id: travel(.athlete, "door"), in: titles, properties: .position, anchor: .topLeading)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(DoorStyle())
-            .accessibilityIdentifier("welcome.join")
-            .padding(.top, 12)
-            .modifier(Rise(shown: entered, step: 5))
+            .font(.subheadline.weight(.semibold))
+            .tint(Color.inkMuted)
+            .frame(minHeight: 44)
+            .padding(.top, 8)
+            .modifier(Rise(shown: entered, step: 3))
         }
+        .frame(maxWidth: .infinity)
         .onAppear { if revealed { entered = true } }
         .onChange(of: revealed) { _, now in if now { entered = true } }
         .task(id: entered) { await cycleExamples() }
+        .sheet(isPresented: $restoring) { SignInSheet(reason: "Sign in to pick up your program.").presentationDetents([.medium]) }
+        // FIT-182: an account's first sync brings a program made elsewhere; with one, there's nothing to set up. Without
+        // one, Start My Transformation is still the way in.
+        .onChange(of: SyncEngine.shared.lastSynced) { _, synced in
+            guard synced != nil, account.user != nil, profiles.first?.programStart != nil else { return }
+            onDone()
+        }
+    }
+
+    /// The app inside a phone: week one's days, and the promise's line rising under the lift.
+    private var phone: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("This week").font(.headline)
+            ForEach(Array(["Mon · Full Body A", "Wed · Full Body B", "Fri · Full Body A"].enumerated()), id: \.offset) { index, day in
+                HStack {
+                    Image(systemName: index == 0 ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(index == 0 ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.inkFaint))
+                    Text(day).font(.subheadline.weight(.medium))
+                    Spacer()
+                }
+            }
+            exampleCard.padding(.top, 4)
+        }
+        .padding(18)
+        .padding(.top, 14)
+        .frame(maxWidth: 290)
+        .background(Color.canvas, in: .rect(cornerRadius: 40))
+        .overlay { RoundedRectangle(cornerRadius: 40).strokeBorder(Color.ink.opacity(0.85), lineWidth: 6) }
+        .overlay(alignment: .top) { Capsule().fill(Color.ink.opacity(0.85)).frame(width: 74, height: 20).padding(.top, 10) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("The app, showing this week's sessions and a lift's goal")
     }
 
     /// The id a door's title and its screen's title share, so one travels into the other; with Reduce Motion on, each
@@ -183,10 +223,9 @@ struct WelcomeView: View {
     /// moves on to another lift every few seconds, and holds still with Reduce Motion or VoiceOver on.
     private var exampleCard: some View {
         let lift = Self.examples[example]
-        return HStack(alignment: .firstTextBaseline) {
+        return VStack(alignment: .leading, spacing: 4) {
             Text(lift.name).font(.subheadline).foregroundStyle(Color.inkMuted)
                 .contentTransition(.opacity)
-            Spacer()
             HStack(spacing: 0) {
                 Text("\(lift.from) → ").contentTransition(.numericText(value: Double(lift.from)))
                 Text("\(counted ? lift.to : lift.from)").foregroundStyle(Plate.current.mark)
@@ -194,13 +233,15 @@ struct WelcomeView: View {
                 Text(" lb").foregroundStyle(Plate.current.mark)
             }
             .font(.display(24, weight: .semibold, relativeTo: .title2)).monospacedDigit()
+            .lineLimit(1).minimumScaleFactor(0.7)
             .overlay(alignment: .bottomTrailing) {
                 RisingLine().trim(from: 0, to: counted ? 1 : 0)
                     .stroke(Plate.current.mark, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .frame(width: 56, height: 10).offset(y: 14)
             }
         }
-        .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 22)
+        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.fill, in: .rect(cornerRadius: 18))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("For example, \(lift.name) from \(lift.from) to \(lift.to) pounds")
@@ -228,29 +269,6 @@ struct WelcomeView: View {
     /// False once the screen's gone (the task cancelled).
     private func pause(_ duration: Duration) async -> Bool {
         do { try await Task.sleep(for: duration); return true } catch { return false }
-    }
-
-    /// `opens` names the screen behind the door, whose title this one's travels into.
-    private func doorButton(_ title: String, _ detail: String, primary: Bool = false, opens: Door? = nil,
-                            id: String? = nil, action: @escaping () -> Void) -> some View {
-        Button { withAnimation(.settle, action) } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                        .matchedGeometryEffect(id: opens.map { travel($0, "door") } ?? title, in: titles, properties: .position, anchor: .topLeading)
-                    Text(detail).font(.subheadline).opacity(primary ? 0.85 : 1)
-                        .foregroundStyle(primary ? AnyShapeStyle(Plate.current.onAccent) : AnyShapeStyle(Color.inkMuted))
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.bold)).opacity(0.7)
-            }
-            .foregroundStyle(primary ? AnyShapeStyle(Plate.current.onAccent) : AnyShapeStyle(Color.ink))
-            .padding(.horizontal, 18).padding(.vertical, 12).frame(maxWidth: .infinity, minHeight: 66)
-            .background(primary ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.fill), in: .rect(cornerRadius: 18))
-            .contentShape(.rect)
-        }
-        .buttonStyle(DoorStyle())
-        .accessibilityIdentifier(id ?? title)
     }
 
     /// FIT-296's coach door: sign in, then coach mode (FIT-298); the dashboard keeps import, programs and billing.
@@ -443,13 +461,6 @@ private struct Rise: ViewModifier {
             .opacity(shown ? 1 : 0)
             .offset(y: shown || reduceMotion ? 0 : 14)
             .animation(.settle.staggered(step * 2), value: shown)
-    }
-}
-
-/// A door gives a little under the finger.
-private struct DoorStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.modifier(Pressed(pressed: configuration.isPressed))
     }
 }
 

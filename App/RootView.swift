@@ -25,6 +25,8 @@ struct RootView: View {
     /// FIT-201: the pilot's first launch, sign in and join your coach, in place of onboarding.
     @State private var welcoming = false
     @AppStorage("welcomed") private var welcomed = false
+    /// FIT-456: the first launch's plan is made and Lifter Pro is owed; existing installs never have it (they stay free).
+    @AppStorage(StartFlow.needsProKey) private var needsPro = false
     /// FIT-413: the launch splash, once per cold launch; resuming from the background keeps this view and its state.
     @State private var splash = true
     /// The first launch's splash plays on the Welcome cover, over this one held at its first frame.
@@ -340,6 +342,11 @@ struct RootView: View {
             .interactiveDismissDisabled()
             .tint(Self.accent)
         }
+        .fullScreenCover(isPresented: Binding(get: { paywalled }, set: { _ in })) {
+            StartPaywall(name: UserDefaults.standard.string(forKey: StartFlow.nameKey) ?? "") {}
+                .interactiveDismissDisabled()
+                .tint(Self.accent)
+        }
         .fullScreenCover(item: $onboarding) { profile in
             // FIT-437: never a paywall after onboarding; Lifter Pro is offered only where AI planning is (You).
             OnboardingView(profile: profile) { _ in onboarding = nil }
@@ -375,6 +382,12 @@ struct RootView: View {
                 }
             }
         }
+    }
+
+    /// FIT-456: in hard mode (switched to freemium since, it lets them in), the paywall stays over the app until Lifter Pro or Coach Pro, a coach of their own, or coach mode.
+    /// Only once the App Store has answered, so a subscriber never sees it flash.
+    private var paywalled: Bool {
+        needsPro && Monetization.current == .hard && pro.checked && !welcoming && !pro.lifterPro && !pro.coachPro && pro.coaches.isEmpty && !mode.coach
     }
 
     /// FIT-201: the pilot's first launch opens on Welcome, until there's a program or it's been through once.
