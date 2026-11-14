@@ -22,6 +22,8 @@ import { ensureSample, isSample } from "./sample.ts";
 import { fingerprint } from "./programStats.ts";
 import { byNeed, triage, type Comment, type Triage } from "../../shared/triage.ts";
 import { TRIAL_DAYS } from "../../shared/plans.ts";
+import { hardFor, type Monetization } from "../../shared/monetization.ts";
+import { readMonetization } from "./monetization.ts";
 import { checkProgramDay, deloadEvery, isLight, programOf, programWeekOf, sundayOf, title, travelWeeks, weekCount, weekIndex, weeklyTarget, weekStart, why } from "./program.ts";
 
 /**
@@ -65,6 +67,10 @@ export interface Store {
   access(uid: string, now: Date): Promise<Access>;
   /** FIT-327: whether lifter Pro is on sale (Stripe's keys and both prices exist); nothing is held back until it is. */
   onSale(): Promise<boolean>;
+  /** FIT-454: the monetization switch; freemium when a store doesn't say. */
+  monetization?(): Promise<Monetization>;
+  /** FIT-454: when the account was made (PROFILE's createdAt); undefined when it doesn't say, which counts as before. */
+  joined?(uid: string): Promise<string | undefined>;
 }
 
 export type ShareKind = "win" | "recap" | "program" | "session";
@@ -148,6 +154,11 @@ export const dynamoStore: Store = {
     return { trialStart: trial.Attributes!.startedAt, pro: await dynamoStore.fullConnector(uid, now) };
   },
   onSale: () => onSale("pro"),
+  monetization: readMonetization,
+  async joined(uid) {
+    const profile = (await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `USER#${uid}`, SK: "PROFILE" } }))).Item;
+    return typeof profile?.createdAt === "string" ? profile.createdAt : undefined;
+  },
   async unshare(uid, id) {
     const { Item } = await db.send(new GetCommand({ TableName: TABLE(), Key: { PK: `SHARE#${id}`, SK: "META" } }));
     if (!Item || Item.uid !== uid) return false;
@@ -945,6 +956,24 @@ export function trialNote(access: Access, now: Date): string | undefined {
     : `Trial over: ${planning} need Barbrabell Pro; logging, progress and goals stay free. How Pro works: ${ORIGIN}/pro.`;
 }
 
+/** FIT-454: what stays open in hard mode: reading their context, and a coach's roster and invites. */
+export const HARD_OPEN_TOOLS = new Set(["get_context", "list_clients", "roster_review", "invite_client"]);
+
+/**
+ * FIT-454: in hard mode, an account made after it was switched on needs Pro for their own training, as the app
+ * does; a coach's client, a coach with clients, and anyone who was here before stay as they were.
+ */
+async function hardPaywall(tool: string, account: Account, store: Store, now: Date) {
+  const monetization = (await store.monetization?.()) ?? { strategy: "freemium", since: null };
+  if (monetization.strategy !== "hard") return;
+  const joined = await store.joined?.(account.uid);
+  if (!joined || !hardFor(monetization, joined) || (await store.fullConnector(account.uid, now))) return;
+  if ((await store.coached(account.uid)) || (await store.clients(account.uid)).some((c) => !isSample(c.uid))) return;
+  throw new Error(`${tool} needs Barbrabell Pro: this account doesn't have it. Pro plans, logs and reviews their training here and in the iPhone app. `
+    + `${signedInLine(account)}. If they started Pro with another sign-in, reconnect with that one, or link the two on the dashboard's Account page (${ORIGIN}/app/account). `
+    + `How Pro works: ${ORIGIN}/pro. Once it's on, this works on their next request; there's nothing to reconnect.`);
+}
+
 function lifterPaywall(tool: string, account: Account) {
   return `${tool} is part of Barbrabell Pro, and this account's ${TRIAL_DAYS}-day trial is over. Pro lets ${agentName(account)} plan and change their training and review their week. `
     + `Free here: logging, reading their plan and progress, goals, and apply and undo. The iPhone app stays free. ${signedInLine(account)}. If they started Pro with another sign-in, reconnect with that one, or link the two on the dashboard's Account page (${ORIGIN}/app/account). `
@@ -1014,6 +1043,7 @@ export async function callTool(name: string, args: Args, account: Account, store
     const access = await store.access(account.uid, now);
     if (!access.pro && trialDaysLeft(access, now) <= 0 && (await store.onSale())) throw new Error(lifterPaywall(name, account));
   }
+  if (!client && !HARD_OPEN_TOOLS.has(name)) await hardPaywall(name, account, store, now);
   // Whose data this call is about. A coach's changes reach the client's phone at its next sync, as the dashboard's do.
   const uid = client?.uid ?? account.uid;
   useAccountExercises(await store.units(uid)); // FIT-173: their own exercises, beside the catalog

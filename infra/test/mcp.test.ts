@@ -1288,3 +1288,38 @@ describe("FIT-327: lifter Pro", () => {
     expect(trialNote({ ...access, pro: true }, later)).toBeUndefined();
   });
 });
+
+describe("FIT-454: the monetization switch", () => {
+  const lifter = { uid: "lee", agent: "claude", tz } as Account;
+  const since = "2026-10-10T00:00:00.000Z";
+  const switchedTo = (strategy: "hard" | "freemium", joined: string | undefined) =>
+    Object.assign(memory({}, { lee: {} }), {
+      monetization: async () => ({ strategy, since: strategy === "hard" ? since : null }),
+      joined: async () => joined,
+    });
+
+  it("in hard mode, an account made after the switch needs Pro for its own training, but can read its context", async () => {
+    const store = switchedTo("hard", "2026-10-12T00:00:00.000Z");
+    const refused = await callTool("get_progress", {}, lifter, store, now).catch((e) => (e as Error).message);
+    expect(refused).toContain("needs Barbrabell Pro");
+    expect(refused).toContain("/pro");
+    expect(refused).not.toMatch(/\$|checkout/i);
+    await expect(callTool("log_daily", {}, lifter, store, now)).rejects.toThrow("needs Barbrabell Pro");
+    await expect(callTool("get_context", {}, lifter, store, now)).resolves.toBeTypeOf("string");
+  });
+
+  it("in hard mode, accounts from before, with Pro, or with a coach stay as they were", async () => {
+    await expect(callTool("get_progress", {}, lifter, switchedTo("hard", "2026-10-01T00:00:00.000Z"), now)).resolves.toBeTypeOf("string");
+    await expect(callTool("get_progress", {}, lifter, switchedTo("hard", undefined), now)).resolves.toBeTypeOf("string");
+    const paid = switchedTo("hard", "2026-10-12T00:00:00.000Z");
+    paid.paying.add("lee");
+    await expect(callTool("get_progress", {}, lifter, paid, now)).resolves.toBeTypeOf("string");
+    const coached = switchedTo("hard", "2026-10-12T00:00:00.000Z");
+    coached.links.push({ coach: "coach", client: "lee", name: "Lee" });
+    await expect(callTool("get_progress", {}, lifter, coached, now)).resolves.toBeTypeOf("string");
+  });
+
+  it("in freemium, a new account's own training is free, as before", async () => {
+    await expect(callTool("get_progress", {}, lifter, switchedTo("freemium", "2026-10-12T00:00:00.000Z"), now)).resolves.toBeTypeOf("string");
+  });
+});
