@@ -80,6 +80,7 @@ A UI change also gets a simulator screenshot. A change to model prompts or `Prog
 - Never hand-edit `AICoach.xcodeproj`; change `project.yml` and run `xcodegen generate`.
 - Evals are not in the `AICoach` scheme and overwrite tracked `Tests/Evals/*.md`; cloud-model evals spend API credit.
 - Foundation Models in the simulator works only if the host Mac has Apple Intelligence; otherwise the app hides voice entry and on-device evals fail.
+- Use the AWS CLI with `--profile aicoach-dev` (or `AWS_PROFILE=aicoach-dev`) for all AWS work here, not the aws-mcp server: aws-mcp is signed in to a different account (304945936761) and reports `AICoach-prod` as missing.
 - Dev and prod share one AWS account; prod's table and user pool are `RETAIN` with deletion protection. Budget alerts cover the whole account.
 - `cdk deploy` without a fresh `web` build ships a stale dashboard.
 - `review-demo.sh` uninstalls the app on its own "Review Demo" simulator each take.
