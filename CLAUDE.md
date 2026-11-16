@@ -50,11 +50,12 @@ Stack `AICoach-prod` (CDK, profile `aicoach-dev`, us-east-1): Cognito, one Dynam
 ```bash
 npx tsc --noEmit -p . && npx vitest run
 npm --prefix ../web run build                      # always: the stack uploads web/dist
-npx cdk diff --profile aicoach-dev -c stage=prod    # stop if the table or user pool is replaced/removed
+npx cdk diff --profile aicoach-dev -c stage=prod    # see stop rules below; "no differences" = nothing to deploy
 npx cdk deploy --profile aicoach-dev -c stage=prod --require-approval never   # 2–3 min, ends "✅  AICoach-prod"
 AWS_PROFILE=aicoach-dev npm run outputs prod        # commit Resources/amplify_outputs.prod.json if it changed
 ```
-Post-deploy: `/ /docs /claude /privacy /support /.well-known/oauth-authorization-server /app/` on https://barbrabell.com return 200, `POST /mcp` returns 401, and the stack's `LastUpdatedTime` is after the deploy started. Rollback: check out the last good commit and repeat build/diff/deploy. Never restore data over the live table (PITR 35 days; restore to a new table, see `infra/README.md`).
+Stop (don't deploy) if the diff replaces or removes the DynamoDB table or the Cognito user pool (any "requires replacement" on either), or removes a user pool client, an identity provider, the CloudFront distribution or the certificate. Deploy only a clean, green `main`.
+Post-deploy: `/ /docs /claude /privacy /support /.well-known/oauth-authorization-server /app/` on https://barbrabell.com return 200, `POST /mcp` returns 401, and the stack's `LastUpdatedTime` is after the deploy started. Also hit whatever page or endpoint the deployed commits changed. Rollback: check out the last good commit and repeat build/diff/deploy. Never restore data over the live table (PITR 35 days; restore to a new table, see `infra/README.md`).
 
 ## Release (iOS)
 Version is `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml` (now 1.0 / 9). Release builds use `amplify_outputs.prod.json`.
@@ -62,8 +63,13 @@ The release tooling (`npm run release`, `scripts/release.mjs`, `scripts/asc.mjs`
 - `npm run release -- --dry-run`: local steps + read-only App Store Connect calls.
 - `npm run release`: bumps `CURRENT_PROJECT_VERSION` and commits, archives and uploads with `xcodebuild -exportArchive` (API-key auth, polls processing), refreshes the prod review account, records the demo video, sets subscriptions and listing from `appstore/`, then stops.
 - `npm run release -- submit`: creates the review submission. Submission is Maxwell's.
+- `npm run release -- products`: products-only write (subscriptions), only when Maxwell has said to apply the subscription plan.
+- Stop if release reports the Paid Apps agreement inactive (the Account Holder signs it under Business; no API). Before submit: every subscription ready, paywall screenshots present, and the review video URL below returns 200.
 Review demo video on `main`: `scripts/review-demo.sh` → `build/review-demo.mp4` (a "Review Demo" simulator plays `Tests/UITests/ReviewDemo.swift` on `scripts/review-demo-units.mjs` data; no sign-in or backend; needs ffmpeg).
 `https://barbrabell.com/review/demo.mp4` serves only after the `/review/*` behavior is deployed and the file is uploaded to the cards bucket by hand.
+
+## Land
+Fast-forward `main` from a worktree; never edit the main checkout. Commit subjects start with the Linear key (`TKL-N: ...`; older history uses `FIT-N`). Local `main` and `origin/main` have diverged (3 ahead / 43 behind on 2026-11-16): don't push until that is reconciled.
 
 ## Verify checks
 A change lands only with all of these green: the iOS unit tests (`AICoach` scheme), `infra` tsc + vitest, `web` vitest + `npm --prefix web run build`.
