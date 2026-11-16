@@ -3,14 +3,14 @@
 ## What it is
 Strength coaching. Coaches are the customers: they program clients from the web dashboard (barbrabell.com/app) or from
 Claude through the MCP connector (`https://barbrabell.com/mcp`); clients follow and log in a free iOS app.
-Coaching is free with any number of clients; Pro is $19.99/mo, sold on the web (Stripe), and adds planning from Claude.
+Coaching is free with any number of clients; Pro is $19.99/mo, sold in the app (StoreKit/App Store) and on the web (Stripe), and adds planning from Claude (FIT-437 reversed the earlier web-only rule).
 Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/project/barbrabell-a83b6b0b9285
 
 ## Layout
 - `App/`: `@main`, root views, `Theme.swift`, `Info.plist`. `Widgets/`: workout Live Activity.
 - `Core/`: Model (SwiftData), Generators, Progress (pure Swift, no UI/persistence imports), AI (`AIModel.swift`: every LLM call), Import.
 - `Features/`: SwiftUI screens. `Resources/`: assets, `Seed/` JSON (exercises, recipes, photos), `amplify_outputs.{dev,prod}.json`.
-- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemo.swift`), `Fixtures`.
+- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemoUITests.swift` + `DemoScreens.swift` for the review demo, `PaywallScreenshotUITests.swift`, `DemoModeUITests.swift`, `AIWeekScreenshotUITests.swift`), `Fixtures`.
 - `infra/`: AWS CDK (TypeScript). `lib/stack.ts` is the whole stack; `lambda/` (MCP, sync, coach, Stripe, AI proxy, share pages…), `resolvers/`, `graphql/`, `scripts/`, `test/` (vitest). Background: `infra/README.md`.
 - `web/`: coach dashboard, Vite + React + TS, served at `/app`. `shared/`: TS shared by web and infra.
 - `plugin/`: the Claude plugin (skills + connector). `directories/`: ChatGPT, Claude, MCP-registry listing builds.
@@ -58,18 +58,18 @@ Stop (don't deploy) if the diff replaces or removes the DynamoDB table or the Co
 Post-deploy: `/ /docs /claude /privacy /support /.well-known/oauth-authorization-server /app/` on https://barbrabell.com return 200, `POST /mcp` returns 401, and the stack's `LastUpdatedTime` is after the deploy started. Also hit whatever page or endpoint the deployed commits changed. Rollback: check out the last good commit and repeat build/diff/deploy. Never restore data over the live table (PITR 35 days; restore to a new table, see `infra/README.md`).
 
 ## Release (iOS)
-Version is `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml` (now 1.0 / 9). Release builds use `amplify_outputs.prod.json`.
-The release tooling (`npm run release`, `scripts/release.mjs`, `scripts/asc.mjs`, `RELEASE.md`) exists only on branch `agent/appstore-automation`, not on `main` (unverified):
+Version is `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml` (now 1.0 / 13). Release builds use `amplify_outputs.prod.json`.
+The release tooling is on `main`: `npm run release` (`scripts/release.mjs`), documented step by step in `RELEASE.md`; `npm run test:release` tests it:
 - `npm run release -- --dry-run`: local steps + read-only App Store Connect calls.
 - `npm run release`: bumps `CURRENT_PROJECT_VERSION` and commits, archives and uploads with `xcodebuild -exportArchive` (API-key auth, polls processing), refreshes the prod review account, records the demo video, sets subscriptions and listing from `appstore/`, then stops.
 - `npm run release -- submit`: creates the review submission. Submission is Maxwell's.
 - `npm run release -- products`: products-only write (subscriptions), only when Maxwell has said to apply the subscription plan.
 - Stop if release reports the Paid Apps agreement inactive (the Account Holder signs it under Business; no API). Before submit: every subscription ready, paywall screenshots present, and the review video URL below returns 200.
-Review demo video on `main`: `scripts/review-demo.sh` → `build/review-demo.mp4` (a "Review Demo" simulator plays `Tests/UITests/ReviewDemo.swift` on `scripts/review-demo-units.mjs` data; no sign-in or backend; needs ffmpeg).
+Review demo video: `npm run demo-video` (`scripts/demo-video.mjs`): an XCUITest (`ReviewDemoUITests`) signs in as the demo client and then the demo coach; `simctl io recordVideo` + ffmpeg write `build/review/demo.mp4`, then it reports which screens of `appstore/review/screens.json` the video never showed (`-- --require-coverage` fails on gaps). `npm run screens` regenerates that inventory.
 `https://barbrabell.com/review/demo.mp4` serves only after the `/review/*` behavior is deployed and the file is uploaded to the cards bucket by hand.
 
 ## Land
-Fast-forward `main` from a worktree; never edit the main checkout. Commit subjects start with the Linear key (`TKL-N: ...`; older history uses `FIT-N`). Local `main` and `origin/main` have diverged (3 ahead / 43 behind on 2026-11-16): don't push until that is reconciled.
+Through a pull request to `origin/main`, squash-merged (the history is `TKL-N: … (#PR)`; older commits use `FIT-N`). Branch from `origin/main` in a worktree, never the main checkout; push the branch, `gh pr create`, merge with `gh pr merge --squash`. Keep local `main` equal to `origin/main` (`git pull --ff-only`); never commit on local `main` directly.
 
 ## Verify checks
 A change lands only with all of these green: the iOS unit tests (`AICoach` scheme), `infra` tsc + vitest, `web` vitest + `npm --prefix web run build`.
@@ -89,6 +89,6 @@ A UI change also gets a simulator screenshot. A change to model prompts or `Prog
 - Use the AWS CLI with `--profile aicoach-dev` (or `AWS_PROFILE=aicoach-dev`) for all AWS work here, not the aws-mcp server: aws-mcp is signed in to a different account (304945936761) and reports `AICoach-prod` as missing.
 - Dev and prod share one AWS account; prod's table and user pool are `RETAIN` with deletion protection. Budget alerts cover the whole account.
 - `cdk deploy` without a fresh `web` build ships a stale dashboard.
-- `review-demo.sh` uninstalls the app on its own "Review Demo" simulator each take.
+- `npm run demo-video` resets the iPhone 17 Pro simulator's keychain and uninstalls the app so it records from a signed-out first launch; don't run it while using that simulator.
 - Importer data quirks (from `~/dev/fitness-planner`, read-only): `load` may be a string (`"BW"`, `"95 lb"`, `"24 kg/hand"`), `reps` a duration (`"50s"`), some logs `"reconstructed": true`.
 - Units follow the user's setting; the author uses lb.
