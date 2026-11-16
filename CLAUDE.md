@@ -1,158 +1,94 @@
-# AI Coach App: Agent Operating Manual
+# barbrabell (ai-coach-app): facts
 
-An iOS app that coaches **training and nutrition** with one generic loop, using **only on-device LLMs**.
-The goal is a shippable, revenue-generating product. Build fast, keep it small.
+## What it is
+Strength coaching. Coaches are the customers: they program clients from the web dashboard (barbrabell.com/app) or from
+Claude through the MCP connector (`https://barbrabell.com/mcp`); clients follow and log in a free iOS app.
+Coaching is free with any number of clients; Pro is $19.99/mo, sold in the app (StoreKit/App Store) and on the web (Stripe), and adds planning from Claude (FIT-437 reversed the earlier web-only rule).
+Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/project/barbrabell-a83b6b0b9285
 
----
+## Layout
+- `App/`: `@main`, root views, `Theme.swift`, `Info.plist`. `Widgets/`: workout Live Activity.
+- `Core/`: Model (SwiftData), Generators, Progress (pure Swift, no UI/persistence imports), AI (`AIModel.swift`: every LLM call), Import.
+- `Features/`: SwiftUI screens. `Resources/`: assets, `Seed/` JSON (exercises, recipes, photos), `amplify_outputs.{dev,prod}.json`.
+- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemoUITests.swift` + `DemoScreens.swift` for the review demo, `PaywallScreenshotUITests.swift`, `DemoModeUITests.swift`, `AIWeekScreenshotUITests.swift`), `Fixtures`.
+- `infra/`: AWS CDK (TypeScript). `lib/stack.ts` is the whole stack; `lambda/` (MCP, sync, coach, Stripe, AI proxy, share pages…), `resolvers/`, `graphql/`, `scripts/`, `test/` (vitest). Background: `infra/README.md`.
+- `web/`: coach dashboard, Vite + React + TS, served at `/app`. `shared/`: TS shared by web and infra.
+- `plugin/`: the Claude plugin (skills + connector). `directories/`: ChatGPT, Claude, MCP-registry listing builds.
+- `appstore/`: listing screenshots and headers. `scripts/`: eval runners and the review demo video.
+- `project.yml`: XcodeGen spec (the `.xcodeproj` is generated and gitignored). `AICoach.storekit`: local StoreKit config.
 
-## 1. Linear is the source of truth
+## Setup
+- Xcode 27 (iOS 26.0 target, Swift 6 strict concurrency), XcodeGen at `/opt/homebrew/bin/xcodegen`, simulator "iPhone 17 Pro".
+- One SwiftPM dependency: amplify-swift (Cognito + AppSync). Otherwise Apple frameworks only.
+- Node + npm; `npm install` in `infra/` and `web/` (both have lockfiles). ffmpeg for the review video.
+- AWS profile `aicoach-dev` (account 397614038040, us-east-1) for deploys and the AWS scripts.
+- Bundle id `com.maxwellkendall.aicoach`, team `7GZKY29XJH`, automatic signing.
 
-All scope, decisions and status live in Linear. **Read Linear before building anything.**
+## Test
+| Suite | Command (from repo root) | Runtime |
+|---|---|---|
+| iOS unit | `xcodegen generate && xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` | ~4.5 min cold (tests 43 s) |
+| infra + MCP + Lambdas | `cd infra && npx tsc --noEmit -p . && npx vitest run` | ~45 s |
+| dashboard | `npm --prefix web test` (vitest); type check + build: `npm --prefix web run build` | ~1 s each |
+| spoken-edit eval | `scripts/eval.sh [runs=3] [filter]` → `Tests/Evals/results.md` | ~4 min at 1 run |
+| spoken-log eval | `scripts/log-eval.sh [runs=3] [filter]` → `Tests/Evals/log-results.md` | ~1.5 min at 1 run |
+| program eval | `scripts/program-eval.sh [model=on-device] [weeks=12] [filter]` → `Tests/Evals/program-results-<model>.md` | ~4.5 min with weeks=0; longer with probes |
+| week eval | `scripts/week-eval.sh [designer=claude-haiku-5-5] [judge=gpt-6-astra]` → `Tests/Evals/week-results-<designer>.md` | ~3 min, ~$0.16 of API credit |
 
-- Workspace team: **Fitness Planner** (key `FIT`)
-- Project: **AI Coach App** (`P-FIT-12`): https://linear.app/custom-voice-app/project/ai-coach-app-a83b6b0b9285
-- Milestone: **Coach pilot ready for New Year's** is the only active one (author, 2026-10-22). Coaches are the customers: a web dashboard, plus the MCP for programming in Claude. Athletes get an always-free, simple app; in-app AI, voice and groups are hidden in the app behind one flag (FIT-215). Three tiers (FIT-437, 2026-11-12): Free; Lifter Pro, AI planning for self-coached lifters from the connector and AI-designed weeks (FIT-327, FIT-426); and Coach Pro, the exhaustive MCP (FIT-312). Both Pro plans are sold in the iPhone app (StoreKit) and on the web (Stripe), and one server entitlement makes either store's Pro work everywhere: app, dashboard and MCP. Prices and the trial length live in `shared/plans.ts` and `appstore/subscriptions.json`. Everything else was cancelled, not deleted. The older milestones (M1–M4, Meals, Realtime, Agent-first) hold only finished or cancelled work
+Evals run the `AICoachEvals` scheme. On-device runs need Apple Intelligence on the host Mac; cloud models read keys from `.env`.
+For program/week evals only: `EVAL_RUN=<label>` keeps a repeat run beside the others; `EVAL_SIMULATOR=<name>` runs on another simulator. The spoken-edit/log evals always overwrite their file on iPhone 17 Pro.
 
-**Workflow per issue**
-1. Read the issue, its parent/sub-issues and its blockers. Only start issues whose blockers are Done.
-2. Move it to **In Progress**.
-3. Build it, test it, commit (see §8).
-4. Comment on the issue with what shipped, anything deferred, and any decisions made, then move it to **Done**.
-5. When you make or discover a decision that changes scope, **write it to Linear** (update the issue or create a new one). Don't keep plans in local markdown files.
-6. Found a bug or follow-up that's out of scope? Create a Linear issue in the right milestone instead of expanding the current one.
-7. Added or changed a feature, a free limit (`FreeLimits`) or a paywall trigger? Update the project document **Features and upgrade paths (Free vs Pro)**: https://linear.app/custom-voice-app/document/features-and-upgrade-paths-free-vs-pro-4bb4f341b5f0
+## Run
+- App: `xcodegen generate && open AICoach.xcodeproj`, run `AICoach` on iPhone 17 Pro (Debug uses `amplify_outputs.dev.json` and `AICoach.storekit`).
+  CLI: `xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`, then `xcrun simctl install/launch`. Debug builds accept `-units PATH` (a sync-units JSON) to load data without sign-in.
+- Dashboard: `cd infra && AWS_PROFILE=aicoach-dev npm run dashboard-config` (writes `web/public/config.json` from AICoach-dev), then from the repo root `npm --prefix web run dev` → http://localhost:5173 (unverified).
+- Share pages from sample data: `npm --prefix infra run web` → http://localhost:8787 (unverified).
+- The MCP server and backend run only as Lambdas, on `AICoach-dev` (`dev.barbrabell.com/mcp`) and `AICoach-prod`; there is no local server. Test sessions: `AWS_PROFILE=aicoach-dev npm --prefix infra run buddy -- coach`.
 
-If Linear tools aren't available, stop and tell the user. Don't invent scope.
-
----
-
-## 2. Product principles (non-negotiable)
-
-1. **One loop, any goal.** Everything is **Goals → Plan → Log → Progress → Celebrate**. Training and meals are just `kind`s of goal, planned activity and log entry. **Never create per-domain screens, tables or flows** when a `kind` + `Measurement`s will do.
-2. **KISS / YAGNI.** Build the smallest thing that satisfies the issue's "done when". No speculative abstractions, no protocols with one conformer, no feature flags or settings nobody asked for.
-3. **On-device first; Claude Haiku through our own server for programs** (author, 2026-10-10, FIT-102). Spoken logging and spoken edits stay on-device (Apple **Foundation Models**). The program brief and the weeks' design use Claude Haiku 5.5 for signed-in users, only through the `aiMessages` proxy (the key never ships in the app), falling back to on-device. Pro's coach conversation (FIT-103) goes the same way. Every model call goes through `AIModel` (`Core/AI/AIModel.swift`); no other network calls to an LLM. Business model v2 (2026-10-29): the coach's own Claude, through the Pro MCP, is the best case and costs us no tokens; our hosted tokens, through the same proxy, are only for the dashboard's import (FIT-285) and as Pro's fallback for coaches without Claude.
-4. **The model designs the training; code keeps specific constraints** (FIT-67). The on-device model has freedom over the program's content: split, sessions, exercises (from the catalog, filtered by the user's equipment), sets, reps, loads, progression and starting weights from the user's baseline. Code checks only a short, named list of rules (`PlanGuard`, FIT-71) and repairs only what breaks one; don't add templates, slots or fills that take choices away from the model. Everything else (the program skeleton of weeks, phases, deloads and trips, plus macros math, alerts, wins and progress) stays **deterministic Swift with unit tests**, and there the LLM only parses natural language via `@Generable` and explains numbers code computed.
-5. **The app works without Apple Intelligence.** Check `SystemLanguageModel.default.availability`; if unavailable, hide voice/NL entry and keep manual flows fully functional.
-6. **User-owned vs derived.** Goals and constraints are user-owned; the app only *proposes* changes. Progress is **derived** from log entries and never stored as source data, so it's always regenerable.
-7. **Always confirm before saving AI output.** Every LLM parse lands on an editable confirm screen. Exception (FIT-47, FIT-49): a spoken edit to today's workout is applied at once with Undo; the model only calls tools (swap, add, remove, change, new workout…) and code makes each change.
-
----
-
-## 3. Tech stack
-
-- Swift 6 (strict concurrency), SwiftUI, **SwiftData**, Swift Testing (`import Testing`)
-- Deployment target **iOS 26.0**; built with Xcode 27
-- Apple frameworks only: FoundationModels, Speech, Charts, PhotosUI. **No third-party dependencies** without a Linear-recorded reason.
-- Project generated by **XcodeGen** from `project.yml` (installed at `/opt/homebrew/bin/xcodegen`). Never hand-edit the `.xcodeproj`; it's gitignored.
-- IDs: `UUID` everywhere, plus `createdAt`/`updatedAt` on every model (sync arrives in M3).
-
----
-
-## 4. Repo layout
-
-```
-project.yml                 # XcodeGen spec — source of truth for targets/settings
-App/                        # @main, root TabView (Today · Goals · Progress)
-Core/
-  Model/                    # SwiftData models: Goal, Plan, PlannedActivity, LogEntry, Measurement, Template, Win
-  Generators/               # pure functions: TrainingGenerator, MealGenerator (no SwiftUI, no SwiftData imports)
-  Progress/                 # derived metrics, alerts, win detection (pure)
-  AI/                       # Foundation Models: @Generable schemas, tools, availability
-  Import/                   # fitness-planner + grocery-planner importers
-Features/
-  Goals/ Plan/ Log/ Progress/ Catalog/   # SwiftUI views, one folder per loop step
-Resources/
-  Seed/                     # bundled exercise + recipe seed JSON
-infra/                      # AWS CDK (TypeScript): Cognito, DynamoDB, AppSync, push. See infra/README.md
-Tests/
-  CoreTests/                # Swift Testing; fixtures from real repo history
-  Fixtures/
-```
-
-Keep `Core/Generators` and `Core/Progress` free of UI and persistence imports so they stay trivially testable and could be reused later on a server for the B2B dashboard.
-
----
-
-## 5. Core data model (from FIT-1)
-
-```
-Goal             kind, metric, target, deadline, status            ("bench 225", "160 g protein/day", "180 lb")
-Plan             interval (week, keyed by Monday), items: [PlannedActivity]
-PlannedActivity  kind (workout | meal | cook | grocery | …), date/slot, templateRef, targets: [Measurement], adjustedReason?
-LogEntry         kind, timestamp, plannedRef?, measurements: [Measurement], note, photo?
-Measurement      metric, value, unit                               (reps, load_lb, rpe, kcal, protein_g, cost_usd, sleep_h, weight_lb …)
-Template         kind (exercise | recipe), name, slug, attributes
-Win              kind (pr | goal_hit | streak), goalRef?, logRef?, date   (unused: wins are derived from logs, FIT-15, `Core/Progress/Wins.swift`)
-```
-
-Adding a new domain = a new `kind` + metrics. **Not** a new model.
-
----
-
-## 6. Existing data and domain rules (read, don't modify)
-
-These sibling repos are the user's real data and the spec for parity. **Read-only.**
-
-| Path | What |
-|---|---|
-| `/Users/kendall/dev/fitness-planner/.claude/CLAUDE.md` | **Training rules spec**: age tiers, volume mapping, Brzycki 1RM, composite score, deload, recovery, alerts, nutrition targets |
-| `/Users/kendall/dev/fitness-planner/.claude/commands/{plan,log,adjust,review}.md` | Step-by-step behavior to reach parity with |
-| `/Users/kendall/dev/fitness-planner/config.yaml` | User's settings → onboarding defaults and import |
-| `/Users/kendall/dev/fitness-planner/profile.json` | Derived state; **acceptance test**: regenerating from logs should match it (or explain the differences) |
-| `/Users/kendall/dev/fitness-planner/exercise-library/*.md` | 11 exercise cards → exercise seed |
-| `/Users/kendall/dev/fitness-planner/session-logs/*.html` | Workout history. JSON in `<script type="application/json" id="session-data">` |
-| `/Users/kendall/dev/fitness-planner/daily-logs/*.html` | Meals and sleep. JSON in `<script type="application/json" id="daily-log-data">` |
-| `/Users/kendall/dev/grocery-planner/recipes/*.md` | Recipes (YAML front matter + ingredients) → recipe seed |
-| `/Users/kendall/dev/grocery-planner/recent-recipes.yaml` | Recipe ratings (effort, nutrition, protein, …) |
-| `/Users/kendall/dev/grocery-planner/pantry.yaml` | Pantry stock |
-
-**Known data quirks in session-data JSON:** `load` may be a string (`"BW"`, `"95 lb"`, `"24 kg/hand"`) instead of `load_lb`; `reps` may be a duration or distance string (`"50s"`, `"30m"`); some logs have `"reconstructed": true` (backfilled, RPE assumed). One older log is `.md`. The importer must handle all of these and never crash on a bad file. Skip it and report it instead.
-
-Convert importers' output to **bundled seed JSON** in `Resources/Seed/` where possible (a one-time script or test that writes fixtures), so the app doesn't read the user's home directory at runtime. The full-history import for the author's own phone can be a debug-only action.
-
----
-
-## 7. Build, run, test
-
+## Deploy (prod)
+Stack `AICoach-prod` (CDK, profile `aicoach-dev`, us-east-1): Cognito, one DynamoDB table, AppSync, Lambdas (MCP, sync, push…), CloudFront serving barbrabell.com (+ share., join.) with the dashboard at `/app`. Dev is `AICoach-dev` on dev.barbrabell.com. From `infra/`, on a clean `main` (all unverified here):
 ```bash
-xcodegen generate
-xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+npx tsc --noEmit -p . && npx vitest run
+npm --prefix ../web run build                      # always: the stack uploads web/dist
+npx cdk diff --profile aicoach-dev -c stage=prod    # see stop rules below; "no differences" = nothing to deploy
+npx cdk deploy --profile aicoach-dev -c stage=prod --require-approval never   # 2–3 min, ends "✅  AICoach-prod"
+AWS_PROFILE=aicoach-dev npm run outputs prod        # commit Resources/amplify_outputs.prod.json if it changed
 ```
+Stop (don't deploy) if the diff replaces or removes the DynamoDB table or the Cognito user pool (any "requires replacement" on either), or removes a user pool client, an identity provider, the CloudFront distribution or the certificate. Deploy only a clean, green `main`.
+Post-deploy: `/ /docs /claude /privacy /support /.well-known/oauth-authorization-server /app/` on https://barbrabell.com return 200, `POST /mcp` returns 401, and the stack's `LastUpdatedTime` is after the deploy started. Also hit whatever page or endpoint the deployed commits changed. Rollback: check out the last good commit and repeat build/diff/deploy. Never restore data over the live table (PITR 35 days; restore to a new table, see `infra/README.md`).
 
-- The iPhone 17 Pro simulator is usually already booted. Foundation Models works in the simulator only if the host Mac has Apple Intelligence enabled; if `availability` says unavailable, test the fallback path and keep going.
-- **Run the app and look at it** (simulator screenshot) after any UI change before calling an issue done.
-- Every generator/progress rule gets a unit test. Use fixtures from real history in §6.
-- `build` and `test` must be green before every commit.
+## Release (iOS)
+Version is `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml` (now 1.0 / 13). Release builds use `amplify_outputs.prod.json`.
+The release tooling is on `main`: `npm run release` (`scripts/release.mjs`), documented step by step in `RELEASE.md`; `npm run test:release` tests it:
+- `npm run release -- --dry-run`: local steps + read-only App Store Connect calls.
+- `npm run release`: bumps `CURRENT_PROJECT_VERSION` and commits, archives and uploads with `xcodebuild -exportArchive` (API-key auth, polls processing), refreshes the prod review account, records the demo video, sets subscriptions and listing from `appstore/`, then stops.
+- `npm run release -- submit`: creates the review submission. Submission is Maxwell's.
+- `npm run release -- products`: products-only write (subscriptions), only when Maxwell has said to apply the subscription plan.
+- Stop if release reports the Paid Apps agreement inactive (the Account Holder signs it under Business; no API). Before submit: every subscription ready, paywall screenshots present, and the review video URL below returns 200.
+Review demo video: `npm run demo-video` (`scripts/demo-video.mjs`): an XCUITest (`ReviewDemoUITests`) signs in as the demo client and then the demo coach; `simctl io recordVideo` + ffmpeg write `build/review/demo.mp4`, then it reports which screens of `appstore/review/screens.json` the video never showed (`-- --require-coverage` fails on gaps). `npm run screens` regenerates that inventory.
+`https://barbrabell.com/review/demo.mp4` serves only after the `/review/*` behavior is deployed and the file is uploaded to the cards bucket by hand.
 
----
+## Land
+Through a pull request to `origin/main`, squash-merged (the history is `TKL-N: … (#PR)`; older commits use `FIT-N`). Branch from `origin/main` in a worktree, never the main checkout; push the branch, `gh pr create`, merge with `gh pr merge --squash`. Keep local `main` equal to `origin/main` (`git pull --ff-only`); never commit on local `main` directly.
 
-## 8. Git
+## Verify checks
+A change lands only with all of these green: the iOS unit tests (`AICoach` scheme), `infra` tsc + vitest, `web` vitest + `npm --prefix web run build`.
+A UI change also gets a simulator screenshot. A change to model prompts or `ProgramDesigner` also gets the matching eval run and its results file.
 
-- Commit directly to `main`, in small vertical slices. Each commit message starts with the issue ID: `FIT-6: log entry confirm screen`.
-- One issue may be several commits. Never commit a red build.
-- No remote yet. If one is added, keep the same convention.
-- End commit messages with:
-  `Co-Authored-By: Claude <noreply@anthropic.com>`
+## Secrets used (names only)
+- Repo `.env` (gitignored): `ANTHROPIC_API_KEY`, `OPEN_AI_API_KEY` (or `OPENAI_API_KEY`), `GEMINI_API_KEY` for evals; `STRIPE_SECRET_KEY`, `STRIPE_WH_SEC`, `STRIPE_GIFTS_SECRET_KEY`, `STRIPE_WH_SEC_GIFTS`.
+  Release branch adds `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH`, `DEMO_COACH_EMAIL`, `DEMO_CLIENT_EMAIL`, `DEMO_PASSWORD`, `ASC_CONTACT_PHONE`.
+- AWS Secrets Manager, per stage: `aicoach/{stage}/apple-signin`, `/google-oauth`, `/apns`, `/stripe`, `/anthropic` (read by the stack and Lambdas).
+- App Store Connect `.p8` keys: `~/.appstoreconnect/private_keys/`; an `AuthKey_*.p8` also sits in the repo root (gitignored by `*.p8`).
+- Shared keys: `~/dev/.secrets.env`. Demo account passwords: `.demo-accounts.*` (gitignored).
 
----
-
-## 9. Build order for the coach pilot
-
-1. **FIT-215** the free, simple athlete app, with Pro sold in the app and on the web (FIT-437, reversing FIT-327's web-only rule)
-2. **FIT-194** coach access in the MCP → **FIT-196** coach roster tools
-3. **FIT-197** coach features on prod
-4. **FIT-201** first launch: sign in and join your coach → **FIT-202** a coach-written week, start to finish → **FIT-204** check-in
-5. **FIT-200** dashboard corrections, **FIT-189** coach plan billing bug, **FIT-186** miles, **FIT-208** tool descriptions
-6. **FIT-213**'s author steps: privacy (FIT-158), App Review or TestFlight (FIT-59, FIT-89), the first coaches (FIT-211)
-
-Linear's blocking relations win if they disagree with this list.
-
----
-
-## 10. Style
-
-- Small files, value types where possible, `@Observable` for view state, no MVVM ceremony unless a view gets genuinely complex.
-- Match units to the user's settings (the author uses **lb**).
-- No placeholder "Lorem" UI. If something isn't built, leave it out.
-- Comments only where the *why* isn't obvious. Rules ported from fitness-planner should cite the section they came from.
+## Gotchas
+- Never hand-edit `AICoach.xcodeproj`; change `project.yml` and run `xcodegen generate`.
+- Evals are not in the `AICoach` scheme and overwrite tracked `Tests/Evals/*.md`; cloud-model evals spend API credit.
+- Foundation Models in the simulator works only if the host Mac has Apple Intelligence; otherwise the app hides voice entry and on-device evals fail.
+- Use the AWS CLI with `--profile aicoach-dev` (or `AWS_PROFILE=aicoach-dev`) for all AWS work here, not the aws-mcp server: aws-mcp is signed in to a different account (304945936761) and reports `AICoach-prod` as missing.
+- Dev and prod share one AWS account; prod's table and user pool are `RETAIN` with deletion protection. Budget alerts cover the whole account.
+- `cdk deploy` without a fresh `web` build ships a stale dashboard.
+- `npm run demo-video` resets the iPhone 17 Pro simulator's keychain and uninstalls the app so it records from a signed-out first launch; don't run it while using that simulator.
+- Importer data quirks (from `~/dev/fitness-planner`, read-only): `load` may be a string (`"BW"`, `"95 lb"`, `"24 kg/hand"`), `reps` a duration (`"50s"`), some logs `"reconstructed": true`.
+- Units follow the user's setting; the author uses lb.
