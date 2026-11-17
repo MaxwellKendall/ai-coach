@@ -20,6 +20,7 @@ Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/pr
 ## Setup
 - Xcode 27 (iOS 26.0 target, Swift 6 strict concurrency), XcodeGen at `/opt/homebrew/bin/xcodegen`, simulator "iPhone 17 Pro".
 - One SwiftPM dependency: amplify-swift (Cognito + AppSync). Otherwise Apple frameworks only.
+- Package versions are pinned (TKL-768): `project.yml` gives amplify-swift an `exactVersion`, and the tracked root `Package.resolved` pins every transitive package. `xcodegen generate` copies it into the gitignored `AICoach.xcodeproj` (`postGenCommand`), so every checkout and worktree builds the same graph. To bump: change `exactVersion`, resolve in Xcode, copy `AICoach.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` back to the root, commit both. `npm run test:release` checks they agree. amplify-swift 2.63.1 doesn't build here (SmithyCBOR "switch must be exhaustive").
 - Node + npm; `npm install` in `infra/` and `web/` (both have lockfiles). ffmpeg for the review video.
 - AWS profile `aicoach-dev` (account 397614038040, us-east-1) for deploys and the AWS scripts.
 - Bundle id `com.maxwellkendall.aicoach`, team `7GZKY29XJH`, automatic signing.
