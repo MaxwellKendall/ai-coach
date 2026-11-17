@@ -50,6 +50,7 @@ final class ReviewDemoUITests: XCTestCase {
         let clients = app.buttons["welcome.clients"]
         XCTAssertTrue(clients.waitForExistence(timeout: 90), "Signing in as the coach did not offer My Clients. \(failureOnScreen(app))")
         hold(1.2)
+        dismissPasswordPrompt(app, timeout: 3)
         clients.tap()
         XCTAssertTrue(app.navigationBars["Clients"].waitForExistence(timeout: 30) || app.staticTexts["Clients"].waitForExistence(timeout: 5),
                       "The coach roster did not open")
@@ -80,6 +81,7 @@ final class ReviewDemoUITests: XCTestCase {
     /// or a week the coach has not written yet stays on screen. "Train this today" is left alone: it moves the plan.
     @MainActor
     private func logOpenSession(_ app: XCUIApplication) {
+        dismissPasswordPrompt(app, timeout: 2)
         let check = app.buttons["Check off as done"].firstMatch
         let deadline = Date().addingTimeInterval(8)
         while Date() < deadline && !check.exists {
@@ -181,10 +183,18 @@ final class ReviewDemoUITests: XCTestCase {
     }
 
     @MainActor
-    private func dismissPasswordPrompt(_ app: XCUIApplication) {
+    /// iOS offers "Save Password?" a few seconds after sign-in on a simulator that has never been asked. It covers
+    /// Today, so wait for it (up to `timeout`) and say Not Now, wherever it is drawn.
+    private func dismissPasswordPrompt(_ app: XCUIApplication, timeout: TimeInterval = 8) {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        if springboard.buttons["Not Now"].waitForExistence(timeout: 1) { springboard.buttons["Not Now"].tap() }
-        if app.buttons["Not Now"].exists { app.buttons["Not Now"].tap() }
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            for owner in [app, springboard] where owner.buttons["Not Now"].exists {
+                owner.buttons["Not Now"].tap()
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        } while Date() < deadline
     }
 
     @MainActor
