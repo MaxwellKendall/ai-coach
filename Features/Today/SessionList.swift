@@ -3,9 +3,10 @@ import SwiftUI
 
 /// FIT-297, design A: today's session as a list. The warm-up first, folded to one line; each lift with its sets and its
 /// load, big, and "+5 lb" when it went up; a superset's lifts bracketed with A and B. Tap the circle to check a lift off
-/// (L3), its load to change it right there (E1). FIT-302: today's session is edited right here, by hand (no AI, no
-/// presets): tap a lift's name for its sets, reps, swap, order and remove; the warm-up opens to its items; Add exercise
-/// at the end. Each change is saved as it's made. Prototype: https://claude.ai/artifact/QBzBgYEd35faydgEk8Qo3f
+/// (L3). TKL-753: one session editor. Tapping a lift opens it in place into Program's block card (`BlockEditor`): every set
+/// a row, a number tapped for the bottom stepper, Swap / + Set / ⋯ under it; tapping it again folds it. The warm-up opens
+/// to its items; Add exercise at the end. Each change is saved as it's made (the screen offers Undo).
+/// Prototype: https://claude.ai/artifact/4RAUoAwczRiRNG9NuAu5Vz
 struct SessionList: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let session: SessionPlan
@@ -15,34 +16,28 @@ struct SessionList: View {
     /// Blocks checked off as done, by index (a session's blocks are rebuilt on every change); nil when it can't be
     /// checked off (not today).
     var checked: Binding<Set<Int>>?
-    /// A load changed in place: the exercise and the step (±5 lb).
-    var onLoad: ((String, Double) -> Void)?
     /// FIT-302: the session as changed by hand, to save; nil where it can't be changed (another day).
     var onEdit: ((SessionPlan) -> Void)?
-    /// FIT-356: the ⋯ offers the how-to with your last sessions of the lift: on your own Today, not a client's day.
+    /// FIT-356: the how-to also shows your last sessions of the lift: on your own Today, not a client's day.
     var history = false
     @State private var warm = false
-    /// The exercise whose load is being changed.
-    @State private var editing: String?
-    /// The lift open for editing: its block and movement.
-    @State private var open: Pick?
-    /// Whether the open lift has been changed since it opened: only then does its ✓ show (author, 2026-11-10).
-    @State private var changed = false
+    /// The lift open in place, by block index.
+    @State private var open: Int?
+    /// The number being changed in the bottom stepper.
+    @State private var selected: BlockEditor.Cell?
     @State private var picking: Picking?
-    /// FIT-356: the lift whose how-to and history are open.
+    /// FIT-356: the lift whose how-to (and history) is open.
     @State private var looking: String?
     @Query private var templates: [Template]
 
-    struct Pick: Equatable { var block: Int, movement: Int }
-
     /// What the exercise picker is for.
     enum Picking: Identifiable {
-        case warmup, add, swap(Pick, String)
+        case warmup, add, swap(block: Int, movement: Int, exercise: String)
         var id: String {
             switch self {
             case .warmup: "warm-up"
             case .add: "add"
-            case .swap(let pick, _): "swap \(pick.block) \(pick.movement)"
+            case .swap(let block, let movement, _): "swap \(block) \(movement)"
             }
         }
     }
@@ -57,9 +52,17 @@ struct SessionList: View {
     private func change(_ edit: (inout SessionPlan) -> Void) {
         var edited = session
         edit(&edited)
-        onEdit?(edited)
-        if open != nil { changed = true }
+        save(edited)
     }
+
+    private func save(_ edited: SessionPlan) {
+        // A lift joined, removed or moved: the open one may be gone, so nothing stays open on a stale index.
+        if edited.blocks.count != session.blocks.count { open = nil; selected = nil }
+        onEdit?(edited)
+    }
+
+    /// The editor's way in: every change it makes is saved at once.
+    private var editable: Binding<SessionPlan> { Binding(get: { session }, set: { save($0) }) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,19 +78,34 @@ struct SessionList: View {
                 let block = session.blocks[index]
                 // The last lift has no rule under it unless Add exercise follows.
                 let ruled = onEdit != nil || index != lifts.last
-                if block.isGroup { superset(block, index: index, ruled: ruled) }
-                else if let movement = block.movements.first { row(movement, block: index, ruled: ruled) }
+                VStack(alignment: .leading, spacing: 0) {
+                    if block.isGroup { superset(block, index: index) }
+                    else if let movement = block.movements.first { row(movement, block: index) }
+                    if open == index, onEdit != nil {
+                        BlockEditor(session: editable, index: index, names: names, templates: templates, selected: $selected,
+                                    onSwap: { picking = .swap(block: $0, movement: $1, exercise: $2) },
+                                    onHowTo: { looking = $0 }, onFill: true)
+                            .padding(14)
+                            .background(Color.fill.opacity(0.6), in: .rect(cornerRadius: 18))
+                            .padding(.leading, inset).padding(.bottom, Self.rowPadding)
+                            .motionTransition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .overlay(alignment: .bottom) { if ruled { Divider() } }
             }
             if onEdit != nil { addButton("Exercise") { picking = .add } }
         }
         .animation(.settle, value: warm)
-        .animation(.settle, value: editing)
         .animation(.settle, value: open)
-        .animation(.settle, value: changed)
-        .onChange(of: open) { changed = false }
+        .sheet(isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })) {
+            SetStepper(session: editable, selected: $selected, names: names)
+                .presentationDetents([.height(250)])
+                .presentationBackgroundInteraction(.enabled(upThrough: .height(250)))
+                .presentationDragIndicator(.hidden)
+        }
         .sheet(item: Binding(get: { looking.map(HowToID.init) }, set: { looking = $0?.id })) { item in
             let template = templates.first { $0.slug == item.id }
-            HowToSheet(name: names[item.id] ?? item.id, slug: item.id, steps: template?.values("instructions") ?? [], history: true)
+            HowToSheet(name: names[item.id] ?? item.id, slug: item.id, steps: template?.values("instructions") ?? [], history: history)
         }
         .sheet(item: $picking) { picking in
             let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
@@ -96,9 +114,9 @@ struct SessionList: View {
                 ExercisePicker(title: "Add to the warm-up", excluding: inSession, warmup: true) { slug in change { $0.addWarmup(slug) } }
             case .add:
                 ExercisePicker(title: "Add exercise", excluding: inSession) { slug in change { $0.add(slug) } }
-            case .swap(let pick, let exercise):
+            case .swap(let block, let movement, let exercise):
                 ExercisePicker(title: "Swap \(names[exercise] ?? exercise)", replacing: exercise, excluding: inSession) { slug in
-                    change { $0.swap(block: pick.block, movement: pick.movement, to: slug) }
+                    change { $0.swap(block: block, movement: movement, to: slug) }
                 }
             }
         }
@@ -134,11 +152,11 @@ struct SessionList: View {
             .joined(separator: ", ")
     }
 
-    private var chevron: some View {
-        Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Color.inkMuted)
-            .rotationEffect(.degrees(warm ? 90 : 0))
-            .frame(width: 24, height: 24).background(Color.fill, in: .circle)  // the check circle's size
-            .frame(width: Self.column, height: Self.column)
+    /// The fold's chevron, in a small grey circle the check circle's size: right for the warm-up, down for a lift.
+    private func chevron(_ name: String, turned: Bool) -> some View {
+        Image(systemName: name).font(.caption.weight(.bold)).foregroundStyle(Color.inkMuted)
+            .rotationEffect(.degrees(turned ? (name == "chevron.right" ? 90 : 180) : 0))
+            .frame(width: 24, height: 24).background(Color.fill, in: .circle)
     }
 
     private func warmup(_ first: (name: String, load: Double)?) -> some View {
@@ -146,13 +164,13 @@ struct SessionList: View {
             Button { warm.toggle() } label: {
                 HStack(spacing: Self.gap) {
                     // In the check circles' column on Today, so the row keeps the list's edge; at the end elsewhere.
-                    if checked != nil { chevron }
+                    if checked != nil { chevron("chevron.right", turned: warm).frame(width: Self.column, height: Self.column) }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(warmupLine(first)).font(.body.weight(.semibold)).multilineTextAlignment(.leading)
                         Text("Warm-up").font(.footnote).foregroundStyle(Color.inkMuted)
                     }
                     Spacer(minLength: 0)
-                    if checked == nil { chevron }
+                    if checked == nil { chevron("chevron.right", turned: warm).frame(width: Self.column, height: Self.column) }
                 }
                 .padding(.vertical, Self.rowPadding).contentShape(.rect)
             }
@@ -162,8 +180,8 @@ struct SessionList: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if session.warmup.isEmpty {
                         HStack { Text("Row, bike or walk, easy").foregroundStyle(Color.inkMuted); Spacer(); Text("\(WarmupRamp.cardioMinutes) min").bold() }
-                    } else if let onEdit {
-                        WarmupList(session: Binding(get: { session }, set: { onEdit($0) }), names: names).font(.body)
+                    } else if onEdit != nil {
+                        WarmupList(session: editable, names: names).font(.body)
                     } else {
                         ForEach(session.warmup) { movement in
                             HStack { Text(names[movement.exercise] ?? movement.exercise).foregroundStyle(Color.inkMuted); Spacer(); Text(movement.warmupDose).bold() }
@@ -195,12 +213,34 @@ struct SessionList: View {
         .overlay(alignment: .bottom) { Divider() }
     }
 
-    private func superset(_ block: SessionPlan.Block, index blockIndex: Int, ruled: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("\(Text("SUPERSET").font(.caption.weight(.bold)).tracking(0.6)) · alternate, rest after both")
-                .foregroundStyle(Color.inkMuted).padding(.top, 12)
+    /// Opens the lift in place, or folds it; where it can't be changed, a tap checks it off as before.
+    private func tap(_ block: Int) {
+        if onEdit != nil {
+            selected = nil
+            open = open == block ? nil : block
+        } else if let checked {
+            toggle(block, in: checked)
+        }
+    }
+
+    private func superset(_ block: SessionPlan.Block, index blockIndex: Int) -> some View {
+        let name = block.movements.map { names[$0.exercise] ?? $0.exercise }.joined(separator: " + ")
+        return VStack(alignment: .leading, spacing: 0) {
+            Button { tap(blockIndex) } label: {
+                HStack {
+                    Text("\(Text("SUPERSET").font(.caption.weight(.bold)).tracking(0.6)) · alternate, rest after both")
+                        .foregroundStyle(Color.inkMuted)
+                    Spacer(minLength: 8)
+                    if onEdit != nil { chevron("chevron.down", turned: open == blockIndex) }
+                }
+                .padding(.top, 12).contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("session.lift")
+            .accessibilityLabel(name)
+            .accessibilityHint(onEdit != nil ? (open == blockIndex ? "Folds the superset" : "Changes the superset") : "")
             ForEach(Array(block.movements.enumerated()), id: \.element.id) { index, movement in
-                row(movement, block: blockIndex, letter: String(UnicodeScalar(UInt8(65 + index))), last: index == block.movements.count - 1)
+                row(movement, block: blockIndex, letter: String(UnicodeScalar(UInt8(65 + index))))
             }
             .padding(.leading, 20)
             .background(alignment: .leading) {
@@ -209,17 +249,16 @@ struct SessionList: View {
                     .frame(width: 10).padding(.vertical, 24).padding(.leading, 4)
             }
         }
-        .overlay(alignment: .bottom) { if ruled { Divider() } }
     }
 
-    private func row(_ movement: SessionPlan.Movement, block: Int, letter: String? = nil, last: Bool = true, ruled: Bool = true) -> some View {
+    private func row(_ movement: SessionPlan.Movement, block: Int, letter: String? = nil) -> some View {
         let done = checked?.wrappedValue.contains(block) == true
         let load = Self.load(movement)
+        let name = names[movement.exercise] ?? movement.exercise
         // Simplicity pass (2026-11-11): the "+5 lb" chip alone says it went up; FIT-277's line saying why is gone.
         let up = load.flatMap { load in previous[movement.exercise].map { load - $0 } }.flatMap { $0 > 0 ? $0 : nil }
-        let pick = Pick(block: block, movement: session.blocks[block].movements.firstIndex { $0.id == movement.id } ?? 0)
-        return VStack(alignment: .leading, spacing: 0) {
-        HStack(alignment: .center, spacing: Self.gap) {
+        let unit = movement.working.first?.value("load_lb_hand") != nil ? "lb each" : "lb"
+        return HStack(alignment: .center, spacing: Self.gap) {
             if let checked {
                 Button { toggle(block, in: checked) } label: {
                     Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title2)
@@ -234,184 +273,47 @@ struct SessionList: View {
                     .frame(width: 18, height: 18).background(Color.surface, in: .circle)
                     .overlay { Circle().stroke(Color.inkFaint, lineWidth: 2) }
             }
-            VStack(alignment: .leading, spacing: 2) {
+            Button { tap(block) } label: {
                 // Accessibility sizes stack the row's parts so a lift's name never breaks mid-word.
-                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 6))
+                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 8))
                 layout {
-                    Text(names[movement.exercise] ?? movement.exercise).font(.body.weight(.semibold))
-                        .foregroundStyle(done ? Color.inkMuted : Color.ink)
-                    if let up {
-                        Text("+\(Coach.number(up)) lb").font(.caption.weight(.bold)).foregroundStyle(.tint)
-                            .padding(.horizontal, 7).padding(.vertical, 1).background(.tint.opacity(0.12), in: .capsule)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(name).font(.body.weight(.semibold)).foregroundStyle(done ? Color.inkMuted : Color.ink)
+                            if let up {
+                                Text("+\(Coach.number(up)) lb").font(.caption.weight(.bold)).foregroundStyle(.tint)
+                                    .padding(.horizontal, 7).padding(.vertical, 1).background(.tint.opacity(0.12), in: .capsule)
+                            }
+                        }
+                        Text(Self.dose(movement)).font(.footnote).foregroundStyle(Color.inkMuted)
+                    }
+                    if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                    if let load {
+                        (Text(Coach.number(load)).font(.display(22, weight: .semibold, relativeTo: .title2))
+                         + Text(" \(unit)").font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted))
+                            .monospacedDigit()
                     }
                 }
-                Text(Self.dose(movement)).font(.footnote).foregroundStyle(Color.inkMuted)
-                if typeSize.isAccessibilitySize { loadView(movement, load: load) }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
             }
-            .contentShape(.rect)
-            .onTapGesture {
-                if onEdit != nil { open = open == pick ? nil : pick } else if let checked { toggle(block, in: checked) }
-            }
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(onEdit != nil ? "Change this exercise" : "")
-            Spacer(minLength: 8)
-            if !typeSize.isAccessibilitySize { loadView(movement, load: load) }
-            // FIT-331: editing that shows it's there, as Hevy and Strong put ⋯ on each exercise. Once the open lift has
-            // been changed, its ⋯ is a small ✓ that closes it (author, 2026-11-10: subtle, and only after an edit).
-            if onEdit != nil, open == pick, changed {
-                Button { open = nil } label: {
-                    Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(Plate.current.mark)
-                        .frame(width: 32, height: 44).contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Done")
-                .motionTransition(.scale.combined(with: .opacity))
-            } else if onEdit != nil {
-                Menu { actions(movement, pick: pick) } label: {
-                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                        .frame(width: 32, height: 44).contentShape(.rect)
-                }
-                .accessibilityLabel("Change \(names[movement.exercise] ?? movement.exercise)")
-            }
+            .buttonStyle(.plain)
+            .modifier(LiftIdentity(lift: letter == nil, name: name, value: [Self.dose(movement), load.map { "\(Coach.number($0)) \(unit)" }].compactMap { $0 }.joined(separator: ", ")))
+            .accessibilityHint(onEdit != nil ? (open == block ? "Folds the lift" : "Changes the lift") : "")
+            // A superset's chevron is on its header; a lift's is at the end of its row.
+            if onEdit != nil, letter == nil { chevron("chevron.down", turned: open == block) }
         }
         .padding(.vertical, Self.rowPadding)
-        .contextMenu { if onEdit != nil { actions(movement, pick: pick) } }
-        if open == pick { editor(movement, pick: pick).padding(.leading, inset).padding(.bottom, Self.rowPadding).motionTransition(.opacity.combined(with: .move(edge: .top))) }
-        }
-        .overlay(alignment: .bottom) { if ruled && (letter == nil || !last) { Divider() } }
-    }
-
-    /// The lifts' blocks in order, for Move up and Move down.
-    private var lifts: [Int] { session.blocks.indices.filter { session.blocks[$0].rounds > 0 } }
-
-    /// FIT-331: a lift's ⋯ and long-press menu: the same changes its open editor has.
-    @ViewBuilder private func actions(_ movement: SessionPlan.Movement, pick: Pick) -> some View {
-        let place = lifts.firstIndex(of: pick.block) ?? 0
-        Button("Edit Sets", systemImage: "slider.horizontal.3") { open = pick }
-        if history { Button("How To and History", systemImage: "clock.arrow.circlepath") { looking = movement.exercise } }
-        Button("Swap", systemImage: "arrow.triangle.2.circlepath") { picking = .swap(pick, movement.exercise) }
-        Button("Move Up", systemImage: "arrow.up") { change { $0.move(block: pick.block, by: lifts[place - 1] - pick.block) } }
-            .disabled(place == 0)
-        Button("Move Down", systemImage: "arrow.down") { change { $0.move(block: pick.block, by: lifts[place + 1] - pick.block) } }
-            .disabled(place == lifts.count - 1)
-        Divider()
-        Button("Remove", systemImage: "trash", role: .destructive) {
-            open = nil
-            change { $0.remove(block: pick.block, movement: pick.movement) }
-        }
-    }
-
-    /// FIT-302: a lift opened for editing: its sets and reps (or seconds), then swap, move up or down, and remove.
-    private func editor(_ movement: SessionPlan.Movement, pick: Pick) -> some View {
-        let working = movement.working
-        let first = movement.sets.firstIndex { !$0.isWarmup } ?? 0
-        let timed = working.first?.value("duration_s") != nil && working.first?.value("reps") == nil
-        let metric = timed ? "duration_s" : "reps"
-        let step: Double = timed ? 5 : 1
-        let amount = working.first?.value(metric) ?? 0
-        let place = lifts.firstIndex(of: pick.block) ?? 0
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 16) {
-                counter("Sets", "\(working.count)") {
-                    change { $0.removeSet(block: pick.block) }
-                } more: {
-                    change { $0.addSet(block: pick.block) }
-                }
-                counter(timed ? "Seconds" : "Reps", Coach.number(amount)) {
-                    change { $0.set(metric, to: max(step, amount - step), block: pick.block, movement: pick.movement, set: first, remaining: true) }
-                } more: {
-                    change { $0.set(metric, to: amount + step, block: pick.block, movement: pick.movement, set: first, remaining: true) }
-                }
-            }
-            // FIT-335: the weight, so an exercise just added (which starts without one) can have it; 0 is bodyweight.
-            if !timed {
-                let hand = working.first?.value("load_lb_hand") != nil
-                let load = Self.load(movement) ?? 0
-                let weigh = { (value: Double) in
-                    change { $0.set(hand ? "load_lb_hand" : "load_lb", to: max(0, value), block: pick.block, movement: pick.movement, set: first, remaining: true) }
-                }
-                HStack(spacing: 8) {
-                    stepButton("minus", "5 lb less") { weigh(load - 5) }
-                    // Typed, as in every lifting app, for a big jump; ± for 5 lb.
-                    WeightField(load: load, label: hand ? "lb each" : "lb", commit: weigh).frame(minWidth: 52)
-                    stepButton("plus", "5 lb more") { weigh(load + 5) }
-                }
-            }
-            HStack(spacing: 8) {
-                chip("Swap") { picking = .swap(pick, movement.exercise) }
-                chip("Move up", symbol: "arrow.up", disabled: place == 0) { change { $0.move(block: pick.block, by: lifts[place - 1] - pick.block) } }
-                chip("Move down", symbol: "arrow.down", disabled: place == lifts.count - 1) {
-                    change { $0.move(block: pick.block, by: lifts[place + 1] - pick.block) }
-                }
-                Spacer()
-                Button("Remove", role: .destructive) {
-                    open = nil
-                    change { $0.remove(block: pick.block, movement: pick.movement) }
-                }
-                .font(.subheadline.weight(.semibold))
-                .buttonStyle(.plain)
-                .foregroundStyle(.red)
-            }
-        }
-        .padding(14)
-        .background(Color.fill.opacity(0.6), in: .rect(cornerRadius: 18))
-    }
-
-    private func counter(_ label: String, _ value: String, less: @escaping () -> Void, more: @escaping () -> Void) -> some View {
-        HStack(spacing: 8) {
-            stepButton("minus", "\(label): fewer", action: less)
-            VStack(spacing: 0) {
-                Text(value).font(.display(20, weight: .semibold, relativeTo: .title3)).monospacedDigit()
-                Text(label).font(.caption).foregroundStyle(Color.inkMuted)
-            }
-            .frame(minWidth: 52)
-            stepButton("plus", "\(label): more", action: more)
-        }
-    }
-
-    /// A small capsule action: its title, or only its symbol (Up, Down) with the title read aloud.
-    private func chip(_ title: String, symbol: String? = nil, disabled: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            if let symbol { Image(systemName: symbol).accessibilityLabel(title) } else { Text(title) }
-        }
-            .font(.subheadline.weight(.semibold))
-            .padding(.horizontal, 14).frame(minWidth: 44, minHeight: 36)
-            .background(Color.surface, in: .capsule)
-            .buttonStyle(.plain)
-            .disabled(disabled)
-            .opacity(disabled ? 0.4 : 1)
-    }
-
-    @ViewBuilder private func loadView(_ movement: SessionPlan.Movement, load: Double?) -> some View {
-        if let load, let onLoad, editing == movement.exercise {
-            HStack(spacing: 6) {
-                stepButton("minus", "5 lb less") { onLoad(movement.exercise, -5) }
-                Text(Coach.number(load)).font(.display(22, weight: .semibold, relativeTo: .title2)).monospacedDigit().frame(minWidth: 48)
-                stepButton("plus", "5 lb more") { onLoad(movement.exercise, 5) }
-            }
-            .transition(.opacity)
-        } else if let load {
-            Button { editing = editing == movement.exercise ? nil : movement.exercise } label: {
-                (Text(Coach.number(load)).font(.display(22, weight: .semibold, relativeTo: .title2))
-                 + Text(" lb").font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted))
-                    .monospacedDigit()
-            }
-            .buttonStyle(.plain)
-            .disabled(onLoad == nil)
-            .accessibilityHint(onLoad == nil ? "" : "Change the weight")
-        }
-    }
-
-    private func stepButton(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.subheadline.weight(.bold)).frame(width: 34, height: 34).background(Color.fill, in: .circle)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 
     private func toggle(_ block: Int, in checked: Binding<Set<Int>>) {
-        if checked.wrappedValue.contains(block) { checked.wrappedValue.remove(block) } else { checked.wrappedValue.insert(block) }
+        if checked.wrappedValue.contains(block) {
+            checked.wrappedValue.remove(block)
+        } else {
+            checked.wrappedValue.insert(block)
+            // Checking off the open lift folds it.
+            if open == block { open = nil; selected = nil }
+        }
     }
 
     /// The working weight; none for bodyweight, which a weight stepped down to 0 is.
@@ -428,6 +330,21 @@ struct SessionList: View {
     }
 }
 
+/// A lift's row is the lift ("session.lift", named for it); a superset's rows are its parts, under the superset's header.
+private struct LiftIdentity: ViewModifier {
+    let lift: Bool
+    let name: String
+    let value: String
+
+    func body(content: Content) -> some View {
+        if lift {
+            content.accessibilityIdentifier("session.lift").accessibilityLabel(name).accessibilityValue(value)
+        } else {
+            content.accessibilityLabel(name).accessibilityValue(value)
+        }
+    }
+}
+
 /// A superset's bracket: open on the right, rounded at both ends.
 private struct Bracket: Shape {
     func path(in rect: CGRect) -> Path {
@@ -440,39 +357,5 @@ private struct Bracket: Shape {
         path.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.maxY), control: CGPoint(x: rect.minX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         return path
-    }
-}
-
-/// FIT-335: a weight typed in place, the number pad up on a tap; empty or 0 is bodyweight. Saved when typing ends.
-private struct WeightField: View {
-    let load: Double
-    let label: String
-    let commit: (Double) -> Void
-    @State private var text = ""
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            TextField("BW", text: $text)
-                .keyboardType(.decimalPad).multilineTextAlignment(.center).focused($focused)
-                .font(.display(20, weight: .semibold, relativeTo: .title3)).monospacedDigit()
-                .toolbar {
-                    if focused {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            Button("Done") { focused = false }.fontWeight(.semibold)
-                        }
-                    }
-                }
-            Text(label).font(.caption).foregroundStyle(Color.inkMuted)
-        }
-        .onAppear { text = load == 0 ? "" : Coach.number(load) }
-        .onChange(of: load) { if !focused { text = load == 0 ? "" : Coach.number(load) } }
-        .onChange(of: focused) {
-            guard !focused else { return }
-            let typed = Double(text.replacingOccurrences(of: ",", with: ".")) ?? 0
-            if typed != load { commit(typed) }
-        }
-        .accessibilityLabel("Weight")
     }
 }

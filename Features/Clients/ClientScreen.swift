@@ -327,7 +327,6 @@ struct ClientScreen: View {
             if day >= today { dayBar(client) }
             if let note = ClientDay.sessionNote(ClientDay.plan(client.units, day)) { SessionNote(text: note) }
             SessionList(session: session, names: names, previous: [:], checked: nil,
-                        onLoad: day >= today ? { changeLoad($0, by: $1, in: session, client) } : nil,
                         onEdit: day >= today ? { save($0, client) } : nil)
                 .padding(.horizontal, 20).padding(.vertical, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -414,18 +413,6 @@ struct ClientScreen: View {
         }
     }
 
-    /// FIT-331: a lift's working weight ±5 lb, every working set of it, as Today's load does for one's own session.
-    private func changeLoad(_ exercise: String, by step: Double, in session: SessionPlan, _ client: Roster.Client) {
-        var changed = session
-        for (b, block) in session.blocks.enumerated() {
-            for (m, movement) in block.movements.enumerated() where movement.exercise == exercise {
-                guard let first = movement.sets.firstIndex(where: { !$0.isWarmup }), let load = SessionList.load(movement) else { continue }
-                let metric = movement.working.first?.value("load_lb") != nil ? "load_lb" : "load_lb_hand"
-                changed.set(metric, to: max(0, load + step), block: b, movement: m, set: first, remaining: true)
-            }
-        }
-        save(changed, client)
-    }
 
     /// The day as changed by hand, sent to their phone.
     private func save(_ session: SessionPlan, _ client: Roster.Client) {

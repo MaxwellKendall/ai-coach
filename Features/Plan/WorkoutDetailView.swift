@@ -1,9 +1,11 @@
 import SwiftUI
 import SwiftData
 
-/// A planned session as blocks (FIT-21, prototype artboard 2). Everything is editable in place: every set
-/// shows its reps and load, tapping one opens a thumb stepper, and each block's footer has Swap, + Set and
-/// a menu for superset, move and remove. Works on a copy; nothing is written until Save or Start.
+/// A planned session as blocks (FIT-21, prototype artboard 2). Everything is editable in place with the one session
+/// editor (TKL-753, `BlockEditor`, which Today opens too): every set shows its reps and load, tapping one opens the
+/// thumb stepper, and each block's footer has Swap, + Set and a menu for superset, move and remove. A planned session
+/// saves each change as it's made, with Undo (TKL-759, saving model a); a workout of your own is built here and
+/// handed over by Start.
 struct WorkoutDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -22,8 +24,14 @@ struct WorkoutDetailView: View {
     var pushed = false
     @State private var session: SessionPlan
     @State private var original: SessionPlan
+    /// The rows as last saved: a change saves over these (new rows are inserted, removed ones deleted).
+    @State private var saved: [PlannedActivity]
     @State private var collapsed: Set<UUID> = []
     @State private var selected: Cell?
+    @State private var toast: Toast?
+    /// The session before the changes the showing Undo would take back; nil once the toast goes.
+    @State private var undoTo: SessionPlan?
+    @State private var undoing = false
     @State private var picking: Picking?
     @State private var howTo: String?
 
@@ -43,10 +51,11 @@ struct WorkoutDetailView: View {
     }
 
     /// The number being changed in the bottom stepper.
-    struct Cell: Equatable {
-        var block: Int, movement: Int, set: Int
-        var metric: String
-    }
+    typealias Cell = BlockEditor.Cell
+
+    /// TKL-759 (a): a planned session saves as it's changed. A workout of your own (nothing planned yet) is built here
+    /// and handed over by Start.
+    private var autosaves: Bool { onStartOwn == nil && !items.isEmpty }
 
     init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil, startIcon: String = "play.fill",
          pushed: Bool = false, onStart: @escaping ([PlannedActivity]) -> Void = { _ in },
@@ -60,6 +69,7 @@ struct WorkoutDetailView: View {
         self.pushed = pushed
         _session = State(initialValue: session)
         _original = State(initialValue: session)
+        _saved = State(initialValue: items)
     }
 
     var body: some View {
@@ -92,14 +102,23 @@ struct WorkoutDetailView: View {
         .screenBackground()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !pushed { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-            if onStartOwn == nil {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { onSave(save()); dismiss() }.disabled(session.items == original.items || session.blocks.isEmpty)
+            if autosaves {
+                // Every change is already saved: there's nothing to cancel.
+                if !pushed { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.fontWeight(.semibold) } }
+            } else {
+                if !pushed { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+                if onStartOwn == nil {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { onSave(save()); dismiss() }.disabled(session.items == original.items || session.blocks.isEmpty)
+                    }
                 }
             }
         }
         .safeAreaInset(edge: .bottom) { bottom(names) }
+        .overlay(alignment: .bottom) { ToastView(toast: $toast).padding(.bottom, selected == nil ? 84 : 250) }
+        .animation(.settle, value: toast)
+        .onChange(of: session) { old, new in changed(from: old, to: new) }
+        .onChange(of: toast) { if toast == nil { undoTo = nil } }
         .sheet(item: Binding(get: { howTo.map(HowToID.init) }, set: { howTo = $0?.id })) { item in
             let template = templates.first { $0.slug == item.id }
             HowToSheet(name: template?.name ?? item.id, slug: item.id, steps: template?.values("instructions") ?? [])
@@ -197,192 +216,19 @@ struct WorkoutDetailView: View {
             }
             .buttonStyle(.plain)
             if open {
-                ForEach(Array(block.movements.enumerated()), id: \.element.id) { m, movement in
-                    if block.isGroup {
-                        Text("\(letter)\(m + 1)  \(names[movement.exercise] ?? movement.exercise)")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    if let note = movement.working.first?.note, !note.isEmpty {
-                        Text(note).font(.caption).foregroundStyle(.secondary)
-                    }
-                    ForEach(Array(movement.sets.enumerated()), id: \.element.id) { s, set in
-                        setRow(set, label: set.isWarmup ? "W" : "\(movement.sets[..<s].filter { !$0.isWarmup }.count + 1)",
-                               load: loadMetric(movement.exercise), weighted: weighted(movement.exercise),
-                               cell: { Cell(block: index, movement: m, set: s, metric: $0) })
-                    }
-                }
-                footer(index, block, names)
+                BlockEditor(session: $session, index: index, names: names, templates: templates, selected: $selected,
+                            onSwap: { picking = .swap(block: $0, movement: $1, exercise: $2) }, onHowTo: { howTo = $0 })
             }
         }
         .padding(14)
         .background(.background, in: .rect(cornerRadius: 24))
     }
 
-    /// The load a bodyweight exercise takes when one's added: each dumbbell or kettlebell, else pounds on the body.
-    private func loadMetric(_ slug: String) -> String {
-        let equipment = templates.first { $0.slug == slug }?.values("equipment") ?? []
-        return !Set(equipment).isDisjoint(with: ["dumbbells", "kettlebells"]) && !equipment.contains("barbell") ? "load_lb_hand" : "load_lb"
-    }
-
-    /// Done with a weight (dumbbells, a barbell…): with none set yet it says so, never "bodyweight".
-    private func weighted(_ slug: String) -> Bool {
-        !Set(templates.first { $0.slug == slug }?.values("equipment") ?? []).isDisjoint(with: Exercise.weights)
-    }
-
-    private func setRow(_ set: SessionPlan.PlannedSet, label: String, load: String, weighted: Bool,
-                        cell: @escaping (String) -> Cell) -> some View {
-        let metrics = Self.editable(set)
-        return HStack(spacing: 8) {
-            Text(label).font(.subheadline.weight(.bold).monospacedDigit()).frame(width: 24)
-                .foregroundStyle(set.isWarmup ? .tertiary : .secondary)
-            ForEach(metrics, id: \.self) { metric in
-                let isSelected = selected == cell(metric)
-                Button { withAnimation(.tap) { selected = isSelected ? nil : cell(metric) } } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text(Self.number(set.value(metric) ?? 0)).font(.title3.weight(.bold).monospacedDigit())
-                        Text(SetRow.units[metric] ?? metric).font(.caption).foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(isSelected ? Color.primary.opacity(0.12) : Color.fill, in: .rect(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isSelected ? Color.primary : .clear, lineWidth: 2))
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
-            if metrics.count == 1 {
-                // FIT-81: tap to add a load ("bodyweight" until one's set; back to 0 is bodyweight again).
-                let isSelected = selected == cell(load)
-                Button { withAnimation(.tap) { selected = isSelected ? nil : cell(load) } } label: {
-                    Text(isSelected ? "0 \(SetRow.units[load] ?? "lb")" : weighted ? "add weight" : "bodyweight").font(.subheadline).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(isSelected ? Color.primary.opacity(0.12) : .clear, in: .rect(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isSelected ? Color.primary : .clear, lineWidth: 2))
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Adds a weight")
-            }
-        }
-        .opacity(set.isWarmup ? 0.6 : 1)
-    }
-
-    /// Rest, then the block's edits: Swap, + Set and the rest in a menu.
-    private func footer(_ index: Int, _ block: SessionPlan.Block, _ names: [String: String]) -> some View {
-        let restAfter = block.movements.last?.working.first.map { set in
-            WorkoutDraft.rest(metric: ["duration_s", "distance_m"].first { set.value($0) != nil } ?? "reps", value: set.value("reps"))
-        }
-        return HStack(spacing: 8) {
-            if let restAfter {
-                Text("Rest \(Duration.seconds(restAfter).formatted(.time(pattern: .minuteSecond)))\(block.isGroup ? " / round" : "")")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            Menu {
-                if index + 1 < session.blocks.count {
-                    Button("Superset with \(SessionPlan.letter(index + 1))", systemImage: "link") { withAnimation(.settle) { session.group(index) } }
-                }
-                if block.isGroup {
-                    Button("Ungroup", systemImage: "square.split.1x2") { withAnimation(.settle) { session.ungroup(index) } }
-                }
-                if index > 0 {
-                    Button("Move up", systemImage: "arrow.up") { withAnimation(.settle) { selected = nil; session.move(block: index, by: -1) } }
-                }
-                if index + 1 < session.blocks.count {
-                    Button("Move down", systemImage: "arrow.down") { withAnimation(.settle) { selected = nil; session.move(block: index, by: 1) } }
-                }
-                if block.rounds > 1 {
-                    Button(block.isGroup ? "Remove last round" : "Remove last set", systemImage: "minus") {
-                        withAnimation(.settle) { selected = nil; session.removeSet(block: index) }
-                    }
-                }
-                // FIT-75: how to do it, for exercises the model picked that you may not know.
-                ForEach(block.movements, id: \.id) { movement in
-                    if !(templates.first { $0.slug == movement.exercise }?.values("instructions") ?? []).isEmpty
-                        || HowToPhotos.shows(movement.exercise)
-                        || ExerciseVideos.bundled[movement.exercise] != nil {
-                        Button(block.isGroup ? "How to Do \(names[movement.exercise] ?? movement.exercise)" : "How to Do It",
-                               systemImage: "questionmark.circle") { howTo = movement.exercise }
-                    }
-                }
-                Divider()
-                ForEach(Array(block.movements.enumerated()), id: \.element.id) { m, movement in
-                    Button("Remove \(names[movement.exercise] ?? movement.exercise)", systemImage: "trash", role: .destructive) {
-                        withAnimation(.settle) { selected = nil; session.remove(block: index, movement: m) }
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis").frame(width: 44, height: 36)
-                    .background(Color.fill, in: .capsule)
-            }
-            // FIT-81: a short list for the movement, and search, not the whole catalog.
-            if block.isGroup {
-                Menu {
-                    ForEach(Array(block.movements.enumerated()), id: \.element.id) { m, movement in
-                        Button("Swap \(names[movement.exercise] ?? movement.exercise)") {
-                            picking = .swap(block: index, movement: m, exercise: movement.exercise)
-                        }
-                    }
-                } label: { swapLabel }
-            } else if let movement = block.movements.first {
-                Button { picking = .swap(block: index, movement: 0, exercise: movement.exercise) } label: { swapLabel }
-                    .buttonStyle(.plain)
-            }
-            Button {
-                withAnimation(.settle) { session.addSet(block: index) }
-            } label: {
-                Text(block.isGroup ? "+ Round" : "+ Set").font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(height: 36)
-                    .background(Color.fill, in: .capsule)
-            }
-            .buttonStyle(.plain)
-        }
-        .foregroundStyle(.primary)
-    }
-
     // MARK: Bottom
 
-    private var swapLabel: some View {
-        Text("Swap").font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(height: 36)
-            .background(Color.fill, in: .capsule)
-    }
-
     @ViewBuilder private func bottom(_ names: [String: String]) -> some View {
-        if let cell = selected, session.blocks.indices.contains(cell.block),
-           session.blocks[cell.block].movements.indices.contains(cell.movement),
-           session.blocks[cell.block].movements[cell.movement].sets.indices.contains(cell.set) {
-            let movement = session.blocks[cell.block].movements[cell.movement]
-            let set = movement.sets[cell.set]
-            let number = movement.sets[..<cell.set].filter { !$0.isWarmup }.count + 1
-            VStack(spacing: 12) {
-                HStack {
-                    Text("\(names[movement.exercise] ?? movement.exercise) · \(set.isWarmup ? "warm-up" : "set \(number)") · \(Self.label(cell.metric).lowercased())")
-                        .font(.subheadline.weight(.semibold)).lineLimit(1)
-                    Spacer()
-                    Button("Done") { withAnimation(.tap) { selected = nil } }.fontWeight(.semibold)
-                }
-                HStack(spacing: 16) {
-                    stepButton("minus", cell, -Self.step(cell.metric))
-                    VStack(spacing: 0) {
-                        Text(Self.number(set.value(cell.metric) ?? 0))
-                            .font(.display(48, weight: .bold).monospacedDigit())
-                            .contentTransition(.numericText(value: set.value(cell.metric) ?? 0))
-                        Text(SetRow.units[cell.metric] ?? "").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    stepButton("plus", cell, Self.step(cell.metric))
-                }
-                Button {
-                    withAnimation(.settle) {
-                        session.set(cell.metric, to: set.value(cell.metric) ?? 0, block: cell.block, movement: cell.movement,
-                                    set: cell.set, remaining: true)
-                        selected = nil
-                    }
-                } label: {
-                    Text("Apply to remaining sets").font(.headline).frame(maxWidth: .infinity, minHeight: 48)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: 14))
-            }
-            .padding(16)
+        if selected != nil {
+            SetStepper(session: $session, selected: $selected, names: names)
             .background(.bar)
             .motionTransition(.move(edge: .bottom))
         } else if let startTitle {
@@ -408,25 +254,27 @@ struct WorkoutDetailView: View {
         }
     }
 
-    private func stepButton(_ symbol: String, _ cell: Cell, _ delta: Double) -> some View {
-        Button {
-            let current = session.blocks[cell.block].movements[cell.movement].sets[cell.set].value(cell.metric) ?? 0
-            withAnimation(.settle) {
-                session.set(cell.metric, to: max(0, current + delta), block: cell.block, movement: cell.movement,
-                            set: cell.set, remaining: false)
-            }
-        } label: {
-            Image(systemName: symbol).font(.title2.weight(.bold)).frame(width: 64, height: 64)
-                .background(Color.fill, in: .circle)
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.tick, trigger: session.blocks[cell.block].movements[cell.movement].sets[cell.set].value(cell.metric))
-    }
-
     @discardableResult
     private func save() -> [PlannedActivity] {
+        if autosaves { return saved }
         guard session.items != original.items else { return items }
         return Planner.save(session, over: items, templates: templates, in: context)
+    }
+
+    /// TKL-759 (a): each change is saved over the rows as last saved, and Undo takes back everything since its toast came.
+    private func changed(from old: SessionPlan, to new: SessionPlan) {
+        guard autosaves, old.items != new.items, !new.blocks.isEmpty else { return }
+        saved = Planner.save(new, over: saved, templates: templates, in: context)
+        try? context.save()
+        onSave(saved)
+        if undoing { undoing = false; return }
+        if undoTo == nil { undoTo = old }
+        toast = Toast(text: "Saved") {
+            guard let before = undoTo else { return }
+            undoing = true
+            withAnimation(.settle) { selected = nil; session = before }
+            undoTo = nil
+        }
     }
 
     /// "MAIN LIFT", "SUPERSET · 3 ROUNDS" or "ACCESSORY" above the block's name.
