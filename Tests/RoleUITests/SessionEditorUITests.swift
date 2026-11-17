@@ -69,8 +69,38 @@ final class SessionEditorUITests: XCTestCase {
         XCTAssertTrue(waitForCount(lifts, liftsBefore - 2), "Remove didn't remove the lift")
         XCTAssertFalse(app.buttons.matching(identifier: "session.lift").matching(NSPredicate(format: "label == %@", name)).firstMatch.exists)
 
-        // Each change offered an Undo.
-        XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 3), "No Undo after a change")
+        // Undo takes the removal back: the lift is on the plan again.
+        let undo = app.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 3), "No Undo after a change")
+        undo.tap()
+        XCTAssertTrue(waitForCount(lifts, liftsBefore - 1), "Undo didn't bring the lift back")
+    }
+
+    /// Every lift removed, then Undo: the whole session comes back (the review's empty-session case).
+    @MainActor
+    func testUndoBringsBackASessionWithEveryLiftRemoved() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "YES", "-role", "solo", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Check off as done"].firstMatch.waitForExistence(timeout: 30), "Today has no session")
+        let lifts = app.buttons.matching(identifier: "session.lift")
+        let names = lifts.allElementsBoundByIndex.map(\.label)
+        XCTAssertFalse(names.isEmpty)
+        for name in names {
+            let lift = lifts.matching(NSPredicate(format: "label == %@", name)).firstMatch
+            XCTAssertTrue(lift.waitForExistence(timeout: 5), "\(name) isn't on Today")
+            lift.tap()
+            app.buttons["session.more"].tap()
+            let remove = app.buttons["Remove \(name)"]
+            XCTAssertTrue(remove.waitForExistence(timeout: 5), "⋯ has no Remove \(name)")
+            remove.tap()
+        }
+        XCTAssertTrue(waitForCount(lifts, 0), "Not every lift was removed")
+        let undo = app.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 3), "No Undo after removing the last lift")
+        undo.tap()
+        XCTAssertTrue(waitForCount(lifts, names.count), "Undo didn't bring the session back")
+        XCTAssertEqual(lifts.allElementsBoundByIndex.map(\.label), names, "The session came back changed")
     }
 
     /// A number in the open lift's first movement: its set ("1", "2", "W") and metric ("reps", "load").

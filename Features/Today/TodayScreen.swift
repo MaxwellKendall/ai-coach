@@ -864,12 +864,14 @@ struct TodayScreen: View {
         if before.blocks.map(\.movements.first?.exercise) != session.blocks.map(\.movements.first?.exercise) { checked = [] }
         // TKL-759 (a): saved as it's made; Undo takes back every change since its toast came.
         let base = editUndo?.base ?? before
+        // Kept from before the first change, so Undo can write back a session an edit emptied (every lift removed).
+        let anchor = editUndo?.anchor ?? Planner.Anchor(items)
         let undo = Toast(text: "Saved") { [context, templates] in
             guard let edit = editUndo else { return }
-            _ = Planner.save(edit.base, over: edit.items, templates: templates, in: context)
+            _ = Planner.save(edit.base, over: edit.items, templates: templates, in: context, anchor: edit.anchor)
             editUndo = nil
         }
-        editUndo = EditUndo(base: base, items: written, toast: undo.id)
+        editUndo = EditUndo(base: base, items: written, anchor: anchor, toast: undo.id)
         withAnimation { toast = undo }
     }
 
@@ -877,6 +879,7 @@ struct TodayScreen: View {
     private struct EditUndo {
         var base: SessionPlan
         var items: [PlannedActivity]
+        var anchor: Planner.Anchor?
         var toast: UUID
     }
 

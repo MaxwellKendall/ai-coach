@@ -556,12 +556,27 @@ enum Planner {
         })
     }
 
+    /// TKL-753: where a session's rows go (its day and time, slot and plan), kept apart from the rows so a session
+    /// emptied by an edit can be written back, by Undo or an add, over no rows at all.
+    struct Anchor {
+        var date: Date
+        var slot: String?
+        var plan: Plan?
+
+        init?(_ items: [PlannedActivity]) {
+            guard let first = items.min(by: { $0.date < $1.date }) else { return nil }
+            date = first.date
+            slot = first.slot
+            plan = first.plan
+        }
+    }
+
     /// Writes an edited session back over its rows. Rows keep their ids where they can; split-off and new
     /// rows are inserted, and rows no longer used are deleted. Second offsets keep the order.
     @discardableResult
     static func save(_ session: SessionPlan, over items: [PlannedActivity], templates: [Template],
-                     in context: ModelContext) -> [PlannedActivity] {
-        guard let first = items.min(by: { $0.date < $1.date }) else { return [] }
+                     in context: ModelContext, anchor: Anchor? = nil) -> [PlannedActivity] {
+        guard let first = Anchor(items) ?? anchor else { return [] }
         let ids = Dictionary(templates.map { ($0.slug, $0.id) }, uniquingKeysWith: { first, _ in first })
         let start = Date(timeIntervalSinceReferenceDate: (first.date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
         var unused = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

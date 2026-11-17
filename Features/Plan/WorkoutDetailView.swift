@@ -26,6 +26,8 @@ struct WorkoutDetailView: View {
     @State private var original: SessionPlan
     /// The rows as last saved: a change saves over these (new rows are inserted, removed ones deleted).
     @State private var saved: [PlannedActivity]
+    /// The session's day, slot and plan, so it can still be saved once an edit has removed every row (TKL-753).
+    @State private var anchor: Planner.Anchor?
     @State private var collapsed: Set<UUID> = []
     @State private var selected: Cell?
     @State private var toast: Toast?
@@ -70,6 +72,7 @@ struct WorkoutDetailView: View {
         _session = State(initialValue: session)
         _original = State(initialValue: session)
         _saved = State(initialValue: items)
+        _anchor = State(initialValue: Planner.Anchor(items))
     }
 
     var body: some View {
@@ -263,8 +266,9 @@ struct WorkoutDetailView: View {
 
     /// TKL-759 (a): each change is saved over the rows as last saved, and Undo takes back everything since its toast came.
     private func changed(from old: SessionPlan, to new: SessionPlan) {
-        guard autosaves, old.items != new.items, !new.blocks.isEmpty else { return }
-        saved = Planner.save(new, over: saved, templates: templates, in: context)
+        // An emptied session is saved too (every lift removed); its anchor lets Undo or an add write it back.
+        guard autosaves, old.items != new.items else { return }
+        saved = Planner.save(new, over: saved, templates: templates, in: context, anchor: anchor)
         try? context.save()
         onSave(saved)
         if undoing { undoing = false; return }
