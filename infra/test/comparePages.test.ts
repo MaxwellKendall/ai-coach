@@ -35,6 +35,8 @@ describe("comparison pages (FIT-244)", () => {
     expect(compareRoute("/robots.txt", site)!.body).toContain("Sitemap: https://example.com/sitemap.xml");
     const map = compareRoute("/sitemap.xml", site)!.body;
     for (const p of indexed) expect(map).toContain(`<loc>https://example.com${p}</loc>`);
+    // TKL-439: the coach page moved off the home page, so it's listed on its own.
+    expect(indexed).toContain("/coaches");
     expect(map).not.toMatch(/\/(w|s|p|join|c)\//);
   });
 

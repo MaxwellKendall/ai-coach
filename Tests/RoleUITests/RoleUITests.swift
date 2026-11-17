@@ -362,7 +362,7 @@ final class RoleUITests: XCTestCase {
     private func assertLifterPaywall(_ app: XCUIApplication) {
         let buy = app.buttons["paywall.buy"]
         XCTAssertTrue(buy.waitForExistence(timeout: 30), "Lifter Pro's products didn't load")
-        XCTAssertTrue(app.staticTexts["Your next week, written for you"].exists, "No headline")
+        XCTAssertTrue(app.staticTexts["Want it planned for you?"].exists, "No headline")
         XCTAssertEqual(buy.label, "Start 14-day free trial")
         XCTAssertEqual(app.staticTexts["paywall.yearly.price"].label, "$39.99/yr after (about $3.33/mo)")
         XCTAssertEqual(app.buttons["paywall.monthly"].label, "Monthly, $5.99/mo")

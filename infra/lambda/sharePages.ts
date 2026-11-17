@@ -306,7 +306,8 @@ export async function route(path: string, store: Store, site: Site): Promise<Pag
   if (path === "/pro" && site.mcpUrl) return html(proPage(site));
   if (path === "/pro/thanks" && site.mcpUrl) return { ...html(proThanksPage(site)), noStore: true };
   if (path === "/pricing") return html(pricingPage(site));
-  if (path === "/" || path === "/coaches") return html(homePage(site));
+  if (path === "/") return html(homePage(site));
+  if (path === "/coaches") return html(coachPage(site));
   return { ...html(missingPage(site)), status: 404 };
 }
 
@@ -603,10 +604,58 @@ function coachInvitePage(coach: string | null, path: string, site: Site) {
 export const START = "/app/clients";
 
 /**
- * FIT-217: the home page is for coaches, the customer since the pilot (author, 2026-10-22). FIT-288: business model
- * v2's pitch, everything they pay other tools for, free; Pro is the AI. "Start free" leads to the dashboard's sign-in.
+ * TKL-439: the home page is for lifters training on their own, the launch's focus (author, 2026-11-12). Every claim is
+ * the free no-coach door's (TKL-230): a ready program for their equipment and days, planned in code from what they
+ * logged. "Free" holds while monetization is freemium (shared/monetization.ts); if hard goes live, drop it here in the
+ * same change (author, 2026-11-17). Nothing here says the AI plans in the app (TKL-426) or that there's no paywall.
  */
 function homePage(site: Site) {
+  const app = esc(site.appName);
+  const claude = site.mcpUrl
+    ? `<section class="block">
+        <h2>Want it planned for you?</h2>
+        <p class="lede">Connect Claude and say “Set me up”: it asks about your goals, writes your program, and plans your weeks. Planning from Claude is free for ${TRIAL_DAYS} days, then needs ${PLANS.lifter.name}, ${priceLine("lifter")}; logging stays free.</p>
+        <div class="actions"><a class="button" href="/claude">Connect Claude</a><a class="button" href="/pro">About ${PLANS.lifter.name}</a></div>
+      </section>`
+    : "";
+  return layout(site, {
+    title: `${site.appName}: a real strength program for your gym, free`,
+    description: `A real program for your gym and your week, free. Log your sets, and next week moves up.`,
+    path: "/",
+    body: `<section class="hero">
+        <p class="eyebrow">For lifting on your own</p>
+        <h1>A real program for your gym and your week, free.</h1>
+        <p class="lede">Log your sets, and next week moves up. Say what you're training for, what equipment you have and how many days a week, and ${app} gives you a program that fits.</p>
+        ${actions(site, [{ href: "#how", label: "How it works" }])}
+      </section>
+      <section class="block how" id="how">
+        <h2>How it works</h2>
+        <ol>
+          <li><b>Pick your program</b><span>A few quick questions: your goal, your gym, your days. Full Body, Upper / Lower, Push / Pull / Legs and more.</span></li>
+          <li><b>Log every set</b><span>A tap per set at the gym, with the weights and reps already filled in.</span></li>
+          <li><b>Next week moves up</b><span>Each week's load and reps follow what you actually lifted.</span></li>
+        </ol>
+      </section>
+      ${claude}
+      <section class="block">
+        <h2>Price</h2>
+        <p class="lede">The app, your program and logging are free. <b>${PLANS.lifter.name}</b> is ${priceLine("lifter")} for weeks planned for you by AI.</p>
+        <div class="actions"><a class="button" href="/pricing">See every plan</a></div>
+      </section>
+      <section class="block">
+        <h2>Coaching clients?</h2>
+        <p class="lede">Program, track and message any number of clients, free, from the dashboard.</p>
+        <div class="actions"><a class="button" href="/coaches">For coaches</a></div>
+      </section>`,
+  });
+}
+
+/**
+ * FIT-217: the page for coaches (the home page until TKL-439). FIT-288: everything a coach needs is free; Pro is the AI.
+ * TKL-439: the line is "unlimited clients, free", not parity with TrueCoach, which has things we don't (its Android
+ * and web client apps, a video library, nutrition, client payments). "Start free" leads to the dashboard's sign-in.
+ */
+function coachPage(site: Site) {
   const app = esc(site.appName);
   const chat = [
     { who: "coach", text: "Mike's knee is sore and his squat has stalled. Rebuild next week." },
@@ -615,12 +664,12 @@ function homePage(site: Site) {
   ];
   return layout(site, {
     title: `${site.appName}: free coaching software for strength coaches`,
-    description: `Everything you pay TrueCoach for, free: programs, the client app and any number of clients. Pay only for the AI that does the work.`,
-    path: "/",
+    description: `Unlimited clients, free: programs, the client app and the dashboard. Pay only for the AI that writes their weeks.`,
+    path: "/coaches",
     body: `${coachStyle}
       <section class="hero">
         <p class="eyebrow">For strength coaches</p>
-        <h1>Everything you pay TrueCoach for, free.</h1>
+        <h1>Unlimited clients, free. Pay only for the AI that writes their weeks.</h1>
         <p class="lede">Write your clients' programs, see every set they log, and know who's slipping or hurting, with any number of clients. Pay only for the AI that does the work: Pro lets Claude write and change each client's week from what they logged.</p>
         <div class="actions">
           <a class="button primary" href="${START}">Start free</a>

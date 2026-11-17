@@ -84,7 +84,7 @@ struct PaywallView: View {
     private var lifterHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Lifter Pro").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-            Text("Your next week, written for you").font(.display(34, weight: .bold)).tracking(-0.4)
+            Text("Want it planned for you?").font(.display(34, weight: .bold)).tracking(-0.4)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("paywall.headline")
             Text("Pro builds every week from your last one, your goal, and your gym. Works in Claude too.")

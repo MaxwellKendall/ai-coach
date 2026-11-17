@@ -165,11 +165,30 @@ describe("the coach landing page (FIT-217)", () => {
     expect((await route("/pro", store, site)).status).toBe(404);
   });
 
-  it("is the home page: everything they pay for, free; Pro's price; and Start free to the dashboard's Clients", async () => {
-    for (const path of ["/", "/coaches"]) {
+  it("TKL-439: the home page is for lifters: a real program, free, that moves up; Pro is planning; coaches go to /coaches", async () => {
+    const page = await route("/", {} as Store, { ...site, mcpUrl: "https://example.com/mcp" });
+    expect(page.status).toBe(200);
+    expect(page.body).toContain("<h1>A real program for your gym and your week, free.</h1>");
+    expect(page.body).toContain("Log your sets, and next week moves up.");
+    expect(page.body).toContain("Want it planned for you?");
+    expect(page.body).toContain(`Planning from Claude is free for ${TRIAL_DAYS} days, then needs Lifter Pro, $5.99 a month or $39.99 a year`);
+    expect(page.body).toContain('href="/coaches"');
+    // Not the coach pitch, and no claim it does what TrueCoach does.
+    expect(page.body).not.toMatch(/TrueCoach for|Everything you pay|For strength coaches/);
+  });
+
+  it("TKL-439: no page claims parity with TrueCoach", async () => {
+    for (const path of ["/", "/coaches", "/pro", "/pricing", "/claude"]) {
+      const page = await route(path, {} as Store, { ...site, mcpUrl: "https://example.com/mcp" });
+      expect(page.body, path).not.toMatch(/Everything you pay|pay (TrueCoach|other tools) for/);
+    }
+  });
+
+  it("is the coach page: unlimited clients, free; Pro's price; and Start free to the dashboard's Clients", async () => {
+    for (const path of ["/coaches"]) {
       const page = await route(path, {} as Store, { ...site, mcpUrl: "https://example.com/mcp" });
       expect(page.status).toBe(200);
-      expect(page.body).toContain("Everything you pay TrueCoach for, free.");
+      expect(page.body).toContain("<h1>Unlimited clients, free. Pay only for the AI that writes their weeks.</h1>");
       expect(page.body).toContain("<b>Free</b><span>any number of clients, no card</span>");
       expect(page.body).toContain("<b>Pro</b> is $19.99 a month or $199 a year");
       expect(page.body).toContain("Clients are free");
@@ -198,12 +217,14 @@ describe("the coach landing page (FIT-217)", () => {
     expect(page.body).not.toMatch(/referr/i);
     const home = await route("/", {} as Store, site);
     expect(home.body).toContain('href="/pricing"');
-    expect(home.body).toContain("in the iPhone app or on the web");
+    expect((await route("/coaches", {} as Store, site)).body).toContain("in the iPhone app or on the web");
   });
 
-  it("links the App Store for clients once there's a listing", async () => {
-    const listed = await route("/", {} as Store, { ...site, appStoreUrl: "https://apps.apple.com/app/id1" });
-    expect(listed.body).toContain('href="https://apps.apple.com/app/id1"');
+  it("links the App Store for clients once there's a listing, and the lifter home leads with it", async () => {
+    for (const path of ["/", "/coaches"]) {
+      const listed = await route(path, {} as Store, { ...site, appStoreUrl: "https://apps.apple.com/app/id1" });
+      expect(listed.body, path).toContain('href="https://apps.apple.com/app/id1"');
+    }
   });
 });
 

@@ -10,7 +10,7 @@ export const EDITABLE_VERSION_STATES = new Set([
   "INVALID_BINARY",
 ]);
 
-const LIMITS = { description: 4000, promotional: 170, whatsNew: 4000, keywords: 100 };
+const LIMITS = { subtitle: 30, description: 4000, promotional: 170, whatsNew: 4000, keywords: 100 };
 
 export function parseArgs(argv) {
   const args = argv.filter((a) => a !== "--");
