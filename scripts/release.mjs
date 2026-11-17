@@ -115,8 +115,10 @@ const dirty = git(["status", "--porcelain"]);
 const head = git(["log", "-1", "--oneline"]);
 console.log(dryRun ? "Dry run. Nothing will be uploaded, changed in App Store Connect, or submitted." : "Release.");
 console.log(`${branch} @ ${head}`);
-if (branch !== "main") fail(`Preflight: branch is ${branch}, not main.`);
-else console.log("Preflight: on main.");
+// A worktree can't have main checked out beside the main checkout, so a clean HEAD equal to origin/main counts too.
+const atOriginMain = git(["rev-parse", "HEAD"]) === git(["rev-parse", "origin/main"]);
+if (branch !== "main" && !atOriginMain) fail(`Preflight: branch is ${branch}, not main, and HEAD is not origin/main.`);
+else console.log(branch === "main" ? "Preflight: on main." : `Preflight: ${branch} is at origin/main.`);
 if (dirty) fail("Preflight: the working tree is not clean.");
 else console.log("Preflight: clean tree.");
 
