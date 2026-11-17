@@ -87,7 +87,7 @@ struct SessionList: View {
                                     onHowTo: { looking = $0 }, onFill: true)
                             .padding(14)
                             .background(Color.fill.opacity(0.6), in: .rect(cornerRadius: 18))
-                            .padding(.leading, inset).padding(.bottom, Self.rowPadding)
+                            .padding(.bottom, Self.rowPadding)
                             .motionTransition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
