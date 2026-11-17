@@ -37,6 +37,8 @@ struct TodayScreen: View {
     @State private var fresh: Set<String> = []
     @State private var message: String?
     @State private var toast: Toast?
+    /// TKL-759: the session before the changes the showing Undo takes back; dropped once that toast goes.
+    @State private var editUndo: EditUndo?
     @State private var sheet: Sheet?
     @State private var live: WorkoutDraft?
     @State private var tracking: RunTarget?
@@ -207,6 +209,7 @@ struct TodayScreen: View {
         .animation(.settle, value: voice.listening)
         .animation(.settle, value: working)
         .animation(.settle, value: toast)
+        .onChange(of: toast) { if toast?.id != editUndo?.toast { editUndo = nil } }
         .onAppear { if day == nil { day = todayPos } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { turnDay() } }
         // FIT-383: the coach removed them while the app was open: Messages, check-ins and their name go.
@@ -679,7 +682,6 @@ struct TodayScreen: View {
             // A later day is read-only: its week may be replanned before it starts, which would undo a change made now.
             SessionList(session: plan.session, names: names, previous: previousLoads,
                         checked: lifts.isEmpty || !isToday ? nil : $checked,
-                        onLoad: isToday ? { exercise, step in changeLoad(exercise, by: step, in: plan.items) } : nil,
                         onEdit: isToday ? { edited($0, over: plan.items) } : nil, history: true)
             ForEach(plan.ran) { run in RunRow(run: run) { sheet = .ran(run) }.padding(.top, 16) }
         }
@@ -858,21 +860,27 @@ struct TodayScreen: View {
     /// the lifts' order or number starts the check-offs again, since they're kept by position.
     private func edited(_ session: SessionPlan, over items: [PlannedActivity]) {
         let before = Planner.session(items, templates: templates)
-        _ = Planner.save(session, over: items, templates: templates, in: context)
+        let written = Planner.save(session, over: items, templates: templates, in: context)
         if before.blocks.map(\.movements.first?.exercise) != session.blocks.map(\.movements.first?.exercise) { checked = [] }
+        // TKL-759 (a): saved as it's made; Undo takes back every change since its toast came.
+        let base = editUndo?.base ?? before
+        // Kept from before the first change, so Undo can write back a session an edit emptied (every lift removed).
+        let anchor = editUndo?.anchor ?? Planner.Anchor(items)
+        let undo = Toast(text: "Saved") { [context, templates] in
+            guard let edit = editUndo else { return }
+            _ = Planner.save(edit.base, over: edit.items, templates: templates, in: context, anchor: edit.anchor)
+            editUndo = nil
+        }
+        editUndo = EditUndo(base: base, items: written, anchor: anchor, toast: undo.id)
+        withAnimation { toast = undo }
     }
 
-    /// FIT-297 (E1): a load changed in place on Today changes the plan's working sets for that exercise.
-    private func changeLoad(_ exercise: String, by step: Double, in items: [PlannedActivity]) {
-        guard let id = templates.first(where: { $0.slug == exercise })?.id else { return }
-        for item in items where item.templateRef == id && item.note != TrainingGenerator.warmupNote {
-            var targets = item.targets
-            guard let index = targets.firstIndex(where: { ["load_lb", "load_lb_hand"].contains($0.metric) }) else { continue }
-            targets[index].value = max(0, targets[index].value + step)
-            item.targets = targets
-            item.updatedAt = .now
-        }
-        try? context.save()
+    /// What Today's Undo restores: the session before this run of changes, over the rows as they now are.
+    private struct EditUndo {
+        var base: SessionPlan
+        var items: [PlannedActivity]
+        var anchor: Planner.Anchor?
+        var toast: UUID
     }
 
     /// FIT-297 (L3): the checked-off lifts saved as planned, with Undo; wins they earn are celebrated.
