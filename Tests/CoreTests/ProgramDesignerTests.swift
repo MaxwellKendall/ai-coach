@@ -1,4 +1,5 @@
 import Foundation
+import FoundationModels
 import Testing
 @testable import AICoach
 
@@ -28,7 +29,7 @@ struct ProgramDesignerTests {
     }
 
     private func item(_ name: String, main: Bool = false, sets: Int = 3, reps: Int? = 8, seconds: Int? = nil,
-                      pounds: Int? = nil, rpe: Int? = 7, superset: Int? = nil) -> ProgramDesigner.DesignedWeek.Item {
+                      pounds: Double? = nil, rpe: Int? = 7, superset: Int? = nil) -> ProgramDesigner.DesignedWeek.Item {
         .init(name: name, main: main, sets: sets, reps: reps, seconds: seconds, meters: nil, pounds: pounds,
               rpe: rpe, superset: superset)
     }
@@ -75,6 +76,26 @@ struct ProgramDesignerTests {
         #expect(bench?.adjustedReason == "Bench held at 185: two sets short Tuesday")
         #expect(rows.first { $0.exercise == "pull-up" }?.adjustedReason == nil)
         #expect(Coach.plan(deload: false, reasons: ["edited", bench!.adjustedReason!]) == "Bench held at 185: two sets short Tuesday.")
+    }
+
+    /// TKL-426: a dumbbell load of 37.5 decodes (it was an Int, so the Travel week failed and fell back to code) and
+    /// reaches the row as 37.5 per hand, not rounded.
+    @Test func aFractionalLoadDecodesAndReachesTheRow() throws {
+        let json = #"""
+            {"sessions": [{"name": "Full", "why": "travel", "exercises": [
+                {"name": "Dumbbell Bench Press", "main": true, "sets": 3, "reps": 10, "pounds": 37.5, "rpe": 7},
+                {"name": "Goblet Squat", "main": false, "sets": 3, "reps": 10, "pounds": 40}]}]}
+            """#
+        let designed = try ProgramDesigner.DesignedWeek(GeneratedContent(json: json))
+        #expect(designed.sessions.first?.exercises.first?.pounds == 37.5)
+        #expect(designed.sessions.first?.exercises.last?.pounds == 40)
+        let loads = try ProgramDesigner.FirstLoads(GeneratedContent(json: #"{"loads": [{"name": "Dumbbell Bench Press", "pounds": 37.5}]}"#))
+        #expect(loads.loads.first?.pounds == 37.5)
+
+        let request = request()
+        let rows = ProgramDesigner.rows(designed, request, settings: request.settings, tier: .of(age: 36)).workouts
+        let press = rows.first { $0.exercise == "dumbbell-bench-press" && $0.note != TrainingGenerator.warmupNote }
+        #expect(press?.target("load_lb_hand") == 37.5)
     }
 
     /// FIT-426: a lift whose own note reports pain isn't held to a decided top set; a note on another lift, or without
