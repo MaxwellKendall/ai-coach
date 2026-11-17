@@ -73,3 +73,13 @@ export function videoHostingNote() {
     "The manual step, once a /review/* behavior exists, is in RELEASE.md.",
   ].join("\n");
 }
+
+// Signing uses the Apple ID signed in to Xcode on this Mac (TKL-760): the release
+// API key has no cloud-signing access, so it is kept for App Store Connect API calls only.
+export function archiveArgs(archivePath = "build/AICoach.xcarchive") {
+  return ["archive", "-scheme", "AICoach", "-configuration", "Release", "-destination", "generic/platform=iOS", "-archivePath", archivePath, "-allowProvisioningUpdates"];
+}
+
+export function exportArgs(archivePath = "build/AICoach.xcarchive") {
+  return ["-exportArchive", "-archivePath", archivePath, "-exportPath", "build/export", "-exportOptionsPlist", "build/ExportOptions.plist", "-allowProvisioningUpdates"];
+}

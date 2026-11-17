@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  archiveArgs,
   assertListing,
+  exportArgs,
   bumpBuildNumber,
   marketingVersion,
   parseArgs,
@@ -70,4 +72,14 @@ test("the committed demo secrets file has no password", () => {
   const source = readFileSync(new URL("../Tests/UITests/Secrets.swift", import.meta.url), "utf8");
   assert.match(source, /environment\["DEMO_PASSWORD"\]/);
   assert.equal(source.includes("base64"), false);
+});
+
+test("archive and export sign with the Xcode account, not the API key (TKL-760)", () => {
+  for (const args of [archiveArgs(), exportArgs()]) {
+    assert.ok(args.includes("-allowProvisioningUpdates"));
+    assert.equal(args.filter((arg) => arg.startsWith("-authenticationKey")).length, 0);
+  }
+  assert.equal(archiveArgs()[0], "archive");
+  assert.equal(exportArgs()[0], "-exportArchive");
+  assert.ok(exportArgs().includes("build/ExportOptions.plist"));
 });

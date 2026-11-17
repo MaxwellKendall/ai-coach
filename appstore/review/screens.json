@@ -1183,6 +1183,26 @@
       ]
     },
     {
+      "id": "SetStepper",
+      "title": "Set Stepper",
+      "kind": "sheet",
+      "file": "Features/Plan/BlockEditor.swift",
+      "roles": [
+        "solo",
+        "client",
+        "coach"
+      ],
+      "from": [
+        "SessionList"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WorkoutDetailView",
+        "SetStepper"
+      ]
+    },
+    {
       "id": "ShareActions.alert.couldnt-make-a-link",
       "title": "Couldn’t make a link",
       "kind": "alert",
