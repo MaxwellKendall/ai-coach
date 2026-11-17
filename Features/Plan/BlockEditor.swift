@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// TKL-753: the one session editor. A block's sets, each a row whose numbers open the bottom stepper (`SetStepper`), and
-/// its footer: rest, then ⋯ (superset, ungroup, move, remove last set, how-to, remove), Swap and + Set. Program › session
+/// swipe a set left to delete it (TKL-766); its footer: rest, then ⋯ (superset, ungroup, move, remove last set, how-to, remove), Swap and + Set. Program › session
 /// shows it in every block card; Today opens it in place under a lift. Every change goes through `session`.
 struct BlockEditor: View {
     @Binding var session: SessionPlan
@@ -40,6 +40,10 @@ struct BlockEditor: View {
                                load: loadMetric(movement.exercise), weighted: weighted(movement.exercise),
                                id: { "set.\(m).\(label).\($0)" },
                                cell: { Cell(block: index, movement: m, set: s, metric: $0) })
+                            .swipeToDelete(enabled: session.canRemove(block: index, movement: m, set: s),
+                                           label: set.isWarmup ? "Delete warm-up set" : block.isGroup ? "Delete round \(label)" : "Delete set \(label)") {
+                                withAnimation(.settle) { selected = nil; session.removeSet(block: index, movement: m, set: s) }
+                            }
                     }
                 }
                 footer(block)
@@ -263,5 +267,61 @@ struct SetStepper: View {
         .buttonStyle(.plain)
         .accessibilityLabel(delta < 0 ? "Less" : "More")
         .sensoryFeedback(.tick, trigger: session.blocks[cell.block].movements[cell.movement].sets[cell.set].value(cell.metric))
+    }
+}
+
+/// TKL-766: swipe a row left to show Delete; a long swipe deletes it outright. Rows that can't go don't move.
+private struct SwipeToDelete: ViewModifier {
+    let enabled: Bool
+    let label: String
+    let delete: () -> Void
+    @State private var offset: CGFloat = 0
+    @State private var width: CGFloat = 0
+    private let reveal: CGFloat = 76
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: offset)
+            .background(alignment: .trailing) {
+                if offset < 0 {
+                    Button(role: .destructive) { finish() } label: {
+                        Image(systemName: "trash").font(.body.weight(.semibold)).foregroundStyle(.white)
+                            .frame(width: max(-offset - 8, 0), height: 44)
+                            .background(Color.red, in: .rect(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHidden(true)
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .simultaneousGesture(drag, including: enabled ? .all : .subviews)
+            .accessibilityAction(named: label) { if enabled { delete() } }
+            .contextMenu {
+                if enabled { Button(label, systemImage: "trash", role: .destructive, action: delete) }
+            }
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 16)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                let start: CGFloat = offset <= -reveal ? -reveal : 0
+                offset = min(0, start + value.translation.width)
+            }
+            .onEnded { value in
+                if width > 0, -offset > width * 0.6 { finish(); return }
+                withAnimation(.settle) { offset = -offset > reveal / 2 || value.predictedEndTranslation.width < -reveal ? -reveal : 0 }
+            }
+    }
+
+    private func finish() {
+        withAnimation(.settle) { offset = 0 }
+        delete()
+    }
+}
+
+extension View {
+    func swipeToDelete(enabled: Bool, label: String, delete: @escaping () -> Void) -> some View {
+        modifier(SwipeToDelete(enabled: enabled, label: label, delete: delete))
     }
 }

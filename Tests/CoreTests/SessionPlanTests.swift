@@ -137,6 +137,37 @@ struct SessionPlanTests {
         #expect(WorkoutDetailView.compact(plan.blocks[0].movements[0]) == "3×5 · 140–150")
     }
 
+    /// TKL-766: swiping a set row deletes that set, not the last one; a lift keeps one working set; a superset loses the round.
+    @Test func removingOneSet() {
+        var plan = SessionPlan(generated)
+        let bench = plan.blocks[0].movements[0]
+        let warmups = bench.sets.filter(\.isWarmup).count
+        let middle = bench.sets[warmups + 1]
+        #expect(plan.canRemove(block: 0, movement: 0, set: warmups + 1))
+        plan.removeSet(block: 0, movement: 0, set: warmups + 1)
+        #expect(plan.blocks[0].rounds == 2)
+        #expect(!plan.blocks[0].movements[0].sets.contains { $0.id == middle.id })
+        #expect(plan.blocks[0].movements[0].sets.filter(\.isWarmup).count == warmups)
+        if warmups > 0 {
+            plan.removeSet(block: 0, movement: 0, set: 0) // a warm-up set goes on its own
+            #expect(plan.blocks[0].movements[0].sets.filter(\.isWarmup).count == warmups - 1)
+            #expect(plan.blocks[0].rounds == 2)
+        }
+        let first = plan.blocks[0].movements[0].sets.firstIndex { !$0.isWarmup }!
+        plan.removeSet(block: 0, movement: 0, set: first)
+        #expect(plan.blocks[0].rounds == 1)
+        #expect(!plan.canRemove(block: 0, movement: 0, set: first)) // the last working set stays
+        plan.removeSet(block: 0, movement: 0, set: first)
+        #expect(plan.blocks[0].rounds == 1)
+
+        plan.group(1) // deadlift + db-row: 3 rounds each
+        let rowSecond = plan.blocks[1].movements[1].working[1].id
+        let s = plan.blocks[1].movements[0].sets.firstIndex { !$0.isWarmup }! + 1
+        plan.removeSet(block: 1, movement: 0, set: s)
+        #expect(plan.blocks[1].movements.allSatisfy { $0.working.count == 2 })
+        #expect(!plan.blocks[1].movements[1].sets.contains { $0.id == rowSecond })
+    }
+
     @Test func addAndRemoveSetsAndMoveBlocks() {
         var plan = SessionPlan(generated)
         plan.addSet(block: 0)
