@@ -129,8 +129,9 @@ export const at = (day: string, hour: number) => new Date(`${day}T${String(hour)
  * The client's sync units: profile, every planned day from their first week through next week, and what they logged.
  * With `program` (FIT-236), also their program and goals, as set_program and add_goal write them. `today` is the
  * module's own day for the scripts; a Lambda passes the day it's asked on, since a warm one outlives the day it loaded.
+ * `by` is who each planned session says wrote it: the coach, or (TKL-749) the lifter's own program.
  */
-export function units(client: Client, first: number, program = false, today = key(new Date())) {
+export function units(client: Client, first: number, program = false, today = key(new Date()), by = "Written by the coach") {
   const sunday = sundayOf(today);
   const out = new Map<string, string>();
   const start = addDays(sunday, 7 * first + 1);
@@ -150,7 +151,7 @@ export function units(client: Client, first: number, program = false, today = ke
   for (let w = first; w <= 1; w++) {
     for (const [weekday, session] of Object.entries(client.days).map(([d, s]) => [Number(d), s] as const)) {
       const day = addDays(sunday, 7 * w + weekday);
-      const plan: PlanRow[] = sessionRows([], session.title, session.lifts(w - first), at(day, 7), "Written by the coach");
+      const plan: PlanRow[] = sessionRows([], session.title, session.lifts(w - first), at(day, 7), by);
       out.set(`plan#${day}`, encode(plan));
       const done = day < today ? client.logged(w, weekday, day === last) : undefined;
       if (!done) continue;

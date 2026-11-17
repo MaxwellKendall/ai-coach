@@ -23,7 +23,8 @@
     "program-stats": "tsx scripts/programStats.ts",
     "coach-stats": "tsx scripts/coachStats.ts",
     "checkpoint": "tsx scripts/coachStats.ts",
-    "monetization": "tsx scripts/monetization.ts"
+    "monetization": "tsx scripts/monetization.ts",
+    "lifter-demo": "tsx scripts/lifter-demo.ts"
   },
   "devDependencies": {
     "@aws-appsync/utils": "^2.1.1",
