@@ -57,8 +57,9 @@ export class Asc {
     }
     if (!res.ok) {
       // Reads are safe to repeat, and App Store Connect returns intermittent 500s on them (TKL-431).
+      // Writes repeat only on 429 (rate limited, so not applied); a 5xx write may have been applied.
       const transientRead = method === "GET" && res.status >= 500 && attempt < 4;
-      if (((res.status === 429 || res.status === 503) && attempt < 5) || transientRead) {
+      if ((res.status === 429 && attempt < 5) || transientRead) {
         const wait = Number(res.headers.get("retry-after")) || 2 ** attempt;
         await new Promise((resolve) => setTimeout(resolve, wait * (this.retryUnitMs ?? 1000)));
         return this.request(method, path, body, attempt + 1);

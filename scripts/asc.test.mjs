@@ -26,3 +26,12 @@ test("a POST that hits a 500 is not retried", async () => {
   await assert.rejects(asc.request("POST", "/v1/x", {}), /failed/);
   assert.equal(calls.length, 1);
 });
+
+test("a PATCH that hits a 503 is not retried, but one that hits a 429 is", async () => {
+  let { asc, calls } = client([[503, { errors: [{ status: "503" }] }], [200, {}]]);
+  await assert.rejects(asc.request("PATCH", "/v1/x", {}), /failed/);
+  assert.equal(calls.length, 1);
+  ({ asc, calls } = client([[429, { errors: [{ status: "429" }] }], [200, { ok: 1 }]]));
+  assert.deepEqual(await asc.request("PATCH", "/v1/x", {}), { ok: 1 });
+  assert.equal(calls.length, 2);
+});
