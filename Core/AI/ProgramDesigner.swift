@@ -89,8 +89,9 @@ enum ProgramDesigner {
             var seconds: Int?
             @Guide(description: "Carries")
             var meters: Int?
+            // TKL-426: Double, so a 37.5 lb dumbbell decodes instead of failing the whole week back to code.
             @Guide(description: "Bar total, or each dumbbell")
-            var pounds: Int?
+            var pounds: Double?
             @Guide(.range(5...10))
             var rpe: Int?
             @Guide(description: "Same number, same superset")
@@ -108,8 +109,8 @@ enum ProgramDesigner {
         struct Load {
             @Guide(description: "The exercise, as written")
             var name: String
-            @Guide(description: "Bar total, or each dumbbell or kettlebell", .range(5...600))
-            var pounds: Int
+            @Guide(description: "Bar total, or each dumbbell or kettlebell", .range(5.0...600.0))
+            var pounds: Double
         }
     }
 
@@ -588,8 +589,8 @@ enum ProgramDesigner {
                     let logged = request.history.last { $0.exercise == slug && ($0.value("load_lb") ?? $0.value("load_lb_hand")) != nil }
                     let perHand = logged.map { $0.value("load_lb_hand") != nil }
                         ?? (exercise.map { !$0.equipment.isDisjoint(with: ["dumbbells", "kettlebells"]) && !$0.equipment.contains("barbell") } ?? false)
-                    targets.append(perHand ? Measurement(metric: "load_lb_hand", value: Double(pounds), unit: "lb/hand")
-                                           : Measurement(metric: "load_lb", value: Double(pounds), unit: "lb"))
+                    targets.append(perHand ? Measurement(metric: "load_lb_hand", value: pounds, unit: "lb/hand")
+                                           : Measurement(metric: "load_lb", value: pounds, unit: "lb"))
                 }
                 if !timed, !carry, let rpe = item.rpe { targets.append(Measurement(metric: "rpe", value: Double(rpe), unit: "RPE")) }
                 let row = PlannedWorkout(date: date, session: session.name, exercise: slug, targets: targets,
