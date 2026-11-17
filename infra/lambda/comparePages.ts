@@ -362,7 +362,7 @@ export function compareRoute(path: string, served: Site): Page | undefined {
 const text = (body: string): Page => ({ status: 200, type: "text/plain; charset=utf-8", body });
 
 /** The public pages worth indexing; shared items and the dashboard aren't. */
-export const indexed = ["/", "/claude", "/pro", "/pricing", "/compare", ...rivals.map((r) => `/compare/${r.slug}`), "/docs", "/privacy", "/terms", "/support"];
+export const indexed = ["/", "/coaches", "/claude", "/pro", "/pricing", "/compare", ...rivals.map((r) => `/compare/${r.slug}`), "/docs", "/privacy", "/terms", "/support"];
 
 function sitemap(site: Site) {
   return `<?xml version="1.0" encoding="UTF-8"?>

@@ -42,6 +42,19 @@ test("listing files fit the App Store and end with the terms line", () => {
   assert.equal(description.trimEnd().endsWith(TERMS_LINE), true);
 });
 
+test("TKL-439: the listing leads with the lifter hero, and the subtitle fits", () => {
+  const description = readFileSync(new URL("../appstore/metadata/description.txt", import.meta.url), "utf8").trim();
+  const promotional = readFileSync(new URL("../appstore/metadata/promotional.txt", import.meta.url), "utf8").trim();
+  const { subtitle } = JSON.parse(readFileSync(new URL("../appstore/metadata/urls.json", import.meta.url), "utf8"));
+  const hero = "A real program for your gym and your week, free. Log your sets, and next week moves up.";
+  assert.equal(description.startsWith(hero), true);
+  assert.equal(promotional, hero);
+  assert.match(subtitle, /free/i);
+  assert.doesNotThrow(() => assertListing({ description, promotional, subtitle }));
+  assert.throws(() => assertListing({ description, subtitle: "x".repeat(31) }), /subtitle is 31 characters/);
+  assert.doesNotMatch(description + promotional + subtitle, /TrueCoach|Everything you pay/);
+});
+
 test("review notes are filled from the caller and keep no placeholder", () => {
   const template = readFileSync(new URL("../appstore/metadata/review-notes.txt", import.meta.url), "utf8");
   const notes = reviewNotes(template, {
