@@ -93,6 +93,18 @@ function b64(value) {
 const deviceList = JSON.parse(exec("xcrun", ["simctl", "list", "devices", "available", "-j"]));
 let udid;
 let deviceName;
+// DEMO_SIMULATOR (a name or UDID) records on a simulator of its own, so another run's tests can't take the screen.
+const wanted = process.env.DEMO_SIMULATOR;
+if (wanted) {
+  for (const devices of Object.values(deviceList.devices)) {
+    const found = devices.find((item) => (item.udid === wanted || item.name === wanted) && item.isAvailable);
+    if (found) { udid = found.udid; deviceName = found.name; break; }
+  }
+  if (!udid) {
+    console.error(`DEMO_SIMULATOR ${wanted} is not an available simulator.`);
+    process.exit(1);
+  }
+}
 for (const preferred of ["iPhone 17 Pro", "iPhone 17 Pro Max"]) {
   if (udid) break;
   for (const devices of Object.values(deviceList.devices)) {
