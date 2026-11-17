@@ -301,7 +301,16 @@ struct SessionList: View {
             .modifier(LiftIdentity(lift: letter == nil, name: name, value: [Self.dose(movement), load.map { "\(Coach.number($0)) \(unit)" }].compactMap { $0 }.joined(separator: ", ")))
             .accessibilityHint(onEdit != nil ? (open == block ? "Folds the lift" : "Changes the lift") : "")
             // A superset's chevron is on its header; a lift's is at the end of its row.
-            if onEdit != nil, letter == nil { chevron("chevron.down", turned: open == block) }
+            // TKL-767: the arrow is its own button (it opens and folds the lift, as the row does), 44 pt to tap.
+            if onEdit != nil, letter == nil {
+                Button { tap(block) } label: {
+                    chevron("chevron.down", turned: open == block).frame(width: 44, height: 44).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, -10)
+                .accessibilityIdentifier("session.arrow")
+                .accessibilityLabel(open == block ? "Fold \(name)" : "Open \(name)")
+            }
         }
         .padding(.vertical, Self.rowPadding)
     }

@@ -103,6 +103,21 @@ final class SessionEditorUITests: XCTestCase {
         XCTAssertEqual(lifts.allElementsBoundByIndex.map(\.label), names, "The session came back changed")
     }
 
+    /// The arrow at a lift's right edge opens its sets, and folds them again (TestFlight 14: it did nothing).
+    @MainActor
+    func testTheArrowOpensAndFoldsALift() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-uiTesting", "YES", "-role", "solo", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Check off as done"].firstMatch.waitForExistence(timeout: 30), "Today has no session")
+        let arrow = app.buttons.matching(identifier: "session.arrow").firstMatch
+        XCTAssertTrue(arrow.waitForExistence(timeout: 5), "A lift has no arrow to tap")
+        arrow.tap()
+        XCTAssertTrue(cell(app, set: "1", metric: "load").waitForExistence(timeout: 5), "Tapping the arrow didn't open the lift's sets")
+        arrow.tap()
+        XCTAssertFalse(cell(app, set: "1", metric: "load").waitForExistence(timeout: 2), "Tapping the arrow again didn't fold the lift")
+    }
+
     /// A number in the open lift's first movement: its set ("1", "2", "W") and metric ("reps", "load").
     @MainActor
     private func cell(_ app: XCUIApplication, set: String, metric: String) -> XCUIElement {
