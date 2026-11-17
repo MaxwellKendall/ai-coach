@@ -10,8 +10,10 @@ import { Asc, loadAscEnv } from "./asc.mjs";
 import { loadEnv } from "./load-env.mjs";
 import {
   EDITABLE_VERSION_STATES,
+  archiveArgs,
   assertListing,
   bumpBuildNumber,
+  exportArgs,
   marketingVersion,
   parseArgs,
   redact,
@@ -176,9 +178,9 @@ if (!dryRun && !failures.length) {
     fail(error.message);
   }
 } else {
-  console.log("\nWould archive and upload with xcodebuild (API key read at runtime, not printed):");
-  console.log("  xcodebuild archive -scheme AICoach -configuration Release -destination generic/platform=iOS -archivePath build/AICoach.xcarchive -allowProvisioningUpdates -authenticationKeyPath <set> -authenticationKeyID <set> -authenticationKeyIssuerID <set>");
-  console.log("  xcodebuild -exportArchive -archivePath build/AICoach.xcarchive -exportPath build/export -exportOptionsPlist build/ExportOptions.plist -allowProvisioningUpdates -authenticationKeyPath <set> -authenticationKeyID <set> -authenticationKeyIssuerID <set>");
+  console.log("\nWould archive and upload with xcodebuild, signed by the Xcode account on this Mac:");
+  console.log(`  xcodebuild ${archiveArgs().join(" ")}`);
+  console.log(`  xcodebuild ${exportArgs().join(" ")}`);
   console.log(`  then poll builds until build ${buildNumber} (or the next one, on a real run) is VALID.`);
 }
 
@@ -491,13 +493,12 @@ function reportStore(found) {
 async function archiveAndUpload(number) {
   mkdirSync("build", { recursive: true });
   writeFileSync("build/ExportOptions.plist", exportPlist(review.teamId));
-  const auth = ["-allowProvisioningUpdates", "-authenticationKeyPath", process.env.ASC_KEY_PATH, "-authenticationKeyID", process.env.ASC_KEY_ID, "-authenticationKeyIssuerID", process.env.ASC_ISSUER_ID];
   console.log(`\nArchiving build ${number}.`);
-  if (await run("xcodebuild", ["archive", "-scheme", "AICoach", "-configuration", "Release", "-destination", "generic/platform=iOS", "-archivePath", "build/AICoach.xcarchive", ...auth]) !== 0) {
+  if (await run("xcodebuild", archiveArgs()) !== 0) {
     throw new Error("xcodebuild archive failed.");
   }
   console.log("Uploading the archive.");
-  if (await run("xcodebuild", ["-exportArchive", "-archivePath", "build/AICoach.xcarchive", "-exportPath", "build/export", "-exportOptionsPlist", "build/ExportOptions.plist", ...auth]) !== 0) {
+  if (await run("xcodebuild", exportArgs()) !== 0) {
     throw new Error("xcodebuild -exportArchive failed.");
   }
 }
