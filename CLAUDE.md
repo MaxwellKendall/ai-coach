@@ -92,6 +92,6 @@ A UI change also gets a simulator screenshot. A change to model prompts or `Prog
 - Use the AWS CLI with `--profile aicoach-dev` (or `AWS_PROFILE=aicoach-dev`) for all AWS work here, not the aws-mcp server: aws-mcp is signed in to a different account (304945936761) and reports `AICoach-prod` as missing.
 - Dev and prod share one AWS account; prod's table and user pool are `RETAIN` with deletion protection. Budget alerts cover the whole account.
 - `cdk deploy` without a fresh `web` build ships a stale dashboard.
-- `npm run demo-video` resets the iPhone 17 Pro simulator's keychain and uninstalls the app so it records from a signed-out first launch; don't run it while using that simulator.
+- `npm run demo-video` resets the iPhone 17 Pro simulator's keychain and uninstalls the app so it records from a signed-out first launch; don't run it while using that simulator. `DEMO_SIMULATOR=<name or UDID>` records on another one (the shared iPhone 17 Pro is often busy with other runs' tests, which steals the demo's taps).
 - Importer data quirks (from `~/dev/fitness-planner`, read-only): `load` may be a string (`"BW"`, `"95 lb"`, `"24 kg/hand"`), `reps` a duration (`"50s"`), some logs `"reconstructed": true`.
 - Units follow the user's setting; the author uses lb.

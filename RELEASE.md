@@ -43,7 +43,7 @@ Paywall screenshots belong in `appstore/screenshots/lifter-pro.png` and `coach-p
 
 `npm run screens` regenerates `appstore/review/screens.json`, every screen the app can show by role, from App/ and Features/. Commit it with any change that adds or removes a screen: `npm run test:release` fails while it is out of date. Screens the demo can't show go in `appstore/review/coverage-exclude.txt`, each with a reason.
 
-`npm run demo-video` runs step 5 on its own. It resets the iPhone 17 Pro simulator's keychain and uninstalls the app, so the recording starts signed out at the first launch. A signed-in session lives in the keychain and would skip Welcome.
+`npm run demo-video` runs step 5 on its own. It resets the iPhone 17 Pro simulator's keychain and uninstalls the app, so the recording starts signed out at the first launch. Set `DEMO_SIMULATOR` (a simulator name or UDID) to record on a simulator no other run is using. A signed-in session lives in the keychain and would skip Welcome.
 
 Listing copy lives in `appstore/metadata/`. The App Store name in those files is `barbrabell`.
 

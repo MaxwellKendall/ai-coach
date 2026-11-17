@@ -163,6 +163,8 @@ if (!dryRun && !failures.length) {
   const bumped = bumpBuildNumber(readFileSync("project.yml", "utf8"));
   writeFileSync("project.yml", bumped.yaml);
   buildNumber = bumped.to;
+  // The project was generated before the bump; regenerate it, or the archive keeps the old build number.
+  if (await run("xcodegen", ["generate"]) !== 0) fail("Could not regenerate the project after the bump.");
   const added = capture("git", ["add", "project.yml"]);
   if (added.code !== 0) fail("Could not stage project.yml.");
   const committed = capture("git", ["commit", "-m", `FIT-431: build ${bumped.to}`, "-m", "Co-Authored-By: Claude <noreply@anthropic.com>"]);
