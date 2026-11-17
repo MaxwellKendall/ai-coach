@@ -220,6 +220,30 @@ struct SessionPlan: Equatable, Sendable {
         }
     }
 
+    /// TKL-766: whether one set can go: a warm-up set always can; a warm-up item keeps one set; a lift keeps one working set.
+    func canRemove(block: Int, movement: Int, set: Int) -> Bool {
+        guard blocks.indices.contains(block), blocks[block].movements.indices.contains(movement),
+              blocks[block].movements[movement].sets.indices.contains(set) else { return false }
+        let sets = blocks[block].movements[movement].sets
+        if blocks[block].rounds == 0 { return sets.count > 1 }
+        return sets[set].isWarmup || blocks[block].rounds > 1
+    }
+
+    /// TKL-766: deletes one set (swiped away). A working set in a superset takes its whole round with it.
+    mutating func removeSet(block: Int, movement: Int, set: Int) {
+        guard canRemove(block: block, movement: movement, set: set) else { return }
+        let sets = blocks[block].movements[movement].sets
+        guard blocks[block].rounds > 0, !sets[set].isWarmup else {
+            blocks[block].movements[movement].sets.remove(at: set)
+            return
+        }
+        let round = sets[..<set].filter { !$0.isWarmup }.count
+        for m in blocks[block].movements.indices {
+            let working = blocks[block].movements[m].sets.indices.filter { !blocks[block].movements[m].sets[$0].isWarmup }
+            if working.indices.contains(round) { blocks[block].movements[m].sets.remove(at: working[round]) }
+        }
+    }
+
     mutating func move(block: Int, by offset: Int) {
         let target = block + offset
         guard blocks.indices.contains(target) else { return }
