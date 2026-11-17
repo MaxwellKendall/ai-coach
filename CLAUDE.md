@@ -59,7 +59,7 @@ Stop (don't deploy) if the diff replaces or removes the DynamoDB table or the Co
 Post-deploy: `/ /docs /claude /privacy /support /.well-known/oauth-authorization-server /app/` on https://barbrabell.com return 200, `POST /mcp` returns 401, and the stack's `LastUpdatedTime` is after the deploy started. Also hit whatever page or endpoint the deployed commits changed. Rollback: check out the last good commit and repeat build/diff/deploy. Never restore data over the live table (PITR 35 days; restore to a new table, see `infra/README.md`).
 
 ## Release (iOS)
-Version is `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml` (now 1.0 / 15). Release builds use `amplify_outputs.prod.json`.
+Version is `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml` (now 1.0 / 16). Release builds use `amplify_outputs.prod.json`.
 The release tooling is on `main`: `npm run release` (`scripts/release.mjs`), documented step by step in `RELEASE.md`; `npm run test:release` tests it:
 - `npm run release -- --dry-run`: local steps + read-only App Store Connect calls.
 - `npm run release`: bumps `CURRENT_PROJECT_VERSION` and commits, archives and uploads with `xcodebuild -exportArchive` (API-key auth, polls processing), refreshes the prod review account, records the demo video, sets subscriptions and listing from `appstore/`, then stops.
