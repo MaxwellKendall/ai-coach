@@ -4,11 +4,14 @@ options:
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
+  # TKL-768: the xcodeproj (and the Package.resolved inside it) is gitignored, so copy the
+  # tracked Package.resolved in; every checkout then builds the same package versions.
+  postGenCommand: mkdir -p AICoach.xcodeproj/project.xcworkspace/xcshareddata/swiftpm && cp Package.resolved AICoach.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 packages:
   # FIT-52: Cognito hosted-UI sign-in and AppSync. Reason recorded on FIT-52 (CLAUDE.md §3).
   Amplify:
     url: https://github.com/aws-amplify/amplify-swift
-    from: 2.62.0
+    exactVersion: 2.62.0
 settings:
   base:
     SWIFT_VERSION: "6.0"
