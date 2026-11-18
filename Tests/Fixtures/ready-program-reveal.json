@@ -572,7 +572,7 @@
       "weight": 185,
       "reps": 3
     },
-    "slug": "upper-lower-4",
+    "slug": "tiered-linear",
     "trainingDays": [
       0,
       1,
@@ -580,24 +580,24 @@
       4
     ],
     "projection": {
-      "exercise": "bench-press",
+      "exercise": "back-squat",
       "loads": [
-        155,
-        155,
-        160,
         165,
         170,
-        175,
         180,
-        180,
-        185,
         190,
         190,
         190,
-        195
+        195,
+        195,
+        195,
+        200,
+        200,
+        200,
+        205
       ],
       "perHand": false,
-      "from": 175
+      "from": 185
     }
   },
   {

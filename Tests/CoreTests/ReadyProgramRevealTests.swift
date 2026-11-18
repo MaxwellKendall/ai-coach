@@ -88,8 +88,9 @@ struct PlanRevealHeadlineTests {
         }
         var answers = ProgramPicker.Answers(have: ProgramPicker.places[0].equipment, days: 4, goal: .strength, lifted: true)
         let program = try #require(answers.pick)
-        #expect(program.slug == "upper-lower-4" && program.mainLift?.exercise == "bench-press")
-        answers.recent = [StartingSet.recent("bench-press", weight: 185, reps: 5, perHand: false)]
+        // TKL-450: some experience and a strength goal on 4 days is the tiered linear progression, led by its heavy squat.
+        #expect(program.slug == "tiered-linear" && program.mainLift?.exercise == "back-squat")
+        answers.recent = [StartingSet.recent("back-squat", weight: 185, reps: 3, perHand: false)]
         let reveal = program.projection(days: answers.days, deloads: program.deloads, recent: program.recent(in: answers.recent))
         #expect(reveal?.from == 185)
     }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { associationFile, route, winWords, type Site, type Store, type Win } from "../lambda/sharePages.ts";
 import { TRIAL_DAYS } from "../../shared/plans.ts";
+import programs from "../../Resources/Seed/programs.json" with { type: "json" };
 
 const site: Site = { appName: "Barbrabell", origin: "https://example.com", appId: "TEAM.com.example.app" };
 const win: Win = {
@@ -218,6 +219,17 @@ describe("the coach landing page (FIT-217)", () => {
     const home = await route("/", {} as Store, site);
     expect(home.body).toContain('href="/pricing"');
     expect((await route("/coaches", {} as Store, site)).body).toContain("in the iPhone app or on the web");
+  });
+
+  it("TKL-450: the lifter home lists every free ready-made program by name", async () => {
+    const home = (await route("/", {} as Store, site)).body;
+    expect(home).toContain('id="programs"');
+    for (const program of programs) {
+      expect(home, program.slug).toContain(program.name);
+      expect(home, program.slug).toContain(program.summary);
+    }
+    expect(home).toContain("Tiered Linear Progression");
+    expect(home).not.toMatch(/5\/3\/1|GZCL|nSuns|Starting Strength|StrongLifts/i);
   });
 
   it("links the App Store for clients once there's a listing, and the lifter home leads with it", async () => {

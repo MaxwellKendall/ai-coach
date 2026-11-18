@@ -1,1 +1,1 @@
-strength,coach,coaching,workout,log,lifting,barbell,gym,powerlifting,training,sets,reps,run
+strength,coach,workout,log,lifting,barbell,gym,ppl,push,pull,legs,upper,lower,linear,progression

@@ -2,7 +2,7 @@
   {
     "slug": "full-body-3",
     "name": "Full Body 3-Day",
-    "summary": "The classic way to start lifting: squat, press, pull and deadlift with a barbell, a little heavier each session.",
+    "summary": "The classic way to start lifting: a 3 × 5 linear progression. Squat, press, pull and deadlift with a barbell, a little heavier each session.",
     "level": "new",
     "goals": ["strength", "start"],
     "place": "gym",
@@ -238,7 +238,7 @@
   {
     "slug": "push-pull-legs",
     "name": "Push / Pull / Legs",
-    "summary": "Pull, push and leg days in turn: six days to train each muscle twice a week, or three for once.",
+    "summary": "PPL: pull, push and leg days in turn. Six days to train each muscle twice a week, or three for once.",
     "level": "some",
     "goals": ["muscle"],
     "place": "gym",
@@ -313,7 +313,7 @@
   {
     "slug": "strength-waves",
     "name": "Strength Waves",
-    "summary": "For when the beginner programs stall: squat, bench, deadlift and press in three-week waves, heavier with fewer reps each week, and a little stronger each wave.",
+    "summary": "For when the beginner programs stall: squat, bench, deadlift and press in three-week percentage waves on a training max, heavier with fewer reps each week, and a little stronger each wave.",
     "level": "some",
     "goals": ["strength"],
     "place": "gym",
@@ -351,6 +351,53 @@
           { "exercise": "incline-dumbbell-press", "or": ["push-up"], "sets": 3, "reps": [8, 12], "start": 25 },
           { "exercise": "chin-up", "or": ["wide-grip-lat-pulldown", "inverted-row"], "sets": 3, "reps": [6, 12] },
           { "exercise": "split-squat-with-dumbbells", "or": ["dumbbell-step-ups"], "sets": 3, "reps": [8, 12], "start": 15 }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "tiered-linear",
+    "name": "Tiered Linear Progression",
+    "summary": "For when the beginner programs get hard: each day starts with heavy sets of 3, then lighter sets of 10 of another lift, then light sets of 15 to 20. Each tier adds weight on its own once every rep is done.",
+    "level": "some",
+    "goals": ["strength"],
+    "place": "gym",
+    "days": [3, 4],
+    "weeks": 12,
+    "minutes": 60,
+    "equipment": ["barbell", "rack", "bench", "dumbbells"],
+    "next": ["strength-waves", "tiered-linear"],
+    "sessions": [
+      {
+        "name": "Day A",
+        "exercises": [
+          { "exercise": "back-squat", "sets": 5, "reps": [3, 3], "start": 45, "step": 5, "main": true },
+          { "exercise": "bench-press", "sets": 3, "reps": [10, 10], "start": 45, "step": 5 },
+          { "exercise": "wide-grip-lat-pulldown", "or": ["dumbbell-row", "inverted-row"], "sets": 3, "reps": [15, 20], "start": 40 }
+        ]
+      },
+      {
+        "name": "Day B",
+        "exercises": [
+          { "exercise": "standing-military-press", "sets": 5, "reps": [3, 3], "start": 45, "step": 5, "main": true },
+          { "exercise": "deadlift", "sets": 3, "reps": [10, 10], "start": 95, "step": 10 },
+          { "exercise": "dumbbell-row", "or": ["seated-cable-rows", "inverted-row"], "sets": 3, "reps": [15, 20], "start": 20 }
+        ]
+      },
+      {
+        "name": "Day C",
+        "exercises": [
+          { "exercise": "bench-press", "sets": 5, "reps": [3, 3], "start": 45, "step": 5, "main": true },
+          { "exercise": "back-squat", "sets": 3, "reps": [10, 10], "start": 45, "step": 5 },
+          { "exercise": "wide-grip-lat-pulldown", "or": ["dumbbell-row", "inverted-row"], "sets": 3, "reps": [15, 20], "start": 40 }
+        ]
+      },
+      {
+        "name": "Day D",
+        "exercises": [
+          { "exercise": "deadlift", "sets": 5, "reps": [3, 3], "start": 95, "step": 10, "main": true },
+          { "exercise": "standing-military-press", "sets": 3, "reps": [10, 10], "start": 45, "step": 5 },
+          { "exercise": "dumbbell-row", "or": ["seated-cable-rows", "inverted-row"], "sets": 3, "reps": [15, 20], "start": 20 }
         ]
       }
     ]
