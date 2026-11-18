@@ -5,6 +5,7 @@ import {
   archiveArgs,
   assertListing,
   exportArgs,
+  landBumpCommit,
   bumpBuildNumber,
   marketingVersion,
   parseArgs,
@@ -112,4 +113,56 @@ test("archive and export sign with the Xcode account, not the API key (TKL-760)"
   assert.equal(archiveArgs()[0], "archive");
   assert.equal(exportArgs()[0], "-exportArchive");
   assert.ok(exportArgs().includes("build/ExportOptions.plist"));
+});
+
+// TKL-774: a run that uploaded a build but never landed its bump left main one build behind,
+// and the next release failed at upload. The bump now lands through a PR right after the upload.
+function fakeGit(results = {}) {
+  const calls = [];
+  const exec = (command, args) => {
+    calls.push([command, ...args].join(" "));
+    const key = Object.keys(results).find((prefix) => calls.at(-1).startsWith(prefix));
+    return key ? results[key] : { code: 0, stdout: "", stderr: "" };
+  };
+  return { calls, exec };
+}
+
+test("landBumpCommit pushes a branch, squash-merges its PR, and moves HEAD to the merged main", () => {
+  const { calls, exec } = fakeGit();
+  const result = landBumpCommit("20", exec);
+  assert.equal(result.landed, true);
+  assert.deepEqual(calls, [
+    "git push origin HEAD:refs/heads/release/build-20",
+    "gh pr create --base main --head release/build-20 --title Build 20: project.yml matches the upload --body npm run release uploaded build 20 to App Store Connect. This lands its CURRENT_PROJECT_VERSION bump so the next release starts from 20.",
+    "gh pr merge release/build-20 --squash --delete-branch",
+    "git fetch --quiet origin main",
+    "git diff --quiet HEAD origin/main",
+    "git reset --keep origin/main",
+  ]);
+});
+
+test("landBumpCommit leaves HEAD alone when the merged main differs from it", () => {
+  const { calls, exec } = fakeGit({ "git diff --quiet": { code: 1, stdout: "", stderr: "" } });
+  const result = landBumpCommit("20", exec);
+  assert.equal(result.landed, true);
+  assert.ok(!calls.some((call) => call.startsWith("git reset")));
+});
+
+test("landBumpCommit stops at the first failed step and says how to land it by hand", () => {
+  const { calls, exec } = fakeGit({ "gh pr merge": { code: 1, stdout: "", stderr: "checks pending" } });
+  const result = landBumpCommit("20", exec);
+  assert.equal(result.landed, false);
+  assert.equal(calls.length, 3);
+  assert.match(result.message, /checks pending/);
+  assert.match(result.message, /gh pr merge release\/build-20 --squash --delete-branch/);
+  assert.match(result.message, /build 20 is uploaded/i);
+});
+
+test("release lands the bump right after the upload is processed, and only on a real run", () => {
+  const source = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
+  const poll = source.indexOf("store.uploadedBuildId = await pollBuild(");
+  const land = source.indexOf("landBumpCommit(buildNumber");
+  assert.ok(poll > 0 && land > poll, "landBumpCommit runs after pollBuild");
+  const uploadBlock = source.lastIndexOf("if (!dryRun && !failures.length) {", poll);
+  assert.ok(uploadBlock > 0 && source.indexOf("} else {", poll) > land, "landing is inside the real-run upload block");
 });

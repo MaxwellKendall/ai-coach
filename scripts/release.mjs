@@ -14,6 +14,7 @@ import {
   archiveArgs,
   assertListing,
   bumpBuildNumber,
+  landBumpCommit,
   exportArgs,
   marketingVersion,
   parseArgs,
@@ -65,6 +66,8 @@ if (products) {
 
 const failures = [];
 const notReady = [];
+// Upload went through but the bump commit is not on origin/main: reported, and the run exits 1, but the later steps still run.
+const unlanded = [];
 let subscriptionPlan;
 function fail(message) {
   const text = redact(message, hidden);
@@ -178,6 +181,9 @@ if (!dryRun && !failures.length) {
   try {
     await archiveAndUpload(buildNumber);
     store.uploadedBuildId = await pollBuild(asc, store.app.id, buildNumber);
+    const landing = landBumpCommit(buildNumber, (command, args) => capture(command, args));
+    if (landing.landed) console.log(landing.message);
+    else unlanded.push(scrub(landing.message));
   } catch (error) {
     fail(error.message);
   }
@@ -284,6 +290,10 @@ console.log(dryRun ? "Dry run complete." : "Release command finished.");
 if (notReady.length) {
   console.log("Not ready to submit:");
   for (const item of notReady) console.log(`- ${item}`);
+  process.exitCode = 1;
+}
+if (unlanded.length) {
+  for (const item of unlanded) console.error(item);
   process.exitCode = 1;
 }
 if (failures.length) {
