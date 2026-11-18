@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Asc, loadAscEnv } from "./asc.mjs";
 import { loadEnv } from "./load-env.mjs";
+import { sendToReview } from "./review-submission.mjs";
 import {
   EDITABLE_VERSION_STATES,
   archiveArgs,
@@ -30,7 +31,6 @@ import {
   loadRemote,
   paidAgreementStatus,
   planSubscriptions,
-  reviewSubmissionPlan,
   withTiers,
 } from "./subscriptions.mjs";
 
@@ -264,10 +264,11 @@ if (submit) {
     console.log("\nWould submit the version and these subscriptions together, then set the submission submitted:");
     for (const item of subscriptionPlan?.submit || []) console.log(`  ${item.name} (${item.productId}) ${item.state}`);
     console.log(`Note to App Review: ${REVIEW_REPLY}`);
+    console.log("It would set the release to Manual, cancel any UNRESOLVED_ISSUES submission, and add one subscription group version per group.");
     console.log("Not sent.");
   } else {
     try {
-      await sendToReview(asc, store, subscriptionPlan);
+      await sendToReview(asc, store, subscriptionPlan, { versionString: marketing });
       console.log("Submitted for review.");
     } catch (error) {
       fail(`Submit: ${error.message}`);
@@ -660,66 +661,3 @@ async function writeReviewDetails(client, versionId, reviewText, phone, preview)
   }
 }
 
-async function sendToReview(client, found, subs) {
-  const open = found.submissions.find((item) => !["COMPLETE", "COMPLETED"].includes(item.state));
-  if (open && ["WAITING_FOR_REVIEW", "IN_REVIEW"].includes(open.state)) {
-    throw new Error(`A review submission is already ${open.state}.`);
-  }
-  const version = found.versions.find((item) => item.attributes.versionString === marketingVersion(readFileSync("project.yml", "utf8")));
-  if (!version) throw new Error("No version record to submit.");
-  let submissionId = open?.id;
-  if (!submissionId) {
-    const made = await client.post("/v1/reviewSubmissions", {
-      data: {
-        type: "reviewSubmissions",
-        attributes: { platform: "IOS" },
-        relationships: { app: { data: { type: "apps", id: found.app.id } } },
-      },
-    });
-    submissionId = made.data.id;
-  }
-  const listed = await client.get(`/v1/reviewSubmissions/${submissionId}/items?include=appStoreVersion,subscriptionVersion`);
-  const existingItems = (listed.data || []).filter((item) => item.type === "reviewSubmissionItems").map((item) => ({
-    appStoreVersionId: item.relationships?.appStoreVersion?.data?.id || null,
-    subscriptionVersionId: item.relationships?.subscriptionVersion?.data?.id || null,
-  }));
-  const adding = reviewSubmissionPlan({ existingItems, versionId: version.id, subscriptions: subs?.submit || [] });
-  if (adding.addAppVersion) {
-    await client.post("/v1/reviewSubmissionItems", {
-      data: {
-        type: "reviewSubmissionItems",
-        relationships: {
-          reviewSubmission: { data: { type: "reviewSubmissions", id: submissionId } },
-          appStoreVersion: { data: { type: "appStoreVersions", id: version.id } },
-        },
-      },
-    });
-  } else {
-    console.log("The version is already on the review submission.");
-  }
-  for (const item of adding.subscriptions) {
-    if (!item.id) throw new Error(`${item.productId} has no subscription to submit.`);
-    let versionId = item.versionId;
-    if (!versionId) {
-      const made = await client.post("/v1/subscriptionVersions", {
-        data: {
-          type: "subscriptionVersions",
-          relationships: { subscription: { data: { type: "subscriptions", id: item.id } } },
-        },
-      });
-      versionId = made.data.id;
-    }
-    await client.post("/v1/reviewSubmissionItems", {
-      data: {
-        type: "reviewSubmissionItems",
-        relationships: {
-          reviewSubmission: { data: { type: "reviewSubmissions", id: submissionId } },
-          subscriptionVersion: { data: { type: "subscriptionVersions", id: versionId } },
-        },
-      },
-    });
-  }
-  await client.patch(`/v1/reviewSubmissions/${submissionId}`, {
-    data: { type: "reviewSubmissions", id: submissionId, attributes: { submitted: true } },
-  });
-}

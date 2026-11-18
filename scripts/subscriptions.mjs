@@ -236,6 +236,7 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
         state: existing.state,
         versionId: existing.versionId || null,
         id: existing.id,
+        groupId: existing.group.id || null,
       });
     }
   }
