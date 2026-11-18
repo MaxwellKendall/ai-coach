@@ -117,3 +117,28 @@ export function landBumpCommit(number, exec) {
   if (exec("git", ["diff", "--quiet", "HEAD", "origin/main"]).code === 0) exec("git", ["reset", "--keep", "origin/main"]);
   return { landed: true, message: `Build ${number} landed on origin/main through ${branch}.` };
 }
+
+/**
+ * TKL-774: the upload consumes the build number, so the bump lands right after it, before
+ * processing is polled; a poll error or timeout must not leave origin/main one build behind.
+ * upload/poll are async and throw on failure; land returns landBumpCommit's { landed, message }.
+ * Returns { buildId, landing, error }: landing is undefined only when the upload failed.
+ */
+export async function uploadLandPoll({ upload, land, poll }) {
+  try {
+    await upload();
+  } catch (error) {
+    return { buildId: undefined, landing: undefined, error: error.message };
+  }
+  let landing;
+  try {
+    landing = land();
+  } catch (error) {
+    landing = { landed: false, message: `The build is uploaded, but landing its bump threw: ${error.message}` };
+  }
+  try {
+    return { buildId: await poll(), landing, error: undefined };
+  } catch (error) {
+    return { buildId: undefined, landing, error: error.message };
+  }
+}

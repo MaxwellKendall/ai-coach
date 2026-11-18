@@ -6,6 +6,7 @@ import {
   assertListing,
   exportArgs,
   landBumpCommit,
+  uploadLandPoll,
   bumpBuildNumber,
   marketingVersion,
   parseArgs,
@@ -158,11 +159,62 @@ test("landBumpCommit stops at the first failed step and says how to land it by h
   assert.match(result.message, /build 20 is uploaded/i);
 });
 
-test("release lands the bump right after the upload is processed, and only on a real run", () => {
+function sequence({ uploadError, pollError, landed = true } = {}) {
+  const steps = [];
+  return {
+    steps,
+    upload: async () => { steps.push("upload"); if (uploadError) throw new Error(uploadError); },
+    land: () => { steps.push("land"); return { landed, message: landed ? "landed" : "not landed" }; },
+    poll: async () => { steps.push("poll"); if (pollError) throw new Error(pollError); return "build-id"; },
+  };
+}
+
+test("uploadLandPoll lands the bump right after the upload, before processing is polled", async () => {
+  const s = sequence();
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land", "poll"]);
+  assert.deepEqual(result, { buildId: "build-id", landing: { landed: true, message: "landed" }, error: undefined });
+});
+
+test("uploadLandPoll still lands the bump when processing fails or times out (TKL-774 verify)", async () => {
+  const s = sequence({ pollError: "Build 20 was not VALID after 40 minutes." });
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land", "poll"]);
+  assert.equal(result.landing.landed, true);
+  assert.equal(result.buildId, undefined);
+  assert.match(result.error, /not VALID after 40 minutes/);
+});
+
+test("uploadLandPoll neither lands nor polls when the upload fails", async () => {
+  const s = sequence({ uploadError: "xcodebuild -exportArchive failed." });
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload"]);
+  assert.equal(result.landing, undefined);
+  assert.match(result.error, /exportArchive failed/);
+});
+
+test("uploadLandPoll still polls when landing fails, and reports the landing", async () => {
+  const s = sequence({ landed: false });
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land", "poll"]);
+  assert.equal(result.landing.landed, false);
+  assert.equal(result.buildId, "build-id");
+});
+
+test("uploadLandPoll counts a throwing land step as not landed and keeps going", async () => {
+  const s = sequence();
+  s.land = () => { s.steps.push("land"); throw new Error("spawn gh ENOENT"); };
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land", "poll"]);
+  assert.equal(result.landing.landed, false);
+  assert.match(result.landing.message, /ENOENT/);
+});
+
+test("release uses uploadLandPoll on a real run, so the bump lands before polling", () => {
   const source = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
-  const poll = source.indexOf("store.uploadedBuildId = await pollBuild(");
-  const land = source.indexOf("landBumpCommit(buildNumber");
-  assert.ok(poll > 0 && land > poll, "landBumpCommit runs after pollBuild");
-  const uploadBlock = source.lastIndexOf("if (!dryRun && !failures.length) {", poll);
-  assert.ok(uploadBlock > 0 && source.indexOf("} else {", poll) > land, "landing is inside the real-run upload block");
+  const call = source.indexOf("await uploadLandPoll(");
+  assert.ok(call > 0, "release.mjs calls uploadLandPoll");
+  assert.ok(!/await archiveAndUpload\(buildNumber\);\s*store\.uploadedBuildId = await pollBuild/.test(source), "no poll straight after upload");
+  const realRun = source.lastIndexOf("if (!dryRun && !failures.length) {", call);
+  assert.ok(realRun > 0 && source.indexOf("} else {", realRun) > call, "inside the real-run upload block");
 });

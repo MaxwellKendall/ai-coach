@@ -15,6 +15,7 @@ import {
   assertListing,
   bumpBuildNumber,
   landBumpCommit,
+  uploadLandPoll,
   exportArgs,
   marketingVersion,
   parseArgs,
@@ -178,15 +179,16 @@ if (!dryRun && !failures.length) {
 }
 
 if (!dryRun && !failures.length) {
-  try {
-    await archiveAndUpload(buildNumber);
-    store.uploadedBuildId = await pollBuild(asc, store.app.id, buildNumber);
-    const landing = landBumpCommit(buildNumber, (command, args) => capture(command, args));
-    if (landing.landed) console.log(landing.message);
-    else unlanded.push(scrub(landing.message));
-  } catch (error) {
-    fail(error.message);
-  }
+  // Land the bump as soon as the upload succeeds: the number is used up even if processing then fails.
+  const uploaded = await uploadLandPoll({
+    upload: () => archiveAndUpload(buildNumber),
+    land: () => landBumpCommit(buildNumber, (command, args) => capture(command, args)),
+    poll: () => pollBuild(asc, store.app.id, buildNumber),
+  });
+  if (uploaded.landing?.landed) console.log(uploaded.landing.message);
+  else if (uploaded.landing) unlanded.push(scrub(uploaded.landing.message));
+  if (uploaded.error) fail(uploaded.error);
+  else store.uploadedBuildId = uploaded.buildId;
 } else {
   console.log("\nWould archive and upload with xcodebuild, signed by the Xcode account on this Mac:");
   console.log(`  xcodebuild ${archiveArgs().join(" ")}`);
