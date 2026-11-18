@@ -65,17 +65,27 @@ struct SignInButtons: View {
         .interactiveDismissDisabled(working != nil || signingInWithEmail)
     }
 
+    /// TKL-460: the App Review demo's local sign-in (`-demo YES`) offers no password autofill, so iOS never asks to
+    /// save the placeholder password on camera.
+    private static var autofill: Bool {
+        #if DEBUG
+        !DebugRole.demo
+        #else
+        true
+        #endif
+    }
+
     private var emailForm: some View {
         VStack(spacing: 10) {
             TextField("Email", text: $email)
-                .textContentType(.username)
+                .textContentType(Self.autofill ? .username : nil)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.next)
                 .accessibilityIdentifier("signin.emailField")
             SecureField("Password", text: $password)
-                .textContentType(.password)
+                .textContentType(Self.autofill ? .password : nil)
                 .submitLabel(.go)
                 .onSubmit(signInWithEmail)
                 .accessibilityIdentifier("signin.passwordField")

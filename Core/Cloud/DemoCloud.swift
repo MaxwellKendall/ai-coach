@@ -10,6 +10,17 @@ enum DemoCloud {
     static let coachUID = "00000000-0000-4000-8000-000000000460"
     static let inviteCode = "K7Q2MX"
 
+    /// The demo account's uid (FIT-446): fixed, the purchase's token.
+    static let uid = "00000000-0000-4000-8000-000000000446"
+
+    /// TKL-460 round 2: who is signed in. Signed in at launch, unless `-demoSignedOut YES` opens it signed out so a
+    /// chapter shows signing in; then any email and password sign in here, as that email. No server, no secret.
+    static func user(signedOut: Bool, email: String?) -> Account.User? {
+        if signedOut && email == nil { return nil }
+        let email = email?.trimmingCharacters(in: .whitespaces).lowercased()
+        return Account.User(uid: uid, name: "Demo Lifter", email: email, provider: nil)
+    }
+
     @MainActor static func coachInvite(_ code: String, demo: Bool = DebugRole.demo) -> Cloud.CoachInvite? {
         demo ? Cloud.CoachInvite(answer: coach) : nil
     }

@@ -147,36 +147,51 @@ test("a screen shown by a role that can't reach it doesn't count", () => {
   assert.ok(result.missing["solo, client"].includes("tab.Today"));
 });
 
-test("TKL-460: coverage for some roles requires only the screens no other role can reach", () => {
+test("TKL-460: coverage for some roles owes every screen any of them can reach, shared ones too", () => {
   const inv = inventory([app, today, you, rest]);
-  // Nothing shown: for client and coach, only coach-only screens are owed; "solo, client" ones are the solo chapter's.
   const owed = coverage(inv, [], new Map(), { roles: ["client", "coach"] });
   assert.equal(owed.ok, false);
   assert.ok(owed.missing.coach.includes("PaywallView.coach"));
-  assert.ok(owed.missing.coach.includes("tab.Clients"));
-  assert.equal(owed.missing["solo, client"], undefined);
-  assert.equal(owed.missing.solo, undefined);
-  assert.equal(owed.missing["solo, client, coach"], undefined);
-  // Every coach-only screen shown: client and coach pass, with nothing missing.
-  const marks = Object.values(owed.missing).flat().map((id) => ({ role: "coach", id }));
-  const passed = coverage(inv, marks, new Map(), { roles: ["client", "coach"] });
+  assert.ok(owed.missing["solo, client"].includes("tab.Today"), "a screen a client shares with solo is still owed");
+  assert.equal(owed.missing.solo, undefined, "a solo-only screen isn't owed for client and coach");
+  // The verifier's probe: a coach-only screen shown and an unshown solo/client screen must not pass.
+  const coachOnly = owed.missing.coach.map((id) => ({ role: "coach", id }));
+  const probe = coverage(inv, coachOnly, new Map(), { roles: ["client", "coach"] });
+  assert.equal(probe.ok, false);
+  assert.ok(probe.missing["solo, client"].includes("tab.Today"));
+  // Every owed screen shown by a role that can reach it: passes.
+  const all = Object.entries(owed.missing).flatMap(([roles, ids]) => ids.map((id) => ({ role: roles.split(", ").at(-1), id })));
+  const passed = coverage(inv, all, new Map(), { roles: ["client", "coach"] });
   assert.equal(passed.ok, true, JSON.stringify(passed.missing));
   assert.equal(passed.shown, passed.required);
-  // Without roles the whole inventory is still owed.
-  assert.equal(coverage(inv, marks).ok, false);
 });
 
-test("TKL-460: screen-coverage.mjs --roles checks only those roles", () => {
+test("TKL-460: a shared screen the solo chapter showed counts for the client", () => {
+  const inv = inventory([app, today, you, rest]);
+  const owed = coverage(inv, [], new Map(), { roles: ["client"] });
+  const solo = owed.missing["solo, client"].map((id) => ({ role: "solo", id }));
+  const result = coverage(inv, solo, new Map(), { roles: ["client"] });
+  assert.equal(result.missing["solo, client"], undefined, JSON.stringify(result.missing));
+});
+
+test("TKL-460: screen-coverage.mjs --roles checks those roles, and --also adds another chapter's marks", () => {
   const inv = JSON.parse(readFileSync(new URL("../appstore/review/screens.json", import.meta.url), "utf8"));
-  const coachOnly = inv.screens.filter((s) => s.roles.length && s.roles.every((r) => r === "coach")).map((s) => `coach ${s.id}`);
+  const excludes = parseExcludes(readFileSync(new URL("../appstore/review/coverage-exclude.txt", import.meta.url), "utf8"));
+  const owed = inv.screens.filter((s) => s.roles.length && !excludes.has(s.id));
+  const coachOnly = owed.filter((s) => s.roles.every((r) => r === "coach")).map((s) => `coach ${s.id}`);
+  const shared = owed.filter((s) => s.roles.includes("solo") && s.roles.includes("client")).map((s) => `solo ${s.id}`);
   const dir = mkdtempSync(join(tmpdir(), "cov-"));
   const marks = join(dir, "marks.txt");
+  const solo = join(dir, "solo.txt");
   writeFileSync(marks, coachOnly.join("\n") + "\n");
-  const scoped = spawnSync("node", ["scripts/screen-coverage.mjs", marks, "--roles", "client,coach"], { cwd: root, encoding: "utf8" });
-  assert.equal(scoped.status, 0, scoped.stdout + scoped.stderr);
-  assert.match(scoped.stdout, /for client, coach/);
-  const all = spawnSync("node", ["scripts/screen-coverage.mjs", marks], { cwd: root, encoding: "utf8" });
-  assert.equal(all.status, 1);
+  writeFileSync(solo, shared.join("\n") + "\n");
+  const cov = (...args) => spawnSync("node", ["scripts/screen-coverage.mjs", ...args], { cwd: root, encoding: "utf8" });
+  const coachOnlyRun = cov(marks, "--roles", "client,coach");
+  assert.equal(coachOnlyRun.status, 1, "coach-only marks don't cover the client");
+  assert.match(coachOnlyRun.stdout, /for client, coach/);
+  const both = cov(marks, "--roles", "client,coach", "--also", solo);
+  assert.equal(both.status, 0, both.stdout + both.stderr);
+  assert.equal(cov(marks, "--also", join(dir, "missing.txt")).status, 2, "a missing --also file is an error, not a silent pass");
 });
 
 test("the committed appstore/review/screens.json matches the code", () => {

@@ -16,8 +16,8 @@ final class ReviewChaptersUITests: XCTestCase {
     /// the account. No coach tabs.
     @MainActor
     func testClientChapter() throws {
-        // Part 1: a first launch, joining Sam by the invite code.
-        var app = launch(role: "new")
+        // Part 1: a first launch, signed out: sign in, then join Sam by the invite code.
+        var app = launch(role: "new", signedOut: true)
         let join = app.buttons["welcome.join"]
         XCTAssertTrue(join.waitForExistence(timeout: 40), "Welcome did not show Have a coach?")
         hold(1.5)
@@ -25,6 +25,7 @@ final class ReviewChaptersUITests: XCTestCase {
         DemoScreens.shown("WelcomeView", as: .client)
         hold(2)
         join.tap()
+        signIn(app, email: "jordan@example.com", as: .client)
         let field = app.textFields["Invite code"]
         XCTAssertTrue(field.waitForExistence(timeout: 10), "Join your coach did not ask for the code")
         hold(1.2)
@@ -61,17 +62,22 @@ final class ReviewChaptersUITests: XCTestCase {
         DemoScreens.cue("begin", .client)
         DemoScreens.shown("tab.Today", as: .client)
         hold(2.5)
+        clientTodayTour(app)
         logOpenSession(app)
+        clientAfterLogging(app)
         app.tabBars.buttons["Program"].tap()
         DemoScreens.shown("tab.Program", as: .client)
         hold(2.5)
+        visit("WorkoutDetailView", by: app.buttons["program.day"].firstMatch, until: app.buttons["Done"].firstMatch, in: app)
         app.tabBars.buttons["Progress"].tap()
         DemoScreens.shown("tab.Progress", as: .client)
         hold(2.5)
+        clientProgressTour(app)
         app.tabBars.buttons["Today"].tap()
         hold(1)
         openYou(app, as: .client)
         assertNoDebugRows(app)
+        clientYouTour(app)
         showAccount(app, as: .client)
         DemoScreens.cue("end", .client)
     }
@@ -83,8 +89,9 @@ final class ReviewChaptersUITests: XCTestCase {
     /// Coach Pro's paywall, and the account with Delete Account.
     @MainActor
     func testCoachChapter() throws {
-        // Part 1: in by the coach's door, to an empty roster, and the first invite.
-        var app = launch(role: "new")
+        // Part 1: in by the coach's door, signing in (a new coach's account is made the same way), to an empty
+        // roster, and the first invite.
+        var app = launch(role: "new", signedOut: true)
         let door = app.buttons["welcome.coach"]
         XCTAssertTrue(door.waitForExistence(timeout: 40), "Welcome did not show I'm a coach")
         hold(1.5)
@@ -92,6 +99,7 @@ final class ReviewChaptersUITests: XCTestCase {
         DemoScreens.shown("WelcomeView", as: .coach)
         hold(1.5)
         door.tap()
+        signIn(app, email: "coach@example.com", as: .coach)
         let clients = app.buttons["welcome.clients"]
         XCTAssertTrue(clients.waitForExistence(timeout: 10), "The coach door did not offer My Clients")
         hold(2.2)
@@ -224,10 +232,12 @@ final class ReviewChaptersUITests: XCTestCase {
     // MARK: Steps
 
     @MainActor
-    private func launch(role: String) -> XCUIApplication {
+    private func launch(role: String, signedOut: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-uiTesting", "YES", "-role", role, "-demo", "YES",
                                 "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        // TKL-460: signed out, so the chapter shows signing in; demo mode signs any email in locally (DemoCloud.user).
+        if signedOut { app.launchArguments += ["-demoSignedOut", "YES"] }
         app.launch()
         return app
     }
@@ -253,6 +263,155 @@ final class ReviewChaptersUITests: XCTestCase {
         let skip = app.buttons["Skip"]
         if skip.waitForExistence(timeout: 5) { hold(0.8); skip.tap() }
         hold(2)
+    }
+
+    /// Sign in with email, as App Review does. Demo mode signs in locally with any email and password, so the
+    /// password typed here is a placeholder, not a demo account's; the field is secure, so the video shows dots.
+    @MainActor
+    private func signIn(_ app: XCUIApplication, email: String, as role: DemoScreens.Role) {
+        let withEmail = app.buttons["signin.email"]
+        XCTAssertTrue(withEmail.waitForExistence(timeout: 15), "Sign in with email was not on screen")
+        DemoScreens.shown("SignInSheet", as: role)
+        hold(2)
+        withEmail.tap()
+        let field = app.textFields["signin.emailField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 8), "The email form did not open")
+        hold(0.6)
+        field.tap()
+        field.typeText(email)
+        let password = app.secureTextFields["signin.passwordField"]
+        password.tap()
+        password.typeText("demo-only\n")
+        notNow(app)
+        _ = field.waitForNonExistence(timeout: 10)
+        // The keyboard can stay up after the form goes; a tap on the empty top of the screen puts it away.
+        for _ in 0..<3 where app.keyboards.firstMatch.exists {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+            hold(0.6)
+        }
+        hold(1.5)
+    }
+
+    /// iOS's Save Password? offer, if it shows: Not Now.
+    @MainActor
+    private func notNow(_ app: XCUIApplication, timeout: TimeInterval = 3) {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            for owner in [app, springboard] where owner.buttons["Not Now"].exists {
+                owner.buttons["Not Now"].tap()
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        } while Date() < deadline
+    }
+
+    /// One screen of the tour: tap `control`; once `until` shows, mark `id`, hold, and close it. A control that isn't
+    /// there leaves the screen unmarked, so the coverage check reports it rather than the recording stopping.
+    @MainActor
+    @discardableResult
+    private func visit(_ id: String, by control: XCUIElement, until shown: XCUIElement, in app: XCUIApplication,
+                       as role: DemoScreens.Role = .client, hold seconds: TimeInterval = 2, close: Bool = true) -> Bool {
+        guard control.waitForExistence(timeout: 4) else { return false }
+        if !control.isHittable { app.swipeUp(); hold(0.4) }
+        guard control.isHittable else { return false }
+        control.tap()
+        guard shown.waitForExistence(timeout: 8) else { dismiss(app); return false }
+        DemoScreens.shown(id, as: role)
+        hold(seconds)
+        if close { dismiss(app) }
+        return true
+    }
+
+    /// Closes whatever is on top: Cancel, Done or Close, or back, or a swipe down.
+    @MainActor
+    private func dismiss(_ app: XCUIApplication) {
+        for label in ["Cancel", "Done", "Close"] {
+            let button = app.navigationBars.buttons[label].firstMatch
+            if button.exists && button.isHittable { button.tap(); hold(1); return }
+        }
+        for label in ["Cancel", "Done", "Skip", "Not Now"] {
+            let button = app.buttons[label].firstMatch
+            if button.exists && button.isHittable { button.tap(); hold(1); return }
+        }
+        app.swipeDown(velocity: .fast)
+        hold(1)
+    }
+
+    /// Today, before logging: the coach's messages, the check-ins, how a lift is done, its sets, adding a lift, moving
+    /// the day, logging it another way, and workout mode.
+    @MainActor
+    private func clientTodayTour(_ app: XCUIApplication) {
+        let top = { app.swipeDown(); self.hold(0.4) }
+        visit("CoachConversation", by: app.buttons["Messages with Sam"], until: app.navigationBars["Sam"], in: app, hold: 2.5)
+        top()
+        visit("CheckInSheet", by: app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Check in'")).firstMatch,
+              until: app.navigationBars.buttons["Save"], in: app)
+        visit("WeeklyCheckInSheet", by: app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Weekly check-in'")).firstMatch,
+              until: app.navigationBars["Weekly Check-in"], in: app)
+        visit("HowToSheet", by: app.buttons["Open Back Squat"], until: app.navigationBars["Back Squat"], in: app, hold: 2.5)
+        visit("SetStepper", by: app.buttons.matching(identifier: "session.lift").firstMatch, until: app.buttons["stepper.done"], in: app,
+              close: false)
+        if app.buttons["stepper.done"].exists { app.buttons["stepper.done"].tap(); hold(1) }
+        visit("ExercisePicker", by: app.buttons["Add exercise"], until: app.navigationBars.buttons["Cancel"], in: app)
+        let more = app.buttons["More"].firstMatch
+        if more.waitForExistence(timeout: 3) {
+            if !more.isHittable { app.swipeUp(); hold(0.4) }
+            more.tap()
+            visit("MoveSheet", by: app.buttons["Move to Another Day"], until: app.staticTexts["Move to another day"], in: app)
+        }
+        if more.exists && more.isHittable {
+            more.tap()
+            visit("LogChoiceSheet", by: app.buttons["Log It Without Starting"], until: app.staticTexts["Log a workout"].firstMatch, in: app)
+        }
+        visit("WorkoutModeView", by: app.buttons["Start"].firstMatch, until: app.buttons["Done"].firstMatch, in: app, hold: 3, close: false)
+        // Leaving workout mode before a set is logged: Done, and discard nothing logged if asked.
+        if app.buttons["Done"].firstMatch.exists { app.buttons["Done"].firstMatch.tap(); hold(1) }
+        if app.buttons["Discard sets"].exists { app.buttons["Discard sets"].tap(); hold(1) }
+        top()
+    }
+
+    /// Today, once the session's logged: what was logged and a note on it.
+    @MainActor
+    private func clientAfterLogging(_ app: XCUIApplication) {
+        visit("SessionRecordView", by: app.buttons["Edit the sets"].firstMatch, until: app.navigationBars.buttons["Done"], in: app, hold: 2.5)
+        visit("WorkoutNoteSheet", by: app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'note'")).firstMatch,
+              until: app.navigationBars["Note"], in: app)
+    }
+
+    /// Progress: adding a goal, a goal's change, Wins and History with the day just logged.
+    @MainActor
+    private func clientProgressTour(_ app: XCUIApplication) {
+        visit("NewGoalSheet", by: app.buttons["Add a goal"].firstMatch, until: app.navigationBars["Add a goal"], in: app)
+        visit("GoalChangeSheet", by: app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Back squat max'")).element(boundBy: 1),
+              until: app.navigationBars["Change Goal"], in: app)
+        let wins = app.buttons["Wins"].firstMatch
+        if wins.waitForExistence(timeout: 3) {
+            wins.tap()
+            hold(2)
+            if app.staticTexts["No wins yet"].exists { DemoScreens.shown("WinsScreen.empty.no-wins-yet", as: .client) }
+        }
+        let history = app.buttons["History"].firstMatch
+        if history.waitForExistence(timeout: 3) {
+            history.tap()
+            hold(1.5)
+            visit("HistoryDayView", by: app.cells.firstMatch.exists ? app.cells.firstMatch : app.buttons.matching(NSPredicate(format: "label CONTAINS 'Lower A'")).firstMatch,
+                  until: app.navigationBars.element(boundBy: 0).buttons.element(boundBy: 0), in: app, close: false)
+            if app.navigationBars.buttons.count > 0 { back(app) }
+        }
+    }
+
+    /// You: the profile, and the exercises with one's detail and a new one.
+    @MainActor
+    private func clientYouTour(_ app: XCUIApplication) {
+        visit("ProfileEditor", by: app.buttons["Profile"], until: app.navigationBars["Profile"], in: app, close: false)
+        if app.navigationBars["Profile"].exists { app.navigationBars["Profile"].buttons.element(boundBy: 0).tap(); hold(1) }
+        if visit("CatalogScreen", by: app.buttons["Exercises"], until: app.navigationBars["Exercises"], in: app, close: false) {
+            visit("TemplateEditor", by: app.navigationBars["Exercises"].buttons["Add"], until: app.navigationBars.buttons["Save"], in: app)
+            visit("TemplateDetailView", by: app.cells.element(boundBy: 0), until: app.navigationBars.element(boundBy: 0), in: app, close: false)
+            back(app)
+            back(app)
+        }
     }
 
     @MainActor

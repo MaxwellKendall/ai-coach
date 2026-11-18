@@ -20,6 +20,17 @@ struct DemoCloudTests {
         #expect(DemoCloud.clientInvite(client: "", demo: true)?.client == nil)
     }
 
+    /// TKL-460 round 2: `-demoSignedOut YES` opens the demo signed out, so a chapter shows signing in; any email then
+    /// signs in locally, as that email, with no server.
+    @Test func demoSignsInLocallyWhenItStartsSignedOut() throws {
+        #expect(DemoCloud.user(signedOut: true, email: nil) == nil)
+        let signedIn = try #require(DemoCloud.user(signedOut: true, email: "Coach@Example.com "))
+        #expect(signedIn.email == "coach@example.com")
+        #expect(signedIn.uid == DemoCloud.uid)
+        // Without the flag the demo is signed in at launch, as before.
+        #expect(DemoCloud.user(signedOut: false, email: nil)?.uid == DemoCloud.uid)
+    }
+
     @Test func outsideDemoNothingIsAnswered() {
         #expect(DemoCloud.coachInvite("K7Q2MX", demo: false) == nil)
         #expect(DemoCloud.acceptCoach("K7Q2MX", demo: false) == nil)

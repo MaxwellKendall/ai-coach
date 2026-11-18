@@ -16,6 +16,8 @@ enum DebugRole {
     /// account (`Account.demo`), so a purchase goes straight to StoreKit. Nothing reaches the server: `Cloud.run` and
     /// `SyncEngine` refuse in it. Works alongside `-uiTesting YES -role …`.
     static var demo: Bool { UserDefaults.standard.bool(forKey: "demo") }
+    /// TKL-460: `-demoSignedOut YES` with `-demo YES` opens it signed out; signing in with any email is then local.
+    static var demoSignedOut: Bool { demo && UserDefaults.standard.bool(forKey: "demoSignedOut") }
     static var role: String? { uiTesting ? UserDefaults.standard.string(forKey: "role") : nil }
     /// FIT-426: `-aiWeeks YES` designs a Pro lifter's weeks with `StubDesigner`, so a UI test sees an AI week without
     /// a network or a model; without it, a UI test's weeks stay code planned.
