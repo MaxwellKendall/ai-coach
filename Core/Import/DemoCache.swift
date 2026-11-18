@@ -1,7 +1,7 @@
 import Foundation
 
 /// FIT-447: demo clips are loaded the first time an exercise is opened, then kept in Caches so they play offline
-/// at the gym. Nothing is bundled in the app. The system may clear Caches, and then a clip is just loaded again.
+/// at the gym. No clip is bundled in the app (TKL-793 bundles only the photos the how-to falls back to). The system may clear Caches, and then a clip is just loaded again.
 struct DemoCache {
     typealias Fetch = (URL) async throws -> (Data, URLResponse)
 

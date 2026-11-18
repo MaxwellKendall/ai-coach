@@ -45,6 +45,12 @@ enum ExercisePhotos {
         return (bundled[slug] ?? []).map { base.appending(path: "exercises/\($0)") }
     }
 
+    /// TKL-793: the photos that ship in the app (Resources/DemoPhotos, from scripts/demo-photos.sh), for exercises with a
+    /// demo clip, so the how-to shows them offline before anything was loaded. Empty for any other exercise.
+    static func local(_ slug: String) -> [URL] {
+        (bundled[slug] ?? []).indices.compactMap { Bundle.main.url(forResource: "photo-\(slug)-\($0)", withExtension: "jpg") }
+    }
+
     /// The bundled map, slug → [start, end]; empty when it's missing.
     static let bundled: [String: [String]] = Bundle.main.url(forResource: "exercise-photos", withExtension: "json")
         .flatMap { try? JSONDecoder().decode([String: [String]].self, from: Data(contentsOf: $0)) } ?? [:]

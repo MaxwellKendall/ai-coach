@@ -26,10 +26,24 @@ struct HowToPhotos: View {
         DemoClip(slug: slug) { Self.photos(slug) }
     }
 
-    /// The start and end photos alone.
+    /// The start and end photos alone. TKL-793: the copies in the app when it has them (exercises with a demo clip), so
+    /// they show offline; else from the site.
     @ViewBuilder static func photos(_ slug: String) -> some View {
+        let local = ExercisePhotos.local(slug).compactMap { UIImage(contentsOfFile: $0.path()) }
         let urls = ExercisePhotos.urls(slug)
-        if !urls.isEmpty {
+        if !local.isEmpty, local.count == urls.count {
+            HStack(spacing: 8) {
+                ForEach(Array(local.enumerated()), id: \.offset) { _, image in
+                    Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(.rect(cornerRadius: 12))
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Photos: the start and end of the movement")
+            .accessibilityValue("\(local.count) shown")
+            .accessibilityIdentifier("howto.photos")
+        } else if !urls.isEmpty {
             HStack(spacing: 8) {
                 ForEach(urls, id: \.self) { url in
                     AsyncImage(url: url) { image in
@@ -43,6 +57,7 @@ struct HowToPhotos: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Photos: the start and end of the movement")
+            .accessibilityIdentifier("howto.photos")
         }
     }
 }

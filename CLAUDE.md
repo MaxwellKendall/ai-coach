@@ -96,4 +96,5 @@ A UI change also gets a simulator screenshot. A change to model prompts or `Prog
 - `cdk deploy` without a fresh `web` build ships a stale dashboard.
 - `npm run demo-video` resets the iPhone 17 Pro simulator's keychain and uninstalls the app so it records from a signed-out first launch; don't run it while using that simulator. `DEMO_SIMULATOR=<name or UDID>` records on another one (the shared iPhone 17 Pro is often busy with other runs' tests, which steals the demo's taps).
 - Importer data quirks (from `~/dev/fitness-planner`, read-only): `load` may be a string (`"BW"`, `"95 lb"`, `"24 kg/hand"`), `reps` a duration (`"50s"`), some logs `"reconstructed": true`.
+- Exercises with a demo clip ship their start/end photos in `Resources/DemoPhotos` (the how-to's offline fallback, TKL-793). After changing `Resources/Seed/exercise-demos.json`, run `scripts/demo-photos.sh`; `ExercisePhotosTests.demoExercisesShipTheirPhotos` fails until you do.
 - Units follow the user's setting; the author uses lb.

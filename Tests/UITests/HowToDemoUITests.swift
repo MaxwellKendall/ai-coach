@@ -92,20 +92,27 @@ final class HowToDemoUITests: XCTestCase {
         let name = tile.label.replacingOccurrences(of: "How to do ", with: "")
         tile.tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10), "The tile didn't open \(name)'s how-to")
+        // The demo client has logged this lift, so the how-to shows Last time here too, as on Today.
+        let lastTime = app.staticTexts.matching(NSPredicate(format: "label ==[c] 'Last time'")).firstMatch
+        XCTAssertTrue(lastTime.waitForExistence(timeout: 10), "Program's how-to has no Last time card")
     }
 
-    /// Offline before a clip was cached (`-exerciseDemos` pointed at a closed port, `-demoCache` a new empty folder): the
-    /// how-to shows the photos and says it's offline.
+    /// Offline before a clip or photo was ever loaded (`-exerciseDemos` and `-exercisePhotos` pointed at a closed port,
+    /// `-demoCache` a new empty folder): the how-to shows the photos that ship in the app and says it's offline.
     @MainActor func testOfflineShowsThePhotosAndSaysSo() throws {
         let app = XCUIApplication()
         app.launchArguments += ["-uiTesting", "YES", "-role", "client", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
-                                "-exerciseDemos", "http://127.0.0.1:9/", "-demoCache", "offline-\(UUID().uuidString)"]
+                                "-exerciseDemos", "http://127.0.0.1:9/", "-exercisePhotos", "http://127.0.0.1:9/",
+                                "-demoCache", "offline-\(UUID().uuidString)"]
         app.launch()
         let tile = app.buttons.matching(identifier: "session.demo").firstMatch
         XCTAssertTrue(tile.waitForExistence(timeout: 30), "No demo tiles on Today")
         tile.tap()
         let note = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH \"You're offline\"")).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 20), "The how-to doesn't say it's offline")
+        let photos = app.descendants(matching: .any).matching(identifier: "howto.photos").firstMatch
+        XCTAssertTrue(photos.waitForExistence(timeout: 5), "The offline how-to shows no photos")
+        XCTAssertEqual(photos.value as? String, "2 shown", "The offline how-to's photos didn't load")
         sleep(2)
         save("howto-offline")
     }

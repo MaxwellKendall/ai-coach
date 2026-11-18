@@ -124,7 +124,7 @@ struct WorkoutDetailView: View {
         .onChange(of: toast) { if toast == nil { undoTo = nil } }
         .sheet(item: Binding(get: { howTo.map(HowToID.init) }, set: { howTo = $0?.id })) { item in
             let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
-            HowToSheet(pages: HowToPage.pages(session, names: names, templates: templates), start: item.id)
+            HowToSheet(pages: HowToPage.pages(session, names: names, templates: templates), start: item.id, history: true)  // TKL-793: Last time, as from Today
         }
         .sheet(item: $picking) { picking in
             let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
