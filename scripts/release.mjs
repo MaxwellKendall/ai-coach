@@ -14,6 +14,8 @@ import {
   archiveArgs,
   assertListing,
   bumpBuildNumber,
+  landBumpCommit,
+  uploadLandPoll,
   exportArgs,
   marketingVersion,
   parseArgs,
@@ -65,6 +67,8 @@ if (products) {
 
 const failures = [];
 const notReady = [];
+// Upload went through but the bump commit is not on origin/main: reported, and the run exits 1, but the later steps still run.
+const unlanded = [];
 let subscriptionPlan;
 function fail(message) {
   const text = redact(message, hidden);
@@ -175,12 +179,16 @@ if (!dryRun && !failures.length) {
 }
 
 if (!dryRun && !failures.length) {
-  try {
-    await archiveAndUpload(buildNumber);
-    store.uploadedBuildId = await pollBuild(asc, store.app.id, buildNumber);
-  } catch (error) {
-    fail(error.message);
-  }
+  // Land the bump as soon as the upload succeeds: the number is used up even if processing then fails.
+  const uploaded = await uploadLandPoll({
+    upload: () => archiveAndUpload(buildNumber),
+    land: () => landBumpCommit(buildNumber, (command, args) => capture(command, args)),
+    poll: () => pollBuild(asc, store.app.id, buildNumber),
+  });
+  if (uploaded.landing?.landed) console.log(uploaded.landing.message);
+  else if (uploaded.landing) unlanded.push(scrub(uploaded.landing.message));
+  if (uploaded.error) fail(uploaded.error);
+  else store.uploadedBuildId = uploaded.buildId;
 } else {
   console.log("\nWould archive and upload with xcodebuild, signed by the Xcode account on this Mac:");
   console.log(`  xcodebuild ${archiveArgs().join(" ")}`);
@@ -284,6 +292,10 @@ console.log(dryRun ? "Dry run complete." : "Release command finished.");
 if (notReady.length) {
   console.log("Not ready to submit:");
   for (const item of notReady) console.log(`- ${item}`);
+  process.exitCode = 1;
+}
+if (unlanded.length) {
+  for (const item of unlanded) console.error(item);
   process.exitCode = 1;
 }
 if (failures.length) {

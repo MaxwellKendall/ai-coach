@@ -5,6 +5,8 @@ import {
   archiveArgs,
   assertListing,
   exportArgs,
+  landBumpCommit,
+  uploadLandPoll,
   bumpBuildNumber,
   marketingVersion,
   parseArgs,
@@ -112,4 +114,107 @@ test("archive and export sign with the Xcode account, not the API key (TKL-760)"
   assert.equal(archiveArgs()[0], "archive");
   assert.equal(exportArgs()[0], "-exportArchive");
   assert.ok(exportArgs().includes("build/ExportOptions.plist"));
+});
+
+// TKL-774: a run that uploaded a build but never landed its bump left main one build behind,
+// and the next release failed at upload. The bump now lands through a PR right after the upload.
+function fakeGit(results = {}) {
+  const calls = [];
+  const exec = (command, args) => {
+    calls.push([command, ...args].join(" "));
+    const key = Object.keys(results).find((prefix) => calls.at(-1).startsWith(prefix));
+    return key ? results[key] : { code: 0, stdout: "", stderr: "" };
+  };
+  return { calls, exec };
+}
+
+test("landBumpCommit pushes a branch, squash-merges its PR, and moves HEAD to the merged main", () => {
+  const { calls, exec } = fakeGit();
+  const result = landBumpCommit("20", exec);
+  assert.equal(result.landed, true);
+  assert.deepEqual(calls, [
+    "git push origin HEAD:refs/heads/release/build-20",
+    "gh pr create --base main --head release/build-20 --title Build 20: project.yml matches the upload --body npm run release uploaded build 20 to App Store Connect. This lands its CURRENT_PROJECT_VERSION bump so the next release starts from 20.",
+    "gh pr merge release/build-20 --squash --delete-branch",
+    "git fetch --quiet origin main",
+    "git diff --quiet HEAD origin/main",
+    "git reset --keep origin/main",
+  ]);
+});
+
+test("landBumpCommit leaves HEAD alone when the merged main differs from it", () => {
+  const { calls, exec } = fakeGit({ "git diff --quiet": { code: 1, stdout: "", stderr: "" } });
+  const result = landBumpCommit("20", exec);
+  assert.equal(result.landed, true);
+  assert.ok(!calls.some((call) => call.startsWith("git reset")));
+});
+
+test("landBumpCommit stops at the first failed step and says how to land it by hand", () => {
+  const { calls, exec } = fakeGit({ "gh pr merge": { code: 1, stdout: "", stderr: "checks pending" } });
+  const result = landBumpCommit("20", exec);
+  assert.equal(result.landed, false);
+  assert.equal(calls.length, 3);
+  assert.match(result.message, /checks pending/);
+  assert.match(result.message, /gh pr merge release\/build-20 --squash --delete-branch/);
+  assert.match(result.message, /build 20 is uploaded/i);
+});
+
+function sequence({ uploadError, pollError, landed = true } = {}) {
+  const steps = [];
+  return {
+    steps,
+    upload: async () => { steps.push("upload"); if (uploadError) throw new Error(uploadError); },
+    land: () => { steps.push("land"); return { landed, message: landed ? "landed" : "not landed" }; },
+    poll: async () => { steps.push("poll"); if (pollError) throw new Error(pollError); return "build-id"; },
+  };
+}
+
+test("uploadLandPoll lands the bump right after the upload, before processing is polled", async () => {
+  const s = sequence();
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land", "poll"]);
+  assert.deepEqual(result, { buildId: "build-id", landing: { landed: true, message: "landed" }, error: undefined });
+});
+
+test("uploadLandPoll still lands the bump when processing fails or times out (TKL-774 verify)", async () => {
+  const s = sequence({ pollError: "Build 20 was not VALID after 40 minutes." });
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land", "poll"]);
+  assert.equal(result.landing.landed, true);
+  assert.equal(result.buildId, undefined);
+  assert.match(result.error, /not VALID after 40 minutes/);
+});
+
+test("uploadLandPoll neither lands nor polls when the upload fails", async () => {
+  const s = sequence({ uploadError: "xcodebuild -exportArchive failed." });
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload"]);
+  assert.equal(result.landing, undefined);
+  assert.match(result.error, /exportArchive failed/);
+});
+
+test("uploadLandPoll still polls when landing fails, and reports the landing", async () => {
+  const s = sequence({ landed: false });
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land", "poll"]);
+  assert.equal(result.landing.landed, false);
+  assert.equal(result.buildId, "build-id");
+});
+
+test("uploadLandPoll counts a throwing land step as not landed and keeps going", async () => {
+  const s = sequence();
+  s.land = () => { s.steps.push("land"); throw new Error("spawn gh ENOENT"); };
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land", "poll"]);
+  assert.equal(result.landing.landed, false);
+  assert.match(result.landing.message, /ENOENT/);
+});
+
+test("release uses uploadLandPoll on a real run, so the bump lands before polling", () => {
+  const source = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
+  const call = source.indexOf("await uploadLandPoll(");
+  assert.ok(call > 0, "release.mjs calls uploadLandPoll");
+  assert.ok(!/await archiveAndUpload\(buildNumber\);\s*store\.uploadedBuildId = await pollBuild/.test(source), "no poll straight after upload");
+  const realRun = source.lastIndexOf("if (!dryRun && !failures.length) {", call);
+  assert.ok(realRun > 0 && source.indexOf("} else {", realRun) > call, "inside the real-run upload block");
 });
