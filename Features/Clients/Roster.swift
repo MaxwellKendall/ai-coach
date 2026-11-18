@@ -138,6 +138,8 @@ final class Roster {
     func refresh(coach: String?, names: [String: String]) async {
         #if DEBUG
         if Self.sample { return }
+        // TKL-460: the review demo's new coach has no server to ask: no clients yet, not "Couldn't load".
+        if DebugRole.demo { loaded = true; return }
         #endif
         guard let coach else {
             clients = []

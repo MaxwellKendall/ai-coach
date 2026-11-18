@@ -17,3 +17,6 @@ RedeemGiftView  # Pilot.gifts is off
 VoiceLogView  # You › Spoken attempts, shown only with Pilot.inAppAI
 SpokenCheckSheet  # the confirm screen after a spoken log
 ProposalSheet  # the confirm screen after a spoken edit to the week
+
+# TKL-460: shown only when none of the coach's clients has a session in the last four weeks; the demo roster has them.
+CopySessionSheet.empty.no-sessions-to-copy  # empty state of Copy a Session, unreachable with any planned client

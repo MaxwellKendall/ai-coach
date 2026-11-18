@@ -10,7 +10,7 @@ Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/pr
 - `App/`: `@main`, root views, `Theme.swift`, `Info.plist`. `Widgets/`: workout Live Activity.
 - `Core/`: Model (SwiftData), Generators, Progress (pure Swift, no UI/persistence imports), AI (`AIModel.swift`: every LLM call), Import.
 - `Features/`: SwiftUI screens. `Resources/`: assets, `Seed/` JSON (exercises, recipes, photos), `amplify_outputs.{dev,prod}.json`.
-- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemoUITests.swift` + `DemoScreens.swift` for the review demo, `PaywallScreenshotUITests.swift`, `DemoModeUITests.swift`, `AIWeekScreenshotUITests.swift`), `Fixtures`.
+- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemoUITests.swift`, `ReviewChaptersUITests.swift` + `DemoScreens.swift` for the review demo, `PaywallScreenshotUITests.swift`, `DemoModeUITests.swift`, `AIWeekScreenshotUITests.swift`), `Fixtures`.
 - `infra/`: AWS CDK (TypeScript). `lib/stack.ts` is the whole stack; `lambda/` (MCP, sync, coach, Stripe, AI proxy, share pages…), `resolvers/`, `graphql/`, `scripts/`, `test/` (vitest). Background: `infra/README.md`.
 - `web/`: coach dashboard, Vite + React + TS, served at `/app`. `shared/`: TS shared by web and infra.
 - `plugin/`: the Claude plugin (skills + connector). `directories/`: ChatGPT, Claude, MCP-registry listing builds.
@@ -69,6 +69,7 @@ The release tooling is on `main`: `npm run release` (`scripts/release.mjs`), doc
 - `npm run release -- products`: products-only write (subscriptions), only when Maxwell has said to apply the subscription plan.
 - Stop if release reports the Paid Apps agreement inactive (the Account Holder signs it under Business; no API). Before submit: every subscription ready, paywall screenshots present, and the review video URL below returns 200.
 Review demo video: `npm run demo-video` (`scripts/demo-video.mjs`): an XCUITest (`ReviewDemoUITests`) signs in as the demo client and then the demo coach; `simctl io recordVideo` + ffmpeg write `build/review/demo.mp4`, then it reports which screens of `appstore/review/screens.json` the video never showed (`-- --require-coverage` fails on gaps). `npm run screens` regenerates that inventory.
+Client and coach chapters (TKL-460): `scripts/review-demo.sh` (`npm run review-demo`) records `ReviewChaptersUITests` in the Debug build's no-server demo mode (`-demo YES`; no demo-account secrets, nothing written to prod; `DemoCloud` answers the invite calls), one simctl recording per part started and stopped on the test's cues (`build/review/cues.txt` + `.ack`), joined with a title card per chapter (`scripts/title-card.swift`; this ffmpeg has no drawtext) into `build/review/chapters.mp4`, ~4 min. It then runs `screen-coverage.mjs --roles client,coach`, which owes only screens no solo lifter can reach (shared screens are the solo chapter's), and fails on a gap.
 `https://barbrabell.com/review/demo.mp4` serves only after the `/review/*` behavior is deployed and the file is uploaded to the cards bucket by hand.
 
 ## Land

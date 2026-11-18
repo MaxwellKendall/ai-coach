@@ -38,6 +38,10 @@ final class Account {
     private(set) var user: User?
     /// FIT-298: false until the first `refresh` has read the session, so "no user" isn't taken for signed out at launch.
     private(set) var restored = false
+    #if DEBUG
+    /// TKL-460: the email the demo signed in with (`-demoSignedOut YES`); nil before.
+    private var demoEmail: String?
+    #endif
     /// FIT-57: Release (TestFlight and the App Store) talks to AICoach-prod and bundles only its file; Debug
     /// bundles both and talks to the one `Backend.current` names.
     static let outputs = "amplify_outputs.\(Backend.current.rawValue)"
@@ -67,8 +71,9 @@ final class Account {
         #if DEBUG
         // FIT-445: a UI test's role is signed out, whatever the simulator's keychain holds, so nothing reaches the server.
         // FIT-446: `-demo YES` is signed in as a local account, with no network: its uid is a fixed UUID, the purchase's token.
+        // TKL-460: `-demoSignedOut YES` starts it signed out; an email sign-in then signs in here (DemoCloud.user).
         if DebugRole.demo {
-            user = User(uid: "00000000-0000-4000-8000-000000000446", name: "Demo Lifter", email: nil, provider: nil)
+            user = DemoCloud.user(signedOut: DebugRole.demoSignedOut, email: demoEmail)
             restored = true
             return
         }
@@ -162,12 +167,22 @@ final class Account {
     /// FIT-229: email and password, for the accounts we make with admin rights (App Review's). There's no sign-up:
     /// preSignUp refuses it, so this only signs in.
     func signIn(email: String, password: String) async throws {
+        #if DEBUG
+        if DebugRole.demo {
+            demoEmail = email
+            await refresh()
+            return
+        }
+        #endif
         let result = try await Amplify.Auth.signIn(username: email.trimmingCharacters(in: .whitespaces).lowercased(), password: password)
         guard result.isSignedIn else { throw PasswordSignInError.notSignedIn }
         await refresh()
     }
 
     func signOut() async {
+        #if DEBUG
+        demoEmail = nil
+        #endif
         _ = await Amplify.Auth.signOut()
         user = nil
     }
