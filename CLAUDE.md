@@ -10,7 +10,7 @@ Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/pr
 - `App/`: `@main`, root views, `Theme.swift`, `Info.plist`. `Widgets/`: workout Live Activity.
 - `Core/`: Model (SwiftData), Generators, Progress (pure Swift, no UI/persistence imports), AI (`AIModel.swift`: every LLM call), Import.
 - `Features/`: SwiftUI screens. `Resources/`: assets, `Seed/` JSON (exercises, recipes, photos), `amplify_outputs.{dev,prod}.json`.
-- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemoUITests.swift` + `DemoScreens.swift` for the review demo, `PaywallScreenshotUITests.swift`, `DemoModeUITests.swift`, `AIWeekScreenshotUITests.swift`), `Fixtures`.
+- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemoUITests.swift` + `DemoScreens.swift` for the review demo, `PaywallScreenshotUITests.swift`, `DemoModeUITests.swift`, `AIWeekScreenshotUITests.swift`, `DemoClipScreenshotUITests.swift` (scheme `ReviewDemo`; Back Squat's demo on the how-to sheet and set card → `build/screens/`)), `Fixtures`.
 - `infra/`: AWS CDK (TypeScript). `lib/stack.ts` is the whole stack; `lambda/` (MCP, sync, coach, Stripe, AI proxy, share pages…), `resolvers/`, `graphql/`, `scripts/`, `test/` (vitest). Background: `infra/README.md`.
 - `web/`: coach dashboard, Vite + React + TS, served at `/app`. `shared/`: TS shared by web and infra.
 - `plugin/`: the Claude plugin (skills + connector). `directories/`: ChatGPT, Claude, MCP-registry listing builds.

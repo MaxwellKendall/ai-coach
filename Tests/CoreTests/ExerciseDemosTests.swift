@@ -26,6 +26,12 @@ struct ExerciseDemosTests {
         }
     }
 
+    /// TKL-790: Maxwell approved all 28 clips of batch 1 (TKL-792), so the app lists exactly those, each on the site.
+    @Test func listsTheApprovedBatch() {
+        #expect(ExerciseDemos.bundled == Set(batch.demos.map(\.slug)))
+        #expect(ExerciseDemos.url("back-squat")?.absoluteString.hasSuffix("/exercises/demos/back-squat.mp4") == true)
+    }
+
     /// The app only ever plays from our site: never the Higgsfield CDN it was downloaded from.
     @Test func playsOnlyFromOurSite() {
         let site = Backend.current.web.host()
