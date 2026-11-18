@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "./load-env.mjs";
 import { redact } from "./release-lib.mjs";
+import { statusBarOverride } from "./paywall-shots-lib.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const secretsPath = resolve(root, "Tests/UITests/Secrets.swift");
@@ -144,7 +145,7 @@ exec("xcrun", ["simctl", "boot", udid], { allowFailure: true });
 exec("xcrun", ["simctl", "bootstatus", udid, "-b"]);
 exec("xcrun", ["simctl", "keychain", udid, "reset"]);
 exec("xcrun", ["simctl", "uninstall", udid, "com.maxwellkendall.aicoach"], { allowFailure: true });
-exec("xcrun", ["simctl", "status_bar", udid, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100", "--wifiBars", "3", "--cellularMode", "active", "--cellularBars", "4"], { allowFailure: true });
+exec("xcrun", statusBarOverride(udid), { allowFailure: true });
 
 const destination = `platform=iOS Simulator,id=${udid}`;
 if (await run("xcodebuild", ["build-for-testing", "-scheme", "ReviewDemo", "-configuration", "Release", "-destination", destination, "-derivedDataPath", "build/dd", "-quiet"]) !== 0) {
