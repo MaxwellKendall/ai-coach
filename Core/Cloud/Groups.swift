@@ -235,12 +235,18 @@ enum Cloud {
 
     /// The invite's coach, or nil when it's been used or has expired.
     @MainActor static func coachInvite(_ code: String) async throws -> CoachInvite? {
+        #if DEBUG
+        if let demo = DemoCloud.coachInvite(code) { return demo }
+        #endif
         let answer = try await run("query($c: String!) { coachInvite(code: $c) }", ["c": code], at: "coachInvite", as: String?.self, query: true)
         return answer.map(CoachInvite.init(answer:))
     }
 
     @MainActor static func acceptCoach(_ code: String) async throws -> Person {
-        try await run("mutation($c: String!) { acceptCoach(code: $c) { uid name since } }", ["c": code], at: "acceptCoach")
+        #if DEBUG
+        if let demo = DemoCloud.acceptCoach(code) { return demo }
+        #endif
+        return try await run("mutation($c: String!) { acceptCoach(code: $c) { uid name since } }", ["c": code], at: "acceptCoach")
     }
 
     @MainActor static func myCoaches() async throws -> [Person] {

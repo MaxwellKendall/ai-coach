@@ -68,6 +68,9 @@ extension Cloud {
 
     /// FIT-360: `client` is who it's for; asked for only when given, so a server from before it still answers.
     @MainActor static func createClientInvite(name: String? = nil, client: String? = nil) async throws -> ClientInvite {
+        #if DEBUG
+        if let demo = DemoCloud.clientInvite(client: client) { return demo }
+        #endif
         guard let client, !client.isEmpty else { return try await plainInvite(name: name) }
         do {
             var variables: [String: Any] = ["c": client]
@@ -115,6 +118,9 @@ extension Cloud {
 
     /// A client's unit, as changed here; false when the server kept a newer copy (their phone's).
     @MainActor static func push(_ key: String, body: String?, client: String) async throws -> Bool {
+        #if DEBUG
+        if DebugRole.demo { return true }
+        #endif
         var unit: [String: Any] = ["key": key, "updatedAt": Date.now.formatted(.iso8601), "deleted": body == nil]
         if let body { unit["body"] = body }
         let result: Pushed = try await run("mutation($u: [SyncUnitInput!]!, $o: ID) { syncPush(units: $u, source: \"app\", uid: $o) { rejected { key } } }",

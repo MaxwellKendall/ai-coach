@@ -328,8 +328,10 @@ export function parseMarks(text) {
 /**
  * Every screen a visible role can reach must be shown at least once by a chapter of one of those roles, or be
  * excluded with a reason. Marks of ids that aren't in the inventory are reported too, since they can't count.
+ * TKL-460: with `roles`, only the screens no other role can reach are owed (for client and coach, the coach-only ones):
+ * a screen a solo lifter can reach too is the solo chapter's to show.
  */
-export function coverage({ screens }, marks, excludes = new Map()) {
+export function coverage({ screens }, marks, excludes = new Map(), { roles } = {}) {
   const byId = new Map(screens.map((s) => [s.id, s]));
   const shown = new Map();
   const unknown = [];
@@ -343,17 +345,19 @@ export function coverage({ screens }, marks, excludes = new Map()) {
   let required = 0;
   for (const s of screens) {
     if (!s.roles.length || excludes.has(s.id)) continue;
+    if (roles && !s.roles.every((role) => roles.includes(role))) continue;
     required++;
     if (shown.has(s.id)) continue;
     (missing[s.roles.join(", ")] ??= []).push(s.id);
   }
   const staleExcludes = [...excludes.keys()].filter((id) => !byId.has(id));
   const missed = Object.values(missing).flat().length;
-  return { required, shown: required - missed, missing, unknown, staleExcludes, ok: missed === 0 && unknown.length === 0 };
+  return { required, shown: required - missed, missing, unknown, staleExcludes, roles, ok: missed === 0 && unknown.length === 0 };
 }
 
 export function report(result) {
-  const lines = [`Review demo coverage: ${result.shown} of ${result.required} screens shown.`];
+  const scope = result.roles ? ` for ${result.roles.join(", ")}` : "";
+  const lines = [`Review demo coverage${scope}: ${result.shown} of ${result.required} screens shown.`];
   for (const [roles, ids] of Object.entries(result.missing).sort()) {
     lines.push(`Not shown, reachable by ${roles}: ${ids.length}`);
     for (const id of ids) lines.push(`  ${id}`);

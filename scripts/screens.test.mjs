@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { coverage, inventory, mask, parseExcludes, parseMarks } from "./screens-lib.mjs";
 
@@ -142,6 +145,38 @@ test("a screen shown by a role that can't reach it doesn't count", () => {
   const inv = inventory([app, today, you, rest]);
   const result = coverage(inv, parseMarks("coach tab.Today\n"));
   assert.ok(result.missing["solo, client"].includes("tab.Today"));
+});
+
+test("TKL-460: coverage for some roles requires only the screens no other role can reach", () => {
+  const inv = inventory([app, today, you, rest]);
+  // Nothing shown: for client and coach, only coach-only screens are owed; "solo, client" ones are the solo chapter's.
+  const owed = coverage(inv, [], new Map(), { roles: ["client", "coach"] });
+  assert.equal(owed.ok, false);
+  assert.ok(owed.missing.coach.includes("PaywallView.coach"));
+  assert.ok(owed.missing.coach.includes("tab.Clients"));
+  assert.equal(owed.missing["solo, client"], undefined);
+  assert.equal(owed.missing.solo, undefined);
+  assert.equal(owed.missing["solo, client, coach"], undefined);
+  // Every coach-only screen shown: client and coach pass, with nothing missing.
+  const marks = Object.values(owed.missing).flat().map((id) => ({ role: "coach", id }));
+  const passed = coverage(inv, marks, new Map(), { roles: ["client", "coach"] });
+  assert.equal(passed.ok, true, JSON.stringify(passed.missing));
+  assert.equal(passed.shown, passed.required);
+  // Without roles the whole inventory is still owed.
+  assert.equal(coverage(inv, marks).ok, false);
+});
+
+test("TKL-460: screen-coverage.mjs --roles checks only those roles", () => {
+  const inv = JSON.parse(readFileSync(new URL("../appstore/review/screens.json", import.meta.url), "utf8"));
+  const coachOnly = inv.screens.filter((s) => s.roles.length && s.roles.every((r) => r === "coach")).map((s) => `coach ${s.id}`);
+  const dir = mkdtempSync(join(tmpdir(), "cov-"));
+  const marks = join(dir, "marks.txt");
+  writeFileSync(marks, coachOnly.join("\n") + "\n");
+  const scoped = spawnSync("node", ["scripts/screen-coverage.mjs", marks, "--roles", "client,coach"], { cwd: root, encoding: "utf8" });
+  assert.equal(scoped.status, 0, scoped.stdout + scoped.stderr);
+  assert.match(scoped.stdout, /for client, coach/);
+  const all = spawnSync("node", ["scripts/screen-coverage.mjs", marks], { cwd: root, encoding: "utf8" });
+  assert.equal(all.status, 1);
 });
 
 test("the committed appstore/review/screens.json matches the code", () => {
