@@ -289,15 +289,26 @@ struct SessionList: View {
                 // Accessibility sizes stack the row's parts so a lift's name never breaks mid-word.
                 let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 8))
                 layout {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(name).font(.body.weight(.semibold)).foregroundStyle(done ? Color.inkMuted : Color.ink)
-                            if let up {
-                                Text("+\(Coach.number(up)) lb").font(.caption.weight(.bold)).foregroundStyle(.tint)
-                                    .padding(.horizontal, 7).padding(.vertical, 1).background(.tint.opacity(0.12), in: .capsule)
-                            }
+                    let title = Text(name).font(.body.weight(.semibold)).foregroundStyle(done ? Color.inkMuted : Color.ink)
+                    let dose = Text(Self.dose(movement)).font(.footnote).foregroundStyle(Color.inkMuted)
+                    // TKL-785: the "+5 lb" pill sits beside the name when both fit on one line; else beside the dose
+                    // when that fits; else on a line of its own. The pill never breaks, nor the dose beside it.
+                    // (A long name may wrap in the last two; it doesn't count toward what fits.)
+                    let wraps = title.frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    ViewThatFits(in: .horizontal) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) { title.lineLimit(1); if let up { Self.raise(up) } }
+                            dose
                         }
-                        Text(Self.dose(movement)).font(.footnote).foregroundStyle(Color.inkMuted)
+                        VStack(alignment: .leading, spacing: 2) {
+                            wraps
+                            HStack(spacing: 8) { dose.lineLimit(1); if let up { Self.raise(up) } }
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            wraps
+                            dose
+                            if let up { Self.raise(up) }
+                        }
                     }
                     if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
                     if let load {
@@ -335,6 +346,13 @@ struct SessionList: View {
             // Checking off the open lift folds it.
             if open == block { fold { open = nil }; selected = nil }
         }
+    }
+
+    /// "+5 lb": the load went up since last time. One line, at its own width (TKL-785).
+    static func raise(_ up: Double) -> some View {
+        Text("+\(Coach.number(up)) lb").font(.caption.weight(.bold)).foregroundStyle(.tint)
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 7).padding(.vertical, 1).background(.tint.opacity(0.12), in: .capsule)
     }
 
     /// The working weight; none for bodyweight, which a weight stepped down to 0 is.
