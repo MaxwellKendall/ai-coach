@@ -1,5 +1,7 @@
 A real program for your gym and your week, free. Log your sets, and next week moves up.
 
+Lifter Pro: a week designed around how last week went, with the why. Each week the AI plans your sessions, sets and weights from what you logged, your goal and your gym, and every change comes with its reason, like "Bench held at 185: two sets short Tuesday." Optional, with a free trial. The program above stays free without it.
+
 Say what you're training for, what equipment you have and how many days a week, and barbrabell gives you a ready-made program that fits: Full Body, Upper / Lower, Push / Pull / Legs and more. Each week's weights and reps follow what you actually logged.
 
 Have a coach? Your coach writes your week instead. You see today's session, log each set, and your coach sees what you did.

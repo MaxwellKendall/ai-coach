@@ -118,6 +118,14 @@ struct EntitlementTests {
         #expect(PaywallView.stillFree(.lifter).contains("free"))
     }
 
+    /// TKL-442: Lifter Pro stays $39.99/yr and leads with the week designed around how last week went, with the why.
+    @Test func lifterPaywallLeadsWithTheDesignedWeek() {
+        #expect(PaywallView.lifterHeadline == "A week designed around how last week went.")
+        #expect(PaywallView.lifterSubhead.contains("why"))
+        #expect(PaywallView.benefits(.lifter).first?.title == "A week designed around how last week went")
+        #expect(!PaywallView.lifterHeadline.contains("$"))
+    }
+
     /// FIT-437: the approved Lifter Pro paywall copy (.git/paywall-copy.md), word for word.
     @Test func lifterPaywallSaysTheApprovedCopy() {
         #expect(PaywallView.lifterTrialButton(days: 14) == "Start 14-day free trial")
