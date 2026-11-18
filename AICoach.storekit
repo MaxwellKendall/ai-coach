@@ -29,7 +29,7 @@
           },
           "localizations": [
             {
-              "description": "AI-designed training weeks",
+              "description": "A week designed around how last week went",
               "displayName": "Lifter Pro",
               "locale": "en_US"
             }
@@ -55,7 +55,7 @@
           },
           "localizations": [
             {
-              "description": "AI-designed training weeks",
+              "description": "A week designed around how last week went",
               "displayName": "Lifter Pro",
               "locale": "en_US"
             }

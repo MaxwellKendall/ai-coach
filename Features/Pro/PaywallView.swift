@@ -84,10 +84,10 @@ struct PaywallView: View {
     private var lifterHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Lifter Pro").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-            Text("Want it planned for you?").font(.display(34, weight: .bold)).tracking(-0.4)
+            Text(Self.lifterHeadline).font(.display(34, weight: .bold)).tracking(-0.4)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("paywall.headline")
-            Text("Pro builds every week from your last one, your goal, and your gym. Works in Claude too.")
+            Text(Self.lifterSubhead)
                 .font(.title3).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 16)
@@ -345,7 +345,7 @@ struct PaywallView: View {
     nonisolated static func benefits(_ plan: StoreProducts.Plan) -> [(symbol: String, title: String, detail: String)] {
         switch plan {
         case .lifter:
-            [("figure.strengthtraining.traditional", "Weeks designed for you",
+            [("figure.strengthtraining.traditional", "A week designed around how last week went",
               "Each week's sessions, sets and weights, planned by AI from what you logged the week before."),
              ("bubble.left.and.text.bubble.right", "Plan from Claude",
               "Connect Claude to plan and change your training and review your week.")]
@@ -401,6 +401,10 @@ struct PaywallView: View {
         @unknown default: StoreProducts.trialDays
         }
     }
+
+    /// TKL-442: Lifter Pro stays $39.99/yr; the paywall leads with what Hevy's bundled trainer doesn't do.
+    nonisolated static let lifterHeadline = "A week designed around how last week went."
+    nonisolated static let lifterSubhead = "Built from what you logged, your goal and your gym, with the why behind every change. Works in Claude too."
 
     // The approved Lifter Pro copy (.git/paywall-copy.md), built only here so tests can pin it.
     nonisolated static func lifterTrialButton(days: Int?) -> String {

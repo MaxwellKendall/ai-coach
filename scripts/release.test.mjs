@@ -55,6 +55,23 @@ test("TKL-439: the listing leads with the lifter hero, and the subtitle fits", (
   assert.doesNotMatch(description + promotional + subtitle, /TrueCoach|Everything you pay/);
 });
 
+test("TKL-442: Lifter Pro leads with the week designed around how last week went, at the same price", () => {
+  const description = readFileSync(new URL("../appstore/metadata/description.txt", import.meta.url), "utf8").trim();
+  const line = "A week designed around how last week went";
+  const paragraphs = description.split(/\n\s*\n/);
+  assert.equal(paragraphs[1].startsWith("Lifter Pro: a week designed around how last week went"), true, paragraphs[1]);
+  const subs = JSON.parse(readFileSync(new URL("../appstore/subscriptions.json", import.meta.url), "utf8"));
+  const lifter = subs.groups.find((g) => g.displayName === "Lifter Pro").products;
+  assert.deepEqual(lifter.map((p) => p.priceUSD), ["5.99", "39.99"]);
+  for (const p of lifter) {
+    assert.equal(p.localization.description, line);
+    assert.ok(p.localization.description.length <= 55);
+  }
+  const storekit = readFileSync(new URL("../AICoach.storekit", import.meta.url), "utf8");
+  assert.doesNotMatch(storekit, /AI-designed training weeks/);
+  assert.equal(storekit.split(`"description": "${line}"`).length - 1, 2);
+});
+
 test("review notes are filled from the caller and keep no placeholder", () => {
   const template = readFileSync(new URL("../appstore/metadata/review-notes.txt", import.meta.url), "utf8");
   const notes = reviewNotes(template, {
