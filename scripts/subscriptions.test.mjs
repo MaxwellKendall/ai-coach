@@ -113,6 +113,7 @@ test("an existing localization is patched, and an item already on the submission
   const plan = planSubscriptions(desired, remote, { screenshotExists: () => true });
   const loc = plan.actions.find((action) => action.type === "setLocalization");
   assert.equal(loc.localizationId, "ml");
+  assert.equal(plan.submit[0].groupId, "g1", "the submit item names its group, for the group version (TKL-773)");
   const again = reviewSubmissionPlan({
     existingItems: [{ appStoreVersionId: "ver", subscriptionVersionId: "sv1" }],
     versionId: "ver",
