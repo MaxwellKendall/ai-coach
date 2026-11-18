@@ -68,6 +68,7 @@ The release tooling is on `main`: `npm run release` (`scripts/release.mjs`), doc
 - `npm run release -- submit`: creates the review submission. Submission is Maxwell's.
 - `npm run release -- products`: products-only write (subscriptions), only when Maxwell has said to apply the subscription plan.
 - Stop if release reports the Paid Apps agreement inactive (the Account Holder signs it under Business; no API). Before submit: every subscription ready, paywall screenshots present, and the review video URL below returns 200.
+Paywall screenshots: `npm run paywall-shots` regenerates `appstore/screenshots/{lifter,coach}-pro.png` with a clean status bar (`PAYWALL_SIMULATOR=<name or UDID>` to use another simulator).
 Review demo video: `npm run demo-video` (`scripts/demo-video.mjs`): an XCUITest (`ReviewDemoUITests`) signs in as the demo client and then the demo coach; `simctl io recordVideo` + ffmpeg write `build/review/demo.mp4`, then it reports which screens of `appstore/review/screens.json` the video never showed (`-- --require-coverage` fails on gaps). `npm run screens` regenerates that inventory.
 `https://barbrabell.com/review/demo.mp4` serves only after the `/review/*` behavior is deployed and the file is uploaded to the cards bucket by hand.
 

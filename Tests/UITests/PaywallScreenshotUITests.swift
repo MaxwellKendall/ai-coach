@@ -4,6 +4,8 @@ import XCTest
 /// (appstore/subscriptions.json: appstore/screenshots/lifter-pro.png and coach-pro.png). `-paywall lifter|coach`
 /// (Debug) opens that plan's paywall alone. Each is checked for what App Review looks for (guideline 3.1.2): both
 /// prices, the renewal terms, Restore Purchases, and the terms and privacy links.
+/// TKL-772: run through `npm run paywall-shots`, which pins the status bar (9:41, full bars) around this test. The
+/// test itself starts from the Home Screen and fails if the status bar shows a "◀ App" link back to another app.
 final class PaywallScreenshotUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
@@ -17,6 +19,10 @@ final class PaywallScreenshotUITests: XCTestCase {
     private func capture(_ plan: String, to name: String) throws {
         let app = XCUIApplication()
         app.launchArguments += ["-paywall", plan, "-trialEligible", "YES", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        // An app opened from another app shows that app's name as a back link in the status bar. Terminating and
+        // launching from the Home Screen starts a fresh scene with none.
+        app.terminate()
+        XCUIDevice.shared.press(.home)
         app.launch()
 
         // The App Store's products, with their prices, once loaded.
@@ -43,6 +49,7 @@ final class PaywallScreenshotUITests: XCTestCase {
         }
         XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 1))
         sleep(1)
+        XCTAssertFalse(app.statusBars.buttons["breadcrumb"].exists, "The status bar shows a link back to another app.")
 
         let shot = XCUIScreen.main.screenshot()
         let attachment = XCTAttachment(screenshot: shot)
