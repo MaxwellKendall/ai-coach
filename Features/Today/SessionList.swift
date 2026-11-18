@@ -57,7 +57,7 @@ struct SessionList: View {
 
     private func save(_ edited: SessionPlan) {
         // A lift joined, removed or moved: the open one may be gone, so nothing stays open on a stale index.
-        if edited.blocks.count != session.blocks.count { open = nil; selected = nil }
+        if edited.blocks.count != session.blocks.count { fold { open = nil }; selected = nil }
         onEdit?(edited)
     }
 
@@ -88,15 +88,16 @@ struct SessionList: View {
                             .padding(14)
                             .background(Color.fill.opacity(0.6), in: .rect(cornerRadius: 18))
                             .padding(.bottom, Self.rowPadding)
-                            .motionTransition(.opacity.combined(with: .move(edge: .top)))
+                            .motionTransition(Self.unfold)
                     }
                 }
+                // TKL-782: the sets show only inside the lift's own frame as it grows or shrinks, so the rows below
+                // never slide over them while they fade.
+                .clipped()
                 .overlay(alignment: .bottom) { if ruled { Divider() } }
             }
             if onEdit != nil { addButton("Exercise") { picking = .add } }
         }
-        .animation(.settle, value: warm)
-        .animation(.settle, value: open)
         .sheet(isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })) {
             SetStepper(session: editable, selected: $selected, names: names)
                 .presentationDetents([.height(250)])
@@ -152,6 +153,16 @@ struct SessionList: View {
             .joined(separator: ", ")
     }
 
+    /// TKL-782: what opens under a row (a lift's sets, the warm-up's items) fades in where it lands, a few points
+    /// below its row. A move from the top edge started it a whole editor's height up, so it slid over the rows above.
+    static let unfold = AnyTransition.opacity.combined(with: .offset(y: -8))
+
+    /// TKL-782: a fold opens or closes in one animation for the whole screen. An `.animation` on this list moved only
+    /// what's inside it, so Today's card around it and the rows under it jumped to their new height.
+    private func fold(_ change: () -> Void) {
+        withMotion(.settle, change)
+    }
+
     /// The fold's chevron, in a small grey circle the check circle's size: right for the warm-up, down for a lift.
     private func chevron(_ name: String, turned: Bool) -> some View {
         Image(systemName: name).font(.caption.weight(.bold)).foregroundStyle(Color.inkMuted)
@@ -161,7 +172,7 @@ struct SessionList: View {
 
     private func warmup(_ first: (name: String, load: Double)?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button { warm.toggle() } label: {
+            Button { fold { warm.toggle() } } label: {
                 HStack(spacing: Self.gap) {
                     // In the check circles' column on Today, so the row keeps the list's edge; at the end elsewhere.
                     if checked != nil { chevron("chevron.right", turned: warm).frame(width: Self.column, height: Self.column) }
@@ -207,9 +218,10 @@ struct SessionList: View {
                 }
                 .font(.subheadline)
                 .padding(.leading, inset).padding(.bottom, Self.rowPadding)
-                .motionTransition(.opacity.combined(with: .move(edge: .top)))
+                .motionTransition(Self.unfold)
             }
         }
+        .clipped()
         .overlay(alignment: .bottom) { Divider() }
     }
 
@@ -217,7 +229,7 @@ struct SessionList: View {
     private func tap(_ block: Int) {
         if onEdit != nil {
             selected = nil
-            open = open == block ? nil : block
+            fold { open = open == block ? nil : block }
         } else if let checked {
             toggle(block, in: checked)
         }
@@ -321,7 +333,7 @@ struct SessionList: View {
         } else {
             checked.wrappedValue.insert(block)
             // Checking off the open lift folds it.
-            if open == block { open = nil; selected = nil }
+            if open == block { fold { open = nil }; selected = nil }
         }
     }
 
