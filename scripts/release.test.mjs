@@ -218,3 +218,15 @@ test("release uses uploadLandPoll on a real run, so the bump lands before pollin
   const realRun = source.lastIndexOf("if (!dryRun && !failures.length) {", call);
   assert.ok(realRun > 0 && source.indexOf("} else {", realRun) > call, "inside the real-run upload block");
 });
+
+test("TKL-450: the listing names the ready programs lifters search for, and the keywords carry them", () => {
+  const description = readFileSync(new URL("../appstore/metadata/description.txt", import.meta.url), "utf8");
+  const keywords = readFileSync(new URL("../appstore/metadata/keywords.txt", import.meta.url), "utf8").trim().split(",");
+  const programs = JSON.parse(readFileSync(new URL("../Resources/Seed/programs.json", import.meta.url), "utf8"));
+  // The search terms each program answers: descriptive only, no trademarked program names (Maxwell, 2026-11-17).
+  const searched = { "push-pull-legs": ["ppl", "push", "pull", "legs"], "upper-lower-4": ["upper", "lower"], "tiered-linear": ["linear", "progression"] };
+  const named = programs.filter((p) => description.includes(p.name) && searched[p.slug]);
+  assert.ok(named.length >= 2, `named in the description: ${named.map((p) => p.name)}`);
+  for (const p of named) for (const term of searched[p.slug]) assert.ok(keywords.includes(term), `${p.slug}: keyword ${term}`);
+  assert.doesNotMatch(description + keywords.join(","), /5\/3\/1|531|GZCL|nSuns|Starting Strength|StrongLifts|PHUL|PHAT/i);
+});

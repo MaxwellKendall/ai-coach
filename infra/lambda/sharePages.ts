@@ -8,6 +8,7 @@
  */
 
 import { MANAGE, PLANS, priceLine, TRIAL_DAYS } from "../../shared/plans.ts";
+import readyPrograms from "../../Resources/Seed/programs.json" with { type: "json" };
 
 export type CardStyle = "dark" | "paper";
 
@@ -604,6 +605,18 @@ function coachInvitePage(coach: string | null, path: string, site: Site) {
 export const START = "/app/clients";
 
 /**
+ * TKL-450: the free ready-made programs (Resources/Seed/programs.json), named as lifters search for them: PPL, upper /
+ * lower, linear progression. Descriptive names only, never a trademarked program's (Maxwell, 2026-11-17).
+ */
+function programList() {
+  const items = readyPrograms.map((p) => `<li><b>${esc(p.name)}</b><span>${esc(p.summary)} ${p.days.length > 1 ? `${p.days.slice(0, -1).join(", ")} or ${p.days.at(-1)}` : p.days[0]} days a week.</span></li>`);
+  return `<section class="block programs" id="programs">
+        <h2>Free programs</h2>
+        <ul>${items.join("")}</ul>
+      </section>`;
+}
+
+/**
  * TKL-439: the home page is for lifters training on their own, the launch's focus (author, 2026-11-12). Every claim is
  * the free no-coach door's (TKL-230): a ready program for their equipment and days, planned in code from what they
  * logged. "Free" holds while monetization is freemium (shared/monetization.ts); if hard goes live, drop it here in the
@@ -631,11 +644,12 @@ function homePage(site: Site) {
       <section class="block how" id="how">
         <h2>How it works</h2>
         <ol>
-          <li><b>Pick your program</b><span>A few quick questions: your goal, your gym, your days. Full Body, Upper / Lower, Push / Pull / Legs and more.</span></li>
+          <li><b>Pick your program</b><span>A few quick questions: your goal, your gym, your days. Full Body, Upper / Lower, Push / Pull / Legs, <a href="#programs">and more</a>.</span></li>
           <li><b>Log every set</b><span>A tap per set at the gym, with the weights and reps already filled in.</span></li>
           <li><b>Next week moves up</b><span>Each week's load and reps follow what you actually lifted.</span></li>
         </ol>
       </section>
+      ${programList()}
       ${claude}
       <section class="block">
         <h2>Price</h2>
@@ -1058,6 +1072,9 @@ h3{font-size:17px}
 .how li::before,.steps li::before{content:counter(n);grid-row:span 2;width:28px;height:28px;border-radius:50%;background:var(--surface);
   border:1px solid var(--line);display:grid;place-items:center;font-size:14px;font-weight:650}
 .how span,.steps span{color:var(--muted);font-size:15px}
+.programs ul{list-style:none;display:grid;gap:14px;padding:0}
+.programs li{display:grid;text-align:left}
+.programs span{color:var(--muted);font-size:15px}
 .foot{color:var(--muted);font-size:13px;text-align:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom))}
 .foot nav{display:flex;justify-content:center;gap:20px;margin-bottom:8px}.foot nav a{color:inherit}
 

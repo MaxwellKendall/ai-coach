@@ -50,7 +50,7 @@ struct ReadyProgramTests {
     @Test func seedProgramsUseTheCatalog() {
         let slugs = Set(catalog.map(\.slug))
         let bySlug = Dictionary(catalog.map { ($0.slug, $0) }, uniquingKeysWith: { first, _ in first })
-        #expect(ReadyProgram.all.count == 8)
+        #expect(ReadyProgram.all.count == 9)
         for ready in ReadyProgram.all {
             #expect(!ready.sessions.isEmpty && !ready.days.isEmpty, "\(ready.slug)")
             let have = Set(ready.equipment + (ready.optional ?? []))
@@ -68,7 +68,7 @@ struct ReadyProgramTests {
         #expect(ReadyProgram.matches(have: gym, days: 2).first?.slug == "full-body-2")
         #expect(ReadyProgram.matches(have: gym, days: 4).first?.slug == "upper-lower-4")
         #expect(ReadyProgram.matches(have: gym, days: 6).first?.slug == "push-pull-legs")
-        #expect(ReadyProgram.matches(have: gym, days: 3).count == 8)
+        #expect(ReadyProgram.matches(have: gym, days: 3).count == 9)
         // FIT-322: some experience and a strength goal, at a gym 3 days a week: Strength Waves.
         #expect(ReadyProgram.matches(have: gym, days: 3, goal: .strength, lifted: true).first?.slug == "strength-waves")
         #expect(ReadyProgram.matches(have: gym, days: 3, goal: .strength, lifted: false).first?.slug == "full-body-3")
@@ -78,6 +78,23 @@ struct ReadyProgramTests {
         #expect(ReadyProgram.matches(have: [], days: 5).map(\.slug) == ["bodyweight-basics"])
         #expect(program("bodyweight-basics").days(nearest: 5) == 3)
         #expect(program("push-pull-legs").days(nearest: 4) == 3)
+    }
+
+    /// TKL-450: the tiered linear progression, for some experience and a strength goal on 4 days. Each tier of a lift
+    /// moves on its own: heavy sets of 3 adding weight don't push the same lift's sets of 10.
+    @Test func tieredKeepsEachTierApart() {
+        let gym = Set(Profile.allEquipment)
+        #expect(ReadyProgram.matches(have: gym, days: 4, goal: .strength, lifted: true).first?.slug == "tiered-linear")
+        #expect(ReadyProgram.matches(have: gym, days: 4).first?.slug == "upper-lower-4")
+        #expect(ReadyProgram.matches(have: gym, days: 3, goal: .strength, lifted: true).first?.slug == "strength-waves")
+        let days = [0, 1, 3, 4]
+        let first = week("tiered-linear", date(10, 25), days: days)
+        let squats = working(first, "back-squat").sorted { $0.date < $1.date }
+        #expect(squats.map { $0.target("sets") } == [5, 3])
+        #expect(squats.map { $0.target("reps") } == [3, 10])
+        let heavy = logged("back-squat", on: date(10, 26), sets: 5, reps: 3, load: 185)
+        let next = working(week("tiered-linear", date(11, 1), days: days, history: heavy), "back-squat").sorted { $0.date < $1.date }
+        #expect(next.map { $0.target("load_lb") } == [190, 45])
     }
 
     /// A home gym without cables or machines runs the barbell programs, with chin-ups and dumbbells standing in.

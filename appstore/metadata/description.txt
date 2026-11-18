@@ -2,7 +2,15 @@ A real program for your gym and your week, free. Log your sets, and next week mo
 
 Lifter Pro: a week designed around how last week went, with the why. Each week the AI plans your sessions, sets and weights from what you logged, your goal and your gym, and every change comes with its reason, like "Bench held at 185: two sets short Tuesday." Optional, with a free trial. The program above stays free without it.
 
-Say what you're training for, what equipment you have and how many days a week, and barbrabell gives you a ready-made program that fits: Full Body, Upper / Lower, Push / Pull / Legs and more. Each week's weights and reps follow what you actually logged.
+Say what you're training for, what equipment you have and how many days a week, and barbrabell gives you a ready-made program that fits. Each week's weights and reps follow what you actually logged.
+
+Free programs:
+Full Body 3-Day — a 3 × 5 linear progression with a barbell.
+Upper / Lower — four days, every muscle twice a week.
+Push / Pull / Legs — the PPL split, on three, five or six days.
+Tiered Linear Progression — heavy sets of 3, then sets of 10, then 15 to 20; each tier adds weight on its own.
+Strength Waves — percentage waves on a training max, for when the beginner programs stall.
+Plus dumbbell and bodyweight programs for training at home.
 
 Have a coach? Your coach writes your week instead. You see today's session, log each set, and your coach sees what you did.
 
