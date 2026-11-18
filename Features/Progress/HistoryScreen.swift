@@ -75,13 +75,15 @@ struct HistoryDayView: View {
 struct ExerciseHistorySection: View {
     let slug: String
     var limit = 6
+    /// TKL-793: the how-to sheet calls it "Last time".
+    var title = "Your last sessions"
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
 
     var body: some View {
         let days = ExerciseHistory.days(Planner.loggedSets(entries.filter { $0.kind == .workout }, templates: templates), exercise: slug).prefix(limit)
         if !days.isEmpty {
-            Section("Your last sessions") {
+            Section(title) {
                 ForEach(Array(days)) { day in
                     if let lift = day.lifts.first {
                         ExerciseHistory.LiftRow(name: day.date.formatted(.dateTime.month(.abbreviated).day()), lift: lift)

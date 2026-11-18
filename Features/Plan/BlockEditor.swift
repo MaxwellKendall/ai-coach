@@ -14,6 +14,14 @@ struct BlockEditor: View {
     var onHowTo: (String) -> Void
     /// Today opens the card on its own fill, so the numbers sit on the surface colour there.
     var onFill = false
+    /// TKL-793: a superset's lifts lead with their demo tiles (Program); Today's rows already have them.
+    var tiles = false
+
+    /// TKL-793: "How to Do It" stays in ⋯ only for an exercise without a demo tile (no clip, no photo) that still has
+    /// steps or a YouTube link.
+    nonisolated static func menuHowTo(_ slug: String, steps: [String]) -> Bool {
+        DemoTileContent.of(slug) == .none && (!steps.isEmpty || ExerciseVideos.bundled[slug] != nil)
+    }
 
     /// The number being changed in the bottom stepper.
     struct Cell: Equatable {
@@ -28,8 +36,12 @@ struct BlockEditor: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(block.movements.enumerated()), id: \.element.id) { m, movement in
                     if block.isGroup {
-                        Text("\(letter)\(m + 1)  \(names[movement.exercise] ?? movement.exercise)")
-                            .font(.subheadline.weight(.semibold))
+                        let name = names[movement.exercise] ?? movement.exercise
+                        HStack(spacing: 12) {
+                            // TKL-793: in Program's card each superset lift leads with its demo (Today's rows have theirs).
+                            if tiles { DemoTile(slug: movement.exercise, name: name) { onHowTo(movement.exercise) } }
+                            Text("\(letter)\(m + 1)  \(name)").font(.subheadline.weight(.semibold))
+                        }
                     }
                     if let note = movement.working.first?.note, !note.isEmpty {
                         Text(note).font(.caption).foregroundStyle(.secondary)
@@ -156,10 +168,9 @@ struct BlockEditor: View {
                     }
                 }
                 // FIT-75: how to do it, for exercises the model picked that you may not know.
+                // TKL-793: an exercise with a demo tile opens it from the tile, so it isn't here too.
                 ForEach(block.movements, id: \.id) { movement in
-                    if !(templates.first { $0.slug == movement.exercise }?.values("instructions") ?? []).isEmpty
-                        || HowToPhotos.shows(movement.exercise)
-                        || ExerciseVideos.bundled[movement.exercise] != nil {
+                    if Self.menuHowTo(movement.exercise, steps: templates.first { $0.slug == movement.exercise }?.values("instructions") ?? []) {
                         Button(block.isGroup ? "How to Do \(names[movement.exercise] ?? movement.exercise)" : "How to Do It",
                                systemImage: "questionmark.circle") { onHowTo(movement.exercise) }
                     }

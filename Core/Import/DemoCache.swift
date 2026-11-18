@@ -8,10 +8,18 @@ struct DemoCache {
     let folder: URL
     let fetch: Fetch
 
-    init(folder: URL = URL.cachesDirectory.appending(path: "demos"),
+    init(folder: URL = Self.defaultFolder,
          fetch: @escaping Fetch = { try await URLSession.shared.data(from: $0) }) {
         self.folder = folder
         self.fetch = fetch
+    }
+
+    /// Caches/demos. Debug only (TKL-793): `-demoCache <name>` uses Caches/<name>, so a UI test starts with nothing cached.
+    static var defaultFolder: URL {
+        #if DEBUG
+        if let other = UserDefaults.standard.string(forKey: "demoCache"), !other.isEmpty { return URL.cachesDirectory.appending(path: other) }
+        #endif
+        return URL.cachesDirectory.appending(path: "demos")
     }
 
     /// The clip on the phone, loaded first if needed. Throws when it can't load (offline, or not on the site yet).
