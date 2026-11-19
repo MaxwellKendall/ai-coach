@@ -184,6 +184,107 @@ final class RoleUITests: XCTestCase {
         shot(app, "subscribed")
     }
 
+    // MARK: TKL-846: redo a week with AI
+
+    /// A Lifter Pro with no program plans this week with the AI (the stub), then redoes it twice: each redo drops the
+    /// count, and at three designs the card says there are none left instead of a button. Light, then dark.
+    @MainActor
+    func testProRedoesThisWeekUntilTheCap() {
+        for appearance in ["light", "dark"] {
+            let app = launch("soloPro", ["-noProgram", "YES", "-lifterProfile", "YES", "-aiWeeks", "YES", "-appearance", appearance])
+            XCTAssertEqual(tabs(app), athlete)
+            openTab(app, "Program")
+            let button = app.buttons["program.planThisWeek"]
+            let caption = app.staticTexts["program.planThisWeek.caption"]
+            XCTAssertTrue(button.waitForExistence(timeout: 10), "This week's card has no Plan this week with AI")
+            XCTAssertEqual(button.label, "Plan this week with AI")
+            XCTAssertEqual(caption.label, "Then 2 redos this week if you want changes")
+            shot(app, "redo-plan-\(appearance)")
+            button.tap()
+            XCTAssertTrue(waitFor(caption, label: "2 redos left this week · logged days stay"), "Planning didn't leave 2 redos: \(caption.label)")
+            XCTAssertEqual(button.label, "Redo this week with AI")
+            XCTAssertFalse(app.buttons["paywall.buy"].exists, "A Pro lifter saw the paywall")
+            XCTAssertTrue(app.buttons["program.day"].firstMatch.exists, "The planned week shows no days")
+            shot(app, "redo-two-left-\(appearance)")
+            button.tap()
+            XCTAssertTrue(waitFor(caption, label: "1 redo left this week · logged days stay"), "A redo didn't drop the count: \(caption.label)")
+            shot(app, "redo-one-left-\(appearance)")
+            button.tap()
+            let capped = app.staticTexts["program.planThisWeek.capped"]
+            XCTAssertTrue(capped.waitForExistence(timeout: 15), "At the cap the card doesn't say so")
+            XCTAssertEqual(capped.label, "No redos left this week. 3 AI designs a week is the most; this one stays as planned.")
+            XCTAssertFalse(button.exists, "At the cap the button is still there")
+            shot(app, "redo-capped-\(appearance)")
+            app.terminate()
+        }
+    }
+
+    /// Next week's card has its own count: with a program, next week isn't saved or designed until it's asked for.
+    @MainActor
+    func testProRedoesNextWeekWithAProgram() {
+        let app = launch("soloPro", ["-aiWeeks", "YES"])
+        XCTAssertEqual(tabs(app), athlete)
+        openTab(app, "Program")
+        let button = app.buttons["program.planNextWeek"]
+        for _ in 0..<3 where !button.isHittable {
+            app.swipeLeft()
+            Thread.sleep(forTimeInterval: 1)
+        }
+        XCTAssertTrue(button.waitForExistence(timeout: 10) && button.isHittable, "Next week's card has no AI button")
+        let caption = app.staticTexts["program.planNextWeek.caption"]
+        XCTAssertEqual(button.label, "Plan next week with AI")
+        XCTAssertEqual(caption.label, "Then 2 redos for next week if you want changes")
+        button.tap()
+        XCTAssertTrue(waitFor(caption, label: "2 redos left for next week · logged days stay"), "Next week: \(caption.label)")
+        XCTAssertEqual(button.label, "Redo next week with AI")
+        button.tap()
+        XCTAssertTrue(waitFor(caption, label: "1 redo left for next week · logged days stay"), "A redo didn't drop the count: \(caption.label)")
+        shot(app, "redo-next-week")
+    }
+
+    /// A free lifter sees the button with Lifter Pro under it; tapping it opens Lifter Pro's paywall, and no model is asked.
+    @MainActor
+    func testFreeLifterRedoOpensTheLifterProPaywall() throws {
+        let session = try storeKit()
+        defer { _ = session }
+        for appearance in ["light", "dark"] {
+            let app = launch("solo", ["-noProgram", "YES", "-lifterProfile", "YES", "-aiWeeks", "YES", "-appearance", appearance])
+            XCTAssertEqual(tabs(app), athlete)
+            openTab(app, "Program")
+            let button = app.buttons["program.planThisWeek"]
+            XCTAssertTrue(button.waitForExistence(timeout: 10), "A free lifter has no Plan this week with AI")
+            XCTAssertEqual(app.staticTexts["program.planThisWeek.caption"].label, "Lifter Pro")
+            shot(app, "redo-free-\(appearance)")
+            button.tap()
+            XCTAssertTrue(app.otherElements["paywall.lifter"].waitForExistence(timeout: 10), "Tapping it didn't open Lifter Pro's paywall")
+            app.terminate()
+        }
+    }
+
+    /// A coach's client never sees it, on this week's card or the next.
+    @MainActor
+    func testCoachedClientHasNoRedo() {
+        let app = launch("client")
+        XCTAssertEqual(tabs(app), athlete)
+        XCTAssertTrue(app.buttons["Check off as done"].firstMatch.waitForExistence(timeout: 15), "Today has no session from the coach")
+        openTab(app, "Program")
+        for _ in 0..<2 {
+            XCTAssertFalse(app.buttons["program.planThisWeek"].exists, "A coach's client was offered Plan this week with AI")
+            XCTAssertFalse(app.buttons["program.planNextWeek"].exists, "A coach's client was offered Plan next week with AI")
+            XCTAssertFalse(app.staticTexts["program.planThisWeek.capped"].exists || app.staticTexts["program.planNextWeek.capped"].exists)
+            app.swipeLeft()
+            Thread.sleep(forTimeInterval: 1)
+        }
+        shot(app, "redo-coached")
+    }
+
+    /// Waits for a text's label, which changes in place.
+    @MainActor
+    private func waitFor(_ element: XCUIElement, label: String, timeout: TimeInterval = 15) -> Bool {
+        let done = expectation(for: NSPredicate(format: "label == %@", label), evaluatedWith: element)
+        return XCTWaiter.wait(for: [done], timeout: timeout) == .completed
+    }
+
     @MainActor
     func testFirstLaunchOpensOnWelcome() {
         let app = launch(nil, ["-welcomed", "NO"])
