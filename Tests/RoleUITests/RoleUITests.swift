@@ -419,6 +419,89 @@ final class RoleUITests: XCTestCase {
         waitForExpectations(timeout: 5)
     }
 
+    /// TKL-845: a lifter on their own with sessions but no program sees "No goal yet" with Set a goal above this week and
+    /// next; next week, with nothing in it, says so. Set a goal, a target and a date make it the program.
+    @MainActor
+    func testLifterWithoutAProgramIsAskedForAGoalAboveThisWeekAndNext() throws {
+        let app = launch("solo", ["-noProgram", "YES", "-units", try noProgramUnits()])
+        XCTAssertEqual(tabs(app), athlete)
+        openTab(app, "Program")
+        XCTAssertTrue(app.staticTexts["No goal yet"].waitForExistence(timeout: 10), "No goal card")
+        XCTAssertTrue(app.staticTexts["Set a goal and a date, and the weeks build around it."].exists, "The goal card has no line")
+        let set = app.buttons["program.setGoal"]
+        XCTAssertTrue(set.exists, "No Set a goal button")
+        XCTAssertEqual(set.label, "Set a goal")
+        XCTAssertFalse(app.staticTexts["No program"].exists, "A lifter on their own got the No program empty view")
+        let this = week(app, "This week"), next = week(app, "Next week")
+        XCTAssertTrue(this.exists, "No This week card")
+        XCTAssertTrue(app.buttons.matching(identifier: "program.day").firstMatch.exists, "This week lists no sessions")
+        shot(app, "noprogram-this-week")
+        drag(from: day(app), by: -1)
+        XCTAssertTrue(next.waitForExistence(timeout: 5), "Swiping didn't page to Next week")
+        XCTAssertTrue(app.staticTexts["Nothing planned yet"].exists, "An empty next week doesn't say Nothing planned yet")
+        shot(app, "noprogram-next-week")
+        // The goal flow: a goal, its target and a date, then the tab is the program.
+        set.tap()
+        XCTAssertTrue(app.navigationBars["Set a goal"].waitForExistence(timeout: 5), "Set a goal did not open the goal flow")
+        // The list loads its rows as they scroll in: the first goal on it.
+        let option = app.cells.buttons.firstMatch
+        XCTAssertTrue(option.waitForExistence(timeout: 5), "The goal flow lists no goals")
+        shot(app, "noprogram-goal-list")
+        option.tap()
+        let build = app.buttons["goal.build"]
+        XCTAssertTrue(build.waitForExistence(timeout: 5), "The goal flow has no Build my weeks")
+        shot(app, "noprogram-goal-date")
+        XCTAssertTrue(app.datePickers.firstMatch.exists, "The goal flow asks no date")
+        build.tap()
+        XCTAssertTrue(app.buttons["Whole program"].waitForExistence(timeout: 10), "A goal and a date didn't make a program")
+        XCTAssertFalse(app.staticTexts["No goal yet"].exists, "The goal card stayed once there's a program")
+        shot(app, "noprogram-after-goal")
+    }
+
+    /// TKL-845: a coach's client gets no goal card: the coach writes the program.
+    @MainActor
+    func testCoachedClientSeesNoGoalCard() {
+        let app = launch("client")
+        XCTAssertEqual(tabs(app), athlete)
+        openTab(app, "Program")
+        XCTAssertTrue(week(app, "This week").waitForExistence(timeout: 10), "A client's Program has no This week")
+        XCTAssertFalse(app.staticTexts["No goal yet"].exists, "A coach's client sees the goal card")
+        XCTAssertFalse(app.buttons["program.setGoal"].exists, "A coach's client is offered Set a goal")
+        shot(app, "noprogram-client")
+    }
+
+    /// Sync units for a lifter with a profile but no program, two sessions this week (today and the day after) and none
+    /// next week, as `-units` reads them. Written each run, so the sessions fall in this week.
+    private func noProgramUnits() throws -> String {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        func key(_ date: Date) -> String {
+            let parts = calendar.dateComponents([.year, .month, .day], from: date)
+            return String(format: "plan#%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
+        }
+        func rows(_ date: Date, _ slot: String, _ lifts: [(String, Double)]) -> [[String: Any]] {
+            lifts.enumerated().map { index, lift in
+                ["id": UUID().uuidString, "kind": "workout", "at": date.timeIntervalSince1970 + 18 * 3600 + Double(index), "slot": slot,
+                 "template": lift.0, "note": "", "main": index == 0, "pinned": false,
+                 "targets": [["metric": "sets", "value": 3, "unit": "sets"], ["metric": "reps", "value": 5, "unit": "reps"],
+                             ["metric": "load_lb", "value": lift.1, "unit": "lb"]]]
+            }
+        }
+        // The day after today, unless that's next week: then the day before.
+        let other = calendar.date(byAdding: .day, value: calendar.component(.weekday, from: today) == 7 ? -1 : 1, to: today)!
+        let profile: [String: Any] = [
+            "age": 34, "weightLb": 180, "daysPerWeek": 3, "sessionMinutes": 45, "trainingDays": [0, 2, 4], "workoutTime": 18,
+            "equipment": ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"], "injuredAreas": [], "fineAreas": [:],
+            "avoidExercises": [], "maxWeeklySets": 20, "style": "powerbuilding", "warmups": false, "cookWindows": [],
+            "travelWeeks": [], "starts": []]
+        let units: [String: Any] = ["profile": profile,
+                                    key(today): rows(today, "Lower A", [("back-squat", 185), ("bench-press", 135)]),
+                                    key(other): rows(other, "Upper A", [("deadlift", 225), ("barbell-shoulder-press", 95)])]
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "noprogram-units.json")
+        try JSONSerialization.data(withJSONObject: units).write(to: url)
+        return url.path
+    }
+
     /// The week card's header: "This week · Nov 9 – Nov 15".
     @MainActor
     private func week(_ app: XCUIApplication, _ name: String) -> XCUIElement {
