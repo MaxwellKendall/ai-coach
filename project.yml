@@ -94,7 +94,7 @@ targets:
   AICoachWidgets:
     type: app-extension
     platform: iOS
-    sources: [Widgets, Features/Log/WorkoutActivityAttributes.swift]
+    sources: [Widgets, Features/Log/WorkoutActivityAttributes.swift, Features/Log/WorkoutIntent.swift]
     info:
       path: Widgets/Info.plist
       properties:
@@ -106,6 +106,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach.widgets
+        # TKL-801: WorkoutIntent's perform runs in the app; the extension only names it.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1"
   AICoachTests:

@@ -11,12 +11,15 @@ import Foundation
         guard id == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         Self.endAll()
         id = try? Live.request(attributes: WorkoutActivityAttributes(plate: Plate.current.rawValue),
-                               content: ActivityContent(state: state, staleDate: nil)).id
+                               content: ActivityContent(state: state, staleDate: state.restEnds)).id
     }
 
-    func update(_ state: WorkoutActivityAttributes.ContentState) {
+    /// TKL-801: a rest's end is the content's stale date, so the island shows "Rest over" even if the app is asleep
+    /// then; `alert` lights up the island and plays a sound (when a rest ends with the app in the background).
+    func update(_ state: WorkoutActivityAttributes.ContentState, alert: AlertConfiguration? = nil) {
         guard let id else { return }
-        Task.detached { await Live.activities.first { $0.id == id }?.update(ActivityContent(state: state, staleDate: nil)) }
+        let content = ActivityContent(state: state, staleDate: state.restEnds)
+        Task.detached { await Live.activities.first { $0.id == id }?.update(content, alertConfiguration: alert) }
     }
 
     func end() {
