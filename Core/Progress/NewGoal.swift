@@ -36,4 +36,9 @@ enum NewGoal {
         case .time: return max(60, start - 60)
         }
     }
+
+    /// TKL-845: the date a program built from a goal is suggested to end: twelve weeks from this week's start.
+    static func suggestedDate(now: Date, calendar: Calendar = .current) -> Date {
+        calendar.date(byAdding: .day, value: 7 * 12 - 1, to: Week.start(of: now, calendar: calendar))!
+    }
 }

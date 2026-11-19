@@ -472,6 +472,22 @@ enum Planner {
         }
     }
 
+    /// TKL-845: a goal and a date make a program for a lifter without one: it starts this week and ends on the date, the
+    /// goal due then. Sessions already planned stay as they are; later weeks plan themselves as for any program.
+    static func startProgram(by date: Date, goal: Goal, profile: Profile, in context: ModelContext, now: Date = .now,
+                             calendar: Calendar = .current) throws {
+        let target = calendar.startOfDay(for: date)
+        profile.programStart = Week.start(of: now, calendar: calendar)
+        profile.targetDate = target
+        profile.programSlug = nil
+        profile.travelWeeks = []
+        profile.brief = nil
+        profile.updatedAt = now
+        goal.deadline = target
+        goal.updatedAt = now
+        try context.save()
+    }
+
     /// Exercises in a session share a start time; `order` seconds keep them in the generator's order.
     static func activity(_ workout: PlannedWorkout, order: Int, ids: [String: UUID]) -> PlannedActivity {
         PlannedActivity(kind: .workout, date: workout.date + TimeInterval(order), slot: workout.session,

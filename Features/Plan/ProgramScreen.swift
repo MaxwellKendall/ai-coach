@@ -26,6 +26,8 @@ struct ProgramScreen: View {
     @State private var swipes = SwipeGate()
     /// FIT-233: Add a goal, from Progress › Goals.
     @State private var addingGoal = false
+    /// TKL-845: "Set a goal" with no program: the goal flow asks a date too, and the goal and date make the program.
+    @State private var settingGoal = false
     /// FIT-343: a goal being updated with a test. FIT-346: a goal being changed.
     @State private var updating: Goal?
     @State private var changing: Goal?
@@ -92,6 +94,13 @@ struct ProgramScreen: View {
                 NewGoalSheet { goal in
                     goalIndex = programGoals.firstIndex { $0.goal.id == goal.id }.map { $0 + 1 } ?? goalIndex
                     toast = Toast(text: "Added. Your coach sees it too.")
+                }
+            }
+            .sheet(isPresented: $settingGoal) {
+                NewGoalSheet(building: true) { _ in
+                    // The program's deck opens on this week, not the page the two-week deck was on.
+                    selected = nil
+                    toast = Toast(text: "Your weeks are built around it.")
                 }
             }
             .sheet(item: $updating) { goal in
@@ -211,32 +220,57 @@ struct ProgramScreen: View {
 
     private var coached: Bool { !pro.coaches.isEmpty }
 
-    /// FIT-202, FIT-203: without a program of the app's, the weeks that were planned (the coach's), one card each:
-    /// past ones with what was done, this one, and any ahead.
+    /// FIT-202, FIT-203: without a program of the app's, a coach's client gets the weeks the coach planned, one card
+    /// each: past ones with what was done, this one, and any ahead. TKL-845: a lifter on their own gets the goal that
+    /// would make the program, then this week and next.
     @ViewBuilder private var plannedWeeks: some View {
         let this = Week.start(of: .now)
-        let mondays = plannedMondays(through: this)
+        let mondays = PlannedDeck.mondays(planned: planned.filter { $0.kind == .workout }.map(\.date), this: this, coached: coached)
         if mondays.isEmpty {
-            ContentUnavailableView(coached ? "\(pro.coaches[0].title) writes your program" : "No program", systemImage: "calendar",
-                                   description: Text(coached ? "Each week shows here once it’s written." : "Log your workouts from Today."))
+            // Only a coach's client: on their own, the deck always has this week and next.
+            ContentUnavailableView("\(pro.coaches[0].title) writes your program", systemImage: "calendar",
+                                   description: Text("Each week shows here once it’s written."))
         } else {
             let current = mondays.firstIndex(of: this) ?? 0
-            SwipeDeck(index: Binding(get: { min(selected ?? current, mondays.count - 1) }, set: { selected = $0 }),
-                      count: mondays.count, gate: swipes) { index in
-                plannedWeekCard(mondays[index], this: this)
+            VStack(spacing: 0) {
+                if !coached {
+                    goalCard.padding(.horizontal, 22).padding(.top, 12)
+                }
+                SwipeDeck(index: Binding(get: { min(selected ?? current, mondays.count - 1) }, set: { selected = $0 }),
+                          count: mondays.count, gate: swipes) { index in
+                    plannedWeekCard(mondays[index], this: this)
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, coached ? 18 : 14)
+                .padding(.bottom, 20)
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 20)
         }
     }
 
-    /// Every Monday from the first planned week through this one or the last planned, whichever is later.
-    private func plannedMondays(through this: Date) -> [Date] {
-        let weeks = Set(planned.filter { $0.kind == .workout }.map { Week.start(of: $0.date) })
-        guard let first = weeks.min(), let last = weeks.max() else { return [] }
-        return Array(sequence(first: min(first, this)) { Calendar.current.date(byAdding: .day, value: 7, to: $0)! }
-            .prefix { $0 <= max(last, this) })
+    /// TKL-845: "No goal yet", and the way to the goal and date that build the weeks.
+    private var goalCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                Text("?").font(.headline).foregroundStyle(Color.inkFaint)
+                    .frame(width: 40, height: 40)
+                    .overlay(Circle().strokeBorder(Color.inkFaint, style: StrokeStyle(lineWidth: 3, dash: [4, 4])))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No goal yet").font(.display(20))
+                    Text("Set a goal and a date, and the weeks build around it.").foregroundStyle(Color.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button { settingGoal = true } label: {
+                Text("Set a goal").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.primary)
+            .accessibilityIdentifier("program.setGoal")
+            .padding(.top, 16)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardBackground()
     }
 
     private func plannedWeekCard(_ monday: Date, this: Date) -> some View {
@@ -254,6 +288,10 @@ struct ProgramScreen: View {
             if weeks >= 0, coached, dayItems(in: monday).isEmpty {
                 Text("\(pro.coaches[0].title) hasn’t written this week yet").font(.display(24)).padding(.top, 8)
                 Text("It shows up here as soon as it’s ready.").foregroundStyle(Color.inkMuted).padding(.top, 4)
+            } else if !coached, dayItems(in: monday).isEmpty {
+                // TKL-845: a week with nothing in it says so.
+                Text("Nothing planned yet").font(.display(24)).padding(.top, 8)
+                Text("Set a goal above and the week plans itself.").foregroundStyle(Color.inkMuted).padding(.top, 4)
             } else {
                 sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
             }

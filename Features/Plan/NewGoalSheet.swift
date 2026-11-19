@@ -10,11 +10,15 @@ struct NewGoalSheet: View {
     @Query private var goals: [Goal]
     @Query private var entries: [LogEntry]
     @Query private var templates: [Template]
+    /// TKL-845: from the Program tab without a program: the target step also asks a date, and the goal and date make the
+    /// program (Planner.startProgram).
+    var building = false
     var onAdd: (Goal) -> Void = { _ in }
 
     @State private var picked: GoalOption?
     @State private var target: Double = 0
     @State private var start: Double?
+    @State private var by = NewGoal.suggestedDate(now: .now)
 
     var body: some View {
         NavigationStack {
@@ -38,7 +42,7 @@ struct NewGoalSheet: View {
             }
             .buttonStyle(.plain)
         }
-        .navigationTitle("Add a goal")
+        .navigationTitle(building ? "Set a goal" : "Add a goal")
     }
 
     private func targetStep(_ option: GoalOption) -> some View {
@@ -51,11 +55,17 @@ struct NewGoalSheet: View {
                   lessLabel: "Lower the target", moreLabel: "Raise the target",
                   less: { target = max(option.step, target - option.step) }, more: { target += option.step })
                 .padding(.top, 24)
+            if building {
+                DatePicker("By", selection: $by, in: earliest..., displayedComponents: .date)
+                    .font(.body.weight(.semibold))
+                    .padding(.top, 28)
+            }
             Spacer()
             Button { save(option) } label: {
-                Text("Add the Goal").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+                Text(building ? "Build My Weeks" : "Add the Goal").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
             }
             .buttonStyle(.primary)
+            .accessibilityIdentifier(building ? "goal.build" : "goal.add")
         }
         .padding(24)
     }
@@ -74,14 +84,21 @@ struct NewGoalSheet: View {
 
     private func save(_ option: GoalOption) {
         let profile = profiles.first
-        let deadline = profile?.targetDate ?? profile?.program.flatMap { weeks in
+        // Without a profile there's no program to build; the goal still keeps its date.
+        let deadline = building ? Calendar.current.startOfDay(for: by) : profile?.targetDate ?? profile?.program.flatMap { weeks in
             profile?.programStart.map { ProgramPlan.monday(weeks.count, start: $0) }
         }
         let goal = Goal(kind: option.kind, metric: option.metric, target: target, unit: option.unit, deadline: deadline)
         goal.baseline = start
         context.insert(goal)
+        if building, let profile {
+            try? Planner.startProgram(by: by, goal: goal, profile: profile, in: context)
+        }
         try? context.save()
         onAdd(goal)
         dismiss()
     }
+
+    /// A program is at least two weeks: the date is no sooner than next week's end.
+    private var earliest: Date { Calendar.current.date(byAdding: .day, value: 13, to: Week.start(of: .now))! }
 }
