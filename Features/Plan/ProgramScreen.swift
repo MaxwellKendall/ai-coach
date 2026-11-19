@@ -313,20 +313,18 @@ struct ProgramScreen: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// FIT-426: Lifter Pro's AI planning of a week (TKL-846: this week or next): the week saved as the code plans it,
-    /// if it isn't yet, then designed by the AI on request. The week stays usable throughout, and stays as it was when
-    /// the model can't.
+    /// FIT-426: Lifter Pro's AI planning of a week (TKL-846: this week or next), on request (`Planner.designOnRequest`).
+    /// The week stays usable throughout, and stays as it was when the model can't.
     @discardableResult
     private func planWeek(_ monday: Date) async -> Bool {
-        if dayItems(in: monday).isEmpty { try? Planner.generate(weekOf: monday, in: context) }
         #if DEBUG
         if DebugRole.uiTesting {
             guard DebugRole.aiWeeks else { return false }
-            return await Planner.design(weekOf: monday, in: context, model: StubDesigner.week(of: monday, in: context), force: true)
+            return await Planner.designOnRequest(weekOf: monday, in: context, model: StubDesigner.week(of: monday, in: context))
         }
         #endif
-        return await Planner.design(weekOf: monday, in: context, model: LanguageModel.weeks(signedIn: account.user != nil),
-                                    force: true)
+        return await Planner.designOnRequest(weekOf: monday, in: context,
+                                             model: LanguageModel.weeks(signedIn: account.user != nil))
     }
 
     /// TKL-846: the card offers AI planning: Lifter Pro sold, a lifter on their own, and a profile complete enough for the

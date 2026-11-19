@@ -150,8 +150,30 @@ enum Planner {
             week \(monday.formatted(.iso8601.year().month().day()), privacy: .public) \(result.source.rawValue, privacy: .public) \
             \(spent.tokens) tokens $\(String(format: "%.4f", spent.cost), privacy: .public) \(String(format: "%.1f", result.seconds), privacy: .public) s
             """)
-        return land(result, on: plan, force: force, spent: spent, entries: entries, templates: templates, in: context,
+        // [verify] TKL-846: a day logged while the model worked keeps its sessions too.
+        return land(result, on: plan, force: force, spent: spent,
+                    entries: (try? context.fetch(FetchDescriptor<LogEntry>())) ?? entries, templates: templates, in: context,
                     calendar: calendar)
+    }
+
+    /// TKL-846: Lifter Pro's "Plan/Redo this week with AI": `design` with `force`, on a week with nothing in it too. A
+    /// week with no plan is planned by code first, so the model's week has one to land on; a plan without sessions is
+    /// designed as it is. When the model can't, the week is as it was: a plan made for the try goes again.
+    @discardableResult
+    static func designOnRequest(weekOf date: Date, in context: ModelContext, model: any AIModel,
+                                calendar: Calendar = .current) async -> Bool {
+        let monday = Week.start(of: date, calendar: calendar)
+        guard model.isAvailable, !designing.weeks.contains(monday) else { return false }
+        let existing = (try? plan(weekOf: monday, in: context)) ?? nil
+        let made = existing == nil ? (try? generate(weekOf: monday, in: context, calendar: calendar)) ?? nil : nil
+        guard let plan = existing ?? made else { return false }
+        let designedBy = plan.designedBy
+        if await design(weekOf: monday, in: context, model: model, force: true, calendar: calendar) { return true }
+        // Planned again meanwhile: that plan is someone else's to keep.
+        guard ((try? self.plan(weekOf: monday, in: context)) ?? nil)?.id == plan.id else { return false }
+        if made != nil { context.delete(plan) } else { plan.designedBy = designedBy }
+        try? context.save()
+        return false
     }
 
     /// The Claude model behind a model, whose tokens a design's cost is read from.
