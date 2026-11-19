@@ -104,6 +104,101 @@ struct WeekRedoTests {
         #expect(plan.designs == 1)
     }
 
+    /// [verify] round 1: a week with no plan, planned with AI. When the model can't, the week has no plan again, as it
+    /// was; when it can, the week is the model's.
+    @Test func planningAnEmptyWeekTheModelCantDoLeavesItEmpty() async throws {
+        let context = container.mainContext
+        try Seeder.seed(context)
+        context.insert(Profile(age: 36, weightLb: 200))
+        try context.save()
+        let next = Calendar.current.date(byAdding: .day, value: 7, to: Week.start(of: .now))!
+        #expect(try Planner.plan(weekOf: next, in: context) == nil)
+        #expect(!(await Planner.designOnRequest(weekOf: next, in: context, model: Unavailable())))
+        #expect(try Planner.plan(weekOf: next, in: context) == nil)
+        #expect(!(await Planner.designOnRequest(weekOf: next, in: context, model: Failing())))
+        #expect(try Planner.plan(weekOf: next, in: context) == nil)
+        #expect(await Planner.designOnRequest(weekOf: next, in: context, model: StubDesigner.week(of: next, in: context)))
+        let plan = try #require(try Planner.plan(weekOf: next, in: context))
+        #expect(plan.designs == 1)
+        #expect(plan.items.contains { $0.kind == .workout })
+    }
+
+    /// [verify] round 1: a saved week with no sessions in it, planned with AI, that the model can't do: the same plan,
+    /// rows and marks as before.
+    @Test func planningAWorkoutlessWeekTheModelCantDoLeavesItAsItWas() async throws {
+        let context = container.mainContext
+        try Seeder.seed(context)
+        context.insert(Profile(age: 36, weightLb: 200))
+        let next = Calendar.current.date(byAdding: .day, value: 7, to: Week.start(of: .now))!
+        let empty = Plan(weekContaining: next)
+        empty.items = [PlannedActivity(kind: .cook, date: next, slot: "Cook")]
+        context.insert(empty)
+        try context.save()
+        let items = Set(empty.items.map(\.id))
+        for model in [Unavailable(), Failing()] as [any AIModel] {
+            #expect(!(await Planner.designOnRequest(weekOf: next, in: context, model: model)))
+            let plan = try #require(try Planner.plan(weekOf: next, in: context))
+            #expect(plan.id == empty.id)
+            #expect(Set(plan.items.map(\.id)) == items)
+            #expect(plan.designedBy == nil)
+            #expect(plan.designs == 0)
+        }
+    }
+
+    /// [verify] round 1: a day logged while the model is still designing keeps its sessions when the week lands.
+    @Test func aDayLoggedWhileTheModelWorksKeepsItsSessions() async throws {
+        let context = container.mainContext
+        try Seeder.seed(context)
+        context.insert(Profile(age: 36, weightLb: 200, trainingDays: Array(0...6)))
+        try context.save()
+        let plan = try #require(try Planner.generate(weekOf: .now, in: context))
+        #expect(await Planner.design(weekOf: .now, in: context, model: StubDesigner.week(of: .now, in: context), force: true))
+        let today = Calendar.current.startOfDay(for: .now)
+        let logged = Set(plan.items.filter { $0.kind == .workout && Calendar.current.isDate($0.date, inSameDayAs: today) }.map(\.id))
+        #expect(!logged.isEmpty)
+        let container = container
+        let model = Midway(inner: StubDesigner.week(of: .now, in: context)) {
+            container.mainContext.insert(LogEntry(kind: .workout, timestamp: .now))
+            try? container.mainContext.save()
+        }
+        #expect(await Planner.design(weekOf: .now, in: context, model: model, force: true))
+        #expect(plan.designs == 2)
+        #expect(logged.isSubset(of: Set(plan.items.map(\.id))))
+    }
+
+    /// Available, but every answer fails, as a model that times out would.
+    struct Failing: AIModel {
+        var name: String { "failing" }
+        var isAvailable: Bool { true }
+        func session(tools: [any Tool], instructions: String) -> any AISession { Session() }
+        struct Session: AISession {
+            func respond(to prompt: String) async throws -> String { throw AIFailure.other }
+            func respond<Content: Generable>(to prompt: String, generating type: Content.Type) async throws -> Content {
+                throw AIFailure.other
+            }
+        }
+    }
+
+    /// The stub's answers, after `midway` runs on the main actor, as a lifter logging while the model works.
+    struct Midway: AIModel {
+        let inner: StubDesigner
+        let midway: @MainActor @Sendable () -> Void
+        var name: String { "stub" }
+        var isAvailable: Bool { true }
+        func session(tools: [any Tool], instructions: String) -> any AISession {
+            Session(inner: inner.session(tools: tools, instructions: instructions), midway: midway)
+        }
+        struct Session: AISession {
+            let inner: any AISession
+            let midway: @MainActor @Sendable () -> Void
+            func respond(to prompt: String) async throws -> String { try await inner.respond(to: prompt) }
+            func respond<Content: Generable>(to prompt: String, generating type: Content.Type) async throws -> Content {
+                await midway()
+                return try await inner.respond(to: prompt, generating: type)
+            }
+        }
+    }
+
     struct Unavailable: AIModel {
         var name: String { "none" }
         var isAvailable: Bool { false }
