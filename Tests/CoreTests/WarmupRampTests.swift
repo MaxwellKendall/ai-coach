@@ -31,4 +31,25 @@ struct SessionTitleTests {
         #expect(TodayScreen.short("Deadlift") == "deadlift")
         #expect(TodayScreen.short("Dumbbell Row (single-arm)") == "row")
     }
+
+    // TKL-797: two lifts that shorten to the same word each take the word that tells them apart.
+    @Test func collidingLiftsTakeTheWordThatTellsThemApart() {
+        #expect(TodayScreen.title(lifts: ["Bench Press", "Incline Bench Press"]) == "Bench press, incline bench press")
+        #expect(TodayScreen.title(lifts: ["Bench Press", "Dumbbell Bench Press", "Pull-Up"]) == "Bench press, dumbbell bench press, pull-up")
+        #expect(TodayScreen.title(lifts: ["Back Squat", "Front Squat"]) == "Back squat, front squat")
+    }
+
+    @Test func aThreeWayCollision() {
+        #expect(TodayScreen.title(lifts: ["Incline Bench Press", "Bench Press", "Close-Grip Bench Press"])
+                == "Incline bench press, bench press, close-grip bench press")
+        // The count still counts every lift.
+        #expect(TodayScreen.title(lifts: ["Bench Press", "Incline Bench Press", "Dumbbell Bench Press", "Pull-Up", "Plank"])
+                == "Bench press, incline bench press, dumbbell bench press + 2 more")
+    }
+
+    @Test func titlesWithNoCollisionAreUnchanged() {
+        #expect(TodayScreen.title(lifts: ["Back Squat", "Bench Press", "Bent Over Barbell Row"]) == "Squat, bench press, row")
+        #expect(TodayScreen.title(lifts: ["Back Squat", "Bench Press", "Bent Over Barbell Row", "Plank"]) == "Squat, bench press, row + 1 more")
+        #expect(TodayScreen.title(lifts: ["Deadlift"]) == "Deadlift")
+    }
 }
