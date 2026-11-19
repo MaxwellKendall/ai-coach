@@ -137,6 +137,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification)
         async -> UNNotificationPresentationOptions {
+        // TKL-801: a rest's end, in the app: the workout screen's haptic already says it.
+        if notification.request.identifier == "workout.rest-over" { return [] }
         // FIT-220: the coach changed the week while the app is open: the change is on the server, so fetch it now.
         let target = PushTarget(notification.request.content.userInfo)
         if target?.kind == .plan {

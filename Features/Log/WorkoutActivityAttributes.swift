@@ -20,6 +20,24 @@ struct WorkoutActivityAttributes: ActivityAttributes {
         var lift: String = ""
         /// The set exactly, for its right side outside a rest: "185×5", "×10", "30 s".
         var set: String = ""
+        /// TKL-801: what comes after the set shown, "Next: Bench 135×8", or "Last set".
+        var next: String = ""
+        /// Which lift of the session, "Lift 3 of 6" (0 while warming up).
+        var liftIndex: Int = 0
+        var lifts: Int = 0
+        /// This lift's sets done and planned, for its dots (the warm-up's steps while warming up).
+        var setsDone: Int = 0
+        var sets: Int = 0
+        /// The running rest's length, so its bar drains from full.
+        var restTotal: TimeInterval?
+        /// A rest just ran out and the set shown is up: "Rest over".
+        var restOver: Bool = false
+        /// Every set is done: the finish card is on screen.
+        var isDone: Bool = false
+
+        var warming: Bool { lift == "Warm-up" }
+        /// The rest's start, for a countdown ring that drains as it runs.
+        var restStarts: Date? { restEnds.map { $0 - (restTotal ?? 60) } }
     }
 
     /// The lifter's plate color (Plate's raw value), for the countdown.
