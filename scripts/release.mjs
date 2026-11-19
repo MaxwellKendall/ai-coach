@@ -12,7 +12,8 @@ import { sendToReview } from "./review-submission.mjs";
 import {
   EDITABLE_VERSION_STATES,
   archiveArgs,
-  assertListing,
+  checkListing,
+  stopsBeforeBuild,
   bumpBuildNumber,
   createFailures,
   landBumpCommit,
@@ -129,11 +130,8 @@ else console.log(branch === "main" ? "Preflight: on main." : `Preflight: ${branc
 if (dirty) fail("Preflight: the working tree is not clean.");
 else console.log("Preflight: clean tree.");
 
-try {
-  assertListing(listing);
+if (checkListing(listing, fail)) {
   console.log("Preflight: listing files fit the App Store limits, and the description ends with the Terms of Use line.");
-} catch (error) {
-  fail(`Preflight: ${error.message}`);
 }
 
 const yaml = readFileSync("project.yml", "utf8");
@@ -141,13 +139,13 @@ const marketing = marketingVersion(yaml);
 let buildNumber = bumpBuildNumber(yaml).from;
 
 if (await run("xcodegen", ["generate"]) !== 0) fail("Preflight: xcodegen failed.");
-if (failures.length && !dryRun) process.exit(1);
+if (stopsBeforeBuild(failures, dryRun)) process.exit(1);
 
 console.log("\nPreflight: build and unit tests.");
 if (await run("xcodebuild", ["-scheme", "AICoach", "-destination", "platform=iOS Simulator,name=iPhone 17 Pro", "-quiet", "test"]) !== 0) {
   fail("Preflight: build or unit tests failed.");
 }
-if (failures.length && !dryRun) process.exit(1);
+if (stopsBeforeBuild(failures, dryRun)) process.exit(1);
 
 let asc;
 let store;

@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   archiveArgs,
   assertListing,
+  checkListing,
+  stopsBeforeBuild,
   exportArgs,
   landBumpCommit,
   uploadLandPoll,
@@ -264,4 +266,34 @@ test("release plans subscriptions before the upload but writes them only after i
 test("a dry run with no upload blockers says which build it would bump to (TKL-795)", () => {
   const source = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
   assert.match(source, /else if \(dryRun && !failures\.blocksUpload\(\)\) \{\n\s+console\.log\(`\\nWould bump build \$\{buildNumber\} → \$\{bumpBuildNumber\(yaml\)\.to\}/);
+});
+
+// [verify] round 1: an over-limit listing went through fail() with the blocking default and exited before the bump.
+test("a listing that breaks the App Store limits is reported but does not stop the build (TKL-795)", () => {
+  const failures = createFailures();
+  const listing = { description: `${"x".repeat(4001)}\n${TERMS_LINE}`, promotional: "", whatsNew: "", keywords: "" };
+  const messages = [];
+  assert.equal(checkListing(listing, (message, options) => { messages.push(message); failures.add(message, options); }), false);
+  assert.match(messages[0], /^Preflight: description is \d+ characters/);
+  assert.equal(failures.length, 1);
+  assert.equal(failures.blocksUpload(), false);
+  assert.equal(stopsBeforeBuild(failures, false), false, "a real run goes on to the build, bump and upload");
+  failures.add("Preflight: the working tree is not clean.");
+  assert.equal(stopsBeforeBuild(failures, false), true, "a dirty tree still stops a real run");
+  assert.equal(stopsBeforeBuild(failures, true), false, "a dry run never exits early");
+});
+
+test("checkListing passes the shipped listing", () => {
+  const read = (name) => readFileSync(new URL(`../appstore/metadata/${name}`, import.meta.url), "utf8").trim();
+  const listing = { description: read("description.txt"), promotional: read("promotional.txt"), whatsNew: read("whats-new.txt"), keywords: read("keywords.txt") };
+  assert.equal(checkListing(listing, () => assert.fail("the shipped listing fails its own check")), true);
+});
+
+test("release.mjs checks the listing with checkListing and exits early only on upload blockers (TKL-795)", () => {
+  const source = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
+  assert.match(source, /checkListing\(listing, fail\)/);
+  assert.doesNotMatch(source, /assertListing\(/, "no direct assertListing call that would block the upload");
+  assert.doesNotMatch(source, /failures\.length && !dryRun\) process\.exit/, "no early exit on non-blocking failures");
+  const exits = source.match(/if \(stopsBeforeBuild\(failures, dryRun\)\) process\.exit\(1\);/g) || [];
+  assert.equal(exits.length, 2, "both preflight exits use stopsBeforeBuild");
 });

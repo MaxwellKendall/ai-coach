@@ -48,6 +48,23 @@ export function assertListing(listing) {
   }
 }
 
+// A listing that breaks the limits is not written later (the listing step goes dry on any failure),
+// but it never stops the TestFlight build: blocksUpload is false (TKL-795).
+export function checkListing(listing, fail) {
+  try {
+    assertListing(listing);
+    return true;
+  } catch (error) {
+    fail(`Preflight: ${error.message}`, { blocksUpload: false });
+    return false;
+  }
+}
+
+// A real run stops before building only for failures that block the upload; a dry run never stops early.
+export function stopsBeforeBuild(failures, dryRun) {
+  return !dryRun && failures.blocksUpload();
+}
+
 export function reviewNotes(template, fields) {
   let notes = template;
   for (const [key, value] of Object.entries(fields)) notes = notes.replaceAll(`{{${key}}}`, value ?? "");
