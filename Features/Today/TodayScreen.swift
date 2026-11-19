@@ -181,6 +181,8 @@ struct TodayScreen: View {
             .scrollPosition(id: $day)
             .scrollIndicators(.hidden)
         }
+        // TKL-802: the today widget's Start (here, not lower: the chain below is at the type checker's limit).
+        .onChange(of: Navigator.shared.startToday, initial: true) { _, wanted in if wanted { startFromWidget() } }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .screenBackground()
         .overlay {
@@ -1041,6 +1043,15 @@ struct TodayScreen: View {
     }
 
     // MARK: Actions
+
+    /// TKL-802: the today widget's Start: today's session, straight into the live workout (Today, if there isn't one).
+    private func startFromWidget() {
+        Navigator.shared.startToday = false
+        turnDay()
+        goToday()
+        guard live == nil, tracking == nil, case .plan(let plan) = cards(week)[todayIndex] else { return }
+        start(plan)
+    }
 
     private func start(_ plan: DayCard.Planned) {
         let lifts = lifting(plan.items)

@@ -110,6 +110,8 @@ final class Navigator {
     var day: PushTarget?
     /// FIT-338: the client and day a coach's notification opens on Clients, handed over by the root.
     var clientDay: PushTarget?
+    /// TKL-802: the today widget's Start, until Today has started the workout.
+    var startToday = false
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {

@@ -237,6 +237,12 @@ struct RootView: View {
         // FIT-58: join.barbrabell.com/CODE opens here, on the Join sheet with the code filled in (sign-in first).
         .onOpenURL { url in
             withAnimation(.tap) { splash = false }
+            // TKL-802: the today widget opens Today, and its Start the live workout (TodayScreen starts it).
+            if let link = TodaySnapshot.Link(url) {
+                if mode.tabs.contains(.today) { tab = .today }
+                if link == .start { navigator.startToday = true }
+                return
+            }
             guard account.isAvailable else { return }
             // FIT-122: a gift's link opens Redeem with its code; Redeem asks to sign in.
             if Pilot.gifts, let gift = InviteLink.gift(from: url) {
