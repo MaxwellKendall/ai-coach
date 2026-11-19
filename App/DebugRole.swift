@@ -8,7 +8,7 @@ import Synchronization
 /// RoleUITests and screenshots: a new in-memory store, no defaults from an earlier run, and signed out, so nothing
 /// reaches the server. Each role is the debug switches that already exist: coach is `-sampleClients`, client is
 /// `-coach Sam` with a session of Sam's today, solo is a ready program started today, soloPro is solo with `-pro`.
-/// `-noProgram YES` leaves solo without a program. new is a first launch, on Welcome. Other launch arguments still win, so `-role client -sampleClients
+/// `-noProgram YES` leaves solo without a program (with `-lifterProfile YES`, a complete profile, TKL-846). new is a first launch, on Welcome. Other launch arguments still win, so `-role client -sampleClients
 /// YES` is a client with a sample roster.
 enum DebugRole {
     static var uiTesting: Bool { UserDefaults.standard.bool(forKey: "uiTesting") }
@@ -58,6 +58,13 @@ enum DebugRole {
             try SyncUnits.apply("plan#\(SyncUnits.day(now))", body: body, in: context)
             try context.save()
         case "solo", "soloPro":
+            // TKL-846: `-noProgram YES -lifterProfile YES` is a lifter with a complete profile and no program, whose
+            // weeks the AI can plan on request.
+            if UserDefaults.standard.bool(forKey: "noProgram"), UserDefaults.standard.bool(forKey: "lifterProfile") {
+                context.insert(Profile(age: 34, weightLb: 180))
+                try context.save()
+                return
+            }
             guard !UserDefaults.standard.bool(forKey: "noProgram"),
                   let program = ReadyProgram.all.first(where: { $0.slug == "full-body-3" }) ?? ReadyProgram.all.first else { return }
             let profile = Profile(age: 34, weightLb: 180)

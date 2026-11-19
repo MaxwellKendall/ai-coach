@@ -2,7 +2,7 @@ import SwiftUI
 import StoreKit
 
 /// FIT-83, FIT-120, FIT-437: a plan's offer (AppMode.offers). Lifter Pro, AI-designed weeks (FIT-426) for a lifter on
-/// their own, appears at AI-planning entry points (Program's "Plan my next week", You's plan row), never after onboarding
+/// their own, appears at AI-planning entry points (Program's "Plan this/next week with AI", You's plan row), never after onboarding
 /// or picking a program; its layout is the approved copy: yearly first with the trial, monthly smaller. Coach Pro,
 /// coaching from Claude (the exhaustive MCP, FIT-284), in coach mode. Each shows
 /// what the plan adds, the App Store's monthly and yearly prices, the free trial when there is one, the auto-renew
