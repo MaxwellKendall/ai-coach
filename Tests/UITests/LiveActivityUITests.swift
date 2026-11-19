@@ -41,10 +41,13 @@ final class LiveActivityUITests: XCTestCase {
 
         // Done set from the island logs it and starts its rest, with the app in the background.
         tapInIsland("Done set")
-        expand()
-        save("live-resting-expanded")
+        // Compact first: an island opened by a press stays open after its button, until the app comes and goes.
+        app.activate()
+        sleep(1)
         home()
         save("live-resting-compact")
+        expand()
+        save("live-resting-expanded")
         lock()
         save("live-resting-lockscreen")
         unlock()

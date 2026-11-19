@@ -1,6 +1,7 @@
 import ActivityKit
 import Foundation
 import UIKit
+import UserNotifications
 
 /// TKL-801: where the live workout is (the warm-up step, the card, the running rest) and the moves on it. The workout
 /// screen's Done, −30 s, +30 s and Skip and the Live Activity's Done set, −10s, +10s and Skip all go through these.
@@ -102,9 +103,21 @@ struct WorkoutCursor: Equatable {
     @ObservationIgnored private let activity = WorkoutActivity()
     @ObservationIgnored private var published: WorkoutActivityAttributes.ContentState?
     @ObservationIgnored private var timer: Task<Void, Never>?
+    /// Sounds a rest's end from iOS itself, since a suspended app's timer can't.
+    @ObservationIgnored var alarm = RestAlarm.system
 
     init(draft: WorkoutDraft) {
         self.draft = draft
+    }
+
+    /// A Live Activity button, as `WorkoutIntent` runs it. With no workout open (the app was closed and iOS launched it
+    /// just for the button), the workout is gone, so the island and its rest alarm go too. Returns whether one was open.
+    @discardableResult
+    static func perform(_ action: String, now: Date = .now,
+                        orphaned: () -> Void = { WorkoutActivity.endAll(); RestAlarm.system.cancel() }) -> Bool {
+        guard let current else { orphaned(); return false }
+        if let action = Action(rawValue: action) { current.handle(action, now: now) }
+        return true
     }
 
     /// A Live Activity button. A rest that ran out while the app slept ends first, so Done set does the set after it.
@@ -137,12 +150,14 @@ struct WorkoutCursor: Equatable {
 
     func start() {
         Self.current = self
+        Task { await RestAlarm.prepare() }
         activity.start(content())
         published = content()
     }
 
     func end() {
         timer?.cancel()
+        alarm.cancel()
         activity.end()
         if Self.current === self { Self.current = nil }
     }
@@ -153,14 +168,20 @@ struct WorkoutCursor: Equatable {
         guard restOver || state != published else { return }
         published = state
         let background = UIApplication.shared.applicationState != .active
-        activity.update(state, alert: restOver && background
+        activity.update(state, alert: restOver && Self.islandAlerts(background: background, alarmSounds: alarm.sounds())
             ? AlertConfiguration(title: "Rest over", body: "\(state.title) · \(state.set)", sound: .default) : nil)
     }
 
-    /// Ends the running rest when it runs out, whether or not the screen is showing.
+    /// The island's own alert at a rest's end: only in the background, and only when iOS won't sound the rest alarm
+    /// (notifications not allowed), so a rest ends with one sound. In the app, the screen's haptic says it.
+    static func islandAlerts(background: Bool, alarmSounds: Bool) -> Bool { background && !alarmSounds }
+
+    /// Ends the running rest when it runs out, whether or not the screen is showing, and sets iOS's alarm for it.
     private func watchRest() {
         timer?.cancel()
-        guard let ends = cursor.rest?.ends else { return }
+        guard let ends = cursor.rest?.ends else { alarm.cancel(); return }
+        let after = content(now: ends)
+        alarm.set(ends, "\(after.title) · \(after.set)")
         timer = Task { [weak self] in
             try? await Task.sleep(for: .seconds(max(0, ends.timeIntervalSinceNow)))
             guard !Task.isCancelled else { return }
@@ -229,5 +250,52 @@ struct WorkoutCursor: Equatable {
     private func nextSet(after index: Int, in cards: [WorkoutDraft.Card]) -> [Int]? {
         guard index + 1 < cards.count else { return nil }
         return cards[(index + 1)...].lazy.compactMap { if case .set(let line) = $0 { line } else { nil } }.first
+    }
+}
+
+/// TKL-801: a rest's end, sounded by iOS as a notification ("Rest over", the set up next) so it comes on time even
+/// when the app is suspended. One at a time; in the app it's silent (`AppDelegate`), as the screen's haptic says it.
+@MainActor struct RestAlarm {
+    /// Sets the alarm for a rest ending at the date, with the set after it.
+    var set: (Date, String) -> Void
+    var cancel: () -> Void
+    /// Whether iOS will sound it: notifications are allowed.
+    var sounds: () -> Bool
+
+    static let id = "workout.rest-over"
+    static var none: RestAlarm { RestAlarm(set: { _, _ in }, cancel: {}, sounds: { false }) }
+
+    /// Whether notifications are allowed, as of the workout's start.
+    private static var allowed = false
+
+    /// At a workout's start: asks once for notifications (in context, FIT-59: rests will alert), else reads the answer.
+    static func prepare() async {
+        let center = UNUserNotificationCenter.current()
+        switch await center.notificationSettings().authorizationStatus {
+        case .notDetermined:
+            #if DEBUG
+            // UI tests and the App Review demo recording run without a system prompt in front of them.
+            if DebugRole.uiTesting || DebugRole.demo { allowed = false; return }
+            #endif
+            allowed = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        case .authorized, .provisional, .ephemeral: allowed = true
+        default: allowed = false
+        }
+    }
+
+    static var system: RestAlarm {
+        RestAlarm(set: { ends, next in
+            let center = UNUserNotificationCenter.current()
+            center.removePendingNotificationRequests(withIdentifiers: [id])
+            center.removeDeliveredNotifications(withIdentifiers: [id])
+            let content = UNMutableNotificationContent()
+            content.title = "Rest over"
+            content.body = next
+            content.sound = .default
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, ends.timeIntervalSinceNow), repeats: false)
+            center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        }, cancel: {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+        }, sounds: { allowed })
     }
 }

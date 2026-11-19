@@ -21,6 +21,7 @@ import Testing
 
     private func workout(warmups: [WorkoutDraft.Warmup] = []) -> LiveWorkout {
         let workout = LiveWorkout(draft: draft(warmups: warmups))
+        workout.alarm = .none
         workout.names = ["back-squat": "Back Squat", "bent-over-barbell-row": "Barbell Row"]
         return workout
     }
@@ -145,5 +146,53 @@ import Testing
         for _ in 0..<5 { workout.handle(.done, now: now); workout.handle(.skip, now: now) }
         state = workout.content(now: now)
         #expect(state.isDone && state.progress == 1)
+    }
+
+    /// A stand-in for iOS's notification center.
+    @MainActor final class Alarms {
+        var set: [(Date, String)] = []
+        var cancels = 0
+        var sounds = true
+    }
+
+    private func workout(alarms: Alarms) -> LiveWorkout {
+        let workout = workout()
+        workout.alarm = RestAlarm(set: { alarms.set.append(($0, $1)) }, cancel: { alarms.cancels += 1 }, sounds: { alarms.sounds })
+        return workout
+    }
+
+    @Test func aRestSetsASystemAlarmForItsEnd() {
+        // [verify] 1: a suspended app's timer can't run at the rest's end, so iOS itself sounds it.
+        let alarms = Alarms()
+        let workout = workout(alarms: alarms)
+        workout.handle(.done, now: now)
+        #expect(alarms.set.count == 1)
+        #expect(alarms.set.last?.0 == now + 180)
+        #expect(alarms.set.last?.1 == "Back Squat · 185×5") // the set the rest is before
+        workout.handle(.more, now: now)
+        #expect(alarms.set.count == 2 && alarms.set.last?.0 == now + 190)
+        let cancels = alarms.cancels
+        workout.handle(.skip, now: now)
+        #expect(alarms.set.count == 2 && alarms.cancels > cancels)
+    }
+
+    @Test func theIslandAlertsOnlyWhenIOSWont() {
+        // One sound at a rest's end: the system alarm's, or the island's own when notifications aren't allowed.
+        #expect(!LiveWorkout.islandAlerts(background: false, alarmSounds: false))
+        #expect(!LiveWorkout.islandAlerts(background: true, alarmSounds: true))
+        #expect(LiveWorkout.islandAlerts(background: true, alarmSounds: false))
+    }
+
+    @Test func anIslandButtonWithNoWorkoutEndsTheActivity() {
+        // [verify] 2: the app was closed and iOS launched it just for the button: the workout is gone, so is the island.
+        LiveWorkout.current = nil
+        var ended = 0
+        #expect(!LiveWorkout.perform("done", orphaned: { ended += 1 }))
+        #expect(ended == 1)
+        let workout = workout()
+        LiveWorkout.current = workout
+        #expect(LiveWorkout.perform("done", now: now, orphaned: { ended += 1 }))
+        #expect(ended == 1 && workout.draft.rows[0].done)
+        LiveWorkout.current = nil
     }
 }
