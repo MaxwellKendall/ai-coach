@@ -16,7 +16,7 @@ For each exercise, in order:
 Look at every contact sheet before --upload: a clip that teaches bad form is worse than none. Skip a bad one with
 --only, or drop it from the batch file. `--source-dir` reads already-downloaded clips (named <slug>.mp4) instead.
 """
-import argparse, json, os, shutil, subprocess, sys, urllib.request
+import argparse, json, os, shutil, ssl, subprocess, sys, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BATCH = os.path.join(ROOT, 'scripts/demos/higgsfield-batch-1.json')
@@ -24,6 +24,20 @@ LISTED = os.path.join(ROOT, 'Resources/Seed/exercise-demos.json')
 PROGRAMS = os.path.join(ROOT, 'Resources/Seed/exercise-videos.json')
 ENCODE = os.path.join(ROOT, '.claude/skills/exercise-demo/scripts/encode.py')
 TOO_BIG_KB = 900
+SYSTEM_CA = '/etc/ssl/cert.pem'  # macOS's own bundle
+
+
+def ca_file():
+    """TKL-794: python.org's Python ships without a CA bundle until "Install Certificates.command" runs, so every
+    HTTPS download fails CERTIFICATE_VERIFY_FAILED. Use macOS's bundle then; SSL_CERT_FILE or Python's own bundle win."""
+    paths = ssl.get_default_verify_paths()
+    if os.environ.get(paths.openssl_cafile_env) or os.path.exists(paths.openssl_cafile or ''):
+        return None
+    return SYSTEM_CA if os.path.exists(SYSTEM_CA) else None
+
+
+def ssl_context():
+    return ssl.create_default_context(cafile=ca_file())
 
 
 def ffmpeg(*args):
@@ -38,7 +52,7 @@ def download(demo, raw, source_dir):
         shutil.copyfile(os.path.join(source_dir, f"{demo['slug']}.mp4"), path)
     else:
         print(f"  downloading {demo['id']}")
-        with urllib.request.urlopen(demo['source'], timeout=120) as response, open(path + '.part', 'wb') as out:
+        with urllib.request.urlopen(demo['source'], timeout=120, context=ssl_context()) as response, open(path + '.part', 'wb') as out:
             shutil.copyfileobj(response, out)
         os.replace(path + '.part', path)
     return path
