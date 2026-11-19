@@ -4,13 +4,14 @@ import WidgetKit
 
 /// TKL-802: keeps the "today's workout" widget's snapshot (Core/Widget/TodaySnapshot.swift) current. The app calls
 /// `refresh` on launch, whenever the store saves (a plan or a log changed, here or by sync) and when the plate changes;
-/// it writes this week and next to the App Group and reloads the widget's timelines when they changed.
+/// it writes this week, next week and the planned weeks after (TodaySnapshot.horizon) to the App Group and reloads the widget's timelines when they changed.
 @MainActor
 enum TodayWidget {
     /// The widget's kind, as Widgets/TodayWidget.swift registers it.
     static let kind = "TodayWidget"
 
-    /// The snapshot as of `now`: Sunday of this week through Saturday of next, each day as Today shows it.
+    /// The snapshot as of `now`: Sunday of this week through the Saturday of next week, or of the last planned week (up to
+    /// 12 weeks), each day as Today shows it.
     static func snapshot(_ context: ModelContext, now: Date = .now, calendar: Calendar = .current) throws -> TodaySnapshot {
         let planned = try context.fetch(FetchDescriptor<PlannedActivity>(sortBy: [SortDescriptor(\.date)])).filter { $0.kind == .workout }
         let entries = try context.fetch(FetchDescriptor<LogEntry>(sortBy: [SortDescriptor(\.timestamp)])).filter { $0.kind == .workout }
@@ -26,7 +27,8 @@ enum TodayWidget {
         let context = DayCard.Context(templates: templates, sessionMinutes: profile?.sessionMinutes ?? 45, deload: false,
                                       tier: AgeTier.of(age: profile?.age ?? 30))
         let sunday = Week.start(of: now, calendar: calendar)
-        let days = (0..<14).map { calendar.date(byAdding: .day, value: $0, to: sunday)! }
+        let days = (0..<TodaySnapshot.horizon(from: sunday, through: planned.last?.date, calendar: calendar))
+            .map { calendar.date(byAdding: .day, value: $0, to: sunday)! }
         let inputs = days.map { day -> (date: Date, input: TodaySnapshot.Input) in
             let next = planned.first { $0.date >= calendar.date(byAdding: .day, value: 1, to: day)! }
             switch DayCard.make(day: day, planned: planned, entries: entries, next: next.map { ($0.slot ?? "Workout", $0.date) }, context: context) {

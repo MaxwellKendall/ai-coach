@@ -104,6 +104,18 @@ struct TodaySnapshotTests {
         #expect(try! JSONDecoder().decode(TodaySnapshot.self, from: data) == snapshot)
     }
 
+    @Test func theHorizonReachesThePlannedWeeksAheadWithinACap() {
+        // Sunday Nov 15. No plan ahead: this week and next.
+        #expect(TodaySnapshot.horizon(from: day(15), through: nil, calendar: calendar) == 14)
+        #expect(TodaySnapshot.horizon(from: day(15), through: day(20, hour: 7), calendar: calendar) == 14)
+        // A workout on Sunday Nov 29 (the review's case: written on Saturday the 21st, opened 8 days later): its whole week.
+        #expect(TodaySnapshot.horizon(from: day(15), through: day(29, hour: 7), calendar: calendar) == 21)
+        // Months of plan: capped at 12 weeks.
+        let march = calendar.date(from: DateComponents(year: 2027, month: 3, day: 1))!
+        #expect(TodaySnapshot.horizon(from: day(15), through: march, calendar: calendar) == TodaySnapshot.maxDays)
+        #expect(TodaySnapshot.maxDays == 84)
+    }
+
     // MARK: What the widget shows
 
     /// Sunday Nov 15 to Saturday Nov 28: lifting Mon, Tue, Thu, Sat and next Mon; Monday done.
@@ -201,6 +213,28 @@ struct TodayWidgetTests {
         content = TodaySnapshot.read(from: url)?.content(on: .now)
         #expect(content?.state == .done)
         #expect(content?.day?.done?.best == "Squat 225×5")
+    }
+
+    @Test func aPlannedWorkoutPastNextWeekShowsWithoutTheApp() throws {
+        // TKL-802 review: the app last writes on a Saturday; the next workout is the Sunday 8 days later.
+        let calendar = Calendar.current
+        let context = ModelContext(try AppSchema.container(inMemory: true))
+        let squat = Template(kind: .exercise, name: "Back Squat", slug: "back-squat", attributes: [])
+        context.insert(squat)
+        let saturday = calendar.date(byAdding: .day, value: 6, to: Week.start(of: .now, calendar: calendar))!.addingTimeInterval(20 * 3600)
+        let later = calendar.date(byAdding: .day, value: 8, to: calendar.startOfDay(for: saturday))!
+        context.insert(PlannedActivity(kind: .workout, date: later.addingTimeInterval(7 * 3600), slot: "Lower A", templateRef: squat.id,
+                                       targets: [AICoach.Measurement(metric: "sets", value: 3, unit: "sets"), AICoach.Measurement(metric: "reps", value: 5, unit: "reps")]))
+        try context.save()
+
+        let snapshot = try TodayWidget.snapshot(context, now: saturday, calendar: calendar)
+        #expect(snapshot.days.count == 21)
+        #expect(snapshot.content(on: later.addingTimeInterval(9 * 3600), calendar: calendar).state == .workout)
+        #expect(snapshot.timeline(from: saturday, calendar: calendar).contains(later), "an entry at that day's midnight")
+        // The days between are rest, not "no data".
+        let monday = calendar.date(byAdding: .day, value: 2, to: calendar.startOfDay(for: saturday))!
+        #expect(snapshot.content(on: monday, calendar: calendar).state == .rest)
+        #expect(snapshot.content(on: monday, calendar: calendar).next?.date == later)
     }
 
     @Test func anEmptyStoreIsNotSetUp() throws {

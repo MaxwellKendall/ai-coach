@@ -1,9 +1,9 @@
 import Foundation
 
 /// TKL-802 (the approved prototype on TKL-800, https://claude.ai/artifact/56LL6q28Kw1gdbeYr2BUpe): what the "today's
-/// workout" widget knows, written by the app to the App Group whenever the plan or a log changes. It holds two weeks of
-/// days, this one and next, so the widget can roll over at midnight to the next day, and to the next week's dots,
-/// without the app opening. Foundation only: the widget extension compiles this file too.
+/// workout" widget knows, written by the app to the App Group whenever the plan or a log changes. It holds this week,
+/// next week and every later week the plan reaches (up to 12 weeks), so the widget can roll over at midnight to the next
+/// day, and to the next week's dots, without the app opening. Foundation only: the widget extension compiles this file too.
 struct TodaySnapshot: Codable, Equatable, Sendable {
     static let appGroup = "group.com.maxwellkendall.aicoach"
     static let fileName = "today.json"
@@ -50,6 +50,22 @@ struct TodaySnapshot: Codable, Equatable, Sendable {
         var done: Done?
 
         var isWorkout: Bool { title != nil }
+    }
+
+    // MARK: How far ahead
+
+    /// The fewest days a snapshot holds (this week and next) and the most (12 weeks, a whole block of a program).
+    static let minDays = 14
+    static let maxDays = 84
+
+    /// How many days, from the week's Sunday, the snapshot holds: through the Saturday of the week of the last planned
+    /// workout, so the widget keeps rolling over while the app stays closed, within `minDays...maxDays`.
+    static func horizon(from sunday: Date, through lastPlanned: Date?, calendar: Calendar = .current) -> Int {
+        let start = calendar.startOfDay(for: sunday)
+        guard let lastPlanned,
+              let offset = calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: lastPlanned)).day else { return minDays }
+        let weeks = offset / 7 + 1
+        return min(max(weeks * 7, minDays), maxDays)
     }
 
     // MARK: What the widget shows on a day
