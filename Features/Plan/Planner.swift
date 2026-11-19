@@ -103,7 +103,7 @@ enum Planner {
         return brief
     }
 
-    /// FIT-426: redesigns on request ("Plan my next week" again) on top of the automatic design: at most 3 a week.
+    /// FIT-426: redesigns on request (TKL-846: "Redo this/next week with AI") on top of the automatic design: at most 3 a week.
     static let redesignsPerWeek = 2
 
     /// FIT-426: whether a week can be designed again on request: not a coach's week, and under the cap. A week not
