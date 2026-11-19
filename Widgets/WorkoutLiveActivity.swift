@@ -4,7 +4,10 @@ import WidgetKit
 
 @main
 struct BarbrabellWidgets: WidgetBundle {
-    var body: some Widget { WorkoutLiveActivity() }
+    var body: some Widget {
+        WorkoutLiveActivity()
+        TodayWidget()
+    }
 }
 
 /// FIT-304: the live workout as one card on the Lock Screen (the lift, then "Set 2 of 3 · 185 lb × 5"; during a rest,

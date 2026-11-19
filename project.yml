@@ -26,12 +26,22 @@ targetTemplates:
   App:
     type: application
     platform: iOS
-    sources: [App, Core, Features, Resources]
+    sources:
+      - App
+      - Core
+      - Features
+      - Resources
+      # TKL-802: the widget's views, for the Debug widget gallery (-widgets) that screenshots each family and state.
+      - Widgets/TodayWidgetViews.swift
     # FIT-185: GPS keeps recording a run with the phone locked. The other keys are generated (GENERATE_INFOPLIST_FILE).
     info:
       path: App/Info.plist
       properties:
         UIBackgroundModes: [location]
+        # TKL-802: the today widget opens barbrabell://today, and its Start barbrabell://start.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.maxwellkendall.aicoach
+            CFBundleURLSchemes: [barbrabell]
         # FIT-304: the live workout on the Lock Screen and in the Dynamic Island.
         NSSupportsLiveActivities: true
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -86,15 +96,25 @@ targets:
         # FIT-185: run mode records each run as an Apple Health workout with its route.
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+        # TKL-802: the app writes today's workout here for the widget.
+        com.apple.security.application-groups: [group.com.maxwellkendall.aicoach]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maxwellkendall.aicoach
         INFOPLIST_KEY_CFBundleDisplayName: Barbrabell
   # FIT-304: the live workout's Live Activity. Shares only its data type with the app.
+  # TKL-802: and the today widget, which reads the app's snapshot from the App Group.
   AICoachWidgets:
     type: app-extension
     platform: iOS
-    sources: [Widgets, Features/Log/WorkoutActivityAttributes.swift]
+    sources:
+      - Widgets
+      - Features/Log/WorkoutActivityAttributes.swift
+      - Core/Widget/TodaySnapshot.swift
+    entitlements:
+      path: Widgets/AICoachWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.maxwellkendall.aicoach]
     info:
       path: Widgets/Info.plist
       properties:

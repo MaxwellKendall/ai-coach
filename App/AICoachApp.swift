@@ -11,6 +11,8 @@ struct AICoachApp: App {
     @Environment(\.scenePhase) private var scenePhase
     /// FIT-369: You's Appearance.
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
+    /// TKL-802: the today widget follows the plate.
+    @AppStorage(Plate.key) private var plate = Plate.blue.rawValue
 
     init() {
         // FIT-304: a workout ends with the app; its Live Activity shouldn't outlive it.
@@ -47,6 +49,9 @@ struct AICoachApp: App {
         #if DEBUG
         if let plan = UserDefaults.standard.string(forKey: "paywall").flatMap(StoreProducts.Plan.init(rawValue:)) {
             PaywallView(plan: plan)
+        } else if let state = UserDefaults.standard.string(forKey: "widgets") {
+            // `-widgets workout` (rest, done, setup, nodata): the today widget's families in that state (TKL-802).
+            WidgetGallery(state: state)
         } else {
             RootView()
         }
@@ -65,6 +70,9 @@ struct AICoachApp: App {
                 .task { await pro.refresh() }
                 // FIT-454: hard paywall or freemium, as the server says.
                 .task { await Monetization.refresh() }
+                .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+                    TodayWidget.refresh(container.mainContext)
+                }
                 // FIT-126: a signed-in account's program and logs sync; signed out, nothing leaves the phone.
                 .onChange(of: account.user?.uid, initial: true) { _, uid in
                     if let uid {
@@ -77,6 +85,9 @@ struct AICoachApp: App {
                 }
         }
         .modelContainer(container)
+        // TKL-802: the today widget's snapshot follows the plan and the logs, whoever saved them (a screen or sync).
+        .onChange(of: plate, initial: true) { TodayWidget.refresh(container.mainContext) }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { TodayWidget.refresh(container.mainContext) } }
         // FIT-16: coming back to the app shares what changed with your groups.
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
