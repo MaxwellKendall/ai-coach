@@ -12,8 +12,10 @@ import { sendToReview } from "./review-submission.mjs";
 import {
   EDITABLE_VERSION_STATES,
   archiveArgs,
-  assertListing,
+  checkListing,
+  stopsBeforeBuild,
   bumpBuildNumber,
+  createFailures,
   landBumpCommit,
   uploadLandPoll,
   exportArgs,
@@ -65,14 +67,16 @@ if (products) {
   process.exit(process.exitCode || 0);
 }
 
-const failures = [];
+// Subscription and listing failures are added with blocksUpload: false, so they never stop a TestFlight build (TKL-795).
+const failures = createFailures();
 const notReady = [];
 // Upload went through but the bump commit is not on origin/main: reported, and the run exits 1, but the later steps still run.
 const unlanded = [];
 let subscriptionPlan;
-function fail(message) {
+let subscriptionGroupIds;
+function fail(message, { blocksUpload = true } = {}) {
   const text = redact(message, hidden);
-  failures.push(text);
+  failures.add(text, { blocksUpload });
   console.error(text);
   if (!dryRun) process.exitCode = 1;
 }
@@ -126,11 +130,8 @@ else console.log(branch === "main" ? "Preflight: on main." : `Preflight: ${branc
 if (dirty) fail("Preflight: the working tree is not clean.");
 else console.log("Preflight: clean tree.");
 
-try {
-  assertListing(listing);
+if (checkListing(listing, fail)) {
   console.log("Preflight: listing files fit the App Store limits, and the description ends with the Terms of Use line.");
-} catch (error) {
-  fail(`Preflight: ${error.message}`);
 }
 
 const yaml = readFileSync("project.yml", "utf8");
@@ -138,13 +139,13 @@ const marketing = marketingVersion(yaml);
 let buildNumber = bumpBuildNumber(yaml).from;
 
 if (await run("xcodegen", ["generate"]) !== 0) fail("Preflight: xcodegen failed.");
-if (failures.length && !dryRun) process.exit(1);
+if (stopsBeforeBuild(failures, dryRun)) process.exit(1);
 
 console.log("\nPreflight: build and unit tests.");
 if (await run("xcodebuild", ["-scheme", "AICoach", "-destination", "platform=iOS Simulator,name=iPhone 17 Pro", "-quiet", "test"]) !== 0) {
   fail("Preflight: build or unit tests failed.");
 }
-if (failures.length && !dryRun) process.exit(1);
+if (stopsBeforeBuild(failures, dryRun)) process.exit(1);
 
 let asc;
 let store;
@@ -159,11 +160,11 @@ if (store && asc) {
   try {
     subscriptionPlan = await prepareSubscriptions(asc, store.app.id);
   } catch (error) {
-    fail(agreementFailure(error));
+    fail(agreementFailure(error), { blocksUpload: false });
   }
 }
 
-if (!dryRun && !failures.length) {
+if (!dryRun && !failures.blocksUpload()) {
   const bumped = bumpBuildNumber(readFileSync("project.yml", "utf8"));
   writeFileSync("project.yml", bumped.yaml);
   buildNumber = bumped.to;
@@ -174,11 +175,13 @@ if (!dryRun && !failures.length) {
   const committed = capture("git", ["commit", "-m", `FIT-431: build ${bumped.to}`, "-m", "Co-Authored-By: Claude <noreply@anthropic.com>"]);
   if (committed.code !== 0) fail(`Could not commit the build number.\n${scrub(committed.stderr)}`);
   else console.log(`Committed build ${bumped.from} → ${bumped.to}.`);
+} else if (dryRun && !failures.blocksUpload()) {
+  console.log(`\nWould bump build ${buildNumber} → ${bumpBuildNumber(yaml).to} and commit it (dry run does not bump or commit).`);
 } else {
   console.log(`\nBuild number stays ${buildNumber}${dryRun ? " (dry run does not bump or commit)." : "."}`);
 }
 
-if (!dryRun && !failures.length) {
+if (!dryRun && !failures.blocksUpload()) {
   // Land the bump as soon as the upload succeeds: the number is used up even if processing then fails.
   const uploaded = await uploadLandPoll({
     upload: () => archiveAndUpload(buildNumber),
@@ -194,6 +197,14 @@ if (!dryRun && !failures.length) {
   console.log(`  xcodebuild ${archiveArgs().join(" ")}`);
   console.log(`  xcodebuild ${exportArgs().join(" ")}`);
   console.log(`  then poll builds until build ${buildNumber} (or the next one, on a real run) is VALID.`);
+}
+
+if (subscriptionPlan) {
+  try {
+    await applyStoreSubscriptions(asc, subscriptionPlan, store.app.id);
+  } catch (error) {
+    fail(`Subscriptions: ${agreementFailure(error)}`, { blocksUpload: false });
+  }
 }
 
 let inviteLine = "(none — not read)";
@@ -300,7 +311,7 @@ if (unlanded.length) {
 }
 if (failures.length) {
   console.log("Needs attention:");
-  for (const item of failures) console.log(`- ${item}`);
+  for (const item of failures.all) console.log(`- ${item}`);
   process.exitCode = 1;
 }
 
@@ -400,17 +411,23 @@ async function prepareSubscriptions(client, appId) {
   }
   console.log("On submit, the version and these subscriptions go in one review submission.");
   for (const item of plan.submit) console.log(`  ${item.name} (${item.productId}) ${item.state}`);
-  if (!dryRun && !failures.length) {
-    const groupIds = new Map(remote.groups.map((group) => [group.referenceName, group.id]));
-    const created = await applySubscriptionPlan(client, plan, { appId, groupIds });
-    for (const item of plan.submit) {
-      if (!item.id && created.get(item.productId)) item.id = created.get(item.productId);
-    }
-    console.log("Subscriptions were created or updated. No product was deleted.");
-  } else {
-    console.log(dryRun ? "Dry run does not create or change subscriptions, prices, offers, or screenshots." : "Subscriptions were not changed.");
-  }
+  subscriptionGroupIds = new Map(remote.groups.map((group) => [group.referenceName, group.id]));
+  console.log(dryRun ? "Dry run does not create or change subscriptions, prices, offers, or screenshots." : "Subscriptions are written after the upload.");
   return plan;
+}
+
+/** Writes the planned subscription changes. Runs after the upload, so a refused write never costs a TestFlight build (TKL-795). */
+async function applyStoreSubscriptions(client, plan, appId) {
+  if (dryRun || failures.length) {
+    if (!dryRun) console.log("\nSubscriptions were not changed.");
+    return;
+  }
+  console.log("\nWriting subscriptions.");
+  const created = await applySubscriptionPlan(client, plan, { appId, groupIds: subscriptionGroupIds });
+  for (const item of plan.submit) {
+    if (!item.id && created.get(item.productId)) item.id = created.get(item.productId);
+  }
+  console.log("Subscriptions were created or updated. No product was deleted.");
 }
 
 async function readStore(client, bundleId) {

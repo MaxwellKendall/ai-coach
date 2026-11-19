@@ -368,6 +368,25 @@
       ]
     },
     {
+      "id": "FullScreenDemo",
+      "title": "Full Screen Demo",
+      "kind": "cover",
+      "file": "Features/Log/WorkoutModeView.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "WorkoutModeView"
+      ],
+      "path": [
+        "RootView",
+        "tab.Today",
+        "WorkoutModeView",
+        "FullScreenDemo"
+      ]
+    },
+    {
       "id": "GoalChangeSheet",
       "title": "Change Goal",
       "kind": "sheet",

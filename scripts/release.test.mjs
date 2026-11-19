@@ -4,10 +4,13 @@ import test from "node:test";
 import {
   archiveArgs,
   assertListing,
+  checkListing,
+  stopsBeforeBuild,
   exportArgs,
   landBumpCommit,
   uploadLandPoll,
   bumpBuildNumber,
+  createFailures,
   marketingVersion,
   parseArgs,
   redact,
@@ -215,7 +218,7 @@ test("release uses uploadLandPoll on a real run, so the bump lands before pollin
   const call = source.indexOf("await uploadLandPoll(");
   assert.ok(call > 0, "release.mjs calls uploadLandPoll");
   assert.ok(!/await archiveAndUpload\(buildNumber\);\s*store\.uploadedBuildId = await pollBuild/.test(source), "no poll straight after upload");
-  const realRun = source.lastIndexOf("if (!dryRun && !failures.length) {", call);
+  const realRun = source.lastIndexOf("if (!dryRun && !failures.blocksUpload()) {", call);
   assert.ok(realRun > 0 && source.indexOf("} else {", realRun) > call, "inside the real-run upload block");
 });
 
@@ -229,4 +232,68 @@ test("TKL-450: the listing names the ready programs lifters search for, and the 
   assert.ok(named.length >= 2, `named in the description: ${named.map((p) => p.name)}`);
   for (const p of named) for (const term of searched[p.slug]) assert.ok(keywords.includes(term), `${p.slug}: keyword ${term}`);
   assert.doesNotMatch(description + keywords.join(","), /5\/3\/1|531|GZCL|nSuns|Starting Strength|StrongLifts|PHUL|PHAT/i);
+});
+
+// TKL-795: a 409 on a subscription in review stopped the run before the bump and upload.
+test("subscription and listing failures are reported but never block the bump and upload", () => {
+  const f = createFailures();
+  f.add("App Store Connect: 409 UNMODIFIABLE", { blocksUpload: false });
+  f.add("Listing: refused", { blocksUpload: false });
+  assert.equal(f.all.length, 2);
+  assert.equal(f.blocksUpload(), false);
+  f.add("Preflight: the working tree is not clean.");
+  assert.equal(f.blocksUpload(), true);
+  assert.equal(f.all.length, 3);
+});
+
+test("release plans subscriptions before the upload but writes them only after it (TKL-795)", () => {
+  const source = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
+  const upload = source.indexOf("await uploadLandPoll(");
+  const prepareBody = source.slice(source.indexOf("async function prepareSubscriptions("), source.indexOf("async function applyStoreSubscriptions("));
+  assert.ok(prepareBody.length > 0);
+  assert.doesNotMatch(prepareBody, /applySubscriptionPlan/, "prepareSubscriptions no longer writes before the bump");
+  const realApply = source.indexOf("await applyStoreSubscriptions(");
+  assert.ok(realApply > upload, "subscriptions are written after the upload");
+  const bump = source.indexOf("const bumped = bumpBuildNumber(");
+  const gate = source.lastIndexOf("if (", bump);
+  assert.match(source.slice(gate, bump), /!failures\.blocksUpload\(\)/, "the bump is gated only on upload blockers");
+  const uploadGate = source.lastIndexOf("if (", upload);
+  assert.match(source.slice(uploadGate, upload), /!failures\.blocksUpload\(\)/, "the upload is gated only on upload blockers");
+  const prepare = source.slice(source.indexOf("subscriptionPlan = await prepareSubscriptions("), source.indexOf("const bumped = bumpBuildNumber("));
+  assert.match(prepare, /blocksUpload: false/, "a subscription read or plan failure does not block the upload");
+});
+
+test("a dry run with no upload blockers says which build it would bump to (TKL-795)", () => {
+  const source = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
+  assert.match(source, /else if \(dryRun && !failures\.blocksUpload\(\)\) \{\n\s+console\.log\(`\\nWould bump build \$\{buildNumber\} → \$\{bumpBuildNumber\(yaml\)\.to\}/);
+});
+
+// [verify] round 1: an over-limit listing went through fail() with the blocking default and exited before the bump.
+test("a listing that breaks the App Store limits is reported but does not stop the build (TKL-795)", () => {
+  const failures = createFailures();
+  const listing = { description: `${"x".repeat(4001)}\n${TERMS_LINE}`, promotional: "", whatsNew: "", keywords: "" };
+  const messages = [];
+  assert.equal(checkListing(listing, (message, options) => { messages.push(message); failures.add(message, options); }), false);
+  assert.match(messages[0], /^Preflight: description is \d+ characters/);
+  assert.equal(failures.length, 1);
+  assert.equal(failures.blocksUpload(), false);
+  assert.equal(stopsBeforeBuild(failures, false), false, "a real run goes on to the build, bump and upload");
+  failures.add("Preflight: the working tree is not clean.");
+  assert.equal(stopsBeforeBuild(failures, false), true, "a dirty tree still stops a real run");
+  assert.equal(stopsBeforeBuild(failures, true), false, "a dry run never exits early");
+});
+
+test("checkListing passes the shipped listing", () => {
+  const read = (name) => readFileSync(new URL(`../appstore/metadata/${name}`, import.meta.url), "utf8").trim();
+  const listing = { description: read("description.txt"), promotional: read("promotional.txt"), whatsNew: read("whats-new.txt"), keywords: read("keywords.txt") };
+  assert.equal(checkListing(listing, () => assert.fail("the shipped listing fails its own check")), true);
+});
+
+test("release.mjs checks the listing with checkListing and exits early only on upload blockers (TKL-795)", () => {
+  const source = readFileSync(new URL("./release.mjs", import.meta.url), "utf8");
+  assert.match(source, /checkListing\(listing, fail\)/);
+  assert.doesNotMatch(source, /assertListing\(/, "no direct assertListing call that would block the upload");
+  assert.doesNotMatch(source, /failures\.length && !dryRun\) process\.exit/, "no early exit on non-blocking failures");
+  const exits = source.match(/if \(stopsBeforeBuild\(failures, dryRun\)\) process\.exit\(1\);/g) || [];
+  assert.equal(exits.length, 2, "both preflight exits use stopsBeforeBuild");
 });

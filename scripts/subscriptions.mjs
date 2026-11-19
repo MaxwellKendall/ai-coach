@@ -12,6 +12,9 @@ export const SUBMITTABLE_STATES = new Set([
   "APPROVED",
 ]);
 
+/** App Store Connect refuses edits to a subscription's name, copy, review note and screenshot in these states (409 UNMODIFIABLE, TKL-795). */
+export const LOCKED_STATES = new Set(["WAITING_FOR_REVIEW", "IN_REVIEW"]);
+
 const PERIODS = new Set(["ONE_MONTH", "ONE_YEAR"]);
 const AGREEMENT_CODE = "FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED";
 
@@ -145,6 +148,8 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
   const actions = [];
   const warnings = [];
   const submit = [];
+  // Copy that differs on a subscription in review: not written now, applied after review.
+  const deferred = [];
   const byProduct = new Map();
   const byName = new Map();
   for (const group of remote.groups || []) {
@@ -197,10 +202,16 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
       if (existing.group.referenceName !== group.referenceName) {
         warnings.push(`${product.productId} stays in group "${existing.group.referenceName}". A subscription cannot be moved.`);
       }
-      if (existing.name !== product.name) {
+      const locked = LOCKED_STATES.has(existing.state);
+      const copyChanged = existing.name !== product.name
+        || (existing.reviewNote || "") !== (product.reviewNote || "")
+        || !sameLocalization(existing, product.localization)
+        || (screenshots && !existing.hasScreenshot && Boolean(product.screenshot));
+      if (locked && copyChanged) deferred.push(`${product.productId} is ${existing.state}; its copy will be applied after review`);
+      if (!locked && existing.name !== product.name) {
         actions.push({ type: "updateName", id: existing.id, productId: product.productId, name: product.name });
       }
-      if ((existing.reviewNote || "") !== (product.reviewNote || "")) {
+      if (!locked && (existing.reviewNote || "") !== (product.reviewNote || "")) {
         actions.push({ type: "setReviewNote", id: existing.id, productId: product.productId, reviewNote: product.reviewNote });
       }
       if (priceNeedsWrite(existing, product, remote.territoryCount || 0)) {
@@ -219,7 +230,7 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
           duration: product.introductoryOffer.duration, periods: product.introductoryOffer.periods,
         });
       }
-      if (!sameLocalization(existing, product.localization)) {
+      if (!locked && !sameLocalization(existing, product.localization)) {
         const current = (existing.localizations || []).find((item) => item.locale === product.localization.locale);
         actions.push({
           type: "setLocalization", id: existing.id, productId: product.productId,
@@ -227,7 +238,7 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
           name: product.localization.name, localizationName: product.localization.name, localizationDescription: product.localization.description,
         });
       }
-      if (screenshots && !existing.hasScreenshot) noteScreenshot(product, existing.id, screenshotExists, seenShots, actions, warnings);
+      if (!locked && screenshots && !existing.hasScreenshot) noteScreenshot(product, existing.id, screenshotExists, seenShots, actions, warnings);
       const ready = SUBMITTABLE_STATES.has(existing.state);
       if (!ready) warnings.push(`${product.name} (${product.productId}) is ${existing.state}, not ready to submit.`);
       submit.push({
@@ -240,7 +251,7 @@ export function planSubscriptions(desired, remote, { screenshotExists = () => fa
       });
     }
   }
-  return { actions, warnings, submit };
+  return { actions, warnings, submit, deferred };
 }
 
 function noteScreenshot(product, id, screenshotExists, seen, actions, warnings) {
@@ -279,7 +290,8 @@ export function formatPlan(plan) {
       default: return action.type;
     }
   });
-  if (!lines.length) lines.push("Subscriptions already match appstore/subscriptions.json.");
+  if (!lines.length && !plan.deferred?.length) lines.push("Subscriptions already match appstore/subscriptions.json.");
+  lines.push(...(plan.deferred || []));
   return lines;
 }
 

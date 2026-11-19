@@ -48,6 +48,23 @@ export function assertListing(listing) {
   }
 }
 
+// A listing that breaks the limits is not written later (the listing step goes dry on any failure),
+// but it never stops the TestFlight build: blocksUpload is false (TKL-795).
+export function checkListing(listing, fail) {
+  try {
+    assertListing(listing);
+    return true;
+  } catch (error) {
+    fail(`Preflight: ${error.message}`, { blocksUpload: false });
+    return false;
+  }
+}
+
+// A real run stops before building only for failures that block the upload; a dry run never stops early.
+export function stopsBeforeBuild(failures, dryRun) {
+  return !dryRun && failures.blocksUpload();
+}
+
 export function reviewNotes(template, fields) {
   let notes = template;
   for (const [key, value] of Object.entries(fields)) notes = notes.replaceAll(`{{${key}}}`, value ?? "");
@@ -141,4 +158,23 @@ export async function uploadLandPoll({ upload, land, poll }) {
   } catch (error) {
     return { buildId: undefined, landing, error: error.message };
   }
+}
+
+/**
+ * Every failure the run reports, and which of them stop the build bump, archive and upload.
+ * Subscription and listing failures are App Store Connect metadata: they are reported and
+ * fail the run, but never keep a TestFlight build from shipping (TKL-795).
+ */
+export function createFailures() {
+  const all = [];
+  const blocking = [];
+  return {
+    all,
+    add(message, { blocksUpload = true } = {}) {
+      all.push(message);
+      if (blocksUpload) blocking.push(message);
+    },
+    blocksUpload: () => blocking.length > 0,
+    get length() { return all.length; },
+  };
 }
