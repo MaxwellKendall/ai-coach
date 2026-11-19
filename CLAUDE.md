@@ -31,6 +31,7 @@ Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/pr
 | iOS unit | `xcodegen generate && xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` | ~4.5 min cold (tests 43 s) |
 | infra + MCP + Lambdas | `cd infra && npx tsc --noEmit -p . && npx vitest run` | ~45 s |
 | dashboard | `npm --prefix web test` (vitest); type check + build: `npm --prefix web run build` | ~1 s each |
+| demo-clip scripts | `python3 -m unittest discover -s scripts/tests` | <1 s |
 | spoken-edit eval | `scripts/eval.sh [runs=3] [filter]` → `Tests/Evals/results.md` | ~4 min at 1 run |
 | spoken-log eval | `scripts/log-eval.sh [runs=3] [filter]` → `Tests/Evals/log-results.md` | ~1.5 min at 1 run |
 | program eval | `scripts/program-eval.sh [model=on-device] [weeks=12] [filter]` → `Tests/Evals/program-results-<model>.md` | ~4.5 min with weeks=0; longer with probes |

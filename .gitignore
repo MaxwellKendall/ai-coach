@@ -19,3 +19,4 @@ directories/claude/dist/
 
 # FIT-444: revenue pull output (may include subscriber counts)
 revenue-out/
+__pycache__/
