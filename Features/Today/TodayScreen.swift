@@ -463,19 +463,41 @@ struct TodayScreen: View {
 
     /// Exercise names as a session's title: "Squat, bench press, row + 1 more".
     static func title(lifts names: [String]) -> String {
-        let lifts = names.map(short)
-        let shown = lifts.prefix(3).enumerated().map { $0.offset == 0 ? $0.element.prefix(1).uppercased() + $0.element.dropFirst() : $0.element }
-        return shown.joined(separator: ", ") + (lifts.count > 3 ? " + \(lifts.count - 3) more" : "")
+        let shown = distinct(Array(names.prefix(3))).enumerated().map { $0.offset == 0 ? $0.element.prefix(1).uppercased() + $0.element.dropFirst() : $0.element }
+        return shown.joined(separator: ", ") + (names.count > 3 ? " + \(names.count - 3) more" : "")
+    }
+
+    /// TKL-797: lifts by their short names, where two that would read the same ("Bench Press" and "Incline Bench
+    /// Press" are both "bench press") each take words from the front of their name until they read apart.
+    static func distinct(_ names: [String]) -> [String] {
+        let words = names.map(words)
+        var kept = words.map { shortLength($0) }
+        func label(_ i: Int) -> String { words[i].isEmpty ? names[i].lowercased() : words[i].suffix(kept[i]).joined(separator: " ").lowercased() }
+        while true {
+            let labels = names.indices.map(label)
+            let clashing = names.indices.filter { i in labels.indices.contains { $0 != i && labels[$0] == labels[i] } && kept[i] < words[i].count }
+            if clashing.isEmpty { return labels }
+            for i in clashing { kept[i] += 1 }
+        }
     }
 
     /// A lift by the word people say: "Back Squat" → "squat", "Bent Over Barbell Row" → "row", "Bench Press" →
     /// "bench press" (a press needs its kind).
     static func short(_ name: String) -> String {
-        // FIT-356: "Dumbbell Row (single-arm)" is a row; the brackets only say which kind.
-        let words = name.replacing(/\s*\(.*\)\s*$/, with: "").split(separator: " ").map(String.init)
-        guard let last = words.last else { return name.lowercased() }
+        let words = words(name)
+        return words.isEmpty ? name.lowercased() : words.suffix(shortLength(words)).joined(separator: " ").lowercased()
+    }
+
+    /// A name's words, without the brackets. FIT-356: "Dumbbell Row (single-arm)" is a row; the brackets only say which kind.
+    private static func words(_ name: String) -> [String] {
+        name.replacing(/\s*\(.*\)\s*$/, with: "").split(separator: " ").map(String.init)
+    }
+
+    /// How many of a name's last words its short name keeps: one, or two when the last needs its kind.
+    private static func shortLength(_ words: [String]) -> Int {
+        guard let last = words.last else { return 0 }
         let needsKind = ["Press", "Raise", "Curl", "Extension", "Fly", "Pulldown", "Thrust"].contains(last)
-        return (needsKind && words.count > 1 ? "\(words[words.count - 2]) \(last)" : last).lowercased()
+        return needsKind && words.count > 1 ? 2 : 1
     }
 
     /// The last working load logged for each exercise before today, for "+5 lb".
