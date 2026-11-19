@@ -10,7 +10,7 @@ Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/pr
 - `App/`: `@main`, root views, `Theme.swift`, `Info.plist`. `Widgets/`: workout Live Activity.
 - `Core/`: Model (SwiftData), Generators, Progress (pure Swift, no UI/persistence imports), AI (`AIModel.swift`: every LLM call), Import.
 - `Features/`: SwiftUI screens. `Resources/`: assets, `Seed/` JSON (exercises, recipes, photos), `amplify_outputs.{dev,prod}.json`.
-- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemoUITests.swift` + `DemoScreens.swift` for the review demo, `PaywallScreenshotUITests.swift`, `DemoModeUITests.swift`, `AIWeekScreenshotUITests.swift`, `DemoClipScreenshotUITests.swift` (scheme `ReviewDemo`; Back Squat's demo on the how-to sheet and set card → `build/screens/`)), `Fixtures`.
+- `Tests/`: `CoreTests` (unit), `Evals` (real models, scored; results `*.md` are tracked), `UITests` (`ReviewDemoUITests.swift` + `DemoScreens.swift` for the review demo, `PaywallScreenshotUITests.swift`, `DemoModeUITests.swift`, `AIWeekScreenshotUITests.swift`, `DemoClipScreenshotUITests.swift` (scheme `ReviewDemo`; Back Squat's demo on the how-to sheet and set card → `build/screens/`), `HowToDemoUITests.swift` (TKL-793: demo tile one tap from Today, paging, full screen, Program's cards, offline; `TEST_RUNNER_APPEARANCE=dark` names the screenshots after `xcrun simctl ui <device> appearance dark`)), `Fixtures`.
 - `infra/`: AWS CDK (TypeScript). `lib/stack.ts` is the whole stack; `lambda/` (MCP, sync, coach, Stripe, AI proxy, share pages…), `resolvers/`, `graphql/`, `scripts/`, `test/` (vitest). Background: `infra/README.md`.
 - `web/`: coach dashboard, Vite + React + TS, served at `/app`. `shared/`: TS shared by web and infra.
 - `plugin/`: the Claude plugin (skills + connector). `directories/`: ChatGPT, Claude, MCP-registry listing builds.
@@ -96,4 +96,5 @@ A UI change also gets a simulator screenshot. A change to model prompts or `Prog
 - `cdk deploy` without a fresh `web` build ships a stale dashboard.
 - `npm run demo-video` resets the iPhone 17 Pro simulator's keychain and uninstalls the app so it records from a signed-out first launch; don't run it while using that simulator. `DEMO_SIMULATOR=<name or UDID>` records on another one (the shared iPhone 17 Pro is often busy with other runs' tests, which steals the demo's taps).
 - Importer data quirks (from `~/dev/fitness-planner`, read-only): `load` may be a string (`"BW"`, `"95 lb"`, `"24 kg/hand"`), `reps` a duration (`"50s"`), some logs `"reconstructed": true`.
+- Exercises with a demo clip ship their start/end photos in `Resources/DemoPhotos` (the how-to's offline fallback, TKL-793). After changing `Resources/Seed/exercise-demos.json`, run `scripts/demo-photos.sh`; `ExercisePhotosTests.demoExercisesShipTheirPhotos` fails until you do.
 - Units follow the user's setting; the author uses lb.

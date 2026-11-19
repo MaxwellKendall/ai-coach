@@ -123,8 +123,8 @@ struct WorkoutDetailView: View {
         .onChange(of: session) { old, new in changed(from: old, to: new) }
         .onChange(of: toast) { if toast == nil { undoTo = nil } }
         .sheet(item: Binding(get: { howTo.map(HowToID.init) }, set: { howTo = $0?.id })) { item in
-            let template = templates.first { $0.slug == item.id }
-            HowToSheet(name: template?.name ?? item.id, slug: item.id, steps: template?.values("instructions") ?? [])
+            let names = Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
+            HowToSheet(pages: HowToPage.pages(session, names: names, templates: templates), start: item.id, history: true)  // TKL-793: Last time, as from Today
         }
         .sheet(item: $picking) { picking in
             let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
@@ -202,25 +202,31 @@ struct WorkoutDetailView: View {
     private func blockCard(_ index: Int, _ block: SessionPlan.Block, _ names: [String: String], letter: String) -> some View {
         let open = !collapsed.contains(block.id)
         return VStack(alignment: .leading, spacing: 12) {
-            Button {
-                withAnimation(.tap) { if open { collapsed.insert(block.id) } else { collapsed.remove(block.id) } }
-            } label: {
-                HStack(spacing: 12) {
-                    BlockBadge(letter: letter)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(Self.kind(block)).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        Text(block.movements.map { names[$0.exercise] ?? $0.exercise }.joined(separator: " + "))
-                            .font(.headline).multilineTextAlignment(.leading)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.down").rotationEffect(.degrees(open ? 180 : 0)).foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                // TKL-793: a lift's card leads with its demo, one tap from the how-to; a superset's are on its lifts' lines.
+                if !block.isGroup, let movement = block.movements.first {
+                    DemoTile(slug: movement.exercise, name: names[movement.exercise] ?? movement.exercise) { howTo = movement.exercise }
                 }
-                .contentShape(.rect)
+                Button {
+                    withAnimation(.tap) { if open { collapsed.insert(block.id) } else { collapsed.remove(block.id) } }
+                } label: {
+                    HStack(spacing: 12) {
+                        BlockBadge(letter: letter)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(Self.kind(block)).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            Text(block.movements.map { names[$0.exercise] ?? $0.exercise }.joined(separator: " + "))
+                                .font(.headline).multilineTextAlignment(.leading)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.down").rotationEffect(.degrees(open ? 180 : 0)).foregroundStyle(.secondary)
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             if open {
                 BlockEditor(session: $session, index: index, names: names, templates: templates, selected: $selected,
-                            onSwap: { picking = .swap(block: $0, movement: $1, exercise: $2) }, onHowTo: { howTo = $0 })
+                            onSwap: { picking = .swap(block: $0, movement: $1, exercise: $2) }, onHowTo: { howTo = $0 }, tiles: true)
             }
         }
         .padding(14)

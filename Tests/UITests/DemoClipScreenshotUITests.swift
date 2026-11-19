@@ -15,18 +15,13 @@ final class DemoClipScreenshotUITests: XCTestCase {
         app.launchArguments += ["-uiTesting", "YES", "-role", "client", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
 
-        // Today: open Back Squat's row, then More › How to Do It.
-        let squat = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'Back Squat'")).firstMatch
-        if !squat.waitForExistence(timeout: 30) { save("today-missing.png") }
-        XCTAssertTrue(squat.exists, "No Back Squat on Today")
-        squat.tap()
-        let more = app.buttons["session.more"].firstMatch
-        XCTAssertTrue(more.waitForExistence(timeout: 10), "Back Squat's row has no More menu")
-        more.tap()
-        let howTo = app.buttons["How to Do It"]
-        XCTAssertTrue(howTo.waitForExistence(timeout: 5), "No How to Do It")
-        howTo.tap()
-        let sheetClip = app.descendants(matching: .any).matching(clip).firstMatch
+        // Today: TKL-793, Back Squat's demo tile opens its how-to in one tap.
+        let tile = app.buttons["How to do Back Squat"].firstMatch
+        if !tile.waitForExistence(timeout: 30) { save("today-missing.png") }
+        XCTAssertTrue(tile.exists, "No Back Squat demo tile on Today")
+        tile.tap()
+        let sheetClip = app.descendants(matching: .any).matching(identifier: "howto.page").firstMatch
+            .descendants(matching: .any).matching(clip).firstMatch
         XCTAssertTrue(sheetClip.waitForExistence(timeout: 20), "The how-to sheet shows no demo clip")
         // Full height, scrolled to the clip, so the whole demo is in the picture.
         app.navigationBars.firstMatch.swipeUp()
@@ -34,7 +29,7 @@ final class DemoClipScreenshotUITests: XCTestCase {
         sleep(4) // the clip downloads into the cache and starts looping
         save("howto-back-squat.png")
         app.buttons["Done"].firstMatch.tap()
-        XCTAssertTrue(sheetClip.waitForNonExistence(timeout: 10), "The how-to sheet didn't close")
+        XCTAssertTrue(app.navigationBars["Back Squat"].waitForNonExistence(timeout: 10), "The how-to sheet didn't close")
 
         // Start the lifts: the set card shows the demo, small.
         let start = app.buttons.matching(NSPredicate(format: "label == 'Start the lifts' OR label == 'Start'")).firstMatch
@@ -45,11 +40,11 @@ final class DemoClipScreenshotUITests: XCTestCase {
         XCTAssertTrue(done.waitForExistence(timeout: 10), "The workout didn't open")
         done.tap()
         // Then past the warm-up ramp (no clip on those cards) to the first working set.
-        let clipShown = app.descendants(matching: .any).matching(clip).firstMatch
+        let clipShown = app.buttons["workout.demo"].firstMatch
         for _ in 0..<8 where !clipShown.waitForExistence(timeout: 3) {
             if app.buttons["Done"].firstMatch.exists { app.buttons["Done"].firstMatch.tap() }
         }
-        let cardClip = app.descendants(matching: .any).matching(clip).firstMatch
+        let cardClip = app.buttons["workout.demo"].firstMatch
         if !cardClip.waitForExistence(timeout: 20) { save("workout-missing.png") }
         XCTAssertTrue(cardClip.exists, "The workout's set card shows no demo clip")
         sleep(4)

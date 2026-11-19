@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 @testable import AICoach
 
 /// FIT-317: free-exercise-db's photos matched to the catalog.
@@ -24,6 +25,23 @@ struct ExercisePhotosTests {
     /// The bundled map is what the generator writes from today's catalog (SeedGenerator.writePhotos).
     @Test func bundledMapIsCurrent() throws {
         #expect(ExercisePhotos.bundled == (try ExercisePhotos.map(json: json, catalog: catalog)).photos)
+    }
+
+    /// TKL-793: an exercise with a demo clip ships its start and end photos in the app, so the how-to still shows
+    /// them offline before the clip (or any photo) was ever loaded. Exercises without a clip ship none.
+    @Test func demoExercisesShipTheirPhotos() throws {
+        let withPhotos = ExerciseDemos.bundled.filter { !ExercisePhotos.urls($0).isEmpty }
+        #expect(withPhotos.count >= 27)
+        for slug in withPhotos {
+            let local = ExercisePhotos.local(slug)
+            #expect(local.count == ExercisePhotos.urls(slug).count, "\(slug)")
+            for file in local {
+                #expect(file.isFileURL, "\(slug)")
+                #expect(UIImage(contentsOfFile: file.path()) != nil, "\(slug): \(file.lastPathComponent)")
+            }
+        }
+        #expect(ExercisePhotos.local("air-bike").isEmpty)
+        #expect(ExercisePhotos.local("not-an-exercise").isEmpty)
     }
 
     /// FIT-319: every program exercise has a YouTube demo, and every link is a YouTube video of a catalog exercise.

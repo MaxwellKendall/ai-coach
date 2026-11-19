@@ -40,6 +40,8 @@ struct WorkoutModeView: View {
     @State private var activity = WorkoutActivity()
     /// FIT-326: the lift being swapped, from the set card's name or the list.
     @State private var swapping: SwapTarget?
+    /// TKL-793: the demo open full screen, by exercise.
+    @State private var demo: String?
 
     struct SwapTarget: Identifiable {
         var block: Int
@@ -149,6 +151,9 @@ struct WorkoutModeView: View {
             Text("Nothing is saved until you press Save on the last card.")
         }
         .sheet(isPresented: $peeking) { peek }
+        .fullScreenCover(item: Binding(get: { demo.map(HowToID.init) }, set: { demo = $0?.id })) { item in
+            FullScreenDemo(slug: item.id, name: names[item.id] ?? item.id)
+        }
         .sheet(item: $swapping) { target in
             ExercisePicker(title: "Swap \(names[target.exercise] ?? target.exercise)", replacing: target.exercise,
                            excluding: Set(draft.rows.map(\.exercise))) { slug in swap(target, to: slug) }
@@ -336,9 +341,16 @@ struct WorkoutModeView: View {
             }
             // FIT-447: the form demo, small, while you set up; nothing when the lift has no clip or it can't load.
             if exercises.count == 1, ExerciseDemos.url(exercises[0]) != nil {
-                DemoClip(slug: exercises[0], corner: 14) { EmptyView() }
-                    .frame(width: 104, height: 104)
-                    .padding(.top, 12)
+                // TKL-793: tapped, it opens full screen with Slow.
+                Button { demo = exercises[0] } label: {
+                    DemoClip(slug: exercises[0], corner: 14) { EmptyView() }
+                        .frame(width: 104, height: 104)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("workout.demo")
+                .accessibilityLabel("Video: one rep of the movement")
+                .accessibilityHint("Opens it full screen")
+                .padding(.top, 12)
             }
             Spacer(minLength: 12)
             // Weight and reps big, each with − and + under it: a change is a tap, right where it's read.
@@ -770,5 +782,50 @@ struct WorkoutModeView: View {
 struct Line: Shape {
     func path(in rect: CGRect) -> Path {
         Path { $0.move(to: CGPoint(x: rect.minX, y: rect.midY)); $0.addLine(to: CGPoint(x: rect.maxX, y: rect.midY)) }
+    }
+}
+
+/// TKL-793: the set card's demo, full screen, with Slow; swipe down or ✕ goes back to the set.
+struct FullScreenDemo: View {
+    @Environment(\.dismiss) private var dismiss
+    let slug: String
+    let name: String
+    @State private var slow = false
+    @State private var drag: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            DemoClip(slug: slug, corner: 0, slow: slow) { HowToPhotos.photos(slug) }
+                .offset(y: max(0, drag))
+            VStack {
+                HStack {
+                    Text(name).font(.headline).foregroundStyle(.white)
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").font(.body.weight(.bold)).foregroundStyle(.white)
+                            .frame(width: 44, height: 44).background(.white.opacity(0.2), in: .circle)
+                    }
+                    .accessibilityIdentifier("demo.close")
+                    .accessibilityLabel("Close")
+                }
+                Spacer()
+                Button { slow.toggle() } label: {
+                    Label("Slow", systemImage: "tortoise.fill").font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .foregroundStyle(slow ? Color.black : Color.white)
+                        .background(slow ? AnyShapeStyle(Color.white) : AnyShapeStyle(.white.opacity(0.2)), in: .capsule)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("demo.slow")
+                .accessibilityLabel(slow ? "Normal speed" : "Slow")
+            }
+            .padding(16)
+        }
+        .contentShape(.rect)
+        .gesture(DragGesture()
+            .onChanged { drag = $0.translation.height }
+            .onEnded { if $0.translation.height > 120 { dismiss() } else { withAnimation(.settle) { drag = 0 } } })
+        .accessibilityAction(.escape) { dismiss() }
     }
 }

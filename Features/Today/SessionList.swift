@@ -4,7 +4,8 @@ import SwiftUI
 /// FIT-297, design A: today's session as a list. The warm-up first, folded to one line; each lift with its sets and its
 /// load, big, and "+5 lb" when it went up; a superset's lifts bracketed with A and B. Tap the circle to check a lift off
 /// (L3). TKL-753: one session editor. Tapping a lift opens it in place into Program's block card (`BlockEditor`): every set
-/// a row, a number tapped for the bottom stepper, Swap / + Set / ⋯ under it; tapping it again folds it. The warm-up opens
+/// a row, a number tapped for the bottom stepper, Swap / + Set / ⋯ under it; tapping it again folds it. TKL-793: each
+/// lift's row leads with its demo tile, which opens the how-to in one tap. The warm-up opens
 /// to its items; Add exercise at the end. Each change is saved as it's made (the screen offers Undo).
 /// Prototype: https://claude.ai/artifact/4RAUoAwczRiRNG9NuAu5Vz
 struct SessionList: View {
@@ -105,8 +106,8 @@ struct SessionList: View {
                 .presentationDragIndicator(.hidden)
         }
         .sheet(item: Binding(get: { looking.map(HowToID.init) }, set: { looking = $0?.id })) { item in
-            let template = templates.first { $0.slug == item.id }
-            HowToSheet(name: names[item.id] ?? item.id, slug: item.id, steps: template?.values("instructions") ?? [], history: history)
+            // TKL-793: it pages through the session's lifts, starting at the one tapped.
+            HowToSheet(pages: HowToPage.pages(session, names: names, templates: templates), start: item.id, history: history)
         }
         .sheet(item: $picking) { picking in
             let inSession = Set(session.blocks.flatMap(\.movements).map(\.exercise))
@@ -285,6 +286,8 @@ struct SessionList: View {
                     .frame(width: 18, height: 18).background(Color.surface, in: .circle)
                     .overlay { Circle().stroke(Color.inkFaint, lineWidth: 2) }
             }
+            // TKL-793: the demo leads the row, one tap from the how-to.
+            DemoTile(slug: movement.exercise, name: name) { looking = movement.exercise }
             Button { tap(block) } label: {
                 // Accessibility sizes stack the row's parts so a lift's name never breaks mid-word.
                 let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 8))

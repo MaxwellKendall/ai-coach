@@ -77,6 +77,12 @@ struct SessionPlan: Equatable, Sendable {
     /// in order. A lift's own ramp sets are in its block, which has working sets, so they aren't part of it.
     var warmup: [Movement] { blocks.filter { $0.rounds == 0 }.flatMap(\.movements) }
 
+    /// TKL-793: the lifts the how-to sheet pages through: each exercise once, in the session's order, no warm-up.
+    var howToOrder: [String] {
+        blocks.filter { $0.rounds > 0 }.flatMap(\.movements).map(\.exercise)
+            .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+    }
+
     /// The first lift with a working load over the empty bar: what the warm-up ramps to.
     var firstLoad: (exercise: String, load: Double)? {
         guard let movement = blocks.first(where: { $0.rounds > 0 })?.movements.first,
