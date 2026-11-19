@@ -166,3 +166,37 @@ test("products mode skips screenshots, and a broad yearly price and trial are le
   assert.equal(blocked.blocked, true);
   assert.match(blocked.exact, /Agreements missing/);
 });
+
+// TKL-795: App Store Connect refuses copy edits (409 UNMODIFIABLE) on a subscription in review,
+// which stopped `npm run release` before the upload.
+test("a subscription in review gets no copy writes, only a warning that it waits for review", () => {
+  const product = structuredClone(file.groups[0].products[0]);
+  product.tier = "5.99";
+  const desired = { groups: [{ ...file.groups[0], products: [product] }] };
+  for (const state of ["WAITING_FOR_REVIEW", "IN_REVIEW"]) {
+    const remote = {
+      groups: [{
+        id: "g1",
+        referenceName: "initial",
+        localization: { id: "loc", name: "Lifter Pro", locale: "en-US" },
+        subscriptions: [{
+          id: "m", productId: product.productId, name: "Old name",
+          state, reviewNote: "Old note", usaPrice: "5.99",
+          hasScreenshot: false, versionId: "sv1",
+          introductoryOffers: [{ duration: "TWO_WEEKS", offerMode: "FREE_TRIAL", numberOfPeriods: 1 }],
+          localizations: [{ id: "ml", locale: "en-US", name: "Lifter Pro", description: "AI-designed training weeks" }],
+        }],
+      }],
+    };
+    const plan = planSubscriptions(desired, remote, { screenshotExists: () => true });
+    const types = plan.actions.filter((action) => action.productId === product.productId).map((action) => action.type);
+    for (const refused of ["setLocalization", "updateName", "setReviewNote", "setScreenshot"]) {
+      assert.equal(types.includes(refused), false, `${state}: no ${refused}`);
+    }
+    const line = `${product.productId} is ${state}; its copy will be applied after review`;
+    assert.ok(plan.deferred.includes(line), `${state}: ${plan.deferred}`);
+    assert.ok(formatPlan(plan).includes(line), "the dry run prints the warning");
+    assert.equal(plan.warnings.length, 0, "waiting for review is not 'not ready to submit'");
+    assert.equal(plan.submit[0].state, state, "it still goes on the submission");
+  }
+});
