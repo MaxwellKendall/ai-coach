@@ -42,7 +42,7 @@ For program/week evals only: `EVAL_RUN=<label>` keeps a repeat run beside the ot
 
 ## Run
 - App: `xcodegen generate && open AICoach.xcodeproj`, run `AICoach` on iPhone 17 Pro (Debug uses `amplify_outputs.dev.json` and `AICoach.storekit`).
-  CLI: `xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`, then `xcrun simctl install/launch`. Debug builds accept `-units PATH` (a sync-units JSON) to load data without sign-in.
+  CLI: `xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`, then `xcrun simctl install/launch`. Debug builds accept `-units PATH` (a sync-units JSON) to load data without sign-in, and `-haptics YES` opens a debug list that plays each Core Haptics pattern (`Resources/Haptics/*.ahap`, TKL-393).
 - Maxwell's iPhone: only `npm run device-install` (`scripts/device-install.mjs`, TKL-796), only after the change is on `origin/main`. It builds Release (prod backend, what he runs) and installs on the paired iPhone (`--device UDID` if several). It refuses a commit not on `origin/main` or a dirty tree unless `--branch-ok`, records sha + configuration per device in `$(git rev-parse --git-common-dir)/device-install.json`, and warns when an install replaces unmerged work or switches Debug/Release. `--dry-run` shows the plan. Never `devicectl install` by hand.
 - Dashboard: `cd infra && AWS_PROFILE=aicoach-dev npm run dashboard-config` (writes `web/public/config.json` from AICoach-dev), then from the repo root `npm --prefix web run dev` → http://localhost:5173 (unverified).
 - Share pages from sample data: `npm --prefix infra run web` → http://localhost:8787 (unverified).
