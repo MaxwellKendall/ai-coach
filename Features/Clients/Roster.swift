@@ -184,6 +184,9 @@ final class Roster {
 
     /// FIT-373: one client's units and replies fetched again, without fetching everyone; throws when it couldn't.
     func reload(_ id: String, coach: String, names: [String: String]) async throws {
+        #if DEBUG
+        if Self.sample { return }
+        #endif
         guard var client = clients.first(where: { $0.id == id }) else { return }
         async let units = Cloud.units(of: id)
         async let comments = Cloud.comments(of: id)
@@ -219,6 +222,9 @@ final class Roster {
         let theirs = Dictionary(uniqueKeysWithValues: units.keys.map { ($0, client.units[$0]) })
         for (key, body) in units { client.units[key] = body }
         update(client, coach: coach, names: names)
+        #if DEBUG
+        if Self.sample { return .sent }
+        #endif
         return await push(theirs, to: id, coach: coach, names: names)
     }
 

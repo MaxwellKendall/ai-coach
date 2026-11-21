@@ -30,6 +30,17 @@ struct ClientScreen: View {
     /// The day `editor` was made for: until it catches up with `day`, the old day's session isn't shown.
     @State private var editorDay: String?
     @State private var toast: Toast?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var changedDays: Set<String> = []
+    @State private var sentWeeks: [String] = []
+    @State private var flight: Flight?
+    @State private var landed = false
+    @State private var arrivals = 0
+
+    private struct Flight: Equatable {
+        let id = UUID()
+        let origin: String
+    }
     /// FIT-335: what's being added to the day, and where its session is going.
     @State private var adding: Adding?
     @State private var dated: Dated?
@@ -57,7 +68,7 @@ struct ClientScreen: View {
     private var thisWeek: Bool { start == Week.start(of: .now) }
     private var week: [Date] { (0..<7).map { Calendar.current.date(byAdding: .day, value: $0, to: start)! } }
 
-    var body: some View {
+    private var clientWeek: some View {
         ScrollView {
             if let client {
                 VStack(alignment: .leading, spacing: 20) {
@@ -75,11 +86,72 @@ struct ClientScreen: View {
                     .clipped()
                     // Swipe the strip to the next or previous week, as in Calendar.
                     .simultaneousGesture(WeekPaging.swipe { go(to: WeekPaging.week($0, from: start)) })
+                    if sentWeeks.count > 1 {
+                        ScrollView(.horizontal) {
+                            HStack {
+                                ForEach(Array(sentWeeks.enumerated()), id: \.element) { index, week in
+                                    Button(Self.dayTitle(week)) {
+                                        if let date = SyncUnits.date(ofKey: "plan#\(week)") { go(to: date) }
+                                    }
+                                    .buttonStyle(.secondary)
+                                    .modifier(CoachEntrance(index: index))
+                                }
+                            }
+                        }
+                        .accessibilityLabel("Updated weeks")
+                    }
                     dayCard(client)
+                        .anchorPreference(key: CoachFlightAnchors.self, value: .bounds) { ["day": $0] }
+                        .animation(reduceMotion ? nil : .settle, value: client.units["log#\(day)"])
                 }
                 .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 32)
             }
         }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let client {
+                Avatar(client: client, size: 40)
+                    .anchorPreference(key: CoachFlightAnchors.self, value: .bounds) { ["avatar": $0] }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20).padding(.bottom, 8)
+            }
+            clientWeek
+        }
+        .overlayPreferenceValue(CoachFlightAnchors.self) { anchors in
+            GeometryReader { geometry in
+                if let flight, let target = anchors["avatar"] {
+                    let end = geometry[target]
+                    let source = (anchors[flight.origin] ?? anchors["day"]).map { geometry[$0] } ?? end
+                    BankToTarget(source: source, target: end, landed: landed) {
+                        Label("Sent", systemImage: "checkmark")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(.regularMaterial, in: .capsule)
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+        }
+        .task(id: flight) {
+            guard flight != nil else { return }
+            if !reduceMotion {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard !Task.isCancelled else { return }
+                withAnimation(.throw) { landed = true }
+                try? await Task.sleep(for: .milliseconds(380))
+                guard !Task.isCancelled else { return }
+            }
+            arrivals += 1
+            try? await Task.sleep(for: .milliseconds(650))
+            guard !Task.isCancelled else { return }
+            withAnimation(.out) {
+                flight = nil
+                changedDays = []
+            }
+        }
+        .sensoryFeedback(.tap, trigger: arrivals)
         .screenBackground()
         // FIT-374: their latest, so "a newer copy" can be seen where it's said.
         .refreshable {
@@ -180,9 +252,12 @@ struct ClientScreen: View {
             }
         }
         .animation(.settle, value: toast)
+        .animation(reduceMotion ? nil : .settle, value: editorDay == day)
         .task(id: "\(day) \(client?.units["plan#\(day)"]?.hashValue ?? 0)") {
-            editor = client.map { ClientDay.Editor(ClientDay.plan($0.units, day), templates: templates) }
-            editorDay = day
+            withMotion(.settle) {
+                editor = client.map { ClientDay.Editor(ClientDay.plan($0.units, day), templates: templates) }
+                editorDay = day
+            }
         }
     }
 
@@ -202,7 +277,9 @@ struct ClientScreen: View {
                     }
                     .padding(.vertical, 14).contentShape(.rect)
                     if let day = flag.day {
-                        NavigationLink(value: DayThread.Ref(client: id, day: day)) { row }.buttonStyle(.plain)
+                        NavigationLink(value: DayThread.Ref(client: id, day: day)) { row }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("coach.flagReply")
                     } else {
                         row
                     }
@@ -287,10 +364,19 @@ struct ClientScreen: View {
                             }
                         }
                         .frame(width: 5, height: 5)
+                        .background {
+                            if changedDays.contains(key) {
+                                Circle().fill(Plate.current.mark.opacity(0.3)).frame(width: 15, height: 15)
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                        .animation(reduceMotion ? nil : .settle, value: changedDays.contains(key))
                     }
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("coach.day.\(key)")
+                .anchorPreference(key: CoachFlightAnchors.self, value: .bounds) { [key: $0] }
             }
         }
     }
@@ -299,22 +385,34 @@ struct ClientScreen: View {
         let log = ClientDay.log(client.units, day)
         let lifts = ClientDay.lifts(log, names: names)
         if !lifts.isEmpty {
+            let estimates = Training.estimated1RMs(ClientProgress.sets(client.units, patterns: [:]).filter {
+                SyncUnits.day($0.date) == day
+            })
             // FIT-367: the day's name over what they logged, as over a planned day.
             Label(Self.dayTitle(day), systemImage: "checkmark.circle.fill").font(.headline).padding(.horizontal, 4)
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(lifts.enumerated()), id: \.offset) { index, lift in
+                ForEach(Array(lifts.enumerated()), id: \.element.slug) { index, lift in
                     // FIT-337: a set logged wrong is corrected here, as on the dashboard (FIT-200).
                     Button { correcting = Correcting(slug: lift.slug, name: lift.name) } label: {
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text(lift.name).font(.headline)
                             Spacer(minLength: 8)
-                            Text(lift.sets).font(.subheadline).foregroundStyle(Color.inkMuted).monospacedDigit().multilineTextAlignment(.trailing)
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text(lift.sets)
+                                if let max = estimates[lift.slug] {
+                                    Text("Est. \(Coach.number(max.rounded())) lb").font(.caption)
+                                }
+                            }
+                            .font(.subheadline).foregroundStyle(Color.inkMuted)
+                            .monospacedDigit().multilineTextAlignment(.trailing)
+                            .contentTransition(reduceMotion ? .opacity : .numericText())
                             Image(systemName: "pencil").font(.footnote).foregroundStyle(Color.inkFaint)
                         }
                         .padding(.vertical, 14).contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Correct what was logged")
+                    .accessibilityIdentifier("coach.correct.\(lift.slug)")
                     if index < lifts.count - 1 { Divider() }
                 }
             }
@@ -374,6 +472,7 @@ struct ClientScreen: View {
                     .frame(width: 44, height: 32).background(Color.fill, in: .capsule)
             }
             .accessibilityLabel("Change \(Self.dayTitle(day))")
+            .accessibilityIdentifier("coach.dayActions")
         }
         .padding(.horizontal, 4)
         .confirmationDialog("Clear \(Self.dayTitle(day))?", isPresented: $clearing, titleVisibility: .visible) {
@@ -406,10 +505,27 @@ struct ClientScreen: View {
         let rows = ClientDay.plan(client.units, day)
         let landed = ClientDay.appended(ClientDay.shifted(rows, to: target, fresh: !move), to: ClientDay.plan(client.units, key))
         let name = Self.dayTitle(key)
-        send(key, rows: landed, client, done: move ? "Moved to \(name)" : "Copied to \(name)")
-        if move {
-            // The client's latest, with the copy just made, so the second change keeps the first.
-            send(day, rows: [], roster.clients.first { $0.id == id } ?? client)
+        guard move else {
+            send(key, rows: landed, client, done: "Copied to \(name)")
+            return
+        }
+        let source = day
+        let sourceKey = "plan#\(source)"
+        let original = client.units[sourceKey]
+        let coach = account.user?.uid ?? ""
+        changedDays = [source, key]
+        Task {
+            let copied = await roster.send(["plan#\(key)": SyncUnits.encode(landed)], to: id, coach: coach, names: names)
+            guard case .sent = copied else {
+                showDelivery(copied, done: nil, days: [], origin: nil)
+                return
+            }
+            guard roster.clients.first(where: { $0.id == id })?.units[sourceKey] == original else {
+                showDelivery(copied, done: "Copied to \(name). The original was edited.", days: [key], origin: key)
+                return
+            }
+            let cleared = await roster.send([sourceKey: nil], to: id, coach: coach, names: names)
+            showDelivery(cleared, done: "Moved to \(name)", days: [source, key], origin: key)
         }
     }
 
@@ -422,12 +538,14 @@ struct ClientScreen: View {
 
     /// A day's plan as it now is, sent to their phone (none clears it). `done` is said once it's sent.
     private func send(_ day: String, rows: [SyncUnits.PlanRow], _ client: Roster.Client, done: String? = nil) {
-        sendAll([day: rows], client, done: done)
+        sendAll([day: rows], client, done: done, origin: day)
     }
 
     /// Days' plans as they now are, sent to their phone.
-    private func sendAll(_ days: [String: [SyncUnits.PlanRow]], _ client: Roster.Client, done: String? = nil) {
-        deliver(days.map { (key: "plan#\($0.key)", body: $0.value.isEmpty ? nil : SyncUnits.encode($0.value)) }, client, done: done)
+    private func sendAll(_ days: [String: [SyncUnits.PlanRow]], _ client: Roster.Client, done: String? = nil, origin: String? = nil) {
+        let affected = days.keys.sorted()
+        deliver(days.map { (key: "plan#\($0.key)", body: $0.value.isEmpty ? nil : SyncUnits.encode($0.value)) },
+                client, done: done ?? "Sent", days: affected, origin: origin ?? affected.first)
     }
 
     /// FIT-337: a day's log as corrected, sent to their phone.
@@ -436,9 +554,25 @@ struct ClientScreen: View {
     }
 
     /// Units as they now are, sent to their phone (FIT-374: or marked unsent, with Retry).
-    private func deliver(_ units: [(key: String, body: String?)], _ client: Roster.Client, done: String?) {
+    private func deliver(_ units: [(key: String, body: String?)], _ client: Roster.Client, done: String?,
+                         days: [String] = [], origin: String? = nil) {
         let units = Dictionary(units.map { ($0.key, $0.body) }, uniquingKeysWith: { _, b in b })
-        Task { said(await roster.send(units, to: id, coach: account.user?.uid ?? "", names: names), done: done) }
+        changedDays = Set(days)
+        Task {
+            let result = await roster.send(units, to: id, coach: account.user?.uid ?? "", names: names)
+            showDelivery(result, done: done, days: days, origin: origin)
+        }
+    }
+
+    private func showDelivery(_ result: Roster.Sent, done: String?, days: [String], origin: String?) {
+        said(result, done: done)
+        guard case .sent = result, let origin else {
+            changedDays = []
+            return
+        }
+        sentWeeks = CoachMotion.weeks(for: days)
+        landed = false
+        flight = Flight(origin: origin)
     }
 
     private func said(_ sent: Roster.Sent, done: String?) {
@@ -484,5 +618,13 @@ struct ClientScreen: View {
         guard !days.isEmpty else { toast = Toast(text: "Those days have gone by"); return }
         let replacing = days.keys.filter { !ClientDay.plan(client.units, $0).isEmpty }.count
         if replacing == 0 { sendAll(days, client, done: done) } else { pending = Pending(days: days, replacing: replacing, done: done) }
+    }
+}
+
+private struct CoachFlightAnchors: PreferenceKey {
+    static let defaultValue: [String: Anchor<CGRect>] = [:]
+
+    static func reduce(value: inout [String: Anchor<CGRect>], nextValue: () -> [String: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
     }
 }

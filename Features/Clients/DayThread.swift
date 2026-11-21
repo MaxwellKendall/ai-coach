@@ -93,7 +93,7 @@ struct DayThread: View {
             session(log, day: day)
             VStack(spacing: 4) {
                 ForEach(notes, id: \.self) { note in bubble(note, mine: false) }
-                ForEach(comments, id: \.at) { comment in bubble(comment.text, mine: comment.by == account.user?.uid) }
+                ForEach(comments, id: \.at) { comment in bubble(comment.text, mine: comment.by == coachID) }
             }
             .padding(.top, notes.isEmpty && comments.isEmpty ? 0 : 16)
             if day == ref.day && notes.isEmpty && comments.isEmpty {
@@ -188,9 +188,25 @@ struct DayThread: View {
         }
     }
 
+    private var coachID: String? {
+        #if DEBUG
+        if Roster.sample { return "" }
+        #endif
+        return account.user?.uid
+    }
+
     private func send() {
-        guard var client, let coach = account.user?.uid else { return }
+        guard var client, let coach = coachID else { return }
         let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        #if DEBUG
+        if Roster.sample {
+            client.comments.append(Triage.Comment(day: ref.day, at: Date.now.ISO8601Format(), by: coach,
+                                                  byName: nil, text: words))
+            roster.update(client, coach: coach, names: names)
+            text = ""
+            return
+        }
+        #endif
         sending = true
         Task {
             do {

@@ -40,7 +40,7 @@ struct ClientProgressScreen: View {
                 VStack(alignment: .leading, spacing: 28) {
                     UnsentCard(id: id, first: first, names: names) { said($0, done: "Sent") }
                     goals(client, sets: sets, weighIns: weighIns)
-                    ProgressCharts(units: client.units, sets: sets, names: names) {
+                    ProgressCharts(units: client.units, sets: sets, names: names, coachMotion: true) {
                         // FIT-344: the day they're asked for the weekly check-in, and reminded; Sunday until it's set.
                         // FIT-367: said what it is: a menu alone read as a stray "Sunday".
                         // Accessibility sizes stack the label over the day, so neither hyphenates.

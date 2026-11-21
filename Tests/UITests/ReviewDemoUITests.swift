@@ -59,8 +59,61 @@ final class ReviewDemoUITests: XCTestCase {
         hold(3)
     }
 
+    /// Opt-in check using the signed-in demo pair and a disposable rest day. The reviewed
+    /// client account is excluded because it belongs to a separate App Store demo flow.
     @MainActor
-    private func signIn(_ app: XCUIApplication, email: String, as role: DemoScreens.Role) {
+    func testDemoSessionChangeReachesClient() throws {
+        let environment = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(environment["COACH_MOTION_SYNC"] == "YES"
+                          && coachEmail == "coach@barbrabell.com" && email == "client@barbrabell.com",
+                          "This check requires the disposable coach/client demo pair")
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        app.buttons["welcome.coach"].tap()
+        signIn(app, email: coachEmail, as: .coach, password: environment["DEMO_COACH_PASSWORD"])
+        let roster = app.buttons["welcome.clients"]
+        XCTAssertTrue(roster.waitForExistence(timeout: 90), failureOnScreen(app))
+        roster.tap()
+        let sam = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Sam Rivera")).firstMatch
+        XCTAssertTrue(sam.waitForExistence(timeout: 30))
+        sam.tap()
+        let rest = app.staticTexts["Rest day"]
+        try XCTSkipUnless(rest.waitForExistence(timeout: 5), "Today's demo session is occupied. Use another disposable day.")
+        app.buttons["Run"].tap()
+        app.buttons["Tempo"].tap()
+        app.buttons["Add"].tap()
+        XCTAssertTrue(app.staticTexts["Run added"].waitForExistence(timeout: 10), "The coach did not see a send confirmation")
+        attach(app, "Coach sent a session")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["Account and library"].tap()
+        let coachAccount = accountRow(app)
+        XCTAssertTrue(coachAccount.waitForExistence(timeout: 10))
+        coachAccount.tap()
+        signOut(app)
+
+        let join = app.buttons["welcome.join"]
+        XCTAssertTrue(join.waitForExistence(timeout: 30))
+        join.tap()
+        signIn(app, email: email, as: .client)
+        XCTAssertTrue(waitForToday(app), failureOnScreen(app))
+        let tempo = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Tempo")).firstMatch
+        XCTAssertTrue(tempo.waitForExistence(timeout: 30), "The demo client did not show the session sent by the coach")
+        attach(app, "Client received the session")
+    }
+
+    @MainActor
+    private func attach(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    private func signIn(_ app: XCUIApplication, email: String, as role: DemoScreens.Role, password override: String? = nil) {
         let emailButton = app.buttons["signin.email"]
         XCTAssertTrue(emailButton.waitForExistence(timeout: 15), "Sign in with email was not on screen")
         DemoScreens.shown("SignInSheet", as: role)
@@ -73,7 +126,7 @@ final class ReviewDemoUITests: XCTestCase {
         emailField.typeText(email)
         passwordField.tap()
         // Return submits. The password field is secure, so the recording shows dots.
-        passwordField.typeText(password + "\n")
+        passwordField.typeText((override ?? password) + "\n")
         dismissPasswordPrompt(app)
     }
 
