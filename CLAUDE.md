@@ -64,7 +64,7 @@ Post-deploy: `/ /docs /claude /privacy /support /.well-known/oauth-authorization
 ## Release (iOS)
 Signing uses the Xcode account (the Apple ID signed in under Xcode › Settings › Accounts on this Mac); the API key in `.env` is only for App Store Connect API calls (TKL-760).
 Version is `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml` (now 1.0 / 24). Release builds use `amplify_outputs.prod.json`.
-The release tooling is on `main`: `npm run release` (`scripts/release.mjs`), documented step by step in `RELEASE.md`; `npm run test:release` tests it:
+The release tooling is on `main`: `npm run release` (`scripts/release-lock.py` → `scripts/release.mjs`), documented step by step in `RELEASE.md`; `npm run test:release` tests it:
 - `npm run release -- --dry-run`: local steps + read-only App Store Connect calls.
 - `npm run release`: bumps `CURRENT_PROJECT_VERSION` and commits, archives and uploads with `xcodebuild -exportArchive` (signed by the Xcode account on this Mac via `-allowProvisioningUpdates`, not the API key; lands the bump through a `release/build-N` PR right after the upload, then polls processing), refreshes the prod review account, records the demo video, sets subscriptions and listing from `appstore/`, then stops.
 - `npm run release -- submit`: creates the review submission. Submission is Maxwell's.

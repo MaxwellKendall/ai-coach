@@ -4,6 +4,8 @@
 
 `npm run release -- products` writes only the subscriptions in `appstore/subscriptions.json`, then stops. It does not bump the build, upload, change the version or the listing, mint invites, refresh the review account, record the video, upload paywall screenshots, or submit. It runs when this commit is `origin/main` and the tree is clean. `npm run release -- --dry-run products` prints the plan and writes nothing.
 
+Real releases, submissions, and subscription writes share a per-app lock across worktrees on the release Mac. A concurrent command exits before preflight and prints the holder's run ID (or `manual`) and PID. The kernel releases the lock when the holder exits, including after a crash. Python 3 is required for the `npm run release` entry point. Lock files live in `~/dev/factory/state/locks/` and are reused on the next run.
+
 The command is plain `xcodebuild` plus a small App Store Connect client (`scripts/asc.mjs`) that signs its own JWT. Fastlane is not used.
 
 ## One-time steps
