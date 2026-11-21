@@ -49,6 +49,8 @@ struct AICoachApp: App {
         #if DEBUG
         if let plan = UserDefaults.standard.string(forKey: "paywall").flatMap(StoreProducts.Plan.init(rawValue:)) {
             PaywallView(plan: plan)
+        } else if ProcessInfo.processInfo.arguments.contains("-surface-motion") {
+            SurfaceMotionPreview()
         } else if let state = UserDefaults.standard.string(forKey: "widgets") {
             // `-widgets workout` (rest, done, setup, nodata): the today widget's families in that state (TKL-802).
             WidgetGallery(state: state)
