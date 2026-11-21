@@ -179,6 +179,30 @@ test("uploadLandPoll lands the bump right after the upload, before processing is
   assert.deepEqual(result, { buildId: "build-id", landing: { landed: true, message: "landed" }, error: undefined });
 });
 
+test("uploadLandPoll awaits the checkpoint after upload and before polling", async () => {
+  const s = sequence();
+  s.checkpoint = async () => {
+    await Promise.resolve();
+    s.steps.push("checkpoint");
+  };
+  await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "checkpoint", "land", "poll"]);
+});
+
+test("uploadLandPoll skips the checkpoint on upload failure and skips polling on checkpoint failure", async () => {
+  const failedUpload = sequence({ uploadError: "upload failed" });
+  failedUpload.checkpoint = async () => assert.fail("no build was uploaded");
+  await uploadLandPoll(failedUpload);
+  assert.deepEqual(failedUpload.steps, ["upload"]);
+
+  const s = sequence();
+  s.checkpoint = async () => { throw new Error("Linear unavailable"); };
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land"]);
+  assert.equal(result.landing.landed, true);
+  assert.match(result.error, /Linear unavailable/);
+});
+
 test("uploadLandPoll still lands the bump when processing fails or times out (TKL-774 verify)", async () => {
   const s = sequence({ pollError: "Build 20 was not VALID after 40 minutes." });
   const result = await uploadLandPoll(s);
