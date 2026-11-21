@@ -52,6 +52,8 @@ struct AICoachApp: App {
         } else if let state = UserDefaults.standard.string(forKey: "widgets") {
             // `-widgets workout` (rest, done, setup, nodata): the today widget's families in that state (TKL-802).
             WidgetGallery(state: state)
+        } else if UserDefaults.standard.bool(forKey: "haptics") {
+            HapticGallery()
         } else {
             RootView()
         }
