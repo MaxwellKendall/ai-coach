@@ -3,8 +3,8 @@
 // `--dry-run` does the local checks and the read-only App Store Connect calls, and does not upload,
 // change the listing, refresh the prod review account, deploy the video, or submit.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Asc, loadAscEnv } from "./asc.mjs";
 import { loadEnv } from "./load-env.mjs";
@@ -39,6 +39,7 @@ import {
 } from "./subscriptions.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const checkpointCommand = process.env.RELEASE_UPLOAD_CHECKPOINT;
 process.chdir(root);
 loadEnv();
 
@@ -69,6 +70,12 @@ if (products) {
 
 // Subscription and listing failures are added with blocksUpload: false, so they never stop a TestFlight build (TKL-795).
 const failures = createFailures();
+if (!dryRun && checkpointCommand) {
+  if (!isAbsolute(checkpointCommand)) {
+    throw new Error("RELEASE_UPLOAD_CHECKPOINT must be the absolute path of an executable.");
+  }
+  accessSync(checkpointCommand, constants.X_OK);
+}
 const notReady = [];
 // Upload went through but the bump commit is not on origin/main: reported, and the run exits 1, but the later steps still run.
 const unlanded = [];
@@ -182,10 +189,22 @@ if (!dryRun && !failures.blocksUpload()) {
 }
 
 if (!dryRun && !failures.blocksUpload()) {
-  // Land the bump as soon as the upload succeeds: the number is used up even if processing then fails.
+  // Record the upload and land the bump before polling: a successful upload uses up the build number.
+  const archiveSha = git(["rev-parse", "HEAD"]);
   const uploaded = await uploadLandPoll({
-    upload: () => archiveAndUpload(buildNumber),
+    upload: async () => {
+      await archiveAndUpload(buildNumber);
+      console.log(`Uploaded TestFlight build ${buildNumber} (${archiveSha}).`);
+    },
     land: () => landBumpCommit(buildNumber, (command, args) => capture(command, args)),
+    checkpoint: checkpointCommand ? async () => {
+      try {
+        const code = await run(checkpointCommand, [String(buildNumber), archiveSha]);
+        if (code !== 0) throw new Error(`checkpoint exited ${code}`);
+      } catch (error) {
+        throw new Error(`Build ${buildNumber} (${archiveSha}) was uploaded, but its checkpoint failed (${error.message}). Recover the checkpoint and poll this build without rerunning release.`);
+      }
+    } : undefined,
     poll: () => pollBuild(asc, store.app.id, buildNumber),
   });
   if (uploaded.landing?.landed) console.log(uploaded.landing.message);

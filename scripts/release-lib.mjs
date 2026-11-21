@@ -136,16 +136,68 @@ export function landBumpCommit(number, exec) {
 }
 
 /**
+ * Finish landing the bump identified by a confirmed upload checkpoint.
+ * The release worktree may be gone; the archived commit can live in any
+ * checkout of this repository. This operation never changes its HEAD.
+ */
+export function recoverUploadedBump(number, sha, exec) {
+  if (!/^[1-9][0-9]*$/.test(number) || !/^[0-9a-f]{40}$/.test(sha)) {
+    throw new Error("Expected the build number and full archive SHA from the upload checkpoint.");
+  }
+  function run(command, args) {
+    const result = exec(command, args);
+    if (result.code !== 0) {
+      throw new Error(`${command} ${args.join(" ")} failed: ${String(result.stderr || result.stdout || "").trim()}`);
+    }
+    return result.stdout;
+  }
+  function mainBuild() {
+    run("git", ["fetch", "--quiet", "origin", "main"]);
+    return Number(bumpBuildNumber(run("git", ["show", "origin/main:project.yml"])).from);
+  }
+  if (mainBuild() >= Number(number)) return;
+
+  const archived = run("git", ["show", `${sha}:project.yml`]);
+  const previous = run("git", ["show", `${sha}^:project.yml`]);
+  const expected = bumpBuildNumber(previous);
+  const changed = run("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", sha]).trim();
+  if (changed !== "project.yml" || expected.to !== number || expected.yaml !== archived) {
+    throw new Error(`Archive ${sha} is not the isolated build ${number} bump.`);
+  }
+
+  const branch = `release/build-${number}`;
+  run("git", ["push", "origin", `${sha}:refs/heads/${branch}`]);
+  const existing = run("gh", ["pr", "list", "--base", "main", "--head", branch,
+    "--json", "number", "--jq", ".[0].number // empty"]).trim();
+  if (!existing) {
+    run("gh", ["pr", "create", "--base", "main", "--head", branch,
+      "--title", `Build ${number}: project.yml matches the upload`,
+      "--body", `Recover the build-number bump for the confirmed App Store Connect upload of build ${number} (${sha}).`]);
+  }
+  run("gh", ["pr", "merge", existing || branch, "--squash", "--delete-branch"]);
+  if (mainBuild() < Number(number)) {
+    throw new Error(`Build ${number} is uploaded but its bump is still missing from origin/main.`);
+  }
+}
+
+/**
  * TKL-774: the upload consumes the build number, so the bump lands right after it, before
  * processing is polled; a poll error or timeout must not leave origin/main one build behind.
- * upload/poll are async and throw on failure; land returns landBumpCommit's { landed, message }.
+ * The optional async checkpoint runs after upload. The bump is landed even if it fails.
+ * Upload, checkpoint and poll throw on failure; land returns { landed, message }.
  * Returns { buildId, landing, error }: landing is undefined only when the upload failed.
  */
-export async function uploadLandPoll({ upload, land, poll }) {
+export async function uploadLandPoll({ upload, land, checkpoint, poll }) {
   try {
     await upload();
   } catch (error) {
     return { buildId: undefined, landing: undefined, error: error.message };
+  }
+  let checkpointError;
+  try {
+    await checkpoint?.();
+  } catch (error) {
+    checkpointError = error;
   }
   let landing;
   try {
@@ -154,6 +206,7 @@ export async function uploadLandPoll({ upload, land, poll }) {
     landing = { landed: false, message: `The build is uploaded, but landing its bump threw: ${error.message}` };
   }
   try {
+    if (checkpointError) throw checkpointError;
     return { buildId: await poll(), landing, error: undefined };
   } catch (error) {
     return { buildId: undefined, landing, error: error.message };
