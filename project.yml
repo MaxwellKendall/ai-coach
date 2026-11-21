@@ -38,6 +38,7 @@ targetTemplates:
       path: App/Info.plist
       properties:
         UIBackgroundModes: [location]
+        CADisableMinimumFrameDurationOnPhone: true
         # TKL-802: the today widget opens barbrabell://today, and its Start barbrabell://start.
         CFBundleURLTypes:
           - CFBundleURLName: com.maxwellkendall.aicoach
