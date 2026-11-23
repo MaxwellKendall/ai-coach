@@ -24,6 +24,7 @@
     "coach-stats": "tsx scripts/coachStats.ts",
     "checkpoint": "tsx scripts/coachStats.ts",
     "monetization": "tsx scripts/monetization.ts",
+    "funnel": "tsx scripts/funnel.ts",
     "lifter-demo": "tsx scripts/lifter-demo.ts"
   },
   "devDependencies": {

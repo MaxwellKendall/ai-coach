@@ -147,6 +147,8 @@ struct WelcomeView: View {
                 .modifier(Rise(shown: entered, step: 0))
             phone.padding(.top, 18).modifier(Rise(shown: entered, step: 1))
             Button {
+                // TKL-466: the funnel's first step after the hero.
+                if profiles.first?.programStart == nil { Funnel.track(.started) }
                 withAnimation(.settle) { if profiles.first?.programStart == nil { picking = true } else { onDone() } }
             } label: {
                 Text("Start My Transformation").font(.headline).frame(maxWidth: .infinity, minHeight: 56)
@@ -179,7 +181,11 @@ struct WelcomeView: View {
             .modifier(Rise(shown: entered, step: 3))
         }
         .frame(maxWidth: .infinity)
-        .onAppear { if revealed { entered = true } }
+        .onAppear {
+            if revealed { entered = true }
+            // TKL-466: the funnel's denominator, a first launch; the server counts each install once.
+            Funnel.track(.screenViewed, "hero")
+        }
         .onChange(of: revealed) { _, now in if now { entered = true } }
         .task(id: entered) { await cycleExamples() }
         .sheet(isPresented: $restoring) { SignInSheet(reason: "Sign in to pick up your program.").presentationDetents([.medium]) }

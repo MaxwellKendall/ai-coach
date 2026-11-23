@@ -85,7 +85,11 @@ struct StartPaywall: View {
             .padding(.horizontal, 24)
             // FIT-454: freemium's way past it, into the free app; hard mode has none.
             if Monetization.current == .freemium {
-                Button("Not Now", action: onDone)
+                Button("Not Now") {
+                    Funnel.track(.paywallDismissed)
+                    Funnel.track(.completed, "not_now")
+                    onDone()
+                }
                     .font(.subheadline).foregroundStyle(Color.inkMuted)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .accessibilityIdentifier("paywall.notNow")
@@ -95,8 +99,10 @@ struct StartPaywall: View {
         }
         .screenBackground()
         .task { await load() }
+        .onAppear { Funnel.track(.paywallViewed) }
+        .onChange(of: selected) { _, now in Funnel.track(.planSelected, StoreProducts.funnelName(now)) }
         .onChange(of: pro.lifterPro || pro.coachPro, initial: true) { _, has in if has { onDone() } }
-        .sheet(isPresented: $coach) { PaywallView(plan: .coach) }
+        .sheet(isPresented: $coach) { PaywallView(plan: .coach, tracksOnboarding: true) }
     }
 
     private func option(_ product: Product, badge: String?) -> some View {
@@ -201,13 +207,21 @@ struct StartPaywall: View {
         working = true
         message = nil
         defer { working = false }
+        let name = StoreProducts.funnelName(product.id)
+        Funnel.track(.purchaseStarted, name)
         do {
             switch try await pro.buy(product, with: purchase) {
-            case .bought: onDone()
-            case .pending: message = "Waiting for approval. Lifter Pro starts as soon as it’s approved."
-            case .cancelled: break
+            case .bought:
+                Funnel.track(.purchaseCompleted, name)
+                Funnel.track(.completed, "purchase")
+                onDone()
+            case .pending:
+                Funnel.track(.purchaseFailed, "pending")
+                message = "Waiting for approval. Lifter Pro starts as soon as it’s approved."
+            case .cancelled: Funnel.track(.purchaseFailed, "cancelled")
             }
         } catch {
+            Funnel.track(.purchaseFailed, "error")
             message = error.localizedDescription
         }
     }
@@ -218,7 +232,10 @@ struct StartPaywall: View {
         defer { working = false }
         do {
             try await pro.restore()
-            if !pro.lifterPro && !pro.coachPro { message = "No subscription to restore on this Apple Account." }
+            if !pro.lifterPro && !pro.coachPro { message = "No subscription to restore on this Apple Account." } else {
+                Funnel.track(.purchaseRestored)
+                Funnel.track(.completed, "restore")
+            }
         } catch {
             message = error.localizedDescription
         }

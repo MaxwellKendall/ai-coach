@@ -47,6 +47,7 @@ For program/week evals only: `EVAL_RUN=<label>` keeps a repeat run beside the ot
 - Dashboard: `cd infra && AWS_PROFILE=aicoach-dev npm run dashboard-config` (writes `web/public/config.json` from AICoach-dev), then from the repo root `npm --prefix web run dev` → http://localhost:5173 (unverified).
 - Share pages from sample data: `npm --prefix infra run web` → http://localhost:8787 (unverified).
 - The MCP server and backend run only as Lambdas, on `AICoach-dev` (`dev.barbrabell.com/mcp`) and `AICoach-prod`; there is no local server. Test sessions: `AWS_PROFILE=aicoach-dev npm --prefix infra run buddy -- coach`.
+- First-launch funnel (TKL-466): the app's `Core/Cloud/Funnel.swift` posts anonymous events (random install id + strategy, no name/age/answers) to `/events` (`infra/lambda/funnel.ts`, rules in `shared/funnel.ts`); `AWS_PROFILE=aicoach-dev npm --prefix infra run funnel -- STAGE [YYYY-MM-DD]` prints each step and first-launch-to-paid per strategy against the 11% benchmark. UI tests and `-demo` only write `funnel.log` in UserDefaults.
 - Demo accounts (sign in with email; passwords in the gitignored `infra/.demo-accounts.STAGE`): `npm --prefix infra run coach-demo -- STAGE [--new-password]` makes coach@ (Coach Pro, 10 clients) and client@ (Sam); `npm --prefix infra run lifter-demo -- STAGE [--new-password]` makes lifter@ (Jordan, solo, Lifter Pro, 3 weeks logged). Both reset the accounts' training to today. App Review's review@ is coached by coach@ (`appstore/review.json`).
 
 ## Deploy (prod)

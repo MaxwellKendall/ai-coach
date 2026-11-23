@@ -35,6 +35,11 @@ enum StoreProducts {
     static let lifterMonthlyFallback = "$5.99"
     static let lifterPerMonthFallback = "$3.33"
 
+    /// TKL-466: the product as the funnel names it (shared/funnel.ts PRODUCTS).
+    static func funnelName(_ productID: String) -> String? {
+        [lifterYearly: "lifter_yearly", lifterMonthly: "lifter_monthly", coachYearly: "coach_yearly", coachMonthly: "coach_monthly"][productID]
+    }
+
     static func plan(of productID: String) -> Plan? {
         Plan.allCases.first { $0.products.contains(productID) }
     }

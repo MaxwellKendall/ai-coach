@@ -71,7 +71,11 @@ struct AICoachApp: App {
                 .task { await account.refresh() }
                 .task { await pro.refresh() }
                 // FIT-454: hard paywall or freemium, as the server says.
-                .task { await Monetization.refresh() }
+                // TKL-466: the funnel sends once the switch is read, so an install's cohort is the strategy it saw.
+                .task {
+                    await Monetization.refresh()
+                    await Funnel.start()
+                }
                 .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
                     TodayWidget.refresh(container.mainContext)
                 }
