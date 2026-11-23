@@ -13,9 +13,11 @@ struct NewGoalSheet: View {
     /// TKL-845: from the Program tab without a program: the target step also asks a date, and the goal and date make the
     /// program (Planner.startProgram).
     var building = false
+    var existingGoals: [Goal] = []
     var onAdd: (Goal) -> Void = { _ in }
 
     @State private var picked: GoalOption?
+    @State private var existing: Goal?
     @State private var target: Double = 0
     @State private var start: Double?
     @State private var by = NewGoal.suggestedDate(now: .now)
@@ -23,12 +25,52 @@ struct NewGoalSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let picked { targetStep(picked) } else { optionList }
+                if let existing {
+                    existingDateStep(existing)
+                } else if !existingGoals.isEmpty {
+                    List(existingGoals) { goal in
+                        Button(Self.title(for: goal)) {
+                            by = max(earliest, goal.deadline ?? NewGoal.suggestedDate(now: .now))
+                            existing = goal
+                        }
+                    }
+                    .navigationTitle("Choose a goal")
+                } else if let picked {
+                    targetStep(picked)
+                } else {
+                    optionList
+                }
             }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
+    }
+
+    static func title(for goal: Goal) -> String {
+        GoalOption.all.first { $0.metric == goal.metric }?.title ?? Goal.label(goal.metric)
+    }
+
+    private func existingDateStep(_ goal: Goal) -> some View {
+        VStack(alignment: .leading) {
+            Text(Self.title(for: goal)).font(.title2.weight(.bold))
+            DatePicker("By", selection: $by, in: earliest..., displayedComponents: .date)
+                .font(.body.weight(.semibold))
+                .padding(.top, 28)
+            Spacer()
+            Button {
+                guard let profile = profiles.first else { return }
+                try? Planner.startProgram(by: by, goal: goal, profile: profile, in: context)
+                onAdd(goal)
+                dismiss()
+            } label: {
+                Text("Build My Weeks").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+            }
+            .buttonStyle(.primary)
+            .accessibilityIdentifier("goal.build")
+        }
+        .padding(24)
+        .navigationTitle("Set a date")
     }
 
     private var optionList: some View {

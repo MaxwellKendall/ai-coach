@@ -30,7 +30,8 @@ enum Seeder {
                                         measurements: seed.measurements, note: seed.note))
             }
         }
-        if Backend.current == .dev, try context.fetchCount(FetchDescriptor<Goal>()) == 0, bundle.url(forResource: "goals", withExtension: "json") != nil {
+        if Backend.current == .dev, !DebugRole.skipSeedGoals,
+           try context.fetchCount(FetchDescriptor<Goal>()) == 0, bundle.url(forResource: "goals", withExtension: "json") != nil {
             for (index, seed) in try decode([GoalSeed].self, "goals", bundle).enumerated() {
                 // Goals list in createdAt order, so keep the file's order.
                 context.insert(Goal(kind: seed.kind, metric: seed.metric, target: seed.target, unit: seed.unit,
