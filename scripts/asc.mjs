@@ -1,6 +1,8 @@
 import { createSign } from "node:crypto";
 import { readFileSync } from "node:fs";
 
+const TOKEN_LIFETIME_SECONDS = 15 * 60;
+const TOKEN_REFRESH_BUFFER_SECONDS = 2 * 60;
 const BASE = "https://api.appstoreconnect.apple.com";
 
 export function loadAscEnv(env = process.env) {
@@ -23,7 +25,7 @@ export function signJwt({ keyId, issuerId, keyPath, now = Math.floor(Date.now() 
   const payload = b64url(JSON.stringify({
     iss: issuerId,
     iat: now,
-    exp: now + 15 * 60,
+    exp: now + TOKEN_LIFETIME_SECONDS,
     aud: "appstoreconnect-v1",
   }));
   const data = `${header}.${payload}`;
@@ -36,14 +38,23 @@ export class Asc {
   constructor(auth, { dryRun = false } = {}) {
     this.auth = auth;
     this.dryRun = dryRun;
-    this.token = signJwt(auth);
+    this.refreshToken(Math.floor(Date.now() / 1000));
     this.planned = [];
+  }
+
+  refreshToken(now) {
+    this.token = signJwt({ ...this.auth, now });
+    this.tokenExpiresAt = now + TOKEN_LIFETIME_SECONDS;
   }
 
   async request(method, path, body, attempt = 0) {
     if (method !== "GET" && method !== "HEAD" && this.dryRun) {
       this.planned.push({ method, path });
       return { dryRun: true };
+    }
+    const now = Math.floor(Date.now() / 1000);
+    if (now >= this.tokenExpiresAt - TOKEN_REFRESH_BUFFER_SECONDS) {
+      this.refreshToken(now);
     }
     const res = await fetch(BASE + path, {
       method,
