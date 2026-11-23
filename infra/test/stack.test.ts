@@ -2,12 +2,18 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
+import { BUNDLING_STACKS } from "aws-cdk-lib/cx-api";
 import { beforeAll, describe, expect, it } from "vitest";
 import { AICoachStack, type IdentityProvider, type Stage } from "../lib/stack.ts";
 
+// These tests inspect CloudFormation templates. CDK can synthesize their resource
+// wiring without running esbuild for every Lambda asset in each test app.
+const templateApp = (context: Record<string, unknown> = {}) =>
+  new App({ context: { ...context, [BUNDLING_STACKS]: [] } });
+
 const synth = (stage: Stage, identityProviders: IdentityProvider[]) =>
   Template.fromStack(
-    new AICoachStack(new App(), `AICoach-${stage}`, {
+    new AICoachStack(templateApp(), `AICoach-${stage}`, {
       env: { account: "111111111111", region: "us-east-1" },
       stage,
       identityProviders,
@@ -263,8 +269,8 @@ describe("ops", () => {
 
 describe("web dashboard (FIT-127)", () => {
   const synthApp = () => {
-    const app = new App({
-      context: { "hosted-zone:account=111111111111:domainName=example.com:region=us-east-1": { Id: "/hostedzone/Z1", Name: "example.com." } },
+    const app = templateApp({
+      "hosted-zone:account=111111111111:domainName=example.com:region=us-east-1": { Id: "/hostedzone/Z1", Name: "example.com." },
     });
     return Template.fromStack(new AICoachStack(app, "AICoach-dev", {
       env: { account: "111111111111", region: "us-east-1" }, stage: "dev", identityProviders: [], alertEmail: "a@example.com",
@@ -311,8 +317,8 @@ describe("web dashboard (FIT-127)", () => {
 describe("share pages (FIT-105)", () => {
   const web = { zone: "example.com", hosts: ["example.com", "share.example.com", "join.example.com"] };
   const synthWeb = () => {
-    const app = new App({
-      context: { "hosted-zone:account=111111111111:domainName=example.com:region=us-east-1": { Id: "/hostedzone/Z1", Name: "example.com." } },
+    const app = templateApp({
+      "hosted-zone:account=111111111111:domainName=example.com:region=us-east-1": { Id: "/hostedzone/Z1", Name: "example.com." },
     });
     return Template.fromStack(new AICoachStack(app, "AICoach-prod", {
       env: { account: "111111111111", region: "us-east-1" }, stage: "prod", identityProviders: [], alertEmail: "a@example.com", web,
