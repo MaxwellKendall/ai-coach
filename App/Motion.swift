@@ -35,6 +35,13 @@ extension SensoryFeedback {
     try withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : animation, body)
 }
 
+/// TKL-933: a cover or sheet going up or down. With Reduce Motion on it is there, or gone, at once.
+@MainActor func withPresentation(reduceMotion: Bool, _ body: () -> Void) {
+    var transaction = Transaction()
+    transaction.disablesAnimations = reduceMotion
+    withTransaction(transaction, body)
+}
+
 /// Spatial motion becomes a fade with Reduce Motion on (the Appllama design skill's motion laws).
 private struct MotionTransition: ViewModifier {
     let transition: AnyTransition
