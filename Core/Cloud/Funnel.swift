@@ -61,7 +61,7 @@ enum Funnel {
     nonisolated static let maxQueued = 100
     private static let queueKey = "funnel.queue"
     private static let installKey = "funnel.install"
-    private static let cohortKey = "funnel.strategy"
+    nonisolated private static let cohortKey = "funnel.strategy"
     private static let watchKey = "funnel.watch"
     private static var ready = false
     private static var sending = false
