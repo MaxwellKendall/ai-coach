@@ -53,3 +53,21 @@ test("a normal exit restores the stub once", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("an early recorder exit is reported even if it has already closed", async () => {
+  const { startRecorder } = await import("./demo-video-lib.mjs");
+  const recorder = startRecorder(process.execPath, ["-e", "console.error('Resource busy'); process.exit(1)"]);
+  await assert.rejects(recorder.waitForStart(), /Resource busy/);
+  await assert.rejects(recorder.stop(), /Resource busy/);
+});
+
+test("a recorder that starts can be stopped and finalized", async () => {
+  const { startRecorder } = await import("./demo-video-lib.mjs");
+  const script = "process.on('SIGINT', () => process.exit(0)); console.error('Recording started'); setInterval(() => {}, 1000)";
+  const recorder = startRecorder(process.execPath, ["-e", script]);
+  try {
+    await recorder.waitForStart();
+  } finally {
+    await recorder.stop();
+  }
+});
