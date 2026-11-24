@@ -32,4 +32,33 @@ struct NewGoalTests {
         #expect(NewGoal.suggested(GoalOption.with(id: "5k")!, from: 1800) == 1740)
         #expect(NewGoal.suggested(GoalOption.with(id: "bench")!, from: nil) == 185)
     }
+
+    /// TKL-927: two goals on one lift read apart by their targets, in the chooser and before the date is saved.
+    @Test func anExistingGoalReadsWithItsTarget() {
+        let low = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 225, unit: "lb")
+        let high = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 275, unit: "lb")
+        #expect(NewGoal.label(low) == "Squat more · 225 lb")
+        #expect(NewGoal.label(high) == "Squat more · 275 lb")
+        #expect(NewGoal.label(low) != NewGoal.label(high))
+        #expect(NewGoal.label(Goal(kind: .training, metric: "pull-up.reps", target: 12, unit: "reps")) == "More pull-ups · 12 reps")
+        #expect(NewGoal.label(Goal(kind: .training, metric: Running.metric(meters: 5000), target: 1560, unit: "s")) == "Run a faster 5K · 26:00")
+    }
+
+    /// TKL-927: the date builds weeks only while there's still no program (one may sync in while the sheet is open)
+    /// and the goal is still active.
+    @Test func aDateBuildsWeeksOnlyWithoutAProgramAndForAnActiveGoal() {
+        let goal = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 275, unit: "lb")
+        let profile = Profile(age: 40, weightLb: 190)
+        profile.programStart = nil
+        profile.targetDate = nil
+        #expect(NewGoal.canBuildProgram(for: goal, profile: profile))
+        #expect(!NewGoal.canBuildProgram(for: goal, profile: nil))
+        let synced = Profile(age: 40, weightLb: 190)
+        synced.programStart = start
+        synced.targetDate = start.addingTimeInterval(86_400 * 7 * 8)
+        #expect(synced.program != nil)
+        #expect(!NewGoal.canBuildProgram(for: goal, profile: synced))
+        let dropped = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 275, unit: "lb", status: .abandoned)
+        #expect(!NewGoal.canBuildProgram(for: dropped, profile: profile))
+    }
 }

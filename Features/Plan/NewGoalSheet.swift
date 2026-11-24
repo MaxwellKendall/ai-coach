@@ -29,7 +29,7 @@ struct NewGoalSheet: View {
                     existingDateStep(existing)
                 } else if !existingGoals.isEmpty {
                     List(existingGoals) { goal in
-                        Button(Self.title(for: goal)) {
+                        Button(NewGoal.label(goal)) {
                             by = max(earliest, goal.deadline ?? NewGoal.suggestedDate(now: .now))
                             existing = goal
                         }
@@ -53,13 +53,17 @@ struct NewGoalSheet: View {
 
     private func existingDateStep(_ goal: Goal) -> some View {
         VStack(alignment: .leading) {
-            Text(Self.title(for: goal)).font(.title2.weight(.bold))
+            Text(NewGoal.label(goal)).font(.title2.weight(.bold))
             DatePicker("By", selection: $by, in: earliest..., displayedComponents: .date)
                 .font(.body.weight(.semibold))
                 .padding(.top, 28)
             Spacer()
             Button {
-                guard let profile = profiles.first else { return }
+                // A program that synced in meanwhile, or a goal dropped meanwhile, keeps what it has.
+                guard NewGoal.canBuildProgram(for: goal, profile: profiles.first), let profile = profiles.first else {
+                    dismiss()
+                    return
+                }
                 try? Planner.startProgram(by: by, goal: goal, profile: profile, in: context)
                 onAdd(goal)
                 dismiss()

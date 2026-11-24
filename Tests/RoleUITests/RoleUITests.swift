@@ -468,8 +468,11 @@ final class RoleUITests: XCTestCase {
         XCTAssertEqual(set.label, "Set a date")
         shot(app, "noprogram-existing-goal")
         set.tap()
-        app.buttons["Squat more"].tap()
+        // TKL-927: the chooser and the date step show the target, so two goals on one lift read apart.
+        app.buttons["Squat more · 245 lb"].tap()
         XCTAssertTrue(app.datePickers.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Squat more · 245 lb"].exists, "The date step doesn't name the goal's target")
+        shot(app, "noprogram-existing-goal-date")
         app.buttons["goal.build"].tap()
         XCTAssertTrue(app.buttons["Whole program"].waitForExistence(timeout: 10))
     }
