@@ -667,7 +667,7 @@
     },
     {
       "id": "NewGoalSheet",
-      "title": "New Goal",
+      "title": "Choose a goal",
       "kind": "sheet",
       "file": "Features/Plan/NewGoalSheet.swift",
       "roles": [
