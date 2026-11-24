@@ -61,6 +61,38 @@ struct PlanRevealHeadlineTests {
         return calendar.date(from: DateComponents(year: 2027, month: 1, day: 16))!
     }()
 
+    @Test func revealTimingKeepsStartWithinTwoSeconds() {
+        #expect(PlanReveal.MotionStage.title < .numbers)
+        #expect(PlanReveal.MotionStage.numbers < .line)
+        #expect(PlanReveal.MotionStage.line < .date)
+        #expect(PlanReveal.MotionStage.date < .details)
+        #expect(PlanReveal.MotionStage.details < .start)
+        #expect(PlanReveal.MotionStage.start.elapsed + .milliseconds(300) < .seconds(2))
+    }
+
+    @Test func chartShowsTheDeloadWithoutChangingThePromise() throws {
+        let program = try #require(ReadyProgram.named("full-body-3"))
+        let projection = try #require(program.projection(days: 3, deloads: program.deloads))
+        let loads = PlanReveal.chartLoads(projection.loads, deloads: program.deloads)
+        #expect(loads[7] < loads[6] && loads[7] < loads[8])
+        #expect(loads.first == projection.start && loads.last == projection.end)
+
+        let fewerDays = try #require(program.projection(days: 2, deloads: program.deloads))
+        #expect(PlanReveal.chartLoads(fewerDays.loads, deloads: program.deloads) != loads)
+    }
+
+    @Test func chartMorphKeepsItsSamplesAndInterpolatesBetweenProjections() {
+        let before = PlanReveal.ChartSamples(loads: [45, 65, 55, 120])
+        let after = PlanReveal.ChartSamples(loads: [45, 55, 65, 95, 85, 100, 125])
+        #expect(before.values.count == after.values.count)
+        var half = after - before
+        half.scale(by: 0.5)
+        let midway = before + half
+        #expect(midway.values[32] == (before.values[32] + after.values[32]) / 2)
+        #expect(midway.values[32] != before.values[32])
+        #expect(midway.values.first == 0 && midway.values.last == 1)
+    }
+
     @Test func promisesTheLiftByTheLastDay() {
         let program = ReadyProgram.named("full-body-3")!
         let reveal = program.projection(days: 3, deloads: program.deloads)

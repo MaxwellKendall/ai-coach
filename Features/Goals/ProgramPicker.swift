@@ -216,6 +216,8 @@ private struct KitList: View {
 /// other program, are below it.
 private struct ProgramChoice: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var programs
     @Query private var profiles: [Profile]
     @Query private var templates: [Template]
     @State var have: Set<String>
@@ -231,6 +233,15 @@ private struct ProgramChoice: View {
     @State private var failure: String?
     /// Following a program already: starting one begins again at week 1, so it's asked first.
     @State private var confirming = false
+    @State private var stage: PlanReveal.MotionStage = .title
+    @State private var titleProgress = 0.0
+    @State private var haptics = HapticPlayer()
+    @State private var successFeedback = false
+    @State private var didPlayRevealFeedback = false
+    @State private var didStart = false
+    @State private var startCheck = 0.0
+
+    private var visibleStage: PlanReveal.MotionStage { reduceMotion ? .start : stage }
 
     private var matches: [ReadyProgram] { ReadyProgram.matches(have: have, days: days, goal: goal, lifted: lifted) }
     private var program: ReadyProgram? { selected ?? matches.first }
@@ -240,26 +251,24 @@ private struct ProgramChoice: View {
         ScrollViewReader { scroll in
             ScrollView {
                 if let program {
-                    VStack(alignment: .leading, spacing: 0) {
-                        header(program).id("top")
-                        daysRow(program).padding(.top, 24)
-                        DisclosureGroup {
-                            KitList(have: $have).padding(.top, 12)
-                        } label: {
-                            LabeledContent("Equipment", value: KitList.summary(have)).font(.headline)
-                        }
-                        .padding(.top, 24)
-                        week(program).padding(.top, 28)
-                        others(program, scroll: scroll).padding(.top, 36)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    choice(program, scroll: scroll)
                 }
             }
         }
         .toolbarTitleDisplayMode(.inline)
-        .safeAreaBar(edge: .bottom) { if let program { startBar(program) } }
+        .safeAreaBar(edge: .bottom) {
+            if let program {
+                startBar(program)
+                    .offset(y: visibleStage >= .start ? 0 : 24)
+                    .opacity(visibleStage >= .start ? 1 : 0)
+                    .allowsHitTesting(visibleStage >= .start)
+                    .accessibilityHidden(visibleStage < .start)
+            }
+        }
+        .allowsHitTesting(!didStart)
+        .hapticFallback(for: haptics)
+        .sensoryFeedback(.success, trigger: successFeedback)
+        .task(id: reduceMotion) { await revealPlan() }
         .onAppear {
             guard selected == nil else { return }
             let profile = profiles.first
@@ -269,24 +278,88 @@ private struct ProgramChoice: View {
             select(current ?? matches.first, days: current != nil ? profile?.trainingDays : nil)
         }
         // Equipment changed here: the best program for it, as the questions would have picked.
-        .onChange(of: have) { withAnimation(.settle) { select(matches.first) } }
+        .onChange(of: have) { withMotion(.settle) { select(matches.first) } }
+    }
+
+    private func choice(_ program: ReadyProgram, scroll: ScrollViewProxy) -> some View {
+        let detailsVisible = visibleStage >= .details
+        return VStack(alignment: .leading, spacing: 0) {
+            header(program)
+                .matchedGeometryEffect(id: program.slug, in: programs, properties: .frame)
+                .id("top")
+            daysRow(program).padding(.top, 24).modifier(RevealDetail(shown: detailsVisible, order: 2))
+            DisclosureGroup {
+                KitList(have: $have).padding(.top, 12)
+            } label: {
+                LabeledContent("Equipment", value: KitList.summary(have)).font(.headline)
+            }
+            .padding(.top, 24)
+            .modifier(RevealDetail(shown: detailsVisible, order: 2))
+            week(program).padding(.top, 28).modifier(RevealDetail(shown: detailsVisible, order: 1))
+            others(program, scroll: scroll).padding(.top, 36).modifier(RevealDetail(shown: detailsVisible, order: 3))
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 24)
+    }
+
+    private func revealPlan() async {
+        guard stage != .start else { return }
+        if reduceMotion {
+            stage = .start
+            titleProgress = 1
+            if !didPlayRevealFeedback { successFeedback = true }
+            return
+        }
+        let clock = ContinuousClock()
+        let began = clock.now
+        do {
+            for frame in 1...10 {
+                try await clock.sleep(until: began + .milliseconds(frame * 20))
+                titleProgress = Double(frame) / 10
+            }
+            for next in PlanReveal.MotionStage.allCases.dropFirst() where next > stage {
+                try await clock.sleep(until: began + next.elapsed)
+                if next == .crescendo, !didPlayRevealFeedback, program?.mainLift != nil {
+                    haptics.play(.crescendo)
+                    didPlayRevealFeedback = true
+                }
+                if next == .date, !didPlayRevealFeedback {
+                    successFeedback = true
+                    didPlayRevealFeedback = true
+                }
+                withAnimation(next == .line ? .reveal : .tap) { stage = next }
+            }
+        } catch is CancellationError {
+            // The navigation task stops when its screen leaves or Reduce Motion changes.
+        } catch {
+            stage = .start
+            titleProgress = 1
+        }
     }
 
     /// FIT-297: the outcome first: the plan's promise from their own set and the line to it, then the program.
     private func header(_ program: ReadyProgram) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             PlanReveal(program: program, days: trainingDays.count, recent: program.recent(in: recent),
-                       ends: Calendar.current.date(byAdding: .day, value: program.weeks * 7 - 1, to: .now) ?? .now)
-            Text(program.summary).font(.body).foregroundStyle(Color.inkMuted).padding(.top, 14)
-            Text([Self.level(program), "\(program.weeks) weeks", "about \(program.minutes) min a session"].joined(separator: " · "))
-                .font(.subheadline).padding(.top, 12)
+                       ends: Calendar.current.date(byAdding: .day, value: program.weeks * 7 - 1, to: Week.start(of: .now)) ?? .now,
+                       stage: visibleStage, titleProgress: reduceMotion ? 1 : titleProgress)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(program.summary).font(.body).foregroundStyle(Color.inkMuted)
+                Text([Self.level(program), "\(program.weeks) weeks", "about \(program.minutes) min a session"].joined(separator: " · "))
+                    .font(.subheadline)
+            }
+            .padding(.top, 14)
+            .modifier(RevealDetail(shown: visibleStage >= .details, order: 0))
         }
     }
 
     private func daysRow(_ program: ReadyProgram) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Training days").font(.headline)
-            DayPicker(days: $trainingDays)
+            DayPicker(days: Binding(get: { trainingDays }, set: { updated in
+                withMotion(.settle) { trainingDays = updated }
+            }))
             let counts = program.days.map(String.init)
             if !program.days.contains(trainingDays.count) {
                 Text("Pick \(counts.count == 1 ? counts[0] : counts.dropLast().joined(separator: ", ") + " or " + counts.last!) days.")
@@ -333,7 +406,7 @@ private struct ProgramChoice: View {
             if showsAll {
                 ForEach(rest) { row($0, scroll: scroll) }
             } else if !rest.isEmpty {
-                Button("All Programs") { withAnimation(.settle) { showsAll = true } }
+                Button("All Programs") { withMotion(.settle) { showsAll = true } }
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
@@ -341,7 +414,7 @@ private struct ProgramChoice: View {
 
     private func row(_ other: ReadyProgram, scroll: ScrollViewProxy) -> some View {
         Button {
-            withAnimation(.settle) {
+            withMotion(.settle) {
                 select(other)
                 scroll.scrollTo("top", anchor: .top)
             }
@@ -358,6 +431,7 @@ private struct ProgramChoice: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .matchedGeometryEffect(id: other.slug, in: programs, properties: .frame)
     }
 
     private func startBar(_ program: ReadyProgram) -> some View {
@@ -366,7 +440,14 @@ private struct ProgramChoice: View {
             Button {
                 if profiles.first?.programSlug == nil { start(program) } else { confirming = true }
             } label: {
-                Text("Start Program").font(.headline).frame(maxWidth: .infinity, minHeight: 54)
+                ZStack {
+                    Text("Start Program").font(.headline).opacity(didStart ? 0 : 1)
+                    StartCheckmark().trim(from: 0, to: startCheck)
+                        .stroke(style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                        .frame(width: 22, height: 16)
+                }
+                .frame(maxWidth: .infinity, minHeight: 54)
+                .accessibilityLabel("Start Program")
             }
             .buttonStyle(.primary)
             .disabled(!program.days.contains(trainingDays.count))
@@ -381,12 +462,21 @@ private struct ProgramChoice: View {
     }
 
     private func start(_ program: ReadyProgram) {
-        guard let profile = profiles.first else { return }
+        guard !didStart, let profile = profiles.first else { return }
         do {
             // FIT-281: the recent sets, while they're of this program's lifts (FIT-323: each of Strength Waves' four).
             let starts = recent.filter { program.recentLifts.contains($0.exercise) }
             try Planner.start(program, days: trainingDays, equipment: equipment, starts: starts, profile: profile, in: context)
-            onStart()
+            if reduceMotion {
+                onStart()
+            } else {
+                withAnimation(.tap, completionCriteria: .logicallyComplete) {
+                    didStart = true
+                    startCheck = 1
+                } completion: {
+                    withMotion(.settle) { onStart() }
+                }
+            }
         } catch {
             failure = "Couldn’t start the program. Try again."
         }
@@ -413,6 +503,31 @@ private struct ProgramChoice: View {
     static func level(_ program: ReadyProgram) -> String { program.level == "new" ? "New to lifting" : "Some experience" }
 
     static let places: [ReadyProgram.Place: String] = [.gym: "Barbell", .dumbbells: "Dumbbells", .bodyweight: "No equipment"]
+}
+
+private struct RevealDetail: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let shown: Bool
+    let order: Int
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 8)
+            .allowsHitTesting(shown)
+            .accessibilityHidden(!shown)
+            .animation(shown && !reduceMotion ? .tap.staggered(order) : nil, value: shown)
+    }
+}
+
+private struct StartCheckmark: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: 2, y: rect.height / 2))
+            path.addLine(to: CGPoint(x: rect.width / 3, y: rect.height - 2))
+            path.addLine(to: CGPoint(x: rect.width - 2, y: 2))
+        }
+    }
 }
 
 /// FIT-281: "Your best recent Back Squat": a hard set from the last few months, which the plan starts a little under.
