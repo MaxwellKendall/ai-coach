@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { loadEnv } from "./load-env.mjs";
 import { redact } from "./release-lib.mjs";
 import { statusBarOverride } from "./paywall-shots-lib.mjs";
+import { restoreOnStop } from "./demo-video-lib.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const secretsPath = resolve(root, "Tests/UITests/Secrets.swift");
@@ -48,7 +49,8 @@ function restore() {
     keyboardWas = undefined;
   }
 }
-process.on("exit", restore);
+// On exit and on SIGINT/SIGTERM/SIGHUP, so a stopped run never leaves the logins in Secrets.swift (TKL-908).
+restoreOnStop(restore);
 
 function scrub(text) {
   return redact(String(text), hidden);
