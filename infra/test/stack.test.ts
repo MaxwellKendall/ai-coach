@@ -1,15 +1,22 @@
 import { fileURLToPath } from "node:url";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { BUNDLING_STACKS } from "aws-cdk-lib/cx-api";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AICoachStack, type IdentityProvider, type Stage } from "../lib/stack.ts";
 
 // These tests inspect CloudFormation templates. CDK can synthesize their resource
 // wiring without running esbuild for every Lambda asset in each test app.
+// Every app writes into one temp root that afterAll removes: left to itself, CDK
+// makes a ~29 MB cdk.out* dir in $TMPDIR per synth and never deletes it (TKL-982).
+const synthRoot = mkdtempSync(join(tmpdir(), "aicoach-stack-test-"));
+afterAll(() => rmSync(synthRoot, { recursive: true, force: true }));
+let synthCount = 0;
 const templateApp = (context: Record<string, unknown> = {}) =>
-  new App({ context: { ...context, [BUNDLING_STACKS]: [] } });
+  new App({ outdir: join(synthRoot, `app-${synthCount++}`), context: { ...context, [BUNDLING_STACKS]: [] } });
 
 const synth = (stage: Stage, identityProviders: IdentityProvider[]) =>
   Template.fromStack(
@@ -27,6 +34,12 @@ beforeAll(() => {
   dev = synth("dev", []);
   prod = synth("prod", ["apple", "google"]);
 }, 120_000); // two synths, slow when other builds share the machine
+
+describe("test harness (TKL-982)", () => {
+  it("synthesizes every app inside the temp root that afterAll removes", () => {
+    expect(templateApp().outdir.startsWith(synthRoot + "/")).toBe(true);
+  });
+});
 
 describe("table", () => {
   it("has the single-table keys, GSI1, TTL, stream and backups", () => {
