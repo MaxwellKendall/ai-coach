@@ -423,7 +423,7 @@ final class RoleUITests: XCTestCase {
     /// next; next week, with nothing in it, says so. Set a goal, a target and a date make it the program.
     @MainActor
     func testLifterWithoutAProgramIsAskedForAGoalAboveThisWeekAndNext() throws {
-        let app = launch("solo", ["-noProgram", "YES", "-units", try noProgramUnits()])
+        let app = launch("solo", ["-noProgram", "YES", "-skipSeedGoals", "YES", "-units", try noProgramUnits()])
         XCTAssertEqual(tabs(app), athlete)
         openTab(app, "Program")
         XCTAssertTrue(app.staticTexts["No goal yet"].waitForExistence(timeout: 10), "No goal card")
@@ -458,6 +458,25 @@ final class RoleUITests: XCTestCase {
         shot(app, "noprogram-after-goal")
     }
 
+    @MainActor
+    func testExistingGoalCanBuildAProgram() throws {
+        let app = launch("solo", ["-noProgram", "YES", "-skipSeedGoals", "YES", "-units", try noProgramUnits(activeGoal: true)])
+        openTab(app, "Program")
+        XCTAssertTrue(app.staticTexts["Squat more"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["No goal yet"].exists)
+        let set = app.buttons["program.setGoal"]
+        XCTAssertEqual(set.label, "Set a date")
+        shot(app, "noprogram-existing-goal")
+        set.tap()
+        // TKL-927: the chooser and the date step show the target, so two goals on one lift read apart.
+        app.buttons["Squat more · 245 lb"].tap()
+        XCTAssertTrue(app.datePickers.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Squat more · 245 lb"].exists, "The date step doesn't name the goal's target")
+        shot(app, "noprogram-existing-goal-date")
+        app.buttons["goal.build"].tap()
+        XCTAssertTrue(app.buttons["Whole program"].waitForExistence(timeout: 10))
+    }
+
     /// TKL-845: a coach's client gets no goal card: the coach writes the program.
     @MainActor
     func testCoachedClientSeesNoGoalCard() {
@@ -472,7 +491,7 @@ final class RoleUITests: XCTestCase {
 
     /// Sync units for a lifter with a profile but no program, two sessions this week (today and the day after) and none
     /// next week, as `-units` reads them. Written each run, so the sessions fall in this week.
-    private func noProgramUnits() throws -> String {
+    private func noProgramUnits(activeGoal: Bool = false) throws -> String {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
         func key(_ date: Date) -> String {
@@ -494,9 +513,14 @@ final class RoleUITests: XCTestCase {
             "equipment": ["barbell", "rack", "bench", "dumbbells", "pull_up_bar"], "injuredAreas": [], "fineAreas": [:],
             "avoidExercises": [], "maxWeeklySets": 20, "style": "powerbuilding", "warmups": false, "cookWindows": [],
             "travelWeeks": [], "starts": []]
-        let units: [String: Any] = ["profile": profile,
+        var units: [String: Any] = ["profile": profile,
                                     key(today): rows(today, "Lower A", [("back-squat", 185), ("bench-press", 135)]),
                                     key(other): rows(other, "Upper A", [("deadlift", 225), ("barbell-shoulder-press", 95)])]
+        if activeGoal {
+            units["goal#\(UUID().uuidString)"] = [
+                "kind": "training", "metric": "back-squat.1rm_lb", "target": 245, "unit": "lb", "status": "active"
+            ]
+        }
         let url = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "noprogram-units.json")
         try JSONSerialization.data(withJSONObject: units).write(to: url)
         return url.path

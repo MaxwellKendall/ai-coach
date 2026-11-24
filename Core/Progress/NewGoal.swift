@@ -41,4 +41,19 @@ enum NewGoal {
     static func suggestedDate(now: Date, calendar: Calendar = .current) -> Date {
         calendar.date(byAdding: .day, value: 7 * 12 - 1, to: Week.start(of: now, calendar: calendar))!
     }
+
+    /// TKL-927: a goal they have, with its target, so two on one lift read apart: "Squat more · 275 lb".
+    static func label(_ goal: Goal) -> String {
+        guard let option = GoalOption.all.first(where: { $0.metric == goal.metric }) else {
+            return "\(Goal.label(goal.metric)) · \(Coach.number(goal.target)) \(goal.unit)".trimmingCharacters(in: .whitespaces)
+        }
+        return "\(option.title) · \(option.format(goal.target)) \(option.shownUnit)".trimmingCharacters(in: .whitespaces)
+    }
+
+    /// TKL-927: a date builds the weeks around a goal they have only while there's still no program (one may have
+    /// synced in while the sheet was open) and the goal is still active and theirs.
+    static func canBuildProgram(for goal: Goal, profile: Profile?) -> Bool {
+        guard let profile, profile.program == nil else { return false }
+        return goal.status == .active && !goal.isDeleted
+    }
 }

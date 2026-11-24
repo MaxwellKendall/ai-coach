@@ -12,6 +12,8 @@ import Synchronization
 /// YES` is a client with a sample roster.
 enum DebugRole {
     static var uiTesting: Bool { UserDefaults.standard.bool(forKey: "uiTesting") }
+    /// Let a UI test supply its own goals through sync units without loading the dogfood goals.
+    static var skipSeedGoals: Bool { uiTesting && UserDefaults.standard.bool(forKey: "skipSeedGoals") }
     /// FIT-446: `-demo YES` is the App Review demo: no debug rows or banners, and already signed in as a local demo
     /// account (`Account.demo`), so a purchase goes straight to StoreKit. Nothing reaches the server: `Cloud.run` and
     /// `SyncEngine` refuse in it. Works alongside `-uiTesting YES -role …`.

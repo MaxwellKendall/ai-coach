@@ -97,7 +97,7 @@ struct ProgramScreen: View {
                 }
             }
             .sheet(isPresented: $settingGoal) {
-                NewGoalSheet(building: true) { _ in
+                NewGoalSheet(building: true, existingGoals: activeGoals) { _ in
                     // The program's deck opens on this week, not the page the two-week deck was on.
                     selected = nil
                     toast = Toast(text: "Your weeks are built around it.")
@@ -247,22 +247,26 @@ struct ProgramScreen: View {
         }
     }
 
-    /// TKL-845: "No goal yet", and the way to the goal and date that build the weeks.
+    private var activeGoals: [Goal] { goals.filter { $0.status == .active } }
+
     private var goalCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let hasGoal = !activeGoals.isEmpty
+        return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
-                Text("?").font(.headline).foregroundStyle(Color.inkFaint)
+                Text(hasGoal ? "✓" : "?").font(.headline).foregroundStyle(Color.inkFaint)
                     .frame(width: 40, height: 40)
                     .overlay(Circle().strokeBorder(Color.inkFaint, style: StrokeStyle(lineWidth: 3, dash: [4, 4])))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("No goal yet").font(.display(20))
-                    Text("Set a goal and a date, and the weeks build around it.").foregroundStyle(Color.inkMuted)
+                    Text(hasGoal ? activeGoals.map(NewGoalSheet.title(for:)).formatted(.list(type: .and)) : "No goal yet")
+                        .font(.display(20))
+                    Text(hasGoal ? "Set a date to build your weeks around a goal." : "Set a goal and a date, and the weeks build around it.")
+                        .foregroundStyle(Color.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Button { settingGoal = true } label: {
-                Text("Set a goal").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                Text(hasGoal ? "Set a date" : "Set a goal").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
             }
             .buttonStyle(.primary)
             .accessibilityIdentifier("program.setGoal")
@@ -291,7 +295,8 @@ struct ProgramScreen: View {
             } else if !coached, dayItems(in: monday).isEmpty {
                 // TKL-845: a week with nothing in it says so.
                 Text("Nothing planned yet").font(.display(24)).padding(.top, 8)
-                Text("Set a goal above and the week plans itself.").foregroundStyle(Color.inkMuted).padding(.top, 4)
+                Text(activeGoals.isEmpty ? "Set a goal above and the week plans itself." : "Set a date above to build your weeks.")
+                    .foregroundStyle(Color.inkMuted).padding(.top, 4)
             } else {
                 sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
             }
@@ -683,7 +688,7 @@ struct ProgramScreen: View {
 
     /// The goals the program works towards: those onboarding offers.
     private var programGoals: [(goal: Goal, option: String)] {
-        goals.filter { $0.status == .active }.compactMap { goal in
+        activeGoals.compactMap { goal in
             GoalOption.all.first { $0.metric == goal.metric }.map { (goal, $0.id) }
         }
     }
