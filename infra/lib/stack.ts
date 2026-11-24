@@ -594,6 +594,17 @@ export class AICoachStack extends Stack {
       table.grant(share, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:UpdateItem", "dynamodb:PutItem");
       stripeSecret.grantRead(share);
       const url = share.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
+      // TKL-466: the first launch's funnel (shared/funnel.ts), sent before anyone signs in, so its URL takes POSTs from
+      // anyone; it keeps only known events, a random install id and counters. Never reads or deletes anyone's data.
+      // Purchases count only from Apple-signed transactions; prod's only from Production (Sandbox is TestFlight and
+      // App Review, not revenue). Writes are capped per minute in the Lambda (funnel.ts MAX_KEYS_PER_MINUTE).
+      const funnel = fn("funnel", { APPSTORE_ENVIRONMENTS: isProd ? "Production" : "Sandbox" });
+      funnel.addToRolePolicy(new iam.PolicyStatement({
+        actions: ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem"],
+        resources: [table.tableArn],
+        conditions: { "ForAllValues:StringLike": { "dynamodb:LeadingKeys": ["FUNNEL#*", "STATS#FUNNEL"] } },
+      }));
+      const funnelUrl = funnel.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
       // join.{domain}/CODE is the invite page, /join/CODE; Apple's file stays where Apple looks for it.
       const joinPaths = new cloudfront.Function(this, "JoinPaths", {
         runtime: cloudfront.FunctionRuntime.JS_2_0,
@@ -676,6 +687,14 @@ export class AICoachStack extends Stack {
           // FIT-236: /docs, the connector's documentation, which the MCP server writes from its own tools.
           ...Object.fromEntries(["/mcp/*", "/oauth/*", "/.well-known/oauth-*", "/docs"].map((p) => [p, mcpBehavior])),
           ...(appBehavior ? { "/app": appBehavior, "/app/*": appBehavior } : {}),
+          // TKL-466: last, so its origin is added after the others and none of theirs are renumbered.
+          "/events": {
+            origin: new origins.FunctionUrlOrigin(funnelUrl),
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+            allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+            cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+            originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          },
         },
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       });

@@ -284,16 +284,19 @@ struct SetupStep: View {
 
     /// Once more on a failure, then the truth and Try Again: never a plan that isn't there.
     private func attempt() {
+        Funnel.track(.planStarted)
         error = nil
         do {
             try work()
         } catch {
             do { try work() } catch {
+                Funnel.track(.planFailed)
                 self.error = "Something went wrong saving it on this phone. Try again."
                 return
             }
         }
         ready = true
+        Funnel.track(.planCompleted)
     }
 }
 

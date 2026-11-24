@@ -34,6 +34,12 @@ struct StartFlow: View {
         .screenBackground()
         .transaction { $0.animation = nil }
         .sensoryFeedback(.selection, trigger: step)
+        // TKL-466: every screen, counted once per install on the server.
+        .onChange(of: step, initial: true) { _, now in
+            Funnel.track(.screenViewed, now.screen)
+            if now == .results { Funnel.track(.resultsViewed) }
+            if now == .ready { Funnel.track(.planReadyViewed) }
+        }
     }
 
     private var topBar: some View {
@@ -92,7 +98,10 @@ struct StartFlow: View {
         case .name:
             NameStep(name: $answers.name) { next() }
         case .invite:
-            InviteStep(name: answers.firstName, start: { next() }, skip: { skipCheck() })
+            InviteStep(name: answers.firstName, start: {
+                Funnel.track(.checkStarted)
+                next()
+            }, skip: { skipCheck() })
         case .steps:
             ThreeStepsStep(next: { next() }, skip: { skipCheck() })
         case .lifts:
@@ -125,9 +134,14 @@ struct StartFlow: View {
 
     private func next() {
         guard let index = Step.allCases.firstIndex(of: step), index + 1 < Step.allCases.count else { return }
+        // TKL-466: which question was answered, never the answer.
+        Funnel.answer(step, name: answers.name)
         var upcoming = Step.allCases[index + 1]
         // Lifts left blank aren't scored; with none, there's nothing to show.
-        if step == .enter { answers.lifts = answers.lifts.filter { $0.weight > 0 && $0.reps > 0 } }
+        if step == .enter {
+            answers.lifts = answers.lifts.filter { $0.weight > 0 && $0.reps > 0 }
+            if !answers.lifts.isEmpty { Funnel.track(.checkCompleted) }
+        }
         if upcoming == .analysis && answers.lifts.isEmpty { upcoming = .setup }
         if upcoming == .results && answers.result() == nil { upcoming = .setup }
         go(upcoming)
@@ -135,6 +149,7 @@ struct StartFlow: View {
 
     /// Spec: Skip for now goes straight to setting up, with starting loads from the program.
     private func skipCheck() {
+        Funnel.track(.checkSkipped, step.screen)
         answers.lifts = []
         go(.setup)
     }
@@ -206,6 +221,44 @@ struct StartFlow: View {
     static func holdbackTitle(_ holdback: StartAnswers.Holdback) -> String {
         [.noProgram: "I don’t have a program", .missSessions: "I miss sessions", .noProgress: "I don’t know if I’m getting stronger",
          .plateau: "I’ve plateaued", .unsure: "I’m not sure what to improve"][holdback]!
+    }
+}
+
+/// TKL-466: the spec's stable screen ids, which the server's funnel keeps (shared/funnel.ts SCREENS).
+extension StartFlow.Step {
+    /// The screens that ask something (shared/funnel.ts QUESTIONS).
+    var isQuestion: Bool {
+        switch self {
+        case .goal, .sex, .age, .height, .weight, .days, .body, .activity, .place, .equipment, .holdback, .name, .lifts, .enter: true
+        default: false
+        }
+    }
+
+    var screen: String {
+        switch self {
+        case .goal: "goal"
+        case .sex: "gender"
+        case .chart: "comparison_chart"
+        case .age: "age"
+        case .height: "height"
+        case .weight: "weight"
+        case .days: "frequency"
+        case .body: "body_type"
+        case .activity: "activity_level"
+        case .place: "where_train"
+        case .equipment: "equipment"
+        case .holdback: "holding_back"
+        case .name: "name"
+        case .invite: "strength_invite"
+        case .steps: "strength_steps"
+        case .lifts: "select_lifts"
+        case .enter: "enter_lifts"
+        case .analysis: "analysis"
+        case .results: "results"
+        case .setup: "setup"
+        case .ready: "plan_ready"
+        case .paywall: "paywall"
+        }
     }
 }
 

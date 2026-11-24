@@ -356,6 +356,28 @@ describe("share pages (FIT-105)", () => {
     });
   });
 
+  it("TKL-466: take the funnel's POSTs at /events, uncached, into a function that only puts, reads and counts", () => {
+    const t = synthWeb();
+    const behavior = Object.values(t.findResources("AWS::CloudFront::Distribution"))
+      .flatMap((d) => d.Properties.DistributionConfig.CacheBehaviors ?? [])
+      .find((b: any) => b.PathPattern === "/events");
+    expect(behavior.AllowedMethods).toContain("POST");
+    expect(behavior.CachePolicyId).toBe("4135ea2d-6df8-44a3-9df3-4b5a84be39ad"); // CachingDisabled
+    const policies = Object.entries(t.findResources("AWS::IAM::Policy"))
+      .filter(([id]) => /^funnel/.test(id))
+      .flatMap(([, p]) => p.Properties.PolicyDocument.Statement);
+    expect(policies).toContainEqual(expect.objectContaining({
+      Condition: { "ForAllValues:StringLike": { "dynamodb:LeadingKeys": ["FUNNEL#*", "STATS#FUNNEL"] } },
+    }));
+    const actions = Object.entries(t.findResources("AWS::IAM::Policy"))
+      .filter(([id]) => /^funnel/.test(id))
+      .flatMap(([, p]) => p.Properties.PolicyDocument.Statement.flatMap((s: any) => [s.Action].flat()));
+    expect(actions.filter((a: string) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]);
+    // Only Apple's Production purchases are revenue in prod.
+    const funnelFn = Object.entries(t.findResources("AWS::Lambda::Function")).find(([id]) => /^funnel/.test(id))![1];
+    expect(funnelFn.Properties.Environment.Variables.APPSTORE_ENVIRONMENTS).toBe("Production");
+  });
+
   it("serve every host from one CDN, with a certificate for each, and the Lambda reachable only through it", () => {
     const t = synthWeb();
     t.hasResourceProperties("AWS::CertificateManager::Certificate", {

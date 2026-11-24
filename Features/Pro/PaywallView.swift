@@ -10,6 +10,11 @@ import StoreKit
 /// already, it's how to manage it: Apple's sheet for the App Store's, the web's Billing for Stripe's.
 struct PaywallView: View {
     let plan: StoreProducts.Plan
+    var tracksOnboarding = false
+
+    private func trackOnboarding(_ event: Funnel.Name, _ detail: String? = nil) {
+        if tracksOnboarding { Funnel.track(event, detail) }
+    }
     @Environment(Pro.self) private var pro
     @Environment(Account.self) private var account
     @Environment(\.dismiss) private var dismiss
@@ -65,6 +70,7 @@ struct PaywallView: View {
         }
         .accessibilityIdentifier("paywall.\(plan.rawValue)")
         .task { await load() }
+        .onChange(of: selected) { _, now in trackOnboarding(.planSelected, StoreProducts.funnelName(now)) }
         .sheet(isPresented: $signingIn) {
             SignInSheet(reason: "Sign in first, so \(plan.name) is on your account: in the app, on the web and in Claude.")
                 .presentationDetents([.medium])
@@ -306,13 +312,23 @@ struct PaywallView: View {
         working = true
         message = nil
         defer { working = false }
+        // TKL-466: the trial or payment itself is sent from StoreKit's signed transaction (Funnel.observe, from Pro).
+        if tracksOnboarding { Funnel.purchaseStarting(product.id) }
         do {
             switch try await pro.buy(product, with: purchase) {
-            case .bought: dismiss()
-            case .pending: message = "Waiting for approval. \(plan.name) starts as soon as it's approved."
-            case .cancelled: break
+            case .bought:
+                trackOnboarding(.completed, "purchase")
+                dismiss()
+            case .pending:
+                trackOnboarding(.purchaseFailed, "pending")
+                message = "Waiting for approval. \(plan.name) starts as soon as it's approved."
+            case .cancelled:
+                trackOnboarding(.purchaseFailed, "cancelled")
+                if tracksOnboarding { Funnel.purchaseAbandoned() }
             }
         } catch {
+            trackOnboarding(.purchaseFailed, "error")
+            if tracksOnboarding { Funnel.purchaseAbandoned() }
             message = error.localizedDescription
         }
     }
@@ -323,7 +339,11 @@ struct PaywallView: View {
         defer { working = false }
         do {
             try await pro.restore()
-            if pro.has(plan) { dismiss() } else { message = "No \(plan.name) subscription to restore on this Apple Account." }
+            if pro.has(plan) {
+                trackOnboarding(.purchaseRestored)
+                trackOnboarding(.completed, "restore")
+                dismiss()
+            } else { message = "No \(plan.name) subscription to restore on this Apple Account." }
         } catch {
             message = error.localizedDescription
         }
