@@ -1,5 +1,10 @@
 // FIT-328 / TKL-749: the demo accounts' Cognito users, made with sign in with email and a permanent password, shared by
-// coach-demo.ts and lifter-demo.ts. Passwords go in infra/.demo-accounts.STAGE, which git ignores, and are never printed.
+// coach-demo.ts and lifter-demo.ts.
+//
+// TKL-1003: when DEMO_PASSWORD is set (it is, in ~/dev/.secrets.env), every demo account gets that one shared
+// password, so these runs no longer rotate the logins other tickets are using. Without it, or with --new-password,
+// a random one is made as before. Either way it goes in infra/.demo-accounts.STAGE, which git ignores, and is
+// never printed.
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import {
@@ -9,11 +14,14 @@ import {
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { PutCommand, type DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { loadDemoCredentials } from "./demoCredentials.ts";
 
 export function demoAccounts(opts: {
   stage: string; region: string; userPoolId: string; db: DynamoDBDocumentClient; newPassword: boolean; since: string; now: string;
 }) {
   const cognito = new CognitoIdentityProviderClient({ region: opts.region });
+  // The standing password every ticket signs in with, unless this run was told to make a new one.
+  const shared = opts.newPassword ? "" : loadDemoCredentials().password;
   const TABLE = `AICoach-${opts.stage}`;
   const file = new URL(`../.demo-accounts.${opts.stage}`, import.meta.url);
   const saved = new Map(existsSync(file) ? readFileSync(file, "utf8").trim().split("\n").map((l) => l.split(" ") as [string, string]) : []);
@@ -39,8 +47,8 @@ export function demoAccounts(opts: {
       uid = made.User?.Attributes?.find((a) => a.Name === "sub")?.Value;
       if (!uid) throw new Error("Cognito made the user without a sub.");
     }
-    if (isNew || opts.newPassword) {
-      const password = `Demo-${randomBytes(3).toString("hex")}-${randomBytes(3).toString("hex")}!`;
+    if (isNew || opts.newPassword || (shared && saved.get(email) !== shared)) {
+      const password = shared || `Demo-${randomBytes(3).toString("hex")}-${randomBytes(3).toString("hex")}!`;
       await cognito.send(new AdminSetUserPasswordCommand({ UserPoolId: opts.userPoolId, Username: email, Password: password, Permanent: true }));
       saved.set(email, password);
     }

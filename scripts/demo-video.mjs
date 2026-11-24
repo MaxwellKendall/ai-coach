@@ -1,11 +1,12 @@
 // FIT-431: record the review path on the iPhone 17 Pro simulator.
-// Credentials are read from .env, compiled into the UI test for that one build, and the stub is restored after.
+// Credentials are the standing test logins (CLAUDE.md, Test credentials), compiled into the UI test for that one
+// build, and the stub is restored after.
 // Output is redacted. The compressed file is build/review/demo.mp4.
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadEnv } from "./load-env.mjs";
+import { loadSecrets } from "./load-env.mjs";
 import { redact } from "./release-lib.mjs";
 import { statusBarOverride } from "./paywall-shots-lib.mjs";
 import { restoreOnStop, startRecorder } from "./demo-video-lib.mjs";
@@ -31,7 +32,7 @@ const shownPath = resolve(outDir, "screens-shown.txt");
 // Until the demo covers every screen (FIT-459, FIT-460), a gap is reported but doesn't fail the run or the release.
 const requireCoverage = process.argv.includes("--require-coverage");
 
-loadEnv(resolve(root, ".env"));
+loadSecrets(root); // the repo .env, then ~/dev/.secrets.env, so a worktree without a .env still has the logins (TKL-1003)
 const clientEmail = process.env.DEMO_CLIENT_EMAIL || "";
 const coachEmail = process.env.DEMO_COACH_EMAIL || "";
 const password = process.env.DEMO_PASSWORD || "";

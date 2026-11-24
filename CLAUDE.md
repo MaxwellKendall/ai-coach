@@ -47,7 +47,24 @@ For program/week evals only: `EVAL_RUN=<label>` keeps a repeat run beside the ot
 - Dashboard: `cd infra && AWS_PROFILE=aicoach-dev npm run dashboard-config` (writes `web/public/config.json` from AICoach-dev), then from the repo root `npm --prefix web run dev` → http://localhost:5173 (unverified).
 - Share pages from sample data: `npm --prefix infra run web` → http://localhost:8787 (unverified).
 - The MCP server and backend run only as Lambdas, on `AICoach-dev` (`dev.barbrabell.com/mcp`) and `AICoach-prod`; there is no local server. Test sessions: `AWS_PROFILE=aicoach-dev npm --prefix infra run buddy -- coach`.
-- Demo accounts (sign in with email; passwords in the gitignored `infra/.demo-accounts.STAGE`): `npm --prefix infra run coach-demo -- STAGE [--new-password]` makes coach@ (Coach Pro, 10 clients) and client@ (Sam); `npm --prefix infra run lifter-demo -- STAGE [--new-password]` makes lifter@ (Jordan, solo, Lifter Pro, 3 weeks logged). Both reset the accounts' training to today. App Review's review@ is coached by coach@ (`appstore/review.json`).
+- Demo accounts (see Test credentials below): `npm --prefix infra run coach-demo -- STAGE` makes coach@ (Coach Pro, 10 clients) and client@ (Sam); `npm --prefix infra run lifter-demo -- STAGE` makes lifter@ (Jordan, solo, Lifter Pro, 3 weeks logged). Both reset the accounts' training to today. App Review's review@ is coached by coach@ (`appstore/review.json`).
+
+## Test credentials
+Three disposable accounts are the studio's standing test logins, on prod and on dev. **Any ticket may use them, without asking anyone**: sign in on the simulator or a phone, program clients, edit or log sessions, send invites, reset them. None of them is an account Maxwell uses himself, and the app is not released, so none of this needs approval — never raise `agent:needs-human` for test-account access, and never park a ticket for want of a login (Maxwell, 2026-11-24, TKL-1003).
+
+| Role | Account | What it is |
+|---|---|---|
+| coach | coach@barbrabell.com | Dana Reyes, active Coach Pro, ten clients, one of them the client below |
+| client | client@barbrabell.com | Sam, coached by Dana, signs in on the phone |
+| lifter | lifter@barbrabell.com | Jordan, solo, Lifter Pro, three weeks logged |
+
+One password for all three, with the logins, in `~/dev/.secrets.env`: `DEMO_PASSWORD`, `DEMO_COACH_EMAIL`, `DEMO_CLIENT_EMAIL`, `DEMO_LIFTER_EMAIL`, `DEMO_STAGE` (`prod`). Every worktree and either agent account reads that one file, so there is nothing to copy into a worktree. Never print the password or put it in a ticket, a commit, a log or a screenshot.
+- In a shell: `set -a; source ~/dev/.secrets.env; set +a`.
+- Node scripts: `loadSecrets()` from `scripts/load-env.mjs` (the repo's own `.env` still wins, key by key).
+- infra scripts: `loadDemoCredentials()` from `infra/scripts/demoCredentials.ts`, which reads the file itself.
+- `AWS_PROFILE=aicoach-dev npm --prefix infra run demo-check -- STAGE [--fix]` says whether each account exists and signs in; `--fix` re-applies the shared password and touches no training data. Both stages were green on 2026-11-24.
+- `coach-demo` and `lifter-demo` keep the shared password. `--new-password` replaces it and breaks every other ticket's sign-in: don't pass it.
+- Not these: any account Maxwell signs in with himself, and review@barbrabell.com, which `npm run release` owns.
 
 ## Deploy (prod)
 Stack `AICoach-prod` (CDK, profile `aicoach-dev`, us-east-1): Cognito, one DynamoDB table, AppSync, Lambdas (MCP, sync, push…), CloudFront serving barbrabell.com (+ share., join.) with the dashboard at `/app`. Dev is `AICoach-dev` on dev.barbrabell.com. From `infra/`, on a clean `main` (verified 2026-11-23 from a `git archive` export of `origin/main`, TKL-980). Set `AWS_PAGER=""` for the AWS CLI calls here; unattended runs otherwise hang in the pager:
