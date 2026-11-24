@@ -50,7 +50,7 @@ For program/week evals only: `EVAL_RUN=<label>` keeps a repeat run beside the ot
 - Demo accounts (sign in with email; passwords in the gitignored `infra/.demo-accounts.STAGE`): `npm --prefix infra run coach-demo -- STAGE [--new-password]` makes coach@ (Coach Pro, 10 clients) and client@ (Sam); `npm --prefix infra run lifter-demo -- STAGE [--new-password]` makes lifter@ (Jordan, solo, Lifter Pro, 3 weeks logged). Both reset the accounts' training to today. App Review's review@ is coached by coach@ (`appstore/review.json`).
 
 ## Deploy (prod)
-Stack `AICoach-prod` (CDK, profile `aicoach-dev`, us-east-1): Cognito, one DynamoDB table, AppSync, Lambdas (MCP, sync, push…), CloudFront serving barbrabell.com (+ share., join.) with the dashboard at `/app`. Dev is `AICoach-dev` on dev.barbrabell.com. From `infra/`, on a clean `main` (all unverified here):
+Stack `AICoach-prod` (CDK, profile `aicoach-dev`, us-east-1): Cognito, one DynamoDB table, AppSync, Lambdas (MCP, sync, push…), CloudFront serving barbrabell.com (+ share., join.) with the dashboard at `/app`. Dev is `AICoach-dev` on dev.barbrabell.com. From `infra/`, on a clean `main` (verified 2026-11-23 from a `git archive` export of `origin/main`, TKL-980). Set `AWS_PAGER=""` for the AWS CLI calls here; unattended runs otherwise hang in the pager:
 ```bash
 npx tsc --noEmit -p . && npx vitest run
 npm --prefix ../web run build                      # always: the stack uploads web/dist
