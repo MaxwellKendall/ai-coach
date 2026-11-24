@@ -17,6 +17,13 @@ export const SCREENS = [
   "analysis", "results", "setup", "plan_ready", "paywall",
 ] as const;
 
+/** The screens that ask something. Their answer-submitted event says which was answered, never the answer; for the
+ * name, only that one was given. */
+export const QUESTIONS = [
+  "goal", "gender", "age", "height", "weight", "frequency", "body_type", "activity_level", "where_train", "equipment",
+  "holding_back", "name", "select_lifts", "enter_lifts",
+] as const satisfies readonly (typeof SCREENS)[number][];
+
 export const PRODUCTS = ["lifter_yearly", "lifter_monthly", "coach_yearly", "coach_monthly"] as const;
 export const PATHS = ["purchase", "restore", "not_now"] as const;
 export const FAILURES = ["cancelled", "pending", "error"] as const;
@@ -25,6 +32,7 @@ export const FAILURES = ["cancelled", "pending", "error"] as const;
 const EVENTS: Record<string, readonly string[]> = {
   onboarding_started: [],
   onboarding_screen_viewed: SCREENS,
+  onboarding_answer_submitted: QUESTIONS,
   strength_check_started: [],
   strength_check_skipped: SCREENS,
   strength_check_completed: [],
@@ -37,16 +45,25 @@ const EVENTS: Record<string, readonly string[]> = {
   paywall_plan_selected: PRODUCTS,
   purchase_started: PRODUCTS,
   purchase_completed: PRODUCTS,
+  trial_started: PRODUCTS,
   purchase_failed: FAILURES,
   purchase_restored: [],
   paywall_dismissed: [],
   onboarding_completed: PATHS,
 };
 
+/**
+ * The events that say someone paid or started a trial. Each must carry Apple's signed transaction (StoreKit's
+ * jwsRepresentation), and the server counts it from the transaction alone (infra/lambda/funnel.ts record): a trial
+ * as trial_started, a paid one as purchase_completed, its product as Apple says. Without one, it's dropped.
+ */
+export const PURCHASE_EVENTS = ["purchase_completed", "trial_started"] as const;
+const MAX_JWS = 16_000;
+
 export const MAX_EVENTS = 100;
 export const BENCHMARK = 0.11;
 
-export type FunnelEvent = { name: string; detail?: string };
+export type FunnelEvent = { name: string; detail?: string; jws?: string };
 export type Batch = { install: string; strategy: Strategy; events: FunnelEvent[] };
 export type FunnelRow = { day: string; strategy: Strategy; counts: Record<string, number> };
 
@@ -59,12 +76,19 @@ export function parseBatch(body: unknown): Batch | undefined {
   if (!Array.isArray(events) || events.length > MAX_EVENTS) return undefined;
   const kept: FunnelEvent[] = [];
   for (const event of events) {
-    const { name, detail } = (event ?? {}) as Record<string, unknown>;
+    const { name, detail, jws } = (event ?? {}) as Record<string, unknown>;
     if (typeof name !== "string" || !Object.hasOwn(EVENTS, name)) continue;
     const allowed = EVENTS[name];
-    if (detail === undefined || detail === null) kept.push({ name });
-    else if (typeof detail === "string" && allowed.includes(detail)) kept.push({ name, detail });
-    else if (allowed.length === 0) kept.push({ name });
+    let one: FunnelEvent;
+    if (detail === undefined || detail === null) one = { name };
+    else if (typeof detail === "string" && allowed.includes(detail)) one = { name, detail };
+    else if (allowed.length === 0) one = { name };
+    else continue;
+    if ((PURCHASE_EVENTS as readonly string[]).includes(name)) {
+      if (typeof jws !== "string" || !jws || jws.length > MAX_JWS) continue;
+      one.jws = jws;
+    }
+    kept.push(one);
   }
   return { install: install.toLowerCase(), strategy, events: kept };
 }
@@ -74,17 +98,21 @@ export function stepKeys(event: FunnelEvent): string[] {
   return event.detail ? [event.name, `${event.name}.${event.detail}`] : [event.name];
 }
 
-const SCREEN_LABEL = (screen: string) => [`Screen: ${screen}`, `onboarding_screen_viewed.${screen}`] as const;
+/** A screen, then (for a question) how many answered it. */
+const SCREEN_LABEL = (screen: string): (readonly [string, string])[] => [
+  [`Screen: ${screen}`, `onboarding_screen_viewed.${screen}`],
+  ...((QUESTIONS as readonly string[]).includes(screen) ? [[`Answered: ${screen}`, `onboarding_answer_submitted.${screen}`] as const] : []),
+];
 
 /** The report's rows in the order a first launch goes through them. */
 export const STEPS: readonly (readonly [string, string])[] = [
   ["First launch (hero)", "onboarding_screen_viewed.hero"],
   ["Started", "onboarding_started"],
-  ...SCREENS.slice(1, SCREENS.indexOf("strength_invite")).map(SCREEN_LABEL),
+  ...SCREENS.slice(1, SCREENS.indexOf("strength_invite")).flatMap(SCREEN_LABEL),
   ["Strength check started", "strength_check_started"],
   ["Strength check skipped", "strength_check_skipped"],
   ["Strength check completed", "strength_check_completed"],
-  ...SCREENS.slice(SCREENS.indexOf("strength_invite"), SCREENS.indexOf("paywall")).map(SCREEN_LABEL),
+  ...SCREENS.slice(SCREENS.indexOf("strength_invite"), SCREENS.indexOf("paywall")).flatMap(SCREEN_LABEL),
   ["Strength results viewed", "strength_results_viewed"],
   ["Plan generation started", "plan_generation_started"],
   ["Plan generation completed", "plan_generation_completed"],
@@ -94,7 +122,9 @@ export const STEPS: readonly (readonly [string, string])[] = [
   ["Plan changed", "paywall_plan_selected"],
   ["Purchase started", "purchase_started"],
   ["Purchase failed or cancelled", "purchase_failed"],
-  ["Purchased", "purchase_completed"],
+  ["Trial started", "trial_started"],
+  ...PRODUCTS.map((p) => [`  ${p}`, `trial_started.${p}`] as const),
+  ["Paid (Apple-verified)", "purchase_completed"],
   ...PRODUCTS.map((p) => [`  ${p}`, `purchase_completed.${p}`] as const),
   ["Restored", "purchase_restored"],
   ["Not Now", "paywall_dismissed"],
@@ -103,7 +133,10 @@ export const STEPS: readonly (readonly [string, string])[] = [
 
 const percent = (n: number, of: number) => (of ? `${((n / of) * 100).toFixed(1)}%` : "-");
 
-/** Sums the rows per strategy; paid is purchases (restores are people who'd already paid). */
+/**
+ * Sums the rows per strategy. Paid is Apple-verified paid transactions: a purchase without a trial, or a trial once
+ * its first paid renewal reaches the app. Restores are people who'd already paid.
+ */
 export function funnelReport(rows: FunnelRow[]) {
   const strategies = Object.fromEntries(STRATEGIES.map((strategy) => {
     const counts: Record<string, number> = {};
@@ -124,7 +157,8 @@ export function funnelReport(rows: FunnelRow[]) {
       continue;
     }
     lines.push(`${strategy}: first-launch-to-paid ${s.paid}/${s.firstLaunches} = ${percent(s.paid, s.firstLaunches)}` +
-      ` (benchmark ${BENCHMARK * 100}%+ download-to-paid, AbMaxx; ours counts first launches, not downloads)`);
+      ` (benchmark ${BENCHMARK * 100}%+ download-to-paid, AbMaxx; ours counts first launches, not downloads;` +
+      ` paid = Apple-verified paid transactions; a free trial counts once it converts)`);
     for (const [label, key] of STEPS) {
       const n = s.counts[key] ?? 0;
       lines.push(`  ${label.padEnd(width)}${String(n).padStart(6)}  ${percent(n, s.firstLaunches).padStart(6)}`);

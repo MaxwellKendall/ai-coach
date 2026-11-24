@@ -78,6 +78,8 @@ final class Pro {
         // Renewals, refunds, Ask to Buy approvals and purchases on other devices, registered as they come.
         updates = Task { [weak self] in
             for await update in StoreKit.Transaction.updates {
+                // TKL-466: an Ask to Buy approval or a trial's first paid renewal, for the onboarding funnel.
+                Funnel.observe(update)
                 await self?.register(update)
                 if case .verified(let transaction) = update { await transaction.finish() }
                 await self?.refresh()
@@ -95,6 +97,10 @@ final class Pro {
         guard Pilot.sellsPro else { return }
         store = await Self.storeEntitlements()
         checked = true
+        // TKL-466: a followed onboarding purchase's latest transaction (a trial that has since been paid for).
+        if Funnel.watching {
+            for await entitlement in StoreKit.Transaction.currentEntitlements { Funnel.observe(entitlement) }
+        }
         await remind()
     }
 
@@ -135,6 +141,7 @@ final class Pro {
             guard case .verified(let transaction) = result else {
                 throw Failure(message: "The App Store couldn't confirm that purchase. Nothing was added; try again.")
             }
+            Funnel.observe(result)
             let problem = await register(result)
             await transaction.finish()
             await refresh()

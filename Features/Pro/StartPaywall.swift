@@ -207,21 +207,24 @@ struct StartPaywall: View {
         working = true
         message = nil
         defer { working = false }
-        let name = StoreProducts.funnelName(product.id)
-        Funnel.track(.purchaseStarted, name)
+        // TKL-466: the trial or payment itself is sent from StoreKit's signed transaction (Funnel.observe, from Pro).
+        Funnel.purchaseStarting(product.id)
         do {
             switch try await pro.buy(product, with: purchase) {
             case .bought:
-                Funnel.track(.purchaseCompleted, name)
                 Funnel.track(.completed, "purchase")
                 onDone()
             case .pending:
+                // Ask to Buy: followed until Transaction.updates brings the approval.
                 Funnel.track(.purchaseFailed, "pending")
                 message = "Waiting for approval. Lifter Pro starts as soon as it’s approved."
-            case .cancelled: Funnel.track(.purchaseFailed, "cancelled")
+            case .cancelled:
+                Funnel.track(.purchaseFailed, "cancelled")
+                Funnel.purchaseAbandoned()
             }
         } catch {
             Funnel.track(.purchaseFailed, "error")
+            Funnel.purchaseAbandoned()
             message = error.localizedDescription
         }
     }

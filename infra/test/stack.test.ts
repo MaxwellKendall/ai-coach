@@ -373,6 +373,9 @@ describe("share pages (FIT-105)", () => {
       .filter(([id]) => /^funnel/.test(id))
       .flatMap(([, p]) => p.Properties.PolicyDocument.Statement.flatMap((s: any) => [s.Action].flat()));
     expect(actions.filter((a: string) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]);
+    // Only Apple's Production purchases are revenue in prod.
+    const funnelFn = Object.entries(t.findResources("AWS::Lambda::Function")).find(([id]) => /^funnel/.test(id))![1];
+    expect(funnelFn.Properties.Environment.Variables.APPSTORE_ENVIRONMENTS).toBe("Production");
   });
 
   it("serve every host from one CDN, with a certificate for each, and the Lambda reachable only through it", () => {

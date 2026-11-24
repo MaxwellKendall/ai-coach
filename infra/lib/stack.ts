@@ -596,7 +596,9 @@ export class AICoachStack extends Stack {
       const url = share.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
       // TKL-466: the first launch's funnel (shared/funnel.ts), sent before anyone signs in, so its URL takes POSTs from
       // anyone; it keeps only known events, a random install id and counters. Never reads or deletes anyone's data.
-      const funnel = fn("funnel", {});
+      // Purchases count only from Apple-signed transactions; prod's only from Production (Sandbox is TestFlight and
+      // App Review, not revenue). Writes are capped per minute in the Lambda (funnel.ts MAX_KEYS_PER_MINUTE).
+      const funnel = fn("funnel", { APPSTORE_ENVIRONMENTS: isProd ? "Production" : "Sandbox" });
       funnel.addToRolePolicy(new iam.PolicyStatement({
         actions: ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem"],
         resources: [table.tableArn],

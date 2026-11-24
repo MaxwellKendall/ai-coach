@@ -134,6 +134,8 @@ struct StartFlow: View {
 
     private func next() {
         guard let index = Step.allCases.firstIndex(of: step), index + 1 < Step.allCases.count else { return }
+        // TKL-466: which question was answered, never the answer.
+        Funnel.answer(step, name: answers.name)
         var upcoming = Step.allCases[index + 1]
         // Lifts left blank aren't scored; with none, there's nothing to show.
         if step == .enter {
@@ -224,6 +226,14 @@ struct StartFlow: View {
 
 /// TKL-466: the spec's stable screen ids, which the server's funnel keeps (shared/funnel.ts SCREENS).
 extension StartFlow.Step {
+    /// The screens that ask something (shared/funnel.ts QUESTIONS).
+    var isQuestion: Bool {
+        switch self {
+        case .goal, .sex, .age, .height, .weight, .days, .body, .activity, .place, .equipment, .holdback, .name, .lifts, .enter: true
+        default: false
+        }
+    }
+
     var screen: String {
         switch self {
         case .goal: "goal"
