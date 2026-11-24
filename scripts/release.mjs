@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Asc, loadAscEnv } from "./asc.mjs";
-import { loadEnv } from "./load-env.mjs";
+import { loadSecrets } from "./load-env.mjs";
 import { sendToReview } from "./review-submission.mjs";
 import {
   EDITABLE_VERSION_STATES,
@@ -40,7 +40,7 @@ import {
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 process.chdir(root);
-loadEnv();
+loadSecrets(root); // TKL-1003: the repo .env first, then the studio's shared ~/dev/.secrets.env
 
 const { dryRun, submit, products, help } = parseArgs(process.argv.slice(2));
 if (help) {
