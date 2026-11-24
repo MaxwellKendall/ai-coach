@@ -78,7 +78,8 @@ Review demo video: `npm run demo-video` (`scripts/demo-video.mjs`): an XCUITest 
 Through a pull request to `origin/main`, squash-merged (the history is `TKL-N: … (#PR)`; older commits use `FIT-N`). Branch from `origin/main` in a worktree, never the main checkout; push the branch, `gh pr create`, merge with `gh pr merge --squash`. Keep local `main` equal to `origin/main` (`git pull --ff-only`); never commit on local `main` directly.
 
 ## Verify checks
-A change lands only with all of these green: the iOS unit tests (`AICoach` scheme), `infra` tsc + vitest, `web` vitest + `npm --prefix web run build`.
+A change lands only with all of these green: the iOS unit tests (`AICoach` scheme), `infra` tsc + vitest, `web` vitest + `npm --prefix web run build`, and `npm run test:release` (~8 s, from the repo root).
+`npm run test:release` includes `screens.test.mjs`, which fails when a UI change renamed or added a screen: run `node scripts/screen-inventory.mjs` (`npm run screens`) and commit the regenerated `appstore/review/screens.json` with the change (TKL-1002; stale inventories otherwise block `npm run release`).
 A UI change also gets a simulator screenshot. A change to model prompts or `ProgramDesigner` also gets the matching eval run and its results file.
 
 ## Secrets used (names only)
