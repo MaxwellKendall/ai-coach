@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
@@ -8,6 +9,7 @@ import {
   stopsBeforeBuild,
   exportArgs,
   landBumpCommit,
+  recoverUploadedBump,
   uploadLandPoll,
   bumpBuildNumber,
   createFailures,
@@ -179,6 +181,30 @@ test("uploadLandPoll lands the bump right after the upload, before processing is
   assert.deepEqual(result, { buildId: "build-id", landing: { landed: true, message: "landed" }, error: undefined });
 });
 
+test("uploadLandPoll awaits the checkpoint after upload and before polling", async () => {
+  const s = sequence();
+  s.checkpoint = async () => {
+    await Promise.resolve();
+    s.steps.push("checkpoint");
+  };
+  await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "checkpoint", "land", "poll"]);
+});
+
+test("uploadLandPoll skips the checkpoint on upload failure and skips polling on checkpoint failure", async () => {
+  const failedUpload = sequence({ uploadError: "upload failed" });
+  failedUpload.checkpoint = async () => assert.fail("no build was uploaded");
+  await uploadLandPoll(failedUpload);
+  assert.deepEqual(failedUpload.steps, ["upload"]);
+
+  const s = sequence();
+  s.checkpoint = async () => { throw new Error("Linear unavailable"); };
+  const result = await uploadLandPoll(s);
+  assert.deepEqual(s.steps, ["upload", "land"]);
+  assert.equal(result.landing.landed, true);
+  assert.match(result.error, /Linear unavailable/);
+});
+
 test("uploadLandPoll still lands the bump when processing fails or times out (TKL-774 verify)", async () => {
   const s = sequence({ pollError: "Build 20 was not VALID after 40 minutes." });
   const result = await uploadLandPoll(s);
@@ -296,4 +322,51 @@ test("release.mjs checks the listing with checkListing and exits early only on u
   assert.doesNotMatch(source, /failures\.length && !dryRun\) process\.exit/, "no early exit on non-blocking failures");
   const exits = source.match(/if \(stopsBeforeBuild\(failures, dryRun\)\) process\.exit\(1\);/g) || [];
   assert.equal(exits.length, 2, "both preflight exits use stopsBeforeBuild");
+});
+
+test("resume after a saved upload checkpoint lands the archived bump without using HEAD", () => {
+  const sha = "a".repeat(40);
+  const release = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    import { writeSync } from "node:fs";
+    import { uploadLandPoll } from ${JSON.stringify(new URL("./release-lib.mjs", import.meta.url).href)};
+    await uploadLandPoll({
+      upload: async () => {},
+      checkpoint: () => { writeSync(1, "20 ${sha}"); process.exit(75); },
+      land: () => { throw new Error("unexpected landing"); },
+      poll: () => { throw new Error("unexpected poll"); },
+    });
+  `], { encoding: "utf8" });
+  assert.equal(release.status, 75);
+  const [build, archivedSha] = release.stdout.split(" ");
+  assert.deepEqual([build, archivedSha], ["20", sha]);
+  const calls = [];
+  let current = 19;
+  let openPR = false;
+  const exec = (command, args) => {
+    calls.push([command, ...args]);
+    if (args[0] === "show") {
+      let version = 20;
+      if (args[1].startsWith("origin/main:")) version = current;
+      if (args[1].includes("^:")) version = 19;
+      return { code: 0, stdout: `    CURRENT_PROJECT_VERSION: "${version}"` };
+    }
+    if (args[0] === "diff-tree") return { code: 0, stdout: "project.yml\n" };
+    if (args[1] === "list") return { code: 0, stdout: openPR ? "42\n" : "" };
+    if (args[1] === "create") openPR = true;
+    if (args[1] === "merge") { current = 20; openPR = false; }
+    return { code: 0, stdout: "" };
+  };
+  recoverUploadedBump(build, archivedSha, exec);
+  assert.ok(calls.some((call) => call.join(" ") === `git push origin ${sha}:refs/heads/release/build-20`));
+  assert.equal(current, 20);
+  const writes = () => calls.filter((call) => ["push", "reset"].includes(call[1]) || (call[0] === "gh" && ["create", "merge"].includes(call[2])));
+  assert.equal(writes().length, 3);
+  recoverUploadedBump(build, archivedSha, exec);
+  assert.equal(writes().length, 3, "a retry after merge performs no writes");
+
+  current = 19;
+  openPR = true;
+  recoverUploadedBump(build, archivedSha, exec);
+  assert.equal(writes().length, 5, "a retry with an open PR skips creation");
+  assert.equal(current, 20);
 });
