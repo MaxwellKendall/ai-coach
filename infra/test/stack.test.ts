@@ -238,7 +238,8 @@ describe("least privilege", () => {
       expect(actionsOf(dev, name)).not.toContain("secretsmanager:GetSecretValue");
     }
     // FIT-130: coach links are put and deleted one by one, never scanned.
-    expect(actionsOf(dev, /^coach(?!Plan)/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]);
+    // TKL-980: unlinking stamps endedBy (FIT-383) and setDisplayName updates in place, so UpdateItem too.
+    expect(actionsOf(dev, /^coach(?!Plan)/).filter((a) => a.startsWith("dynamodb:")).sort()).toEqual(["dynamodb:DeleteItem", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem"]);
     // FIT-137: linking deletes the empty account Cognito made and links its identity; nothing else in the pool.
     expect(actionsOf(dev, /^accounts/).filter((a) => a.startsWith("cognito-idp:")).sort()).toEqual(["cognito-idp:AdminDeleteUser", "cognito-idp:AdminLinkProviderForUser"]);
     // FIT-131: programs are put, read and answered, never deleted or scanned.

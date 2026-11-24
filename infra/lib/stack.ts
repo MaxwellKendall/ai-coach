@@ -463,7 +463,7 @@ export class AICoachStack extends Stack {
 
     // ---- FIT-130: coaches and clients ----
     const coach = fn("coach", { SHARE_ORIGIN: shareOrigin || "https://example.invalid" });
-    table.grant(coach, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:DeleteItem");
+    table.grant(coach, "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem");
     const coachSource = api.addLambdaDataSource("CoachSource", coach);
     for (const [typeName, fieldName] of [["Mutation", "createClientInvite"], ["Query", "coachInvite"], ["Mutation", "acceptCoach"],
       ["Query", "myCoaches"], ["Query", "myClients"], ["Mutation", "unlinkCoach"], ["Mutation", "removeClient"],
