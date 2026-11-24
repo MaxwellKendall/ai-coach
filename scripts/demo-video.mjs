@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { loadEnv } from "./load-env.mjs";
 import { redact } from "./release-lib.mjs";
 import { statusBarOverride } from "./paywall-shots-lib.mjs";
+import { restoreOnStop, startRecorder } from "./demo-video-lib.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const secretsPath = resolve(root, "Tests/UITests/Secrets.swift");
@@ -41,14 +42,17 @@ if (!clientEmail || !coachEmail || !password) {
 const hidden = [password, Buffer.from(password, "utf8").toString("base64")];
 
 let keyboardWas;
+let recorder;
 function restore() {
+  recorder?.interrupt();
   writeFileSync(secretsPath, stub);
   if (keyboardWas !== undefined) {
     spawnSync("defaults", ["write", "com.apple.iphonesimulator", "ConnectHardwareKeyboard", "-bool", keyboardWas]);
     keyboardWas = undefined;
   }
 }
-process.on("exit", restore);
+// On exit and on SIGINT/SIGTERM/SIGHUP, so a stopped run never leaves the logins in Secrets.swift (TKL-908).
+restoreOnStop(restore);
 
 function scrub(text) {
   return redact(String(text), hidden);
@@ -155,15 +159,22 @@ if (await run("xcodebuild", ["build-for-testing", "-scheme", "ReviewDemo", "-con
 
 rmSync(shownPath, { force: true });
 process.env.TEST_RUNNER_DEMO_SCREENS = shownPath;
-const recorder = spawn("xcrun", ["simctl", "io", udid, "recordVideo", "--codec", "h264", "--force", rawPath], { stdio: "ignore" });
-await new Promise((resolvePromise) => setTimeout(resolvePromise, 1000));
-const testCode = await run("xcodebuild", [
-  "test-without-building", "-scheme", "ReviewDemo", "-configuration", "Release",
-  "-destination", destination, "-derivedDataPath", "build/dd",
-  "-only-testing:AICoachUITests/ReviewDemoUITests/testReviewPath",
-]);
-recorder.kill("SIGINT");
-await new Promise((resolvePromise) => recorder.on("close", resolvePromise));
+recorder = startRecorder("xcrun", ["simctl", "io", udid, "recordVideo", "--codec", "h264", "--force", rawPath]);
+let testCode;
+try {
+  await recorder.waitForStart();
+  testCode = await run("xcodebuild", [
+    "test-without-building", "-scheme", "ReviewDemo", "-configuration", "Release",
+    "-destination", destination, "-derivedDataPath", "build/dd",
+    "-only-testing:AICoachUITests/ReviewDemoUITests/testReviewPath",
+  ]);
+  if (testCode !== 0) console.error("The review demo UI test failed.");
+  await recorder.stop();
+  recorder = undefined;
+} catch (error) {
+  console.error(scrub(error.message));
+  process.exit(1);
+}
 
 if (await run("ffmpeg", [
   "-y", "-i", rawPath, "-vf", "scale=886:-2:flags=lanczos,fps=30",
