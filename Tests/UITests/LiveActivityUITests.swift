@@ -70,13 +70,14 @@ final class LiveActivityUITests: XCTestCase {
 
         // A rest that runs out: the island says so.
         doneRest.tap()
+        // Cut it to about 10 s from the island, counted from the app's clock (the island's ring has no text to read),
+        // leaving room for the seconds the taps take, so the button is still there for the last one.
+        let left = restLeft(app)
         home()
         expand()
-        for _ in 0..<40 where springboard.buttons["10 seconds less"].exists {
-            springboard.buttons["10 seconds less"].tap()
-            if restText().map({ $0 <= 10 }) ?? false { break }
-        }
-        sleep(14)
+        let less = springboard.buttons["10 seconds less"]
+        for _ in 0..<max(0, (left - 20) / 10) where less.exists { less.tap() }
+        sleep(UInt32(min(25, max(14, restText() ?? 14))))
         save("live-restover-island")
         home()
         save("live-restover-compact")
