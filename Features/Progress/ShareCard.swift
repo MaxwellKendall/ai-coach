@@ -26,14 +26,24 @@ struct ShareCard: View {
     var showNumbers = true
     /// FIT-107: the share's short link, once it has one, in place of the date: a screenshot still leads somewhere.
     var link: String?
+    /// TKL-934: optional animation overrides for celebration playback (default values render the static share image).
+    var overrideBig: String? = nil
+    var bigScale: CGFloat = 1
+    var sparklineProgress: CGFloat = 1
+    var peakVisible = true
+    var peakAccent = false
+    var overrideTag: String? = nil
+    var tagAccent = false
 
     var body: some View {
         let words = WinWords(win, showNumbers: showNumbers)
         VStack(alignment: .leading, spacing: 0) {
-            Text(words.tag).font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundStyle(style.muted)
+            Text(overrideTag ?? words.tag)
+                .font(.system(size: 11, weight: .semibold)).tracking(1.2)
+                .foregroundStyle(tagAccent ? Plate.current.accent : style.muted)
             Text(words.heading).font(.system(size: 18, weight: .semibold)).padding(.top, 4)
             switch win.kind {
-            case .milestone: ring(words)
+            case .milestone where overrideTag == nil: ring(words)
             default: figure(words)
             }
             HStack {
@@ -62,14 +72,19 @@ struct ShareCard: View {
     private func figure(_ words: WinWords) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text(words.big).font(.system(size: 84, weight: .bold, design: .rounded)).tracking(-2).minimumScaleFactor(0.6).lineLimit(1)
+                Text(overrideBig ?? words.big)
+                    .font(.system(size: 84, weight: .bold, design: .rounded)).tracking(-2)
+                    .monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)
+                    .scaleEffect(bigScale)
                 Text(words.unit).font(.system(size: 22, weight: .semibold)).foregroundStyle(style.muted)
             }
             .padding(.top, 30)
             Text(words.sub).font(.system(size: 15)).foregroundStyle(style.soft).padding(.top, 8)
             Spacer(minLength: 8)
-            if win.kind == .pr {
-                Sparkline(values: win.trend, color: style.text).frame(height: 70)
+            if win.kind == .pr || !win.trend.isEmpty {
+                Sparkline(values: win.trend, color: style.text, drawProgress: sparklineProgress,
+                          peakVisible: peakVisible, peakColor: peakAccent ? Plate.current.accent : style.text)
+                    .frame(height: 70)
             } else {
                 HStack(spacing: 6) {
                     ForEach(0..<min(Int(win.value), 8), id: \.self) { _ in
@@ -110,13 +125,25 @@ struct ShareCard: View {
 struct Sparkline: View {
     let values: [Double]
     let color: Color
+    var drawProgress: CGFloat = 1
+    var peakVisible = true
+    var peakColor: Color? = nil
 
     var body: some View {
         GeometryReader { proxy in
             let points = points(in: proxy.size)
             ZStack {
-                Path { $0.addLines(points) }.stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                if let last = points.last { Circle().fill(color).frame(width: 11, height: 11).position(last) }
+                Path { $0.addLines(points) }
+                    .trim(from: 0, to: drawProgress)
+                    .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                if let last = points.last {
+                    Circle()
+                        .fill(peakColor ?? color)
+                        .frame(width: 11, height: 11)
+                        .scaleEffect(peakVisible ? 1 : 0.01)
+                        .opacity(peakVisible ? 1 : 0)
+                        .position(last)
+                }
             }
         }
     }
