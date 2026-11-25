@@ -1,4 +1,5 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -10,48 +11,38 @@ struct BarbrabellWidgets: WidgetBundle {
     }
 }
 
-/// FIT-304 + TKL-934: the live workout on the Lock Screen and in the Dynamic Island.
-/// Keeps the existing layout (TKL-801 owns layout changes) and adds motion: countdown rings via
-/// `ProgressView(timerInterval:)` + `Text(timerInterval:)`, `numericText` transitions on logged sets,
-/// and "Next: Back Squat · 170 × 5" in the expanded view.
+/// FIT-304, TKL-801 (the approved prototype on TKL-800, https://claude.ai/artifact/56LL6q28Kw1gdbeYr2BUpe): the live
+/// workout in the Dynamic Island and on the Lock Screen. Expanded and on the Lock Screen: the lift large, "Lift 3 of 6"
+/// and the set dots, the set as the hero with Done set; during a rest, the countdown draining in the plate color with
+/// −10s, +10s and Skip; then what's next. The buttons work without opening the app (WorkoutIntent). When a rest runs
+/// out the island says "Rest over", from the content's stale date even if the app is asleep.
 struct WorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
-            Card(state: context.state, tint: tint(context.attributes.plate)).padding(16)
+            let phase = ActivityPhase(context.state, stale: context.isStale)
+            LockScreen(state: context.state, phase: phase, tint: tint(context.attributes.plate))
+                .padding(16)
         } dynamicIsland: { context in
             let state = context.state
+            let phase = ActivityPhase(state, stale: context.isStale)
             let tint = tint(context.attributes.plate)
-            let restRange = Self.restInterval(for: state)
             return DynamicIsland {
-                // Long-pressed: the lift and the set large, the rest's countdown or the load on the right, then progress.
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(state.title).font(.headline).lineLimit(1)
-                        Text(state.step.contains("/") ? "Set \(state.step.replacingOccurrences(of: "/", with: " of "))" : state.step)
-                            .font(.subheadline).foregroundStyle(.secondary)
-                            .contentTransition(.numericText())
-                    }
-                    .padding(.leading, 6)
+                    Heading(state: state, phase: phase, tint: tint, island: true).padding(.leading, 6).padding(.top, 2)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Group {
-                        if let range = restRange {
-                            Text(timerInterval: range, countsDown: true).foregroundStyle(tint)
-                        } else {
-                            Text(state.set.isEmpty ? (state.load ?? "") : state.set)
-                                .contentTransition(.numericText())
+                        if case .resting(let starts, let ends) = phase {
+                            RestRing(starts: starts, ends: ends, tint: tint, size: 46)
+                        } else if !state.isDone {
+                            SetDots(done: state.setsDone, of: state.sets, tint: tint)
                         }
                     }
-                    .font(.title2.weight(.semibold)).monospacedDigit().multilineTextAlignment(.trailing).padding(.trailing, 6)
+                    .padding(.trailing, 6).padding(.top, 2)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(state.nextUp ?? state.detail)
-                            .font(.subheadline).monospacedDigit().lineLimit(1)
-                            .contentTransition(.numericText())
-                        ProgressView(value: state.progress).tint(tint)
-                    }
-                    .padding(.horizontal, 6).padding(.bottom, 4)
+                    Hero(state: state, phase: phase, tint: tint, onDark: true)
+                        .padding(.horizontal, 6).padding(.bottom, 2)
                 }
             } compactLeading: {
                 // "Squat 2/3": which lift and which set, always.
@@ -61,50 +52,31 @@ struct WorkoutLiveActivity: Widget {
                 }
                 .font(.subheadline.weight(.semibold)).monospacedDigit().padding(.leading, 4)
             } compactTrailing: {
-                // "185×5", or a countdown ring + timer while resting (animates without updates).
-                if let range = restRange {
-                    HStack(spacing: 4) {
-                        ProgressView(timerInterval: range, countsDown: true) {
-                            EmptyView()
-                        } currentValueLabel: {
-                            EmptyView()
-                        }
-                        .progressViewStyle(.circular)
-                        .tint(tint)
-                        .frame(width: 18, height: 18)
-                        Text(timerInterval: range, countsDown: true)
-                            .font(.caption.weight(.semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(tint)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 38)
-                    }
-                } else {
-                    Text(state.set.isEmpty ? (state.load ?? "") : state.set)
-                        .font(.subheadline.weight(.semibold)).monospacedDigit()
+                switch phase {
+                case .resting(_, let ends):
+                    Text(timerInterval: Date.now...ends, countsDown: true).monospacedDigit().foregroundStyle(tint)
+                        .multilineTextAlignment(.trailing).frame(maxWidth: 44)
+                case .restOver:
+                    Text("Go").font(.subheadline.weight(.bold)).foregroundStyle(tint)
+                case .done:
+                    Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(tint)
+                case .lifting:
+                    Text(state.set.isEmpty ? (state.load ?? "") : state.set).font(.subheadline.weight(.semibold)).monospacedDigit()
                         .contentTransition(.numericText())
                         .lineLimit(1).minimumScaleFactor(0.8).foregroundStyle(tint)
                 }
             } minimal: {
-                if let range = restRange {
-                    ProgressView(timerInterval: range, countsDown: true) {
-                        EmptyView()
-                    } currentValueLabel: {
-                        EmptyView()
-                    }
-                    .progressViewStyle(.circular)
-                    .tint(tint)
-                } else {
+                switch phase {
+                case .resting(let starts, let ends):
+                    RestRing(starts: starts, ends: ends, tint: tint, size: 22, digits: false)
+                case .restOver:
+                    Image(systemName: "bell.fill").font(.caption2.weight(.bold)).foregroundStyle(tint)
+                default:
                     ProgressView(value: state.progress).progressViewStyle(.circular).tint(tint)
                 }
             }
+            .keylineTint(tint)
         }
-    }
-
-    static func restInterval(for state: WorkoutActivityAttributes.ContentState) -> ClosedRange<Date>? {
-        guard let ends = state.restEnds, ends > .now else { return nil }
-        let start = min(state.restStarted ?? .now, ends)
-        return start...ends
     }
 
     /// The app's plate colors (Plate.mark in App/Theme.swift), each light and dark.
@@ -119,40 +91,155 @@ struct WorkoutLiveActivity: Widget {
     }
 }
 
-private struct Card: View {
+/// The lift large, then where it sits in the session.
+private struct Heading: View {
     let state: WorkoutActivityAttributes.ContentState
+    let phase: ActivityPhase
+    let tint: Color
+    /// In the island, where a rest's "up next" moves up here so its buttons fit.
+    var island = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(state.title).font(.title3.weight(.bold)).lineLimit(1).minimumScaleFactor(0.8)
+            Text(where_).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
+        }
+    }
+
+    private var where_: String {
+        if state.isDone { return "\(state.lifts) lifts · all done" }
+        if island, case .resting = phase { return "Rest · up next \(state.set)" }
+        if state.warming { return "Warm-up · step \(state.step.replacingOccurrences(of: "/", with: " of "))" }
+        let set = "Set " + state.step.replacingOccurrences(of: "/", with: " of ")
+        return state.lifts > 0 ? "Lift \(state.liftIndex) of \(state.lifts) · \(set)" : set
+    }
+}
+
+/// The hero (the set, or the rest's countdown), its buttons, then what's next.
+private struct Hero: View {
+    let state: WorkoutActivityAttributes.ContentState
+    let phase: ActivityPhase
+    let tint: Color
+    /// In the island, which is always black.
+    var onDark = false
+    /// On the Lock Screen, which has less height than the open island.
+    var tight = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: tight ? 6 : 10) {
+            switch phase {
+            case .resting(let starts, let ends):
+                // In the island the ring counts down and the heading says what's next, so the buttons fit.
+                if !onDark {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(timerInterval: Date.now...ends, countsDown: true)
+                            .font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(tint)
+                        Spacer(minLength: 8)
+                        Text("Up next \(state.set)").font(.subheadline.weight(.semibold)).monospacedDigit()
+                            .foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                ProgressView(timerInterval: starts...ends, countsDown: true) { EmptyView() } currentValueLabel: { EmptyView() }
+                    .tint(tint)
+                HStack(spacing: 8) {
+                    action("−10s", "less", label: "10 seconds less")
+                    action("+10s", "more", label: "10 seconds more")
+                    action("Skip", "skip", label: "Skip rest", primary: true)
+                }
+            case .done:
+                Text("Workout done").font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("Open Barbrabell to save it").font(.subheadline).foregroundStyle(.secondary)
+            case .lifting, .restOver:
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if phase == .restOver {
+                            Text("Rest over").font(.caption.weight(.bold)).foregroundStyle(tint).textCase(.uppercase)
+                        }
+                        Text(state.set.isEmpty ? (state.load ?? "") : state.set)
+                            .font(.system(size: 40, weight: .bold, design: .rounded)).monospacedDigit()
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                    Spacer(minLength: 8)
+                    action(state.warming ? "Done" : "Done set", "done", label: state.warming ? "Warm-up step done" : "Done set",
+                           primary: true, wide: true)
+                }
+            }
+            // Resting, "Up next" already says it.
+            if !state.isDone, !state.next.isEmpty, phase == .lifting || phase == .restOver {
+                Text(state.next).font(.subheadline).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+            }
+        }
+    }
+
+    private func action(_ title: String, _ id: String, label: String, primary: Bool = false, wide: Bool = false) -> some View {
+        Button(intent: WorkoutIntent(id)) {
+            Text(title).font(.subheadline.weight(.bold)).monospacedDigit()
+                .frame(maxWidth: wide ? nil : .infinity).padding(.horizontal, wide ? 18 : 0).frame(height: tight || (onDark && phase != .lifting && phase != .restOver) ? 34 : 40)
+                .foregroundStyle(primary ? Color.white : Color.primary)
+                .background(primary ? tint : Color.primary.opacity(onDark ? 0.16 : 0.08), in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+/// The rest as a ring that drains in the plate color, its seconds inside.
+private struct RestRing: View {
+    let starts: Date
+    let ends: Date
+    let tint: Color
+    let size: CGFloat
+    var digits = true
+
+    var body: some View {
+        ProgressView(timerInterval: starts...ends, countsDown: true) { EmptyView() } currentValueLabel: {
+            if digits {
+                Text(timerInterval: Date.now...ends, countsDown: true, showsHours: false)
+                    .font(.system(size: 11, weight: .bold)).monospacedDigit()
+            }
+        }
+        .progressViewStyle(.circular).tint(tint).frame(width: size, height: size)
+    }
+}
+
+/// A dot per set of the lift, filled as they're done.
+private struct SetDots: View {
+    let done: Int
+    let of: Int
     let tint: Color
 
     var body: some View {
-        let restRange = WorkoutLiveActivity.restInterval(for: state)
-        HStack(spacing: 12) {
-            if let range = restRange {
-                ZStack {
-                    ProgressView(timerInterval: range, countsDown: true) {
-                        EmptyView()
-                    } currentValueLabel: {
-                        EmptyView()
-                    }
-                    .progressViewStyle(.circular)
-                    .tint(tint)
-                    .frame(width: 32, height: 32)
-                }
-                .frame(width: 32, height: 32)
-            } else {
+        HStack(spacing: 4) {
+            ForEach(0..<min(of, 8), id: \.self) { index in
+                Circle().fill(index < done ? tint : Color.primary.opacity(0.2)).frame(width: 8, height: 8)
+            }
+        }
+        .frame(height: 28)
+        .accessibilityElement().accessibilityLabel("\(done) of \(of) sets done")
+    }
+}
+
+/// The Lock Screen and StandBy: the expanded island's content, sized for the Lock Screen.
+private struct LockScreen: View {
+    let state: WorkoutActivityAttributes.ContentState
+    let phase: ActivityPhase
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "dumbbell.fill").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                     .frame(width: 32, height: 32).background(tint, in: .rect(cornerRadius: 8))
+                Heading(state: state, phase: phase, tint: tint)
+                Spacer(minLength: 0)
+                if case .resting(let starts, let ends) = phase {
+                    RestRing(starts: starts, ends: ends, tint: tint, size: 34)
+                } else if !state.isDone {
+                    SetDots(done: state.setsDone, of: state.sets, tint: tint)
+                }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(state.title).font(.headline).lineLimit(1)
-                Text(state.detail)
-                    .font(.subheadline).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
-                    .contentTransition(.numericText())
-            }
-            Spacer(minLength: 0)
-            if let range = restRange {
-                Text(timerInterval: range, countsDown: true).font(.title3.weight(.semibold)).monospacedDigit()
-                    .foregroundStyle(tint).multilineTextAlignment(.trailing).frame(width: 56, alignment: .trailing)
-            }
+            Hero(state: state, phase: phase, tint: tint, tight: true)
         }
     }
 }
