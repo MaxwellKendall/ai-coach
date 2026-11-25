@@ -51,22 +51,3 @@ struct CoachChartReveal: ViewModifier {
         }
     }
 }
-
-/// Positions a chip between two anchors in the same coordinate space. The caller
-/// advances `landed` when its action succeeds and owns any feedback on arrival.
-struct BankToTarget<Chip: View>: View {
-    let source: CGRect
-    let target: CGRect
-    let landed: Bool
-    @ViewBuilder var chip: Chip
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        let rect = landed || reduceMotion ? target : source
-        chip.fixedSize()
-            .position(x: rect.midX, y: rect.midY)
-            .transition(.opacity)
-            .accessibilityHidden(true)
-            .allowsHitTesting(false)
-    }
-}
