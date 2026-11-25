@@ -59,6 +59,7 @@ test("npm release excludes a second worktree before upload and recovers after th
     const contending = run("contender", ...mode);
     assert.equal(contending.status, 1, contending.stderr);
     assert.match(contending.stderr, /holder.*PID/i);
+    assert.match(contending.stderr, new RegExp(`Processes holding the lock:[\\s\\S]*\\b${holderPid}\\b`));
   }
   assert.equal(run("preview", "--dry-run").status, 0);
   assert.equal(run("help", "--help").status, 0);
@@ -69,4 +70,72 @@ test("npm release excludes a second worktree before upload and recovers after th
   assert.equal(run("takeover").status, 0);
   assert.equal(run("next").status, 0);
   assert.equal(readFileSync(uploads, "utf8"), "holder\ntakeover\nnext\n");
+});
+
+test("a held lock names the processes that hold it, even when the recorded PID is gone", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "release-lock-orphan-"));
+  const ready = join(dir, "ready");
+  const env = { ...process.env, HOME: dir, TEST_READY: ready };
+  // The release exits at once but leaves a detached child behind that still holds the lock descriptor.
+  const mock = `
+    import { spawn } from "node:child_process";
+    import { fstatSync, statSync, writeFileSync } from "node:fs";
+    import { homedir } from "node:os";
+    if (process.argv.includes("--dry-run") || process.argv.includes("--help")) process.exit(0);
+    if (process.env.FACTORY_RUN_ID === "crashed") {
+      // libuv closes extra descriptors on spawn, so hand the lock to the child on purpose
+      // to stand in for any tool that leaks or daemonizes with it.
+      const { ino } = statSync(homedir() + "/dev/factory/state/locks/com.maxwellkendall.aicoach.release.lock");
+      const fd = [...Array(64).keys()].slice(3).find((n) => { try { return fstatSync(n).ino === ino; } catch { return false; } });
+      const child = spawn("sleep", ["300"], { detached: true, stdio: ["ignore", "ignore", "ignore", fd] });
+      child.unref();
+      writeFileSync(process.env.TEST_READY, JSON.stringify({ parent: process.pid, child: child.pid }));
+    }
+  `;
+  const root = join(dir, "repo");
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  mkdirSync(join(root, "appstore"));
+  for (const file of ["package.json", "appstore/review.json", "scripts/release-lock.py"]) {
+    cpSync(new URL(`../${file}`, import.meta.url), join(root, file));
+  }
+  writeFileSync(join(root, "scripts", "release.mjs"), mock);
+  const run = (id) => spawnSync("npm", ["run", "release"], {
+    cwd: root, env: { ...env, FACTORY_RUN_ID: id }, encoding: "utf8", timeout: 30000,
+  });
+
+  assert.equal(run("crashed").status, 0);
+  const { parent, child } = JSON.parse(readFileSync(ready, "utf8"));
+  t.after(() => {
+    try { process.kill(child, "SIGKILL"); } catch {}
+    rmSync(dir, { recursive: true, force: true });
+  });
+  assert.throws(() => process.kill(parent, 0), /ESRCH/, "recorded PID has exited");
+
+  const blocked = run("contender");
+  assert.equal(blocked.status, 1, blocked.stderr);
+  assert.match(blocked.stderr, new RegExp(`crashed \\(PID ${parent}\\)`));
+  assert.match(blocked.stderr, new RegExp(`PID ${parent} is no longer running`));
+  assert.match(blocked.stderr, new RegExp(`\\b${child}\\b.*sleep`));
+  assert.match(blocked.stderr, /Stop the processes above/);
+
+  // If lsof fails (non-zero exit), report the fallback instead of pointing at an empty list.
+  const fakeBin = join(dir, "fake-bin");
+  mkdirSync(fakeBin);
+  writeFileSync(join(fakeBin, "lsof"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  const lsofFailed = spawnSync("npm", ["run", "release"], {
+    cwd: root,
+    env: { ...env, PATH: `${fakeBin}:${process.env.PATH}`, FACTORY_RUN_ID: "contender-no-lsof" },
+    encoding: "utf8",
+    timeout: 30000,
+  });
+  assert.equal(lsofFailed.status, 1, lsofFailed.stderr);
+  assert.match(lsofFailed.stderr, /Could not list the lock's holders \(lsof failed\)/);
+  assert.match(lsofFailed.stderr, new RegExp(`PID ${parent} is no longer running`));
+  assert.doesNotMatch(lsofFailed.stderr, /Stop the processes above/);
+
+  process.kill(child, "SIGKILL");
+  for (let tries = 0; tries < 200; tries++) {
+    try { process.kill(child, 0); await setTimeout(25); } catch { break; }
+  }
+  assert.equal(run("takeover").status, 0);
 });
