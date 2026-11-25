@@ -4,7 +4,52 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
+import subprocess
 import sys
+
+
+def pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def lock_holders(path):
+    """Processes other than this one with the lock file open, as "PID command" lines."""
+    try:
+        found = subprocess.run(["lsof", "-t", str(path)], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    pids = sorted({int(p) for p in found.split()} - {os.getpid()})
+    holders = []
+    for pid in pids:
+        try:
+            command = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
+                                     capture_output=True, text=True, timeout=10).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            command = ""
+        holders.append(f"{pid} {command or '?'}")
+    return holders
+
+
+def held_message(bundle_id, path, recorded):
+    lines = [f"Release already running for {bundle_id}: {recorded}"]
+    holders = lock_holders(path)
+    if holders is None:
+        lines.append(f"Could not list the lock's holders (lsof failed); try: lsof {path}")
+    elif holders:
+        lines.append("Processes holding the lock:")
+        lines += [f"  {h}" for h in holders]
+    match = re.search(r"\(PID (\d+)\)", recorded)
+    if match and not pid_alive(int(match.group(1))):
+        lines.append(f"Recorded PID {match.group(1)} is no longer running; a leftover child still holds the lock. "
+                     "Stop the processes above to release it.")
+    return "\n".join(lines)
 
 
 def acquire_lock(root):
@@ -20,7 +65,7 @@ def acquire_lock(root):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 lock.seek(0)
-                print(f"Release already running for {bundle_id}: {lock.read().strip()}", file=sys.stderr)
+                print(held_message(bundle_id, lock.name, lock.read().strip()), file=sys.stderr)
                 sys.exit(1)
 
             run_id = os.environ.get("FACTORY_RUN_ID") or "manual"
