@@ -22,20 +22,28 @@ struct WorkoutActivityAttributes: ActivityAttributes {
         var lift: String = ""
         /// The set exactly, for its right side outside a rest: "185×5", "×10", "30 s".
         var set: String = ""
-        /// TKL-934: expanded Dynamic Island line ("Next: Back Squat · 170 × 5").
-        var nextUp: String? = nil
-        /// TKL-934: logged and total set counts for numericText transitions.
-        var loggedSets: Int = 0
-        var totalSets: Int = 0
+        /// TKL-801: what comes after the set shown, "Next: Bench 135×8", or "Last set".
+        var next: String = ""
+        /// Which lift of the session, "Lift 3 of 6" (0 while warming up).
+        var liftIndex: Int = 0
+        var lifts: Int = 0
+        /// This lift's sets done and planned, for its dots (the warm-up's steps while warming up).
+        var setsDone: Int = 0
+        var sets: Int = 0
+        /// The running rest's length, so its bar drains from full.
+        var restTotal: TimeInterval?
+        /// A rest just ran out and the set shown is up: "Rest over".
+        var restOver: Bool = false
+        /// Every set is done: the finish card is on screen.
+        var isDone: Bool = false
+
+        var warming: Bool { lift == "Warm-up" }
+        /// The rest's start, for a countdown ring that drains as it runs.
+        var restStarts: Date? { restStarted ?? restEnds.map { $0 - (restTotal ?? 60) } }
     }
 
     /// The lifter's plate color (Plate's raw value), for the countdown.
     var plate: String
-
-    /// TKL-934: "Next: Back Squat · 170 × 5" for the expanded Dynamic Island.
-    nonisolated static func nextUpLine(title: String, dose: String) -> String {
-        dose.isEmpty ? "Next: \(title)" : "Next: \(title) · \(dose)"
-    }
 
     /// FIT-304: a lift in a word for the Dynamic Island: "Back Squat" → "Squat", "Bench Press" → "Bench",
     /// "Standing Military Press" → "Press", "Romanian Deadlift" → "RDL".
@@ -46,5 +54,24 @@ struct WorkoutActivityAttributes: ActivityAttributes {
         guard let first = words.first else { return name }
         if words.count > 1, words.last == "Press", !["Bench", "Leg", "Floor"].contains(first) { return "Press" }
         return first
+    }
+}
+
+/// What the Live Activity shows (TKL-801; here so the app's tests reach it): a set to do, a rest running, a rest that just ran out, or the session done.
+enum ActivityPhase: Equatable {
+    case lifting
+    case resting(starts: Date, ends: Date)
+    case restOver
+    case done
+
+    init(_ state: WorkoutActivityAttributes.ContentState, stale: Bool, now: Date = .now) {
+        if state.isDone {
+            self = .done
+        } else if let ends = state.restEnds, let starts = state.restStarts {
+            // Stale is the rest's end passing with the app asleep.
+            self = stale || ends <= now ? .restOver : .resting(starts: min(starts, ends), ends: ends)
+        } else {
+            self = state.restOver ? .restOver : .lifting
+        }
     }
 }

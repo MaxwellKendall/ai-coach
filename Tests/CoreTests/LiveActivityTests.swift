@@ -13,7 +13,8 @@ struct LiveActivityTests {
         #expect(WorkoutActivityAttributes.short("Pull-up") == "Pull-up")
     }
 
-    @Test func restIntervalAndNextUpLinePopulateForMotion() {
+    @Test func restIntervalAndNextLinePopulateForMotion() {
+        // TKL-934's countdown rings run from the rest's start; TKL-1023 keeps them under the approved island layout.
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let ends = start.addingTimeInterval(120)
         let state = WorkoutActivityAttributes.ContentState(
@@ -26,14 +27,14 @@ struct LiveActivityTests {
             progress: 0.33,
             lift: "Squat",
             set: "170×5",
-            nextUp: WorkoutActivityAttributes.nextUpLine(title: "Back Squat", dose: "170 × 5"),
-            loggedSets: 1,
-            totalSets: 3
+            next: "Next: Squat 170×5",
+            setsDone: 1,
+            sets: 3,
+            restTotal: 90
         )
-        #expect(state.restStarted == start)
+        #expect(state.restStarts == start) // the real start wins over ends − total
         #expect(state.restEnds == ends)
-        #expect(state.nextUp == "Next: Back Squat · 170 × 5")
-        #expect(state.loggedSets == 1)
-        #expect(state.totalSets == 3)
+        #expect(state.next == "Next: Squat 170×5")
+        #expect(state.setsDone == 1 && state.sets == 3)
     }
 }
