@@ -53,9 +53,17 @@ struct WorkoutLiveActivity: Widget {
                 .font(.subheadline.weight(.semibold)).monospacedDigit().padding(.leading, 4)
             } compactTrailing: {
                 switch phase {
-                case .resting(_, let ends):
-                    Text(timerInterval: Date.now...ends, countsDown: true).monospacedDigit().foregroundStyle(tint)
-                        .multilineTextAlignment(.trailing).frame(maxWidth: 44)
+                case .resting(let starts, let ends):
+                    // TKL-934: draining countdown ring beside the digits so remaining rest reads at a glance.
+                    HStack(spacing: 4) {
+                        RestRing(starts: starts, ends: ends, tint: tint, size: 18, digits: false)
+                        Text(timerInterval: starts...ends, countsDown: true)
+                            .font(.caption.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(tint)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 38)
+                    }
                 case .restOver:
                     Text("Go").font(.subheadline.weight(.bold)).foregroundStyle(tint)
                 case .done:
@@ -133,7 +141,7 @@ private struct Hero: View {
                 // In the island the ring counts down and the heading says what's next, so the buttons fit.
                 if !onDark {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(timerInterval: Date.now...ends, countsDown: true)
+                        Text(timerInterval: starts...ends, countsDown: true)
                             .font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(tint)
                         Spacer(minLength: 8)
                         Text("Up next \(state.set)").font(.subheadline.weight(.semibold)).monospacedDigit()
@@ -158,6 +166,7 @@ private struct Hero: View {
                         }
                         Text(state.set.isEmpty ? (state.load ?? "") : state.set)
                             .font(.system(size: 40, weight: .bold, design: .rounded)).monospacedDigit()
+                            .contentTransition(.numericText())
                             .lineLimit(1).minimumScaleFactor(0.6)
                     }
                     Spacer(minLength: 8)
@@ -168,6 +177,7 @@ private struct Hero: View {
             // Resting, "Up next" already says it.
             if !state.isDone, !state.next.isEmpty, phase == .lifting || phase == .restOver {
                 Text(state.next).font(.subheadline).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+                    .contentTransition(.numericText())
             }
         }
     }
@@ -195,7 +205,7 @@ private struct RestRing: View {
     var body: some View {
         ProgressView(timerInterval: starts...ends, countsDown: true) { EmptyView() } currentValueLabel: {
             if digits {
-                Text(timerInterval: Date.now...ends, countsDown: true, showsHours: false)
+                Text(timerInterval: starts...ends, countsDown: true, showsHours: false)
                     .font(.system(size: 11, weight: .bold)).monospacedDigit()
             }
         }

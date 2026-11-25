@@ -69,7 +69,7 @@ enum ActivityPhase: Equatable {
             self = .done
         } else if let ends = state.restEnds, let starts = state.restStarts {
             // Stale is the rest's end passing with the app asleep.
-            self = stale || ends <= now ? .restOver : .resting(starts: starts, ends: ends)
+            self = stale || ends <= now ? .restOver : .resting(starts: min(starts, ends), ends: ends)
         } else {
             self = state.restOver ? .restOver : .lifting
         }

@@ -9,9 +9,16 @@ import Foundation
 
     func start(_ state: WorkoutActivityAttributes.ContentState) {
         guard id == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        Self.endAll()
+        let staleIDs = Set(Live.activities.map(\.id))
         id = try? Live.request(attributes: WorkoutActivityAttributes(plate: Plate.current.rawValue),
                                content: Self.content(state)).id
+        if !staleIDs.isEmpty {
+            Task.detached {
+                for activity in Live.activities where staleIDs.contains(activity.id) {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                }
+            }
+        }
     }
 
     /// TKL-801: a rest's end is the content's stale date, so the island shows "Rest over" even if the app is asleep

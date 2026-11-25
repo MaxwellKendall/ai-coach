@@ -111,8 +111,14 @@ struct WorkoutCursor: Equatable {
     @ObservationIgnored private let activity = WorkoutActivity()
     @ObservationIgnored private var published: WorkoutActivityAttributes.ContentState?
     @ObservationIgnored private var timer: Task<Void, Never>?
+    /// True while `finishRest` clears an expired rest so `watchRest` preserves (not cancels) its rest-end alarm.
+    @ObservationIgnored private var finishingRest = false
     /// Sounds a rest's end from iOS itself, since a suspended app's timer can't.
     @ObservationIgnored var alarm = RestAlarm.system
+    /// Overridable in tests to verify background alert suppression vs fallback.
+    @ObservationIgnored var isBackground: () -> Bool = { UIApplication.shared.applicationState != .active }
+    /// Overridable in tests to observe published Live Activity updates and alerts.
+    @ObservationIgnored var sendUpdate: ((WorkoutActivityAttributes.ContentState, AlertConfiguration?) -> Void)?
     /// The workout screen's say in a rest running out (its haptic and the next card's arrival): it calls the end it's
     /// given inside its animation. Unset, the rest just ends.
     @ObservationIgnored var onRestEnd: (@MainActor (() -> Void) -> Void)?
@@ -140,6 +146,11 @@ struct WorkoutCursor: Equatable {
         case .less, .more:
             guard let index = cursor.restIndex(in: draft) else { break }
             cursor.shiftRest(by: action == .less ? -10 : 10, on: index, in: draft, now: now)
+            // Cutting a running rest to zero ends it now (preserving the immediate alarm scheduled in `watchRest`).
+            if cursor.rest.map({ $0.ends <= now }) == true {
+                _ = finishRest(now: now, alert: true)
+                return
+            }
         case .skip:
             guard let index = cursor.restIndex(in: draft) else { break }
             cursor.skipRest(on: index)
@@ -150,6 +161,8 @@ struct WorkoutCursor: Equatable {
     /// Ends a rest that has run out; the island says so. Returns whether one did.
     @discardableResult
     func finishRest(now: Date = .now, alert: Bool = true) -> Bool {
+        finishingRest = true
+        defer { finishingRest = false }
         guard cursor.restEnded(now: now) else { return false }
         restsFinished += 1
         restOverPage = cursor.page
@@ -178,9 +191,10 @@ struct WorkoutCursor: Equatable {
         let state = content(now: now)
         guard restOver || state != published else { return }
         published = state
-        let background = UIApplication.shared.applicationState != .active
-        activity.update(state, alert: restOver && Self.islandAlerts(background: background, alarmSounds: alarm.sounds())
-            ? AlertConfiguration(title: "Rest over", body: "\(state.title) · \(state.set)", sound: .default) : nil)
+        let background = isBackground()
+        let alert: AlertConfiguration? = restOver && Self.islandAlerts(background: background, alarmSounds: alarm.sounds())
+            ? AlertConfiguration(title: "Rest over", body: "\(state.title) · \(state.set)", sound: .default) : nil
+        if let sendUpdate { sendUpdate(state, alert) } else { activity.update(state, alert: alert) }
     }
 
     /// The island's own alert at a rest's end: only in the background, and only when iOS won't sound the rest alarm
@@ -190,7 +204,10 @@ struct WorkoutCursor: Equatable {
     /// Ends the running rest when it runs out, whether or not the screen is showing, and sets iOS's alarm for it.
     private func watchRest() {
         timer?.cancel()
-        guard let ends = cursor.rest?.ends else { alarm.cancel(); return }
+        guard let ends = cursor.rest?.ends else {
+            if !finishingRest { alarm.cancel() }
+            return
+        }
         let after = content(now: ends)
         alarm.set(ends, "\(after.title) · \(after.set)")
         timer = Task { [weak self] in
@@ -295,12 +312,16 @@ struct WorkoutCursor: Equatable {
     }
 
     /// The notification iOS delivers at the rest's end, with a sound; it's only heard when notifications are allowed.
+    /// When the deadline has already arrived (e.g. −10s cut the rest to zero), `trigger` is nil for immediate delivery.
     static func request(ends: Date, next: String, now: Date = .now) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
         content.title = "Rest over"
         content.body = next
         content.sound = .default
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, ends.timeIntervalSince(now)), repeats: false)
+        let remaining = ends.timeIntervalSince(now)
+        let trigger: UNNotificationTrigger? = remaining > 0.05
+            ? UNTimeIntervalNotificationTrigger(timeInterval: remaining, repeats: false)
+            : nil
         return UNNotificationRequest(identifier: id, content: content, trigger: trigger)
     }
 

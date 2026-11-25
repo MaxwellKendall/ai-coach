@@ -1,3 +1,4 @@
+import ActivityKit
 import Foundation
 import Testing
 import UserNotifications
@@ -64,10 +65,12 @@ import UserNotifications
         for _ in 0..<14 { workout.handle(.less, now: now + 20) }
         #expect(workout.cursor.rest?.ends == now + 30)
         // Never before now: a rest cut to nothing ends there, and moves on.
+        var clamped = workout.cursor
+        clamped.shiftRest(by: -10, on: 1, in: workout.draft, now: now + 25)
+        #expect(clamped.rest?.ends == now + 25)
         workout.handle(.less, now: now + 25)
-        #expect(workout.cursor.rest?.ends == now + 25)
-        workout.handle(.more, now: now + 25)
         #expect(workout.cursor.rest == nil && workout.cursor.page == 2)
+        #expect(workout.content(now: now + 25).restOver)
     }
 
     @Test func moreStretchesTheBarPastItsStart() {
@@ -213,6 +216,48 @@ import UserNotifications
         #expect(trigger.timeInterval == 180)
         // The island's own alert only stands in when notifications aren't allowed (best effort, when the app wakes).
         #expect(LiveWorkout.islandAlerts(background: true, alarmSounds: alarms.sounds) == !allowed)
+    }
+
+    @Test(arguments: [true, false])
+    func cuttingARestToZeroEndsItAndPreservesTheAlert(allowed: Bool) {
+        // TKL-1023 [verify] 1: tapping −10s with 5 s left while backgrounded must end the rest immediately and
+        // preserve/deliver the system rest-end notification instead of scheduling 1 s later and canceling it.
+        let alarms = Alarms()
+        alarms.sounds = allowed
+        let workout = workout(alarms: alarms)
+        workout.isBackground = { true }
+        var updates: [(WorkoutActivityAttributes.ContentState, AlertConfiguration?)] = []
+        workout.sendUpdate = { updates.append(($0, $1)) }
+        workout.handle(.done, now: now)
+        let cancelsBefore = alarms.cancels
+
+        workout.handle(.less, now: now + 175)
+
+        #expect(workout.cursor.rest == nil && workout.cursor.page == 2)
+        #expect(workout.restsFinished == 1)
+        let state = workout.content(now: now + 175)
+        #expect(state.restOver)
+        #expect(ActivityPhase(state, stale: false, now: now + 175) == .restOver)
+        // Replacement alarm is scheduled for immediate delivery (trigger == nil) and NOT canceled by finishRest.
+        #expect(alarms.set.last?.0 == now + 175)
+        #expect(alarms.set.last?.1 == "Back Squat · 185×5")
+        #expect(alarms.cancels == cancelsBefore)
+        let immediate = RestAlarm.request(ends: now + 175, next: "Back Squat · 185×5", now: now + 175)
+        #expect(immediate.trigger == nil)
+        #expect(immediate.content.title == "Rest over")
+        #expect(immediate.content.sound != nil)
+        // Published island state shows Rest over; island alert stands in only when notifications are denied.
+        #expect(updates.last?.0.restOver == true)
+        #expect((updates.last?.1 != nil) == !allowed)
+    }
+
+    @Test func naturalRestEndPreservesThePendingAlarm() {
+        let alarms = Alarms()
+        let workout = workout(alarms: alarms)
+        workout.handle(.done, now: now)
+        let cancelsBefore = alarms.cancels
+        #expect(workout.finishRest(now: now + 180))
+        #expect(alarms.cancels == cancelsBefore)
     }
 
     @Test func anIslandButtonWithNoWorkoutEndsTheActivity() {
