@@ -35,6 +35,7 @@ final class HapticPlayer {
         if !playHaptics(pattern) {
             fallbackFeedback = pattern.fallback
             fallbackTrigger += 1
+            Self.log.info("Fell back for haptic pattern: \(pattern.rawValue, privacy: .public)")
         }
         if sound { playSound(pattern) }
     }

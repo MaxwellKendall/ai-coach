@@ -40,6 +40,8 @@ struct TodayScreen: View {
     /// TKL-759: the session before the changes the showing Undo takes back; dropped once that toast goes.
     @State private var editUndo: EditUndo?
     @State private var sheet: Sheet?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var workoutTransition
     @State private var live: WorkoutDraft?
     @State private var tracking: RunTarget?
     @State private var you = false
@@ -280,14 +282,13 @@ struct TodayScreen: View {
         // FIT-185: run mode, for a run today, planned or not.
         .fullScreenCover(item: $tracking) { target in RunModeView(planned: target.planned) }
         .fullScreenCover(item: $live, onDismiss: celebrate) { draft in
-            WorkoutModeView(draft: draft) {
+            WorkoutModeView(draft: draft, reduceWorkoutMotion: workoutReduceMotion) {
                 goToday()
                 saved = true
             }
-            .onAppear {
-                saved = false
-                winsBefore = Set(allWins.map(\.key))
-            }
+            .modifier(WorkoutCoverTransition(reduceMotion: workoutReduceMotion, namespace: workoutTransition))
+            // A zoom brings swipe-down and pinch to dismiss with it. Leaving is the Close button's, which asks first.
+            .interactiveDismissDisabled()
         }
         .sheet(item: $sessionLink) { ActivityView(link: $0).presentationDetents([.medium, .large]) }
         .sheet(isPresented: Binding(get: { celebrating != nil }, set: { if !$0 { celebrating = nil } })) {
@@ -330,7 +331,9 @@ struct TodayScreen: View {
         }
     }
 
-    private var allWins: [WinItem] {
+    private var allWins: [WinItem] { wins(in: entries) }
+
+    private func wins(in entries: [LogEntry]) -> [WinItem] {
         WinFeed.wins(profile: profiles.first, goals: goals, entries: entries, planned: planned, templates: templates)
     }
 
@@ -360,8 +363,11 @@ struct TodayScreen: View {
     private func celebrate() {
         guard saved else { return }
         saved = false
-        let earned = Wins.earned(allWins, before: winsBefore)
-        if earned.isEmpty { toast = Toast(text: "Workout saved") } else { celebrating = earned }
+        // Read from the context: an instant dismissal gets here before the query has the sets just saved.
+        let logged = (try? context.fetch(FetchDescriptor<LogEntry>(sortBy: [SortDescriptor(\.timestamp)]))) ?? entries
+        let earned = Wins.earned(wins(in: logged), before: winsBefore)
+        if earned.isEmpty { toast = Toast(text: "Workout saved"); return }
+        withPresentation(reduceMotion: workoutReduceMotion) { celebrating = earned }
     }
 
     // MARK: Header and strip
@@ -441,6 +447,7 @@ struct TodayScreen: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Self.dayName(days[index]))
+                .accessibilityIdentifier(today ? "today.currentDay" : "today.otherDay")
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
@@ -733,12 +740,14 @@ struct TodayScreen: View {
                     // A planned run comes first: run mode tracks it and saves it to Apple Health. Lifts beside it are checked off or started below.
                     if plan.ran.isEmpty, let run = runs(plan.items).first {
                         startRun(run)
-                        if !lifting(plan.items).isEmpty { secondary("Start the lifts", "play.fill") { start(plan) } }
+                        if !lifting(plan.items).isEmpty { secondary("Start the lifts", "play.fill") { start(plan) }.matchedTransitionSource(id: "workout", in: workoutTransition) }
                         pair("Move", "calendar", { sheet = .move }, "Log", "plus", { sheet = .logChoice(plan.items) })
                     } else {
                         // Simplicity pass: one button; Move and Log behind the ⋯ beside it.
                         HStack(spacing: 8) {
-                            Button { start(plan) } label: { Label("Start", systemImage: "play.fill") }.buttonStyle(.primary)
+                            Button { start(plan) } label: { Label("Start", systemImage: "play.fill") }
+                                .buttonStyle(.primary)
+                                .matchedTransitionSource(id: "workout", in: workoutTransition)
                             Menu {
                                 Button("Log It Without Starting", systemImage: "plus") { sheet = .logChoice(plan.items) }
                                 Button("Move to Another Day", systemImage: "calendar") { sheet = .move }
@@ -752,8 +761,13 @@ struct TodayScreen: View {
                 }
             case .done(let done):
                 if let run = done.pendingRun { startRun(run) }
-                pair("Edit the sets", "square.and.pencil", { if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned, done.start) } },
-                     "Log", "plus", { sheet = .logChoice([]) })
+                HStack(spacing: 8) {
+                    secondary("Edit the sets", "square.and.pencil") {
+                        if let run = done.run { sheet = .ran(run) } else { sheet = .record(done.planned, done.start) }
+                    }
+                    .matchedTransitionSource(id: "workout", in: workoutTransition)
+                    secondary("Log", "plus") { sheet = .logChoice([]) }
+                }
             default:
                 // FIT-235: the next session this week pulled to today.
                 if let next = nextPlanned(cards) {
@@ -1053,10 +1067,24 @@ struct TodayScreen: View {
         start(plan)
     }
 
+    private var workoutReduceMotion: Bool {
+        #if DEBUG
+        if DebugRole.workoutMotionFixture { return DebugRole.workoutReduceMotion }
+        #endif
+        return reduceMotion
+    }
+
     private func start(_ plan: DayCard.Planned) {
         let lifts = lifting(plan.items)
         if lifts.isEmpty, let run = runs(plan.items).first { tracking = RunTarget(planned: run); return }
-        live = WorkoutDraft(session: plan.title, plan: lifts.count == plan.items.count ? plan.session : Planner.session(lifts, templates: templates))
+        present(WorkoutDraft(session: plan.title, plan: lifts.count == plan.items.count ? plan.session : Planner.session(lifts, templates: templates)))
+    }
+
+    /// Every way into the workout cover: it notes the wins so far, so Save celebrates only what this workout earned.
+    private func present(_ draft: WorkoutDraft) {
+        saved = false
+        winsBefore = Set(allWins.map(\.key))
+        withPresentation(reduceMotion: workoutReduceMotion) { live = draft }
     }
 
     // MARK: FIT-179: runs
@@ -1146,7 +1174,7 @@ struct TodayScreen: View {
         let draft = WorkoutDraft(session: "Workout", plan: session)
         Task {
             try? await Task.sleep(for: .milliseconds(450))
-            live = draft
+            present(draft)
         }
     }
 
@@ -1438,4 +1466,18 @@ struct TodayScreen: View {
 
 extension WorkoutDraft: Identifiable {
     var id: String { session + rows.map(\.id.uuidString).joined() }
+}
+
+/// Today uses the same source ID before and after the day changes to done.
+private struct WorkoutCoverTransition: ViewModifier {
+    var reduceMotion: Bool
+    var namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content.navigationTransition(.automatic)
+        } else {
+            content.navigationTransition(.zoom(sourceID: "workout", in: namespace))
+        }
+    }
 }

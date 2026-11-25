@@ -19,6 +19,9 @@ enum DebugRole {
     /// `SyncEngine` refuse in it. Works alongside `-uiTesting YES -role …`.
     static var demo: Bool { UserDefaults.standard.bool(forKey: "demo") }
     static var role: String? { uiTesting ? UserDefaults.standard.string(forKey: "role") : nil }
+    static var workoutMotionFixture: Bool { uiTesting && UserDefaults.standard.bool(forKey: "workoutMotionFixture") }
+    static var workoutReduceMotion: Bool { UserDefaults.standard.bool(forKey: "workoutReduceMotion") }
+
     /// FIT-426: `-aiWeeks YES` designs a Pro lifter's weeks with `StubDesigner`, so a UI test sees an AI week without
     /// a network or a model; without it, a UI test's weeks stay code planned.
     static var aiWeeks: Bool { uiTesting && UserDefaults.standard.bool(forKey: "aiWeeks") }
@@ -49,10 +52,19 @@ enum DebugRole {
         case "client":
             // A session Sam wrote for today, as the server would sync it (FIT-202).
             let at = Calendar.current.startOfDay(for: now).timeIntervalSince1970 + 18 * 3600
-            let lifts: [(String, Double)] = [("back-squat", 185), ("bench-press", 135)]
+            let lifts: [(String, Double)] = workoutMotionFixture ? [("back-squat", 185)] : [("back-squat", 185), ("bench-press", 135)]
+            if workoutMotionFixture {
+                let profile = Profile(age: 34, weightLb: 180)
+                profile.programStart = Calendar.current.startOfDay(for: now)
+                profile.targetDate = Calendar.current.date(byAdding: .day, value: 28, to: now)
+                context.insert(profile)
+                let goal = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 500, unit: "lb")
+                goal.baseline = UserDefaults.standard.bool(forKey: "workoutNoBest") ? 400 : 200
+                context.insert(goal)
+            }
             let rows: [[String: Any]] = lifts.enumerated().map { index, lift in
                 ["id": UUID().uuidString, "kind": "workout", "at": at + Double(index), "slot": "Lower A", "template": lift.0,
-                 "targets": [["metric": "sets", "value": 3, "unit": "sets"], ["metric": "reps", "value": 5, "unit": "reps"],
+                 "targets": [["metric": "sets", "value": workoutMotionFixture ? 2 : 3, "unit": "sets"], ["metric": "reps", "value": 5, "unit": "reps"],
                              ["metric": "load_lb", "value": lift.1, "unit": "lb"]],
                  "note": "", "main": index == 0, "pinned": true]
             }

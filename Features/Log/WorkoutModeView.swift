@@ -16,6 +16,7 @@ struct WorkoutModeView: View {
     @Query private var profiles: [Profile]
     @Query private var planned: [PlannedActivity]
     @State var draft: WorkoutDraft
+    var reduceWorkoutMotion = false
     var onSaved: () -> Void = {}
     @State private var startedAt = Date.now
     @State private var page = 0
@@ -28,7 +29,15 @@ struct WorkoutModeView: View {
     @State private var countsDown = false
     @State private var backward = false
     @State private var rest: Rest?
-    @State private var restsFinished = 0
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { reduceWorkoutMotion || systemReduceMotion }
+    @State private var haptics = HapticPlayer()
+    /// The set on its way to its segment, which fills when it lands.
+    @State private var flight: Flight?
+    /// Where the numbers are, for the chip that leaves them.
+    @State private var numbers: CGPoint?
+    @State private var movedOnAt = Date.distantPast
+    @State private var saving = false
     @State private var quitting = false
     @State private var voice = VoiceCapture()
     @State private var working: String?
@@ -55,6 +64,16 @@ struct WorkoutModeView: View {
         var total: TimeInterval
         var page: Int
     }
+
+    private struct Flight {
+        var bank: Bank
+        var block: Int
+        var sets: Int
+    }
+
+    /// The second tap of a double tap lands on whatever the first one brought under the finger: the next set's Done,
+    /// or Save on the last card.
+    private var justMovedOn: Bool { Date.now.timeIntervalSince(movedOnAt) < 0.35 }
 
     private var names: [String: String] {
         Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { first, _ in first })
@@ -85,10 +104,10 @@ struct WorkoutModeView: View {
                 }
             }
             .id("\(warming ? warmStep : -1) \(page)")
-            .motionTransition(.asymmetric(insertion: .move(edge: backward ? .leading : .trailing).combined(with: .opacity), removal: .opacity))
+            .transition(reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: backward ? .leading : .trailing).combined(with: .opacity), removal: .opacity))
             .offset(x: dragX)
             .rotationEffect(.degrees(Double(dragX) / 40))
-            .gesture(swipe(cards: cards))
+            .gesture(swipe(cards: cards, page: page, warmStep: warmStep))
             .padding(.horizontal, 22)
             .padding(.top, 16)
             footer(cards: cards, names: names, warming: warming)
@@ -98,6 +117,7 @@ struct WorkoutModeView: View {
         .animation(.settle, value: page)
         .animation(.settle, value: warmStep)
         .screenBackground()
+        .banking(flight?.bank, onArrival: land)
         .onChange(of: page) {
             live?.update(draft.live(at: page, names: names))
         }
@@ -116,13 +136,13 @@ struct WorkoutModeView: View {
             Button("OK") {}
         } message: { Text(message ?? "") }
         .onChange(of: voice.problem) { _, problem in if let problem { message = problem } }
-        .sensoryFeedback(.success, trigger: restsFinished)
-        .sensoryFeedback(.tap, trigger: draft.rows.filter(\.done).count)
+        .hapticFallback(for: haptics)
+        .sensoryFeedback(.tap, trigger: draft.rows.filter(\.done).count - (flight?.sets ?? 0))
         .task(id: rest?.ends) {
             guard let ends = rest?.ends, let on = rest?.page else { return }
             try? await Task.sleep(for: .seconds(max(0, ends.timeIntervalSinceNow)))
-            guard !Task.isCancelled else { return }
-            restsFinished += 1
+            guard !Task.isCancelled, rest?.ends == ends, rest?.page == on else { return }
+            haptics.play(.ready)
             // Rest's over: on to the next set.
             withAnimation(.settle) {
                 rest = nil
@@ -146,7 +166,7 @@ struct WorkoutModeView: View {
             live = nil
         }
         .confirmationDialog("Leave this workout?", isPresented: $quitting, titleVisibility: .visible) {
-            Button("Discard sets", role: .destructive) { dismiss() }
+            Button("Discard sets", role: .destructive) { leave() }
         } message: {
             Text("Nothing is saved until you press Save on the last card.")
         }
@@ -214,7 +234,7 @@ struct WorkoutModeView: View {
     private var topBar: some View {
         HStack {
             Button {
-                if draft.rows.contains(where: \.done) { quitting = true } else { dismiss() }
+                if draft.rows.contains(where: \.done) { quitting = true } else { leave() }
             } label: {
                 Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 44, height: 44)
             }
@@ -239,7 +259,8 @@ struct WorkoutModeView: View {
         return HStack(spacing: 4) {
             ForEach(draft.blocks, id: \.self) { block in
                 let rows = draft.rows.filter { $0.block == block }
-                let done = Double(rows.filter(\.done).count) / Double(max(rows.count, 1))
+                let flying = flight.flatMap { $0.block == block ? $0.sets : nil } ?? 0
+                let done = Double(rows.filter(\.done).count - flying) / Double(max(rows.count, 1))
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color(.separator))
@@ -247,11 +268,12 @@ struct WorkoutModeView: View {
                     }
                 }
                 .frame(height: 4)
+                .bankTarget(block)
                 .opacity(current == block ? 1 : 0.55)
             }
         }
         .padding(.vertical, 5)
-        .animation(.settle, value: draft.rows.filter(\.done).count)
+        .animation(reduceMotion ? nil : .settle, value: draft.rows.filter(\.done).count)
         .accessibilityHidden(true)
     }
 
@@ -365,6 +387,7 @@ struct WorkoutModeView: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            .bankSource { numbers = $0 }
             Spacer(minLength: 12)
             if first.round == 0, exercises.count == 1, let last = lastTime(exercises[0]) {
                 Text(last).font(.subheadline).foregroundStyle(Color.inkMuted).frame(maxWidth: .infinity)
@@ -412,15 +435,17 @@ struct WorkoutModeView: View {
     /// buttons on the card, and the finish card its Save.
     @ViewBuilder private func footer(cards: [WorkoutDraft.Card], names: [String: String], warming: Bool) -> some View {
         let nextLine = nextText(cards: cards, names: names, warming: warming)
+        let shownPage = page
+        let shownWarmStep = warmStep
         VStack(alignment: .leading, spacing: 12) {
             if let nextLine { Text(nextLine).font(.subheadline).foregroundStyle(Color.inkMuted).lineLimit(1) }
             if warming {
-                Button("Done") { forward(cards: cards) }.buttonStyle(.primary)
+                Button("Done") { forward(cards: cards, from: shownPage, warmStep: shownWarmStep) }.buttonStyle(.primary)
             } else if cards.indices.contains(page), case .set(let line) = cards[page] {
                 let done = line.allSatisfy { draft.rows[$0].done }
                 let restAfter: TimeInterval? = if cards.indices.contains(page + 1), case .rest(let seconds) = cards[page + 1] { seconds } else { nil }
                 Button(done ? "Next" : restAfter.map { "Done · rest \(Duration.seconds($0).formatted(.time(pattern: .minuteSecond)))" } ?? "Done") {
-                    forward(cards: cards)
+                    forward(cards: cards, from: shownPage, warmStep: shownWarmStep)
                 }
                 .buttonStyle(.primary)
             }
@@ -430,10 +455,16 @@ struct WorkoutModeView: View {
 
     /// The card's main action, from its button or a swipe to the left: a warm-up step is done, a set is logged and its
     /// rest starts, a rest is skipped. The finish card stays (Save is its own button).
-    private func forward(cards: [WorkoutDraft.Card]) {
+    private func forward(cards: [WorkoutDraft.Card], from shownPage: Int, warmStep shownWarmStep: Int) {
+        guard page == shownPage, warmStep == shownWarmStep, !justMovedOn else { return }
         backward = false
-        if warmStep < draft.warmups.count { withAnimation(.settle) { warmStep += 1 }; return }
+        if warmStep < draft.warmups.count {
+            movedOnAt = .now
+            withAnimation(.settle) { warmStep += 1 }
+            return
+        }
         guard cards.indices.contains(page) else { return }
+        movedOnAt = .now
         _ = swiped(from: page, .next, cards: cards)
         withAnimation(.settle) { page += 1 }
     }
@@ -450,17 +481,17 @@ struct WorkoutModeView: View {
     }
 
     /// The card follows a sideways drag; far enough (or flicked) and it goes forward or back, else it springs home.
-    private func swipe(cards: [WorkoutDraft.Card]) -> some Gesture {
+    private func swipe(cards: [WorkoutDraft.Card], page shownPage: Int, warmStep shownWarmStep: Int) -> some Gesture {
         DragGesture(minimumDistance: 20)
             .onChanged { value in
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                dragX = value.translation.width
+                if !reduceMotion { dragX = value.translation.width }
             }
             .onEnded { value in
                 let distance = value.predictedEndTranslation.width
                 withAnimation(.settle) { dragX = 0 }
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                if distance < -120 { forward(cards: cards) } else if distance > 120 { back() }
+                if distance < -120 { forward(cards: cards, from: shownPage, warmStep: shownWarmStep) } else if distance > 120 { back() }
             }
     }
 
@@ -499,8 +530,19 @@ struct WorkoutModeView: View {
         switch (cards[index], swipe) {
         case (.set(let line), .next):
             if !line.allSatisfy({ draft.rows[$0].done }) {
+                let block = draft.rows[line[0]].block
+                if let flight { land(flight.bank.id) }
+                let sets = line.filter { !draft.rows[$0].done }.count
                 draft.tick(line)
-                if let restAfter { rest = Rest(ends: .now + restAfter, total: restAfter, page: index + 1) }
+                if !reduceMotion, let numbers {
+                    flight = Flight(bank: Bank(target: block, from: numbers), block: block, sets: sets)
+                }
+                if var restAfter {
+                    #if DEBUG
+                    if DebugRole.workoutMotionFixture { restAfter = 10 }
+                    #endif
+                    rest = Rest(ends: .now + restAfter, total: restAfter, page: index + 1)
+                }
             }
         case (.set, .up):
             return restAfter == nil ? nil : index + 2
@@ -514,7 +556,17 @@ struct WorkoutModeView: View {
         return nil
     }
 
+    private func land(_ id: Bank.ID) {
+        guard flight?.bank.id == id else { return }
+        withAnimation(reduceMotion ? nil : .tap) { flight = nil }
+    }
+
+    private func leave() {
+        withPresentation(reduceMotion: reduceMotion) { dismiss() }
+    }
+
     private func unlog(_ line: [Int]) {
+        if let flight { land(flight.bank.id) }
         let before = draft
         withAnimation(.settle) { draft.untick(line) }
         withAnimation { toast = Toast(text: "Set \(draft.rows[line[0]].round + 1) unlogged") { draft = before } }
@@ -769,12 +821,20 @@ struct WorkoutModeView: View {
     }
 
     private func save() {
+        guard !saving, !justMovedOn else { return }
+        saving = true
         draft.duration = Date.now.timeIntervalSince(startedAt)
         draft.save(at: startedAt, templates: templates, in: context)
+        // The zoom back takes its picture of Today as it starts, so Today has to show the day done by then: commit
+        // now rather than at the next autosave, and give it a few frames to draw.
+        try? context.save()
         live?.end(saved: (draft.rows.filter(\.done).count, draft.top(names: names)))
         live = nil
         onSaved()
-        dismiss()
+        Task {
+            try? await Task.sleep(for: .milliseconds(50))
+            leave()
+        }
     }
 }
 

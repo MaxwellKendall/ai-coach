@@ -66,6 +66,7 @@ struct ShareWinSheet: View {
 struct CelebrationSheet: View {
     let wins: [WinItem]
     @State private var appeared = false
+    @State private var haptics = HapticPlayer()
 
     var body: some View {
         TabView {
@@ -75,8 +76,12 @@ struct CelebrationSheet: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .background(Color(.systemBackground))
-        .sensoryFeedback(.success, trigger: appeared)
-        .onAppear { appeared = true }
+        .hapticFallback(for: haptics)
+        .onAppear {
+            guard !appeared else { return }
+            appeared = true
+            haptics.play(.crescendo)
+        }
         .presentationDetents([.large])
     }
 }
