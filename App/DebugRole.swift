@@ -21,6 +21,10 @@ enum DebugRole {
     static var role: String? { uiTesting ? UserDefaults.standard.string(forKey: "role") : nil }
     static var workoutMotionFixture: Bool { uiTesting && UserDefaults.standard.bool(forKey: "workoutMotionFixture") }
     static var workoutReduceMotion: Bool { UserDefaults.standard.bool(forKey: "workoutReduceMotion") }
+    static var workoutGoalHitFixture: Bool { uiTesting && UserDefaults.standard.bool(forKey: "workoutGoalHit") }
+    static var workoutMultiWinFixture: Bool { uiTesting && UserDefaults.standard.bool(forKey: "workoutMultiWin") }
+    static var workoutSupersetFixture: Bool { uiTesting && UserDefaults.standard.bool(forKey: "workoutSuperset") }
+    static var programDoneFixture: Bool { uiTesting && UserDefaults.standard.bool(forKey: "programDoneFixture") }
 
     /// FIT-426: `-aiWeeks YES` designs a Pro lifter's weeks with `StubDesigner`, so a UI test sees an AI week without
     /// a network or a model; without it, a UI test's weeks stay code planned.
@@ -58,15 +62,31 @@ enum DebugRole {
                 profile.programStart = Calendar.current.startOfDay(for: now)
                 profile.targetDate = Calendar.current.date(byAdding: .day, value: 28, to: now)
                 context.insert(profile)
-                let goal = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 500, unit: "lb")
-                goal.baseline = UserDefaults.standard.bool(forKey: "workoutNoBest") ? 400 : 200
+                let target: Double = workoutGoalHitFixture ? 200 : 500
+                let goal = Goal(kind: .training, metric: "back-squat.1rm_lb", target: target, unit: "lb")
+                goal.baseline = UserDefaults.standard.bool(forKey: "workoutNoBest") ? 400 : (workoutGoalHitFixture ? 150 : 200)
                 context.insert(goal)
+                if workoutMultiWinFixture {
+                    let benchGoal = Goal(kind: .training, metric: "bench-press.1rm_lb", target: 250, unit: "lb")
+                    benchGoal.baseline = 135
+                    context.insert(benchGoal)
+                }
             }
-            let rows: [[String: Any]] = lifts.enumerated().map { index, lift in
+            var rows: [[String: Any]] = lifts.enumerated().map { index, lift in
                 ["id": UUID().uuidString, "kind": "workout", "at": at + Double(index), "slot": "Lower A", "template": lift.0,
                  "targets": [["metric": "sets", "value": workoutMotionFixture ? 2 : 3, "unit": "sets"], ["metric": "reps", "value": 5, "unit": "reps"],
                              ["metric": "load_lb", "value": lift.1, "unit": "lb"]],
-                 "note": "", "main": index == 0, "pinned": true]
+                 "note": workoutMotionFixture ? "Brace, then sit between your heels." : "", "main": index == 0, "pinned": true]
+            }
+            if workoutSupersetFixture || workoutMultiWinFixture {
+                rows.append(["id": UUID().uuidString, "kind": "workout", "at": at + 10, "slot": "Lower A", "template": "bench-press",
+                             "targets": [["metric": "sets", "value": 1, "unit": "sets"], ["metric": "reps", "value": 8, "unit": "reps"],
+                                         ["metric": "load_lb", "value": 155, "unit": "lb"]],
+                             "note": "Row between bench sets.", "main": true, "pinned": true, "group": 1])
+                rows.append(["id": UUID().uuidString, "kind": "workout", "at": at + 11, "slot": "Lower A", "template": "bent-over-barbell-row",
+                             "targets": [["metric": "sets", "value": 1, "unit": "sets"], ["metric": "reps", "value": 8, "unit": "reps"],
+                                         ["metric": "load_lb", "value": 115, "unit": "lb"]],
+                             "note": "", "main": false, "pinned": true, "group": 1])
             }
             let body = String(decoding: try JSONSerialization.data(withJSONObject: rows, options: [.sortedKeys]), as: UTF8.self)
             try SyncUnits.apply("plan#\(SyncUnits.day(now))", body: body, in: context)
@@ -80,6 +100,29 @@ enum DebugRole {
             let today = (Calendar.current.component(.weekday, from: now) + 5) % 7
             let days = (0..<program.days(nearest: 3)).map { (today + 2 * $0) % 7 }
             try Planner.start(program, days: days, equipment: Profile.allEquipment, profile: profile, in: context, now: now)
+            if programDoneFixture {
+                // Backdate the program past its final week and seed completed sessions + PRs so ProgramDoneCard plays in full.
+                let finishedStart = Calendar.current.date(byAdding: .weekOfYear, value: -(program.weeks + 1), to: now)!
+                profile.programStart = Calendar.current.startOfDay(for: finishedStart)
+                profile.targetDate = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: now)
+                let templates = (try? context.fetch(FetchDescriptor<Template>())) ?? []
+                let squatId = templates.first { $0.slug == "back-squat" }?.id
+                let goal = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 225, unit: "lb")
+                goal.baseline = 165
+                context.insert(goal)
+                for week in 0..<program.weeks {
+                    for offset in [0, 2, 4] {
+                        if let day = Calendar.current.date(byAdding: .day, value: week * 7 + offset, to: finishedStart) {
+                            let load = 165.0 + Double(week) * 5.0
+                            context.insert(LogEntry(kind: .workout, timestamp: day, templateRef: squatId, measurements: [
+                                Measurement(metric: "reps", value: 5, unit: "reps"),
+                                Measurement(metric: "load_lb", value: load, unit: "lb"),
+                            ]))
+                        }
+                    }
+                }
+                try context.save()
+            }
         default:
             break
         }

@@ -62,25 +62,16 @@ struct ShareWinSheet: View {
     }
 }
 
-/// FIT-106: a session that earned wins ends here, on the best one's card with Share first; the others are a swipe away.
+/// FIT-106 + TKL-934: a session that earned wins ends here, on the best one's card with Share first;
+/// several wins arrive fanned and throw aside one by one, with "1 of N" rolling.
 struct CelebrationSheet: View {
     let wins: [WinItem]
-    @State private var appeared = false
-    @State private var haptics = HapticPlayer()
+    var reduceMotion = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        TabView {
-            ForEach(Array(wins.enumerated()), id: \.element.id) { index, win in
-                ShareWinSheet(win: win, heading: wins.count == 1 ? "Nice work" : "Nice work · \(index + 1) of \(wins.count)")
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        .background(Color(.systemBackground))
-        .hapticFallback(for: haptics)
-        .onAppear {
-            guard !appeared else { return }
-            appeared = true
-            haptics.play(.crescendo)
+        CelebrationView(wins: wins, reduceMotion: reduceMotion) {
+            dismiss()
         }
         .presentationDetents([.large])
     }

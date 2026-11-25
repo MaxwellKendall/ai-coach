@@ -70,15 +70,58 @@ struct Pressed: ViewModifier {
 /// message and the error haptic say it.
 struct Shake: ViewModifier {
     let trigger: Int
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var reduceMotion = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     func body(content: Content) -> some View {
+        let reduced = reduceMotion || systemReduceMotion
         content.keyframeAnimator(initialValue: 0.0, trigger: trigger) { content, x in
-            content.offset(x: reduceMotion ? 0 : x)
+            content.offset(x: reduced ? 0 : x)
         } keyframes: { _ in
             KeyframeTrack {
                 for x in [-10.0, 9, -6, 4, 0] { SpringKeyframe(x, duration: 0.07) }
             }
         }
+    }
+}
+
+/// TKL-934: an integer or rounded number that counts smoothly from one value to another on arrival.
+struct CountingNumber: View, Animatable {
+    nonisolated var value: Double
+    var format: (Double) -> String = { Int($0.rounded()).formatted(.number) }
+
+    nonisolated var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+
+    var body: some View {
+        Text(format(value)).monospacedDigit()
+    }
+}
+
+/// TKL-934: a checkmark path that draws itself on with `.trim(from: 0, to:)`.
+struct CheckmarkStroke: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + rect.width * 0.23, y: rect.minY + rect.height * 0.52))
+        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.41, y: rect.minY + rect.height * 0.70))
+        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.77, y: rect.minY + rect.height * 0.30))
+        return path
+    }
+}
+
+/// TKL-934: a superset's vertical pairing bracket, open on the right, drawn on with `.trim(from: 0, to:)`.
+struct SupersetBracket: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let r = min(4, rect.width * 0.4)
+        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + r, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY + r), control: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.maxY), control: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        return path
     }
 }

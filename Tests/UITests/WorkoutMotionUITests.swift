@@ -108,6 +108,145 @@ final class WorkoutMotionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Save workout"].isHittable)
     }
 
+    // MARK: TKL-934 Motion Pass 1
+
+    @MainActor func testStepperRepeatUndoSupersetFeelAndPeek() {
+        launch("-workoutSuperset", "YES")
+        startWorkout()
+        // Stepper tap and hold-to-repeat on load.
+        let heavier = app.buttons["5 lb heavier"]
+        XCTAssertTrue(heavier.waitForExistence(timeout: 5))
+        heavier.tap()
+        XCTAssertTrue(app.staticTexts["190"].waitForExistence(timeout: 3))
+        heavier.press(forDuration: 1.0)
+        XCTAssertFalse(app.staticTexts["190"].exists, "Holding + accelerates past 190")
+
+        // Bank set 1 and Undo from the toast to lift the chip back out.
+        done.tap()
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        let undo = app.buttons["Undo"]
+        if undo.waitForExistence(timeout: 3) {
+            undo.tap()
+            XCTAssertTrue(firstSet.waitForExistence(timeout: 5))
+        }
+
+        // Re-log set 1, adjust rest with +30 s / -30 s, then Skip to set 2.
+        done.tap()
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        app.buttons["30 seconds more"].tap()
+        app.buttons["30 seconds less"].tap()
+        skip.tap()
+        XCTAssertTrue(secondSet.waitForExistence(timeout: 5))
+        done.tap()
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        skip.tap()
+
+        // Superset card with coach cue.
+        XCTAssertTrue(app.staticTexts["Set 1 of 1 · superset"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Row between bench sets."].waitForExistence(timeout: 5))
+
+        // Open peek and return.
+        app.buttons["Whole workout"].tap()
+        XCTAssertTrue(app.staticTexts["2 of 4 sets logged"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Done"].tap()
+
+        // Log superset → Finish card → tap Feel choices → Save.
+        done.tap()
+        XCTAssertTrue(app.buttons["Save workout"].waitForExistence(timeout: 5))
+        app.buttons["Good"].tap()
+        app.buttons["Hard"].tap()
+        app.buttons["Save workout"].tap()
+        XCTAssertTrue(celebration.waitForExistence(timeout: 8))
+    }
+
+    @MainActor func testGoalHitCelebration() {
+        launch("-workoutGoalHit", "YES")
+        startWorkout()
+        logBothSets()
+        app.buttons["Save workout"].tap()
+        XCTAssertTrue(celebration.waitForExistence(timeout: 8))
+        capture("goal-hit")
+        app.buttons["Close"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Edit the sets"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testMultipleWinsFannedAndThrowAside() {
+        launch("-workoutMultiWin", "YES")
+        startWorkout()
+        done.tap()
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        skip.tap()
+        XCTAssertTrue(secondSet.waitForExistence(timeout: 5))
+        done.tap()
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        skip.tap()
+        XCTAssertTrue(app.staticTexts["Set 1 of 1 · superset"].waitForExistence(timeout: 5))
+        done.tap()
+        XCTAssertTrue(app.buttons["Save workout"].waitForExistence(timeout: 5))
+        app.buttons["Save workout"].tap()
+        let firstHeading = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Nice work · 1 of '")).firstMatch
+        XCTAssertTrue(firstHeading.waitForExistence(timeout: 8))
+        capture("multi-win-1")
+        drag(from: CGVector(dx: 0.7, dy: 0.4), to: CGVector(dx: 0.05, dy: 0.4))
+        let secondHeading = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Nice work · 2 of '")).firstMatch
+        XCTAssertTrue(secondHeading.waitForExistence(timeout: 5))
+        capture("multi-win-2")
+    }
+
+    @MainActor func testFinishedProgramPlaysProgramDoneCard() {
+        let appearance = ProcessInfo.processInfo.environment["TEST_RUNNER_APPEARANCE"] ?? "light"
+        let outDir = ProcessInfo.processInfo.environment["TEST_RUNNER_SHOT_DIR"]
+        app = XCUIApplication()
+        app.launchArguments = ["-uiTesting", "YES", "-role", "solo", "-programDoneFixture", "YES"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Program done"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Up next"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["See the recap"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Pick Another"].waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1.2)
+        saveShot("pdone-\(appearance)", to: outDir)
+    }
+
+    /// Captures the 5 prototype comparison screens (set, banking, rest, finish, celebration) into /tmp when requested.
+    @MainActor func testDesignComparisonShots() {
+        let appearance = ProcessInfo.processInfo.environment["TEST_RUNNER_APPEARANCE"] ?? "light"
+        let outDir = ProcessInfo.processInfo.environment["TEST_RUNNER_SHOT_DIR"]
+        launch()
+        startWorkout()
+        saveShot("set-\(appearance)", to: outDir)
+        done.tap()
+        Thread.sleep(forTimeInterval: 0.25)
+        saveShot("banking-\(appearance)", to: outDir)
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        saveShot("rest-\(appearance)", to: outDir)
+        skip.tap()
+        XCTAssertTrue(secondSet.waitForExistence(timeout: 5))
+        done.tap()
+        XCTAssertTrue(app.buttons["Save workout"].waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1.0)
+        app.buttons["Good"].tap()
+        saveShot("finish-\(appearance)", to: outDir)
+        app.buttons["Save workout"].tap()
+        XCTAssertTrue(celebration.waitForExistence(timeout: 8))
+        Thread.sleep(forTimeInterval: 1.3)
+        saveShot("celebration-\(appearance)", to: outDir)
+        app.buttons["Close"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Edit the sets"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor private func saveShot(_ name: String, to dir: String?) {
+        let shot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: shot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        if let dir {
+            let url = URL(fileURLWithPath: dir).appendingPathComponent("\(name).png")
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try? shot.pngRepresentation.write(to: url)
+        }
+    }
+
     // MARK: The path
 
     @MainActor private func runToPersonalBest() {

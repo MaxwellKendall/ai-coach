@@ -42,6 +42,7 @@ struct TodayScreen: View {
     @State private var sheet: Sheet?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var workoutTransition
+    @Namespace private var celebrationTransition
     @State private var live: WorkoutDraft?
     @State private var tracking: RunTarget?
     @State private var you = false
@@ -56,7 +57,9 @@ struct TodayScreen: View {
     /// FIT-106: the wins there were before a workout, so the ones it earns can be celebrated when it's saved.
     @State private var winsBefore: Set<String> = []
     @State private var saved = false
+    @State private var celebratedInline = false
     @State private var celebrating: [WinItem]?
+    @State private var celebrationFromSaveBar = false
     @State private var sessionLink: SharedLink?
     /// FIT-297: today's blocks checked off as done (L3), saved together.
     @State private var checked: Set<Int> = []
@@ -282,17 +285,29 @@ struct TodayScreen: View {
         // FIT-185: run mode, for a run today, planned or not.
         .fullScreenCover(item: $tracking) { target in RunModeView(planned: target.planned) }
         .fullScreenCover(item: $live, onDismiss: celebrate) { draft in
-            WorkoutModeView(draft: draft, reduceWorkoutMotion: workoutReduceMotion) {
-                goToday()
-                saved = true
-            }
+            WorkoutModeView(
+                draft: draft,
+                reduceWorkoutMotion: workoutReduceMotion,
+                onSaved: {
+                    goToday()
+                    saved = true
+                },
+                earnedWins: {
+                    let earned = earnedAfterSave()
+                    if !earned.isEmpty { celebratedInline = true }
+                    return earned
+                }
+            )
             .modifier(WorkoutCoverTransition(reduceMotion: workoutReduceMotion, namespace: workoutTransition))
             // A zoom brings swipe-down and pinch to dismiss with it. Leaving is the Close button's, which asks first.
             .interactiveDismissDisabled()
         }
         .sheet(item: $sessionLink) { ActivityView(link: $0).presentationDetents([.medium, .large]) }
-        .sheet(isPresented: Binding(get: { celebrating != nil }, set: { if !$0 { celebrating = nil } })) {
-            if let celebrating { CelebrationSheet(wins: celebrating) }
+        .sheet(isPresented: Binding(get: { celebrating != nil }, set: { if !$0 { celebrating = nil; celebrationFromSaveBar = false } })) {
+            if let celebrating {
+                CelebrationSheet(wins: celebrating, reduceMotion: workoutReduceMotion)
+                    .modifier(CelebrationZoomTransition(active: celebrationFromSaveBar, reduceMotion: workoutReduceMotion, namespace: celebrationTransition))
+            }
         }
         // FIT-424: weeks are planned at the root (RootView); a failure there is said here, once.
         .onChange(of: Planner.designing.trouble, initial: true) { _, trouble in
@@ -359,14 +374,23 @@ struct TodayScreen: View {
         }
     }
 
+    /// Reads the wins earned since `winsBefore` directly from the context (ahead of `@Query` refresh).
+    private func earnedAfterSave() -> [WinItem] {
+        let logged = (try? context.fetch(FetchDescriptor<LogEntry>(sortBy: [SortDescriptor(\.timestamp)]))) ?? entries
+        return Wins.earned(wins(in: logged), before: winsBefore)
+    }
+
     /// FIT-106: a saved workout that earned wins ends on their cards; otherwise a quiet "saved".
     private func celebrate() {
         guard saved else { return }
         saved = false
-        // Read from the context: an instant dismissal gets here before the query has the sets just saved.
-        let logged = (try? context.fetch(FetchDescriptor<LogEntry>(sortBy: [SortDescriptor(\.timestamp)]))) ?? entries
-        let earned = Wins.earned(wins(in: logged), before: winsBefore)
+        if celebratedInline {
+            celebratedInline = false
+            return
+        }
+        let earned = earnedAfterSave()
         if earned.isEmpty { toast = Toast(text: "Workout saved"); return }
+        celebrationFromSaveBar = false
         withPresentation(reduceMotion: workoutReduceMotion) { celebrating = earned }
     }
 
@@ -456,10 +480,21 @@ struct TodayScreen: View {
     }
 
     @ViewBuilder private func dot(_ card: DayCard) -> some View {
-        switch card {
-        case .done: Circle().fill(Color.ink).frame(width: 5, height: 5)
-        case .plan: Circle().strokeBorder(Color.ink, lineWidth: 1.5).frame(width: 5, height: 5)
-        case .rest: Color.clear.frame(width: 5, height: 5)
+        let done = Self.isDone(card)
+        Group {
+            switch card {
+            case .done: Circle().fill(Color.ink).frame(width: 5, height: 5)
+            case .plan: Circle().strokeBorder(Color.ink, lineWidth: 1.5).frame(width: 5, height: 5)
+            case .rest: Color.clear.frame(width: 5, height: 5)
+            }
+        }
+        .keyframeAnimator(initialValue: 1.0, trigger: done) { content, scale in
+            content.scaleEffect(done && !workoutReduceMotion ? scale : 1.0)
+        } keyframes: { _ in
+            KeyframeTrack {
+                SpringKeyframe(1.8, duration: 0.14)
+                SpringKeyframe(1.0, duration: 0.24)
+            }
         }
     }
 
@@ -735,6 +770,7 @@ struct TodayScreen: View {
                         .foregroundStyle(Color(.systemBackground)).background(Color.ink, in: .rect(cornerRadius: 18))
                     }
                     .buttonStyle(.plain)
+                    .matchedTransitionSource(id: "saveBar", in: celebrationTransition)
                     .accessibilityIdentifier("today.save")
                 } else {
                     // A planned run comes first: run mode tracks it and saves it to Apple Health. Lifts beside it are checked off or started below.
@@ -791,8 +827,17 @@ struct TodayScreen: View {
                     }
                     if isToday(index), !pro.coaches.isEmpty, weeklyDue { weeklyCard }
                     if isToday(index), let done = finishedProgram {
-                        ProgramDoneCard(finished: done, next: done.following(days: profiles.first?.trainingDays.count ?? 3),
-                                        recap: { review = weekReport() }, start: { startNext(after: done) }, pick: { picking = true })
+                        ProgramDoneCard(
+                            finished: done,
+                            next: done.following(days: profiles.first?.trainingDays.count ?? 3),
+                            weeks: profiles.first?.program ?? [],
+                            sessionsDone: programSessions.done,
+                            personalBests: allWins.filter { $0.kind == .pr }.count,
+                            reduceMotion: workoutReduceMotion,
+                            recap: { review = weekReport() },
+                            start: { startNext(after: done) },
+                            pick: { picking = true }
+                        )
                     }
                     // A session's rows bring their own 16 pt above and below, so its card adds only 4: the text sits
                     // 20 pt from every edge, as on the other cards.
@@ -931,8 +976,12 @@ struct TodayScreen: View {
         let saved = draft.save(at: .now, templates: templates, in: context)
         try? context.save()
         checked = []
-        let earned = Wins.earned(allWins, before: winsBefore)
-        if !earned.isEmpty { celebrating = earned; return }
+        let earned = earnedAfterSave()
+        if !earned.isEmpty {
+            celebrationFromSaveBar = true
+            withPresentation(reduceMotion: workoutReduceMotion) { celebrating = earned }
+            return
+        }
         withAnimation { toast = Toast(text: "Workout saved") { [context] in
             for entry in saved { context.delete(entry) }
             try? context.save()
@@ -1083,6 +1132,7 @@ struct TodayScreen: View {
     /// Every way into the workout cover: it notes the wins so far, so Save celebrates only what this workout earned.
     private func present(_ draft: WorkoutDraft) {
         saved = false
+        celebratedInline = false
         winsBefore = Set(allWins.map(\.key))
         withPresentation(reduceMotion: workoutReduceMotion) { live = draft }
     }
@@ -1478,6 +1528,21 @@ private struct WorkoutCoverTransition: ViewModifier {
             content.navigationTransition(.automatic)
         } else {
             content.navigationTransition(.zoom(sourceID: "workout", in: namespace))
+        }
+    }
+}
+
+/// TKL-934 (C1): from Today's checked-off Save bar, the celebration card rises out of the save bar.
+private struct CelebrationZoomTransition: ViewModifier {
+    var active: Bool
+    var reduceMotion: Bool
+    var namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if active && !reduceMotion {
+            content.navigationTransition(.zoom(sourceID: "saveBar", in: namespace))
+        } else {
+            content.navigationTransition(.automatic)
         }
     }
 }
