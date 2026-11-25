@@ -196,7 +196,11 @@ final class WorkoutMotionUITests: XCTestCase {
 
     @MainActor private func assertLogged(_ count: Int) {
         app.buttons["Whole workout"].tap()
-        XCTAssertTrue(app.staticTexts["\(count) of 2 sets logged"].waitForExistence(timeout: 5))
+        let subtitle = app.staticTexts["\(count) of 2 sets logged"]
+        XCTAssertTrue(subtitle.waitForExistence(timeout: 5))
+        // Close the peek again: it covers the card, so a tap after this one would be swallowed by the sheet.
+        app.navigationBars.buttons["Done"].tap()
+        XCTAssertTrue(subtitle.waitForNonExistence(timeout: 5))
     }
 
     @MainActor private func drag(from: CGVector, to: CGVector) {
