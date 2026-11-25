@@ -61,19 +61,20 @@ final class SessionEditorUITests: XCTestCase {
         // ⋯ › Remove: the lift goes.
         let last = lifts.element(boundBy: lifts.count - 1)
         let name = last.label
-        last.tap()
-        app.buttons["session.more"].tap()
+        openMore(for: last, in: app)
         let remove = app.buttons["Remove \(name)"]
-        XCTAssertTrue(remove.waitForExistence(timeout: 5), "⋯ has no Remove \(name)")
+        XCTAssertTrue(waitUntil { remove.exists }, "⋯ has no Remove \(name)")
         remove.tap()
         XCTAssertTrue(waitForCount(lifts, liftsBefore - 2), "Remove didn't remove the lift")
         XCTAssertFalse(app.buttons.matching(identifier: "session.lift").matching(NSPredicate(format: "label == %@", name)).firstMatch.exists)
 
-        // Undo takes the removal back: the lift is on the plan again.
+        // Undo takes back the removal (and the superset too if its 6 s Undo toast is still up: TKL-759):
+        // either way, the removed lift is back on Today.
         let undo = app.buttons["Undo"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 3), "No Undo after a change")
+        XCTAssertTrue(waitUntil(timeout: 3) { undo.exists }, "No Undo after a change")
         undo.tap()
-        XCTAssertTrue(waitForCount(lifts, liftsBefore - 1), "Undo didn't bring the lift back")
+        let restored = app.buttons.matching(identifier: "session.lift").matching(NSPredicate(format: "label == %@", name)).firstMatch
+        XCTAssertTrue(waitUntil { restored.exists && (lifts.count == liftsBefore - 1 || lifts.count == liftsBefore) }, "Undo didn't bring the lift back")
     }
 
     /// Every lift removed, then Undo: the whole session comes back (the review's empty-session case).
@@ -86,18 +87,17 @@ final class SessionEditorUITests: XCTestCase {
         let lifts = app.buttons.matching(identifier: "session.lift")
         let names = lifts.allElementsBoundByIndex.map(\.label)
         XCTAssertFalse(names.isEmpty)
-        for name in names {
+        for (removed, name) in names.enumerated() {
             let lift = lifts.matching(NSPredicate(format: "label == %@", name)).firstMatch
-            XCTAssertTrue(lift.waitForExistence(timeout: 5), "\(name) isn't on Today")
-            lift.tap()
-            app.buttons["session.more"].tap()
+            XCTAssertTrue(waitUntil { lift.exists }, "\(name) isn't on Today")
+            openMore(for: lift, in: app)
             let remove = app.buttons["Remove \(name)"]
-            XCTAssertTrue(remove.waitForExistence(timeout: 5), "⋯ has no Remove \(name)")
+            XCTAssertTrue(waitUntil { remove.exists }, "⋯ has no Remove \(name)")
             remove.tap()
+            XCTAssertTrue(waitForCount(lifts, names.count - removed - 1), "Remove didn't remove \(name)")
         }
-        XCTAssertTrue(waitForCount(lifts, 0), "Not every lift was removed")
         let undo = app.buttons["Undo"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 3), "No Undo after removing the last lift")
+        XCTAssertTrue(waitUntil(timeout: 3) { undo.exists }, "No Undo after removing the last lift")
         undo.tap()
         XCTAssertTrue(waitForCount(lifts, names.count), "Undo didn't bring the session back")
         XCTAssertEqual(lifts.allElementsBoundByIndex.map(\.label), names, "The session came back changed")
@@ -128,9 +128,32 @@ final class SessionEditorUITests: XCTestCase {
         Double(label.split(separator: " ").first.map(String.init) ?? "") ?? -1
     }
 
+    /// TKL-1017: SessionList unfolds BlockEditor with withMotion(.settle) inside a .clipped() VStack (TKL-782).
+    /// Wait for the unfold to settle before tapping ⋯, or the tap lands on the next lift row moving out from under it.
+    @MainActor
+    private func openMore(for lift: XCUIElement, in app: XCUIApplication) {
+        lift.tap()
+        let more = app.buttons["session.more"]
+        // Don't require isHittable: on a lower lift, session.more sits below Start until tap() scrolls it into view.
+        XCTAssertTrue(waitUntil { more.exists }, "The open lift has no ⋯")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        more.tap()
+    }
+
+    /// Polls promptly (without XCTest's ~1 s initial waitForExistence delay) so multi-lift edits stay inside the 6 s Undo toast.
+    @MainActor
+    private func waitUntil(timeout: TimeInterval = 5, _ condition: () -> Bool) -> Bool {
+        if condition() { return true }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            if condition() { return true }
+        }
+        return condition()
+    }
+
     @MainActor
     private func waitForCount(_ query: XCUIElementQuery, _ count: Int) -> Bool {
-        let done = NSPredicate { _, _ in query.count == count }
-        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: done, object: nil)], timeout: 5) == .completed
+        waitUntil(timeout: 5) { query.count == count }
     }
 }
