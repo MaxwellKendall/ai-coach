@@ -9,6 +9,11 @@ struct Bank: Identifiable {
     let from: CGPoint
 
     nonisolated static let space = "bank"
+
+    static func flight(to target: some Hashable, from origin: CGPoint?, reduceMotion: Bool) -> Bank? {
+        guard !reduceMotion, let origin else { return nil }
+        return Bank(target: target, from: origin)
+    }
 }
 
 private struct BankTargets: PreferenceKey {
@@ -19,16 +24,16 @@ private struct BankTargets: PreferenceKey {
     }
 }
 
-private struct BankChip: View {
+private struct BankChip<Chip: View>: View {
     let from: CGPoint
     let to: CGPoint
+    let chip: Chip
     let onArrival: () -> Void
     @State private var arrived = false
 
     var body: some View {
-        Capsule()
-            .fill(Plate.current.mark)
-            .frame(width: 36, height: 14)
+        chip
+            .fixedSize()
             .scaleEffect(arrived ? 0.35 : 1)
             .position(arrived ? to : from)
             .onAppear {
@@ -54,13 +59,27 @@ extension View {
     }
 
     func banking(_ bank: Bank?, onArrival: @escaping (Bank.ID) -> Void) -> some View {
+        banking(bank, onArrival: onArrival) {
+            Capsule()
+                .fill(Plate.current.mark)
+                .frame(width: 36, height: 14)
+        }
+    }
+
+    func banking<Chip: View>(
+        _ bank: Bank?,
+        onArrival: @escaping (Bank.ID) -> Void,
+        @ViewBuilder chip: @escaping () -> Chip
+    ) -> some View {
         coordinateSpace(.named(Bank.space))
             .overlayPreferenceValue(BankTargets.self) { targets in
                 GeometryReader { geometry in
                     if let bank, let target = targets[bank.target] {
                         let frame = geometry[target]
-                        BankChip(from: bank.from, to: CGPoint(x: frame.midX, y: frame.midY)) { onArrival(bank.id) }
-                            .id(bank.id)
+                        BankChip(from: bank.from, to: CGPoint(x: frame.midX, y: frame.midY), chip: chip()) {
+                            onArrival(bank.id)
+                        }
+                        .id(bank.id)
                     }
                 }
                 .allowsHitTesting(false)
