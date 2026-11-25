@@ -40,11 +40,11 @@ final class CoachMotionUITests: XCTestCase {
         shot(app, "Sample invite ready to share")
         copy.tap()
         XCTAssertTrue(app.buttons["Copied"].exists)
-        app.staticTexts["Invite a client"].firstMatch.swipeDown()
+        dismissSheet(app, titled: "Invite a client")
 
         let mike = app.buttons["coach.client.Mike Torres"]
         XCTAssertTrue(mike.waitForExistence(timeout: 5))
-        mike.tap()
+        tap(mike)
         let actions = app.buttons["coach.dayActions"]
         XCTAssertTrue(actions.waitForExistence(timeout: 5))
         actions.tap()
@@ -122,6 +122,37 @@ final class CoachMotionUITests: XCTestCase {
         }
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         return button
+    }
+
+    /// The invite sheet has no Done: a swipe on its title can bounce it back, so fall back to tapping
+    /// the dimmed area above it, and don't go on until its title has left the screen.
+    @MainActor
+    private func dismissSheet(_ app: XCUIApplication, titled title: String) {
+        let sheet = app.staticTexts[title].firstMatch
+        for attempt in 0..<4 where sheet.exists {
+            if attempt % 2 == 0 {
+                // Drag the sheet itself down to the bottom of the screen, as a thumb does.
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
+                    .press(forDuration: 0.1,
+                           thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+            } else {
+                // Or tap the dimmed roster above it: at the very top the status bar takes the tap.
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+            }
+            _ = sheet.waitForNonExistence(timeout: 3)
+        }
+        XCTAssertFalse(sheet.exists, "The \(title) sheet would not close")
+    }
+
+    /// The row is there before the sheet above it has finished leaving, and a tap into a sheet is lost.
+    @MainActor
+    private func tap(_ element: XCUIElement) {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline && !element.isHittable {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
+        XCTAssertTrue(element.isHittable, "\(element) never took a tap")
+        element.tap()
     }
 
     @MainActor
