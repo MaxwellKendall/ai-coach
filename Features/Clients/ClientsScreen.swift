@@ -18,6 +18,8 @@ struct ClientsScreen: View {
     private var names: [String: String] { Dictionary(templates.map { ($0.slug, $0.name) }, uniquingKeysWith: { a, _ in a }) }
 
     @State private var path = NavigationPath()
+    @Namespace private var clientZoom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -27,7 +29,7 @@ struct ClientsScreen: View {
                         Text(problem).font(.subheadline).foregroundStyle(Color.inkMuted)
                     }
                     if !roster.loaded {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+                        skeleton
                     } else if roster.clients.isEmpty {
                         empty
                     } else {
@@ -64,9 +66,23 @@ struct ClientsScreen: View {
                 }
             }
             .modifier(Searching(on: roster.clients.count > 8, query: $query))
-            .refreshable { await reload() }
+            .refreshable {
+                #if DEBUG
+                if Roster.sample {
+                    roster.sampleRefresh(names: names)
+                    return
+                }
+                #endif
+                await reload()
+            }
             .task(id: "\(account.restored) \(account.user?.uid ?? "")") { await reload() }
-            .navigationDestination(for: String.self) { id in ClientScreen(id: id) }
+            .navigationDestination(for: String.self) { id in
+                if reduceMotion {
+                    ClientScreen(id: id)
+                } else {
+                    ClientScreen(id: id).navigationTransition(.zoom(sourceID: id, in: clientZoom))
+                }
+            }
             .navigationDestination(for: DayThread.Ref.self) { ref in DayThread(ref: ref) }
             .navigationDestination(for: ClientProgressScreen.Ref.self) { ref in ClientProgressScreen(id: ref.client) }
             .navigationDestination(for: ClientScreen.Opening.self) { opening in ClientScreen(id: opening.client, day: opening.day) }
@@ -84,11 +100,12 @@ struct ClientsScreen: View {
         }
     }
 
-    /// FIT-331: everyone A–Z, or only who needs you, narrowed by the search.
+    /// Who needs you first, then everyone on track, narrowed by search.
     private var shown: [Roster.Client] {
         let clients = needsOnly && !roster.needsYou.isEmpty ? roster.needsYou : roster.clients
         let query = query.trimmingCharacters(in: .whitespaces)
-        return query.isEmpty ? clients : clients.filter { $0.name.localizedStandardContains(query) }
+        let matching = query.isEmpty ? clients : clients.filter { $0.name.localizedStandardContains(query) }
+        return Triage.byNeed(matching, \.week)
     }
 
     /// FIT-339: invites not used yet: when each was sent, to share again or take back.
@@ -148,16 +165,58 @@ struct ClientsScreen: View {
                 .frame(maxWidth: .infinity).padding(.top, 24)
         } else {
             VStack(spacing: 0) {
-                ForEach(clients) { client in
-                    NavigationLink(value: client.id) { ClientRow(client: client) }
-                        .buttonStyle(.plain)
-                    // Inset to the names' edge, as in Messages.
-                    if client.id != clients.last?.id { Divider().padding(.leading, typeSize.isAccessibilitySize ? 0 : ClientRow.avatar + 12) }
+                ForEach(Array(clients.enumerated()), id: \.element.id) { index, client in
+                    VStack(spacing: 0) {
+                        NavigationLink(value: client.id) { ClientRow(client: client) }
+                            .buttonStyle(.plain)
+                            .matchedTransitionSource(id: client.id, in: clientZoom)
+                            .accessibilityIdentifier("coach.client.\(client.id)")
+                        if client.id != clients.last?.id {
+                            Divider().padding(.leading, typeSize.isAccessibilitySize ? 0 : ClientRow.avatar + 12)
+                        }
+                    }
+                    .modifier(CoachEntrance(index: index))
                 }
             }
             .padding(.horizontal, 16)
             .cardBackground()
+            .animation(reduceMotion ? nil : .settle, value: clients.map(\.id))
         }
+    }
+
+    private var skeleton: some View {
+        VStack(spacing: 0) {
+            ForEach(0..<5) { index in
+                HStack(spacing: 12) {
+                    Circle().fill(Color.fillStrong).frame(width: 44, height: 44)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Capsule().fill(Color.fillStrong).frame(width: 120, height: 12)
+                        Capsule().fill(Color.fill).frame(width: 82, height: 8)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+                .modifier(CoachEntrance(index: index))
+            }
+        }
+        .padding(.horizontal, 16)
+        .overlay {
+            if !reduceMotion {
+                GeometryReader { geometry in
+                    LinearGradient(colors: [.clear, Color.surface.opacity(0.55), .clear],
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(width: geometry.size.width / 2)
+                        .phaseAnimator([false, true]) { content, swept in
+                            content.offset(x: swept ? geometry.size.width : -geometry.size.width / 2)
+                        } animation: { _ in .linear(duration: 1.1) }
+                }
+                .clipped()
+                .allowsHitTesting(false)
+            }
+        }
+        .cardBackground()
+        .accessibilityLabel("Loading clients")
+        .accessibilityElement(children: .ignore)
     }
 
     /// Not before the account has read its session: at launch there's no user yet, which isn't signed out, and the
@@ -198,6 +257,7 @@ struct ClientRow: View {
     static let avatar: CGFloat = 44
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 12) {
@@ -253,12 +313,13 @@ struct ClientRow: View {
     @ViewBuilder private var status: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let flag = client.week.flags.min(by: { order($0) < order($1) }) {
-                FlagDot(kind: flag.kind)
+                FlagDot(kind: flag.kind).transition(.opacity)
                 Text(flag.text)
             } else {
                 Text(client.week.planned == 0 ? "Nothing planned this week" : "\(client.week.done) of \(client.week.planned) this week")
             }
         }
+        .animation(reduceMotion ? nil : .settle, value: client.week.flags)
     }
 
     private func order(_ flag: Triage.Flag) -> Int { Triage.Flag.Kind.allCases.firstIndex(of: flag.kind)! }
@@ -295,15 +356,19 @@ struct Avatar: View {
 /// and missed, and a faint dot for a rest day.
 struct WeekDots: View {
     let units: [String: String]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulses = Array(repeating: 0, count: 7)
 
     var body: some View {
         let start = Week.start(of: .now)
         let today = SyncUnits.day(.now)
+        let days = (0..<7).map { SyncUnits.day(Calendar.current.date(byAdding: .day, value: $0, to: start)!) }
+        let trained = days.map { ClientDay.trained(units, $0) }
         HStack(spacing: 3) {
             ForEach(0..<7, id: \.self) { offset in
-                let day = SyncUnits.day(Calendar.current.date(byAdding: .day, value: offset, to: start)!)
+                let day = days[offset]
                 Group {
-                    if ClientDay.trained(units, day) {
+                    if trained[offset] {
                         Circle().fill(Color.ink)
                     } else if ClientDay.planned(units, day) {
                         Circle().strokeBorder(day < today ? Color.warn : Color.inkMuted, lineWidth: 1.5)
@@ -312,7 +377,17 @@ struct WeekDots: View {
                     }
                 }
                 .frame(width: 7, height: 7)
+                .modifier(CoachEntrance(index: offset, distance: 4))
+                .keyframeAnimator(initialValue: 1.0, trigger: pulses[offset]) { content, scale in
+                    content.scaleEffect(reduceMotion ? 1 : scale)
+                } keyframes: { _ in
+                    SpringKeyframe(1.65, duration: 0.16)
+                    SpringKeyframe(1, duration: 0.28)
+                }
             }
+        }
+        .onChange(of: trained) { before, after in
+            for index in CoachMotion.newLogs(before: before, after: after) { pulses[index] += 1 }
         }
         .accessibilityHidden(true)
     }
@@ -335,6 +410,7 @@ struct InviteSheet: View {
     @State private var invite: Cloud.ClientInvite?
     @State private var problem: String?
     @State private var copied = false
+    @State private var copyCount = 0
     /// FIT-228: asked for only when the account has no name, so the invite says who it's from.
     @State private var asking = false
     @State private var name = ""
@@ -365,8 +441,14 @@ struct InviteSheet: View {
             } else {
                 VStack(spacing: 6) {
                     if let invite {
-                        Text(invite.code).font(.display(34, weight: .medium, design: .monospaced)).tracking(6)
-                            .textSelection(.enabled)
+                        HStack(spacing: 6) {
+                            ForEach(Array(invite.code.enumerated()), id: \.offset) { index, character in
+                                Text(String(character)).modifier(CoachEntrance(index: index, distance: -12))
+                            }
+                        }
+                        .font(.display(34, weight: .medium, design: .monospaced))
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(invite.code)
                         Text(invite.url.replacingOccurrences(of: "https://", with: "")).font(.subheadline).foregroundStyle(Color.inkMuted)
                     } else if let problem {
                         Text(problem).font(.subheadline).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
@@ -394,7 +476,9 @@ struct InviteSheet: View {
                 Button(copied ? "Copied" : "Copy Code") {
                     UIPasteboard.general.string = invite.code
                     copied = true
+                    copyCount += 1
                 }
+                .sensoryFeedback(.tick, trigger: copyCount)
                 .buttonStyle(.secondary).padding(.top, 10)
             }
         }
@@ -409,6 +493,12 @@ struct InviteSheet: View {
         let given = name.trimmingCharacters(in: .whitespaces)
         making = true
         defer { making = false }
+        #if DEBUG
+        if Roster.sample {
+            invite = Cloud.ClientInvite(code: "SAMPLE", url: "https://example.com/invite/SAMPLE", createdAt: nil, client: client)
+            return
+        }
+        #endif
         do {
             invite = try await Cloud.createClientInvite(name: asking ? given : nil, client: client.trimmingCharacters(in: .whitespaces))
             asking = false

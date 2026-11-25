@@ -5,6 +5,22 @@ import Foundation
 extension Roster {
     static var sample: Bool { UserDefaults.standard.bool(forKey: "sampleClients") }
 
+    /// A newly logged workout arriving on pull, so the roster can be exercised without a server.
+    func sampleRefresh(names: [String: String]) {
+        guard var client = clients.first(where: { $0.id == "Tom Reyes" }) else { return }
+        let today = SyncUnits.day(.now)
+        guard !ClientDay.trained(client.units, today),
+              let earlier = client.units.keys.sorted().first(where: { $0.hasPrefix("log#") }) else { return }
+        let rows = ClientDay.log(client.units, String(earlier.dropFirst(4))).map { row in
+            var new = row
+            new.id = UUID()
+            new.at = .now
+            return new
+        }
+        client.units["log#\(today)"] = SyncUnits.encode(rows)
+        update(client, coach: "", names: names)
+    }
+
     static func samples() -> [Client] {
         let calendar = Calendar.current
         func day(_ offset: Int) -> String { SyncUnits.day(calendar.date(byAdding: .day, value: offset, to: .now)!) }
@@ -37,7 +53,8 @@ extension Roster {
                           week: Triage.week(units, comments: [], names: names, coach: "", today: day(0)))
         }
         return [
-            client("Mike Torres", [plan(-2, [("back-squat", 245)]),
+            client("Mike Torres", [log(-9, "back-squat", [(225, 5, 8), (225, 5, 8)], note: nil),
+                                   plan(-2, [("back-squat", 245)]),
                                    log(-2, "back-squat", [(245, 5, nil), (245, 5, nil), (245, 3, 9)], note: "Knee’s sore on squats. Stopped the last set at 3."),
                                    plan(0, [("back-squat", 245), ("romanian-deadlift", 185)])]),
             client("Sara Kim", [plan(-4, [("bench-press", 135)]), plan(-1, [("bench-press", 135)]), plan(1, [("bench-press", 140)])]),

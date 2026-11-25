@@ -59,8 +59,88 @@ final class ReviewDemoUITests: XCTestCase {
         hold(3)
     }
 
+    /// Opt-in check using the signed-in demo pair and a disposable rest day. The reviewed
+    /// client account is excluded because it belongs to a separate App Store demo flow.
     @MainActor
-    private func signIn(_ app: XCUIApplication, email: String, as role: DemoScreens.Role) {
+    func testDemoSessionChangeReachesClient() throws {
+        let environment = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(environment["COACH_MOTION_SYNC"] == "YES"
+                          && coachEmail == "coach@barbrabell.com" && email == "client@barbrabell.com",
+                          "This check requires the disposable coach/client demo pair")
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        app.buttons["welcome.coach"].tap()
+        signIn(app, email: coachEmail, as: .coach, password: environment["DEMO_COACH_PASSWORD"])
+        let roster = app.buttons["welcome.clients"]
+        XCTAssertTrue(roster.waitForExistence(timeout: 90), failureOnScreen(app))
+        // The roster button lands before the sign-in sheet has finished leaving, and the keychain
+        // prompt can arrive late: wait for the button to take a tap instead of tapping into the sheet.
+        dismissPasswordPrompt(app, timeout: 3)
+        let ready = Date().addingTimeInterval(30)
+        while Date() < ready && !roster.isHittable {
+            dismissPasswordPrompt(app, timeout: 1)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        }
+        XCTAssertTrue(roster.isHittable, failureOnScreen(app))
+        roster.tap()
+        let sam = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Sam Rivera")).firstMatch
+        XCTAssertTrue(sam.waitForExistence(timeout: 30))
+        sam.tap()
+        // A run goes onto today whether or not the demo plan already has a session there: on a rest day
+        // from the empty day's buttons, otherwise from the day's ⋯. Nothing already planned is removed.
+        let rest = app.staticTexts["Rest day"]
+        if rest.waitForExistence(timeout: 8) {
+            app.buttons["Run"].tap()
+        } else {
+            let actions = app.buttons["coach.dayActions"]
+            XCTAssertTrue(actions.waitForExistence(timeout: 10), failureOnScreen(app))
+            actions.tap()
+            app.buttons["Add a Run"].tap()
+        }
+        app.buttons["Tempo"].tap()
+        app.buttons["Add"].tap()
+        XCTAssertTrue(app.staticTexts["Run added"].waitForExistence(timeout: 10), "The coach did not see a send confirmation")
+        attach(app, "Coach sent a session")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["Account and library"].tap()
+        let coachAccount = accountRow(app)
+        XCTAssertTrue(coachAccount.waitForExistence(timeout: 10))
+        coachAccount.tap()
+        signOut(app)
+
+        let join = app.buttons["welcome.join"]
+        XCTAssertTrue(join.waitForExistence(timeout: 30))
+        join.tap()
+        signIn(app, email: email, as: .client)
+        XCTAssertTrue(waitForToday(app), failureOnScreen(app))
+        // The run reaches them as the catalog names it ("Trail Running/Walking"), with "tempo" as its note.
+        let sent = NSPredicate(format: "label CONTAINS[c] 'Trail Running' OR label CONTAINS[c] 'tempo'")
+        let delivered = app.descendants(matching: .any).matching(sent).firstMatch
+        var arrived = delivered.waitForExistence(timeout: 45)
+        if !arrived {
+            // Their phone may have read the plan before the coach's edit landed: pull Today down once.
+            app.swipeDown()
+            arrived = delivered.waitForExistence(timeout: 45)
+        }
+        XCTAssertTrue(arrived, "The demo client did not show the session sent by the coach")
+        // The keychain prompt arrives over Today a few seconds after sign-in: it would sit in the evidence.
+        dismissPasswordPrompt(app, timeout: 5)
+        attach(app, "Client received the session")
+    }
+
+    @MainActor
+    private func attach(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    private func signIn(_ app: XCUIApplication, email: String, as role: DemoScreens.Role, password override: String? = nil) {
         let emailButton = app.buttons["signin.email"]
         XCTAssertTrue(emailButton.waitForExistence(timeout: 15), "Sign in with email was not on screen")
         DemoScreens.shown("SignInSheet", as: role)
@@ -73,7 +153,7 @@ final class ReviewDemoUITests: XCTestCase {
         emailField.typeText(email)
         passwordField.tap()
         // Return submits. The password field is secure, so the recording shows dots.
-        passwordField.typeText(password + "\n")
+        passwordField.typeText((override ?? password) + "\n")
         dismissPasswordPrompt(app)
     }
 
@@ -147,6 +227,9 @@ final class ReviewDemoUITests: XCTestCase {
     @MainActor
     private func accountRow(_ app: XCUIApplication) -> XCUIElement {
         let identified = app.descendants(matching: .any).matching(identifier: "you.account").firstMatch
+        // The account section is the last one on You, so a long list (a coach's, above all) has not
+        // drawn it yet: scroll down until it is there.
+        for _ in 0..<8 where !identified.exists { app.swipeUp() }
         if identified.exists { return identified }
         for label in [email, "Sam Rivera", "Account"] {
             let text = app.staticTexts[label]
@@ -159,7 +242,14 @@ final class ReviewDemoUITests: XCTestCase {
 
     @MainActor
     private func signOut(_ app: XCUIApplication) {
-        app.buttons["account.signOut"].tap()
+        let out = app.buttons["account.signOut"]
+        if !out.waitForExistence(timeout: 10) {
+            // The account row's push can be swallowed while the list is still settling: open it again.
+            let row = accountRow(app)
+            if row.exists { row.tap() }
+        }
+        XCTAssertTrue(out.waitForExistence(timeout: 15), failureOnScreen(app))
+        out.tap()
     }
 
     @MainActor

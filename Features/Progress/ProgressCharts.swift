@@ -7,6 +7,7 @@ struct ProgressCharts<CheckInsTop: View>: View {
     let units: [String: String]
     let sets: [LoggedSet]
     let names: [String: String]
+    var coachMotion = false
     /// What heads the check-ins: the coach's check-in day picker, or nothing.
     @ViewBuilder var checkInsTop: CheckInsTop
 
@@ -34,7 +35,7 @@ struct ProgressCharts<CheckInsTop: View>: View {
             if lifts.isEmpty {
                 Text("Nothing lifted with a weight yet.").font(.subheadline).foregroundStyle(Color.inkMuted)
             }
-            ForEach(lifts, id: \.self) { slug in
+            ForEach(Array(lifts.enumerated()), id: \.element) { index, slug in
                 let trend = Training.estimated1RMTrend(sets, exercise: slug)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .firstTextBaseline) {
@@ -53,6 +54,7 @@ struct ProgressCharts<CheckInsTop: View>: View {
                         .chartYScale(domain: .automatic(includesZero: false))
                         .chartXAxis(.hidden)
                         .frame(height: 64)
+                        .modifier(CoachChartReveal(enabled: coachMotion, index: index))
                     }
                 }
             }
@@ -73,6 +75,7 @@ struct ProgressCharts<CheckInsTop: View>: View {
             // FIT-367: four dates across a phone's width overlap past this size; the chart is read by its bars.
             .dynamicTypeSize(...DynamicTypeSize.xLarge)
             .frame(height: 120)
+            .modifier(CoachChartReveal(enabled: coachMotion, bars: true, index: 4))
             let done = weeks.map(\.done).reduce(0, +), planned = weeks.map(\.planned).reduce(0, +)
             Text(planned == 0 ? "Nothing planned yet" : "\(done) of \(planned) sessions done")
                 .font(.subheadline).foregroundStyle(Color.inkMuted)
@@ -108,6 +111,7 @@ struct ProgressCharts<CheckInsTop: View>: View {
                 if weighIns.count > 1 {
                     Chart(weighIns, id: \.date) { LineMark(x: .value("Day", $0.date), y: .value("lb", $0.value)).foregroundStyle(Plate.current.mark) }
                         .chartYScale(domain: .automatic(includesZero: false)).chartXAxis(.hidden).frame(height: 56)
+                        .modifier(CoachChartReveal(enabled: coachMotion, index: 5))
                 }
             }
             if !sleep.isEmpty {
