@@ -14,6 +14,11 @@ enum CelebrationMotion {
         }
         return (0, win.value)
     }
+
+    /// True once a 3D Y-flip passes 90°, where the achieved back face replaces the front chart face.
+    nonisolated static func showsBackFace(angle: Double) -> Bool {
+        angle >= 90
+    }
 }
 
 /// TKL-934 (C2): depth-of-field flecks rendered with Canvas + TimelineView in ink and the user's Plate accent.
@@ -163,19 +168,23 @@ struct CelebrationView: View {
             image = ShareCard.image(win, style: style, showNumbers: showNumbers)
         }
         .onAppear {
-            if wins.count > 1, !landedOnce {
-                landedOnce = true
-                if !reduced {
-                    withAnimation(.release) { fanned = true }
-                } else {
-                    fanned = true
-                }
-                haptics.play(.crescendo)
-                if !reduced {
-                    flecksDuration = 2.2
-                    flecksTrigger += 1
-                }
+            guard wins.count > 1, !fanned else { return }
+            if !reduced {
+                withAnimation(.release) { fanned = true }
+            } else {
+                fanned = true
             }
+        }
+    }
+
+    /// The first win's number lands: Crescendo plays once, with the flecks (bigger for a goal hit).
+    private func land(isGoal: Bool) {
+        guard !landedOnce else { return }
+        landedOnce = true
+        haptics.play(.crescendo)
+        if !reduced {
+            flecksDuration = isGoal ? 2.8 : 2.2
+            flecksTrigger += 1
         }
     }
 
@@ -211,15 +220,7 @@ struct CelebrationView: View {
 
     @ViewBuilder private var cardStage: some View {
         if wins.count == 1 {
-            AnimatedWinCard(win: wins[0], style: style, showNumbers: showNumbers, reduceMotion: reduced) { isGoal in
-                guard !landedOnce else { return }
-                landedOnce = true
-                haptics.play(.crescendo)
-                if !reduced {
-                    flecksDuration = isGoal ? 2.8 : 2.2
-                    flecksTrigger += 1
-                }
-            }
+            AnimatedWinCard(win: wins[0], style: style, showNumbers: showNumbers, reduceMotion: reduced, onLand: land)
             .modifier(OptionalMatchedCard(namespace: cardNamespace, reduceMotion: reduced))
             .shadow(color: .black.opacity(0.14), radius: 15, y: 8)
         } else {
@@ -235,7 +236,15 @@ struct CelebrationView: View {
             ForEach(Array(remaining.reversed()), id: \.element.id) { item in
                 let depth = item.offset - currentIndex
                 let isTop = depth == 0
-                ShareCard(win: item.element, style: style, showNumbers: showNumbers)
+                // The top card plays its win (count-up and Sparkline, or the goal's flip); the ones under it wait.
+                Group {
+                    if isTop {
+                        AnimatedWinCard(win: item.element, style: style, showNumbers: showNumbers, reduceMotion: reduced,
+                                        onLand: land)
+                    } else {
+                        ShareCard(win: item.element, style: style, showNumbers: showNumbers)
+                    }
+                }
                     .shadow(color: .black.opacity(0.14), radius: 15, y: 8)
                     .rotationEffect(.degrees(reduced ? 0 : (isTop ? Double(dragX) / 18.0 : (fanned ? Double(depth) * 5.0 : 0))),
                                     anchor: UnitPoint(x: 0.5, y: 0.9))
@@ -429,20 +438,19 @@ struct AnimatedWinCard: View {
     }
 
     private var goalHitCard: some View {
-        let angle: Double = flipped ? 180 : 0
-        return ZStack {
-            // Front face: chart draws to target line, target lights end to end.
-            GoalHitFrontCard(win: win, style: style, showNumbers: showNumbers,
-                             lineProgress: reduceMotion ? 1 : goalLineProgress,
-                             targetLitProgress: reduceMotion ? 1 : targetLitProgress)
-                .opacity(angle < 90 ? 1 : 0)
-            // Achieved back face: flipped 180° so it reads forward once the container flips.
-            ShareCard(win: win, style: style, showNumbers: showNumbers,
-                      overrideTag: "GOAL HIT", tagAccent: true)
-                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                .opacity(angle >= 90 ? 1 : 0)
-        }
-        .rotation3DEffect(.degrees(reduceMotion ? (flipped ? 180 : 0) : angle), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
+        GoalFlipCard(
+            angle: flipped ? 180 : 0,
+            reduceMotion: reduceMotion,
+            front: {
+                GoalHitFrontCard(win: win, style: style, showNumbers: showNumbers,
+                                 lineProgress: reduceMotion ? 1 : goalLineProgress,
+                                 targetLitProgress: reduceMotion ? 1 : targetLitProgress)
+            },
+            back: {
+                ShareCard(win: win, style: style, showNumbers: showNumbers,
+                          overrideTag: "GOAL HIT", tagAccent: true)
+            }
+        )
         .onAppear {
             guard !played else { return }
             played = true
@@ -468,6 +476,41 @@ struct AnimatedWinCard: View {
                     flipped = true
                 }
             }
+        }
+    }
+}
+
+/// Animates the 3D Y-flip smoothly so the front and achieved back faces swap exactly at 90°.
+private struct GoalFlipCard<Front: View, Back: View>: View, Animatable {
+    nonisolated var angle: Double
+    let reduceMotion: Bool
+    @ViewBuilder let front: () -> Front
+    @ViewBuilder let back: () -> Back
+
+    nonisolated var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+
+    var body: some View {
+        let backVisible = CelebrationMotion.showsBackFace(angle: angle)
+        if reduceMotion {
+            ZStack {
+                if backVisible {
+                    back()
+                } else {
+                    front()
+                }
+            }
+        } else {
+            ZStack {
+                front()
+                    .opacity(backVisible ? 0 : 1)
+                back()
+                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                    .opacity(backVisible ? 1 : 0)
+            }
+            .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
         }
     }
 }

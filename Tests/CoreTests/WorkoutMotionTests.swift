@@ -70,6 +70,11 @@ struct WorkoutMotionTests {
         let halfway = WinItem(kind: .milestone, date: .now, key: "m:squat:50", metric: "back-squat.1rm_lb",
                               unit: "lb", value: 175, start: 150, target: 200, percent: 50, trend: [150, 175])
         #expect(!CelebrationMotion.isGoalHit(halfway))
+
+        #expect(!CelebrationMotion.showsBackFace(angle: 0))
+        #expect(!CelebrationMotion.showsBackFace(angle: 89.9))
+        #expect(CelebrationMotion.showsBackFace(angle: 90))
+        #expect(CelebrationMotion.showsBackFace(angle: 180))
     }
 
     @Test func flecksGenerateDeterministicDepthOfFieldParticles() {
