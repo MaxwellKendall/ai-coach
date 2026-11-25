@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -21,15 +22,23 @@ def pid_alive(pid):
 
 def lock_holders(path):
     """Processes other than this one with the lock file open, as "PID command" lines."""
+    lsof = shutil.which("lsof") or "/usr/sbin/lsof"
     try:
-        found = subprocess.run(["lsof", "-t", str(path)], capture_output=True, text=True, timeout=10).stdout
+        result = subprocess.run([lsof, "-t", "--", str(path)], capture_output=True, text=True, timeout=15)
     except (OSError, subprocess.SubprocessError):
         return None
-    pids = sorted({int(p) for p in found.split()} - {os.getpid()})
+    tokens = result.stdout.split()
+    if result.returncode != 0 and not tokens:
+        return None
+    try:
+        pids = sorted({int(p) for p in tokens} - {os.getpid()})
+    except ValueError:
+        return None
+    ps = shutil.which("ps") or "/bin/ps"
     holders = []
     for pid in pids:
         try:
-            command = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
+            command = subprocess.run([ps, "-o", "command=", "-p", str(pid)],
                                      capture_output=True, text=True, timeout=10).stdout.strip()
         except (OSError, subprocess.SubprocessError):
             command = ""
@@ -47,8 +56,10 @@ def held_message(bundle_id, path, recorded):
         lines += [f"  {h}" for h in holders]
     match = re.search(r"\(PID (\d+)\)", recorded)
     if match and not pid_alive(int(match.group(1))):
-        lines.append(f"Recorded PID {match.group(1)} is no longer running; a leftover child still holds the lock. "
-                     "Stop the processes above to release it.")
+        tail = ("Stop the processes above to release it." if holders
+                else f"Check with `lsof {path}` or retry if it just exited." if holders is not None
+                else "Find and stop the leftover process to release it.")
+        lines.append(f"Recorded PID {match.group(1)} is no longer running; a leftover child still holds the lock. {tail}")
     return "\n".join(lines)
 
 
