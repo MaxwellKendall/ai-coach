@@ -198,6 +198,22 @@ final class ReviewDemoUITests: XCTestCase {
             skip.tap()
         }
         hold(1.6)
+        closeCelebration(app, timeout: 6)
+    }
+
+    /// TKL-1021: since TKL-934 a save that earns a win (the demo client's usually does) ends on the "Nice work"
+    /// sheet, which covers Today and swallows the tap on "Account and library". Show it, then close it.
+    @MainActor
+    private func closeCelebration(_ app: XCUIApplication, timeout: TimeInterval) {
+        let nice = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Nice work'")).firstMatch
+        guard nice.waitForExistence(timeout: timeout) else { return }
+        DemoScreens.shown("CelebrationSheet", as: .client)
+        hold(2.4)
+        let close = app.buttons["Close"].firstMatch
+        if close.isHittable { close.tap() }
+        else { close.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        _ = nice.waitForNonExistence(timeout: 6)
+        hold(0.8)
     }
 
     @MainActor
@@ -205,6 +221,12 @@ final class ReviewDemoUITests: XCTestCase {
         let you = app.buttons["Account and library"]
         XCTAssertTrue(you.waitForExistence(timeout: 10), "Today has no account button")
         you.tap()
+        if !app.staticTexts["You"].waitForExistence(timeout: 5) {
+            // A late celebration or toast can still cover Today: clear it and try once more.
+            closeCelebration(app, timeout: 1)
+            if you.isHittable { you.tap() }
+            else { you.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        }
         XCTAssertTrue(app.staticTexts["You"].waitForExistence(timeout: 10), "You did not open")
         DemoScreens.shown("YouScreen", as: .client)
         hold(1)
