@@ -42,18 +42,26 @@ enum NewGoal {
         calendar.date(byAdding: .day, value: 7 * 12 - 1, to: Week.start(of: now, calendar: calendar))!
     }
 
-    /// TKL-927: a goal they have, with its target, so two on one lift read apart: "Squat more · 275 lb".
+    /// TKL-927, TKL-999: a goal they have, with its target, so two on one lift — including nearby fractional targets
+    /// from MCP — read apart: "Squat more · 225 lb", "Squat more · 225.4 lb".
     static func label(_ goal: Goal) -> String {
         guard let option = GoalOption.all.first(where: { $0.metric == goal.metric }) else {
             return "\(Goal.label(goal.metric)) · \(Coach.number(goal.target)) \(goal.unit)".trimmingCharacters(in: .whitespaces)
         }
-        return "\(option.title) · \(option.format(goal.target)) \(option.shownUnit)".trimmingCharacters(in: .whitespaces)
+        let target = option.measure == .time ? Running.clock(goal.target) : Coach.number(goal.target)
+        return "\(option.title) · \(target) \(option.shownUnit)".trimmingCharacters(in: .whitespaces)
     }
 
-    /// TKL-927: a date builds the weeks around a goal they have only while there's still no program (one may have
-    /// synced in while the sheet was open) and the goal is still active and theirs.
-    static func canBuildProgram(for goal: Goal, profile: Profile?) -> Bool {
+    /// TKL-927, TKL-999: a date builds the weeks around a goal they have only while there's still no program (one may
+    /// have synced in while the sheet was open) and the goal is still among their current active goals. Membership is
+    /// checked by identity before reading attributes because a saved sync deletion detaches a retained SwiftData model
+    /// and resets `isDeleted` to false.
+    static func canBuildProgram(for goal: Goal, in goals: [Goal], profile: Profile?) -> Bool {
         guard let profile, profile.program == nil else { return false }
-        return goal.status == .active && !goal.isDeleted
+        guard !goal.isDeleted, goal.modelContext === profile.modelContext else { return false }
+        guard let current = goals.first(where: { $0 === goal || $0.persistentModelID == goal.persistentModelID }) else {
+            return false
+        }
+        return !current.isDeleted && current.status == .active
     }
 }
