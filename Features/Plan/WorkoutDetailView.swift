@@ -59,7 +59,7 @@ struct WorkoutDetailView: View {
     /// and handed over by Start.
     private var autosaves: Bool { onStartOwn == nil && !items.isEmpty }
 
-    init(items: [PlannedActivity], session: SessionPlan, startTitle: String? = nil, startIcon: String = "play.fill",
+    init(items: [PlannedActivity], session: SessionPlan, anchor: Planner.Anchor? = nil, startTitle: String? = nil, startIcon: String = "play.fill",
          pushed: Bool = false, onStart: @escaping ([PlannedActivity]) -> Void = { _ in },
          onSave: @escaping ([PlannedActivity]) -> Void = { _ in }, onStartOwn: ((SessionPlan) -> Void)? = nil) {
         self.items = items
@@ -72,7 +72,7 @@ struct WorkoutDetailView: View {
         _session = State(initialValue: session)
         _original = State(initialValue: session)
         _saved = State(initialValue: items)
-        _anchor = State(initialValue: Planner.Anchor(items))
+        _anchor = State(initialValue: anchor ?? Planner.Anchor(items))
     }
 
     var body: some View {
@@ -164,7 +164,7 @@ struct WorkoutDetailView: View {
         let sets = session.blocks.flatMap(\.movements).reduce(0) { $0 + $1.working.count }
         let reasons = Set(session.blocks.flatMap(\.movements).flatMap(\.sets).compactMap(\.adjustedReason)).subtracting(["edited"]).sorted()
         return VStack(alignment: .leading, spacing: 6) {
-            if let date = items.first?.date {
+            if let date = items.first?.date ?? anchor?.date {
                 Text(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
             }
@@ -267,7 +267,7 @@ struct WorkoutDetailView: View {
     private func save() -> [PlannedActivity] {
         if autosaves { return saved }
         guard session.items != original.items else { return items }
-        return Planner.save(session, over: items, templates: templates, in: context)
+        return Planner.save(session, over: items, templates: templates, in: context, anchor: anchor)
     }
 
     /// TKL-759 (a): each change is saved over the rows as last saved, and Undo takes back everything since its toast came.

@@ -14,6 +14,7 @@ struct ProgramScreen: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Query private var profiles: [Profile]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
+    @Query private var plans: [Plan]
     @Query(sort: \PlannedActivity.date) private var planned: [PlannedActivity]
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
@@ -44,6 +45,9 @@ struct ProgramScreen: View {
     /// The day whose session is open (FIT-45).
     @State private var opened: Date?
     @State private var programLink: SharedLink?
+    /// TKL-745: day currently hovered during a drag-and-drop reorder, and haptic trigger.
+    @State private var dropTarget: Date?
+    @State private var reorderTick = 0
 
     struct Regenerate: Identifiable {
         let id = UUID()
@@ -298,11 +302,12 @@ struct ProgramScreen: View {
                 Text(activeGoals.isEmpty ? "Set a goal above and the week plans itself." : "Set a date above to build your weeks.")
                     .foregroundStyle(Color.inkMuted).padding(.top, 4)
             } else {
-                sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
+                sessions(thisWeek(monday), pinnable: false, editable: weeks >= 0, monday: monday).padding(.top, 12)
             }
             Color.clear.frame(height: 12)
         }
         .padding(22)
+        .scrollsWhenTall()
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .cardBackground()
         .frame(maxHeight: .infinity, alignment: .top)
@@ -340,10 +345,10 @@ struct ProgramScreen: View {
             let ready = ReadyProgram.named(profile.programSlug)
             Text(ready?.title(week) ?? ProgramPlan.title(week)).font(.display(28)).padding(.top, 6)
             if index == current || index == current + 1 {
-                let saved = index == current || !dayItems(in: monday).isEmpty
+                let saved = index == current || plans.contains { $0.weekStart == monday }
                 // FIT-202: a coach's client follows the coach's weeks; pinning is for weeks the app plans.
                 sessions(saved ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped(),
-                         pinnable: saved && !coached, monday: monday)
+                         pinnable: saved && !coached, editable: true, monday: monday)
                     .padding(.top, 14)
                 Color.clear.frame(height: 12)
                 // FIT-437: the one place a free lifter meets Lifter Pro by asking for AI planning. FIT-426: Lifter Pro
@@ -407,7 +412,7 @@ struct ProgramScreen: View {
         let rest: String = if index < current { "Done" }
             else if index == current { unique(thisWeek(monday)) }
             else if index == current + 1 {
-                unique(dayItems(in: monday).isEmpty ? nextWeek.map { Planner.SketchDay($0, names: names) }.grouped() : thisWeek(monday))
+                unique(plans.contains { $0.weekStart == monday } ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped())
             }
             else {
                 (sketch(index, weeks: weeks).map { "\($0.name.split(separator: " ").first ?? "") \($0.value)" }
@@ -439,61 +444,312 @@ struct ProgramScreen: View {
     }
 
     /// Each day opens its session to edit (FIT-45); a done day opens what was logged.
-    private func sessions(_ days: [Planner.SketchDay], pinnable: Bool, monday: Date) -> some View {
-        VStack(spacing: 0) {
-            ForEach(days) { day in
-                HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Button { open(day.date, monday: monday) } label: {
-                        // Accessibility sizes put the day over its lifts, so the lifts get the width.
-                        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
-                            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 14))
-                        layout {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
-                                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
-                                    .lineLimit(1).fixedSize()
-                                    .frame(minWidth: 36, alignment: .leading)
-                                // FIT-367: at accessibility sizes, done or missed goes on the day's line, so the lifts
-                                // below get the card's whole width.
-                                if typeSize.isAccessibilitySize {
-                                    Spacer()
-                                    status(day.date)
-                                }
-                            }
-                            // The lifts name the session, as on Today; the sets are one tap away.
-                            Text(day.title).font(.body.weight(.semibold)).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("program.day")
-                    .accessibilityHint(done(day.date) ? "Shows what you logged" : missed(day.date) ? "Opens the day on Today, to log it" : "Opens the session to change it")
-                    if done(day.date) || missed(day.date) {
-                        if !typeSize.isAccessibilitySize { status(day.date) }
-                    } else if pinnable, day.date >= Calendar.current.startOfDay(for: .now) {
-                        let items = dayItems(day.date)
-                        let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
-                        Button {
-                            guard !swipes.swiping() else { return }
-                            // Pinned sessions stay open on Today without Pro (FIT-120), so pinning is Pro too.
-                            pro.gate { withAnimation(.settle) { for item in items { item.pinned = !pinned; item.updatedAt = .now } } }
-                        } label: {
-                            Image(systemName: pinned ? "pin.fill" : "pin")
-                                .font(.subheadline)
-                                .foregroundStyle(pinned ? Color.primary : Color(.tertiaryLabel))
-                                .frame(width: 44, height: 44)
-                                .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(pinned ? "Unpin \(day.session). Regenerating can change it." : "Pin \(day.session) so regenerating keeps it")
-                        .accessibilityAddTraits(pinned ? .isSelected : [])
+    /// TKL-745: editable weeks show all 7 days (Sun–Sat) so open workouts can be dragged onto another workout (swap)
+    /// or onto a rest day (move), marked as a rest day, copied, or added on a rest day.
+    private func sessions(_ days: [Planner.SketchDay], pinnable: Bool, editable: Bool, monday: Date) -> some View {
+        let slots: [ProgramWeekEditor.DaySlot] = if editable {
+            ProgramWeekEditor.weekSlots(weekStart: monday, workouts: days, loggedDays: loggedWorkoutDays)
+        } else {
+            days.map { day in
+                ProgramWeekEditor.DaySlot(date: day.date, workout: day, done: done(day.date), missed: missed(day.date), editable: false)
+            }
+        }
+        return VStack(spacing: 0) {
+            ForEach(slots) { slot in
+                dayRow(slot, in: slots, pinnable: pinnable, monday: monday)
+                if slot.id != slots.last?.id { Divider() }
+            }
+            if slots.isEmpty { Text("Nothing planned.").font(.subheadline).foregroundStyle(.secondary) }
+        }
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: reorderTick)
+    }
+
+    @ViewBuilder
+    private func dayRow(_ slot: ProgramWeekEditor.DaySlot, in slots: [ProgramWeekEditor.DaySlot], pinnable: Bool, monday: Date) -> some View {
+        let isToday = Calendar.current.isDateInToday(slot.date)
+        let isTargeted = dropTarget == slot.date && slot.editable
+        let row = HStack(alignment: .center, spacing: 10) {
+            dayRowMain(slot, isToday: isToday, monday: monday)
+            if slot.done || slot.missed {
+                if !typeSize.isAccessibilitySize { status(slot.date) }
+            } else if slot.editable {
+                dayRowControls(slot, in: slots, pinnable: pinnable, monday: monday)
+            }
+        }
+        .padding(.vertical, slot.workout == nil ? 8 : 10)
+        .padding(.horizontal, isTargeted ? 8 : 0)
+        .background {
+            if isTargeted {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Plate.current.accent.opacity(0.10))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Plate.current.mark, lineWidth: 1.5))
+            }
+        }
+        .animation(.tap, value: isTargeted)
+
+        if slot.editable, slot.workout != nil {
+            row
+                .draggable(ProgramWeekEditor.dragPayload(weekStart: monday, day: slot.date)) {
+                    dragPreview(slot)
+                }
+                .dropDestination(for: String.self) { payloads, _ in
+                    handleDrop(payloads, onto: slot.date, monday: monday)
+                } isTargeted: { targeted in
+                    dropTarget = targeted ? slot.date : (dropTarget == slot.date ? nil : dropTarget)
+                }
+        } else if slot.editable {
+            row
+                .dropDestination(for: String.self) { payloads, _ in
+                    handleDrop(payloads, onto: slot.date, monday: monday)
+                } isTargeted: { targeted in
+                    dropTarget = targeted ? slot.date : (dropTarget == slot.date ? nil : dropTarget)
+                }
+        } else {
+            row
+        }
+    }
+
+    @ViewBuilder
+    private func dayRowMain(_ slot: ProgramWeekEditor.DaySlot, isToday: Bool, monday: Date) -> some View {
+        let weekday = slot.date.formatted(.dateTime.weekday(.abbreviated))
+        let content = Group {
+            // Accessibility sizes put the day over its lifts, so the lifts get the width.
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 14))
+            layout {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(weekday)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(isToday ? Plate.current.mark : Color.inkMuted)
+                        .lineLimit(1).fixedSize()
+                        .frame(minWidth: 36, alignment: .leading)
+                    // FIT-367: at accessibility sizes, done or missed goes on the day's line, so the lifts
+                    // below get the card's whole width.
+                    if typeSize.isAccessibilitySize {
+                        Spacer()
+                        status(slot.date)
                     }
                 }
-                .padding(.vertical, 10)
-                if day.id != days.last?.id { Divider() }
+                if let workout = slot.workout {
+                    // The lifts name the session, as on Today; the sets are one tap away.
+                    Text(workout.title)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.ink)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text("Rest day")
+                        .font(.subheadline)
+                        .foregroundStyle(slot.editable ? Color.inkMuted : Color.inkFaint)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-            if days.isEmpty { Text("Nothing planned.").font(.subheadline).foregroundStyle(.secondary) }
+            .contentShape(.rect)
+        }
+
+        if slot.workout != nil {
+            Button { open(slot.date, monday: monday) } label: { content }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("program.day")
+                .accessibilityHint(
+                    slot.done ? "Shows what you logged"
+                        : slot.missed ? "Opens the day on Today, to log it"
+                        : "Opens the session to change it, or drag to another day to reorder"
+                )
+        } else if slot.editable {
+            Button { open(slot.date, monday: monday) } label: { content }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("program.restDay")
+                .accessibilityHint("Add a workout on this day, or drop a workout here")
+        } else {
+            content
+                .accessibilityIdentifier("program.restDay")
+        }
+    }
+
+    @ViewBuilder
+    private func dayRowControls(_ slot: ProgramWeekEditor.DaySlot, in slots: [ProgramWeekEditor.DaySlot], pinnable: Bool, monday: Date) -> some View {
+        let items = dayItems(slot.date)
+        let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
+        let weekday = slot.date.formatted(.dateTime.weekday(.wide))
+        let dayKey = SyncUnits.day(slot.date)
+        let otherEditable = slots.filter { $0.editable && $0.date != slot.date }
+        let otherWorkouts = slots.filter { $0.workout != nil && $0.date != slot.date }
+
+        HStack(spacing: 4) {
+            if slot.workout != nil, pinnable, pinned {
+                Image(systemName: "pin.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.inkMuted)
+                    .accessibilityLabel("Pinned")
+            }
+            Menu {
+                if slot.workout != nil {
+                    Button("Edit workout", systemImage: "pencil") { open(slot.date, monday: monday) }
+                    if !otherEditable.isEmpty {
+                        Menu("Move to…", systemImage: "arrow.left.arrow.right") {
+                            ForEach(otherEditable) { target in
+                                Button(targetLabel(target, verb: "swap")) {
+                                    reorder(from: slot.date, to: target.date, monday: monday)
+                                }
+                            }
+                        }
+                        Menu("Copy to…", systemImage: "doc.on.doc") {
+                            ForEach(otherEditable) { target in
+                                Button(targetLabel(target, verb: "replace")) {
+                                    copyDay(from: slot.date, to: target.date, monday: monday)
+                                }
+                            }
+                        }
+                    }
+                    if pinnable {
+                        Button(pinned ? "Unpin" : "Pin", systemImage: pinned ? "pin.slash" : "pin") {
+                            togglePin(slot.date)
+                        }
+                    }
+                    Divider()
+                    Button("Make rest day", systemImage: "moon", role: .destructive) {
+                        clearToRest(slot.date, monday: monday)
+                    }
+                } else {
+                    Button("Add workout", systemImage: "plus") { open(slot.date, monday: monday) }
+                    let movable = otherEditable.filter { $0.workout != nil }
+                    if !movable.isEmpty {
+                        Menu("Move workout here…", systemImage: "arrow.down.to.line") {
+                            ForEach(movable) { source in
+                                Button(sourceLabel(source)) {
+                                    reorder(from: source.date, to: slot.date, monday: monday)
+                                }
+                            }
+                        }
+                    }
+                    if !otherWorkouts.isEmpty {
+                        Menu("Copy workout here…", systemImage: "doc.on.doc") {
+                            ForEach(otherWorkouts) { source in
+                                Button(sourceLabel(source)) {
+                                    copyDay(from: source.date, to: slot.date, monday: monday)
+                                }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.inkFaint)
+                    .frame(width: 36, height: 36)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Actions for \(weekday)")
+            .accessibilityIdentifier("program.day.actions.\(dayKey)")
+
+            if slot.workout != nil {
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.inkFaint.opacity(0.65))
+                    .frame(width: 18, height: 36)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private func dragPreview(_ slot: ProgramWeekEditor.DaySlot) -> some View {
+        HStack(spacing: 10) {
+            Text(slot.date.formatted(.dateTime.weekday(.abbreviated)))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.inkMuted)
+            Text(slot.workout?.title ?? "Workout")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.ink)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.surface, in: .rect(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
+    }
+
+    private func targetLabel(_ target: ProgramWeekEditor.DaySlot, verb: String) -> String {
+        let day = target.date.formatted(.dateTime.weekday(.abbreviated))
+        guard let workout = target.workout else { return "\(day) · Rest day" }
+        return "\(day) · \(workout.title) (\(verb))"
+    }
+
+    private func sourceLabel(_ source: ProgramWeekEditor.DaySlot) -> String {
+        let day = source.date.formatted(.dateTime.weekday(.abbreviated))
+        return "\(day) · \(source.workout?.title ?? "Workout")"
+    }
+
+    private var loggedWorkoutDays: Set<Date> {
+        Set(entries.filter { $0.kind == .workout }.map { Calendar.current.startOfDay(for: $0.timestamp) })
+    }
+
+    private func togglePin(_ date: Date) {
+        guard !swipes.swiping() else { return }
+        let items = dayItems(date)
+        let pinned = !items.isEmpty && items.allSatisfy(\.pinned)
+        // Pinned sessions stay open on Today without Pro (FIT-120), so pinning is Pro too.
+        pro.gate {
+            withAnimation(.settle) {
+                for item in items { item.pinned = !pinned; item.updatedAt = .now }
+                try? context.save()
+            }
+        }
+    }
+
+    private func handleDrop(_ payloads: [String], onto target: Date, monday: Date) -> Bool {
+        dropTarget = nil
+        guard let payload = payloads.first,
+              let source = ProgramWeekEditor.parseDragPayload(payload, expectedWeekStart: monday),
+              source != target else { return false }
+        return reorder(from: source, to: target, monday: monday)
+    }
+
+    @discardableResult
+    private func reorder(from source: Date, to target: Date, monday: Date) -> Bool {
+        guard pro.active else { pro.paywall = true; return false }
+        let plansItself = pro.weekSource(hasProgram: profiles.first?.programStart != nil)?.plansItself == true
+        guard let plan = try? ProgramWeekEditor.ensurePlan(weekOf: monday, plansItself: plansItself, in: context),
+              let outcome = try? ProgramWeekEditor.moveOrSwap(
+                from: source, to: target, in: plan, loggedDays: loggedWorkoutDays, coached: coached, context: context
+              ) else { return false }
+        reorderTick += 1
+        withAnimation(.settle) {
+            toast = Toast(text: outcome.message) {
+                withAnimation(.settle) { outcome.undo() }
+            }
+        }
+        return true
+    }
+
+    private func clearToRest(_ date: Date, monday: Date) {
+        guard pro.active else { pro.paywall = true; return }
+        let plansItself = pro.weekSource(hasProgram: profiles.first?.programStart != nil)?.plansItself == true
+        guard let plan = try? ProgramWeekEditor.ensurePlan(weekOf: monday, plansItself: plansItself, in: context),
+              let outcome = try? ProgramWeekEditor.makeRestDay(
+                date, in: plan, loggedDays: loggedWorkoutDays, context: context
+              ) else { return }
+        reorderTick += 1
+        withAnimation(.settle) {
+            toast = Toast(text: outcome.message) {
+                withAnimation(.settle) { outcome.undo() }
+            }
+        }
+    }
+
+    private func copyDay(from source: Date, to target: Date, monday: Date) {
+        guard pro.active else { pro.paywall = true; return }
+        let plansItself = pro.weekSource(hasProgram: profiles.first?.programStart != nil)?.plansItself == true
+        guard let plan = try? ProgramWeekEditor.ensurePlan(weekOf: monday, plansItself: plansItself, in: context),
+              let outcome = try? ProgramWeekEditor.copyWorkout(
+                from: source, to: target, in: plan, loggedDays: loggedWorkoutDays, coached: coached, context: context
+              ) else { return }
+        reorderTick += 1
+        withAnimation(.settle) {
+            toast = Toast(text: outcome.message) {
+                withAnimation(.settle) { outcome.undo() }
+            }
         }
     }
 
@@ -527,9 +783,8 @@ struct ProgramScreen: View {
         guard pro.active else { return pro.paywall = true }
         // FIT-357: a missed day is logged where past days are, on Today, not changed as a plan.
         if missed(date) { return Navigator.shared.pushed = PushTarget(kind: .nudge, day: Calendar.current.startOfDay(for: date)) }
-        if dayItems(in: monday).isEmpty, pro.weekSource(hasProgram: true)?.plansItself == true {
-            try? Planner.generate(weekOf: monday, in: context)
-        }
+        let plansItself = pro.weekSource(hasProgram: profiles.first?.programStart != nil)?.plansItself == true
+        _ = try? ProgramWeekEditor.ensurePlan(weekOf: monday, plansItself: plansItself, in: context)
         opened = Calendar.current.startOfDay(for: date)
     }
 
@@ -537,10 +792,21 @@ struct ProgramScreen: View {
         let items = dayItems(date).sorted { $0.date < $1.date }
         if done(date) {
             SessionRecordView(planned: items)
-        } else if !items.isEmpty {
+        } else {
+            let plan = try? Planner.plan(weekOf: date, in: context)
+            let workoutTime = profiles.first?.workoutTime ?? 420
+            let defaultDate = Calendar.current.date(byAdding: .minute, value: workoutTime, to: Calendar.current.startOfDay(for: date)) ?? date
+            let anchor = Planner.Anchor(items) ?? Planner.Anchor(date: defaultDate, slot: "Workout", plan: plan)
             // An edited session is pinned, so regenerating the week keeps it.
-            WorkoutDetailView(items: items, session: Planner.session(items, templates: templates), pushed: true) { _ in } onSave: { saved in
-                for item in saved { item.pinned = true }
+            WorkoutDetailView(items: items, session: Planner.session(items, templates: templates), anchor: anchor, pushed: true) { _ in } onSave: { saved in
+                for item in saved { item.pinned = !coached }
+                if let plan {
+                    if plan.weekStart > Calendar.current.startOfDay(for: .now),
+                       plan.designedBy != ProgramDesigner.Source.model.rawValue {
+                        plan.designedBy = ProgramWeekEditor.userDesigned
+                    }
+                    plan.updatedAt = .now
+                }
                 try? context.save()
             }
         }

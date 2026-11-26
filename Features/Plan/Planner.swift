@@ -335,7 +335,8 @@ enum Planner {
         // FIT-131: a coach's week is theirs; nothing is added to it.
         guard plan.updatedAt < plan.weekStart, !isCoached(plan) else { return }
         // FIT-426: the AI designed it after this week's last session, from how the week went; it's the week that comes.
-        if plan.designedBy == ProgramDesigner.Source.model.rawValue {
+        // TKL-745: a future week the user rearranged or cleared days in stays as they set it.
+        if plan.designedBy == ProgramDesigner.Source.model.rawValue || plan.designedBy == ProgramWeekEditor.userDesigned {
             plan.updatedAt = date
             return try context.save()
         }
@@ -578,6 +579,12 @@ enum Planner {
         var date: Date
         var slot: String?
         var plan: Plan?
+
+        init(date: Date, slot: String?, plan: Plan?) {
+            self.date = date
+            self.slot = slot
+            self.plan = plan
+        }
 
         init?(_ items: [PlannedActivity]) {
             guard let first = items.min(by: { $0.date < $1.date }) else { return nil }
