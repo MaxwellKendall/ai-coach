@@ -12,6 +12,17 @@ enum GoalChange {
         goal.updatedAt = now
         try context.save()
     }
+
+    @MainActor
+    static func delete(_ goal: Goal, in context: ModelContext) throws {
+        context.delete(goal)
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
 }
 
 /// A goal's target and date, from the ⋯ on its card; Drop is here too.

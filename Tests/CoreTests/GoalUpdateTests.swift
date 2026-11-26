@@ -86,6 +86,28 @@ struct GoalUpdateTests {
         guard case .rest = card else { Issue.record("A test made the day a session"); return }
     }
 
+    @Test func deletingAGoalRemovesOnlyItsSyncUnit() throws {
+        let context = try store()
+        let goal = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 265, unit: "lb")
+        let otherGoal = Goal(kind: .training, metric: "pull-up.reps", target: 10, unit: "reps")
+        context.insert(goal)
+        context.insert(otherGoal)
+        try GoalUpdate.save(GoalOption.with(id: "squat")!, .lift(load: 225, reps: 1), note: "", in: context, now: now)
+        let key = "goal#\(goal.id.uuidString)"
+        var expected = try SyncUnits.all(in: context)
+        var sync = SyncState(synced: expected.mapValues(SyncUnits.hash))
+        try #require(expected.removeValue(forKey: key) != nil)
+
+        try GoalChange.delete(goal, in: context)
+
+        let reopened = ModelContext(context.container)
+        #expect(try reopened.fetch(FetchDescriptor<Goal>()).map(\.id) == [otherGoal.id])
+        let actual = try SyncUnits.all(in: reopened)
+        #expect(actual == expected)
+        sync.notice(actual, now: now)
+        #expect(sync.outgoing(actual) == [.init(key: key, updatedAt: now, body: nil)])
+    }
+
     @Test func aGoalsTargetAndDateChangeInItsUnit() throws {
         let context = try store()
         let goal = Goal(kind: .training, metric: "back-squat.1rm_lb", target: 265, unit: "lb", deadline: now)
