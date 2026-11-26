@@ -799,7 +799,7 @@ struct ProgramScreen: View {
             let anchor = Planner.Anchor(items) ?? Planner.Anchor(date: defaultDate, slot: "Workout", plan: plan)
             // An edited session is pinned, so regenerating the week keeps it.
             WorkoutDetailView(items: items, session: Planner.session(items, templates: templates), anchor: anchor, pushed: true) { _ in } onSave: { saved in
-                for item in saved { item.pinned = !coached }
+                for item in saved { item.pinned = true }
                 if let plan {
                     if plan.weekStart > Calendar.current.startOfDay(for: .now),
                        plan.designedBy != ProgramDesigner.Source.model.rawValue {

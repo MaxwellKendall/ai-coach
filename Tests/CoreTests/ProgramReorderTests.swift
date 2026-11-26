@@ -119,7 +119,7 @@ struct ProgramReorderTests {
         #expect(monAfter.isEmpty)
         #expect(wedAfter.count == 2)
         #expect(wedAfter.map(\.templateRef) == [templates["back-squat"]?.id, templates["barbell-row"]?.id])
-        #expect(wedAfter.allSatisfy(\.pinned))
+        #expect(wedAfter.allSatisfy { $0.pinned })
 
         // Undo puts Squat + Row back on Mon and clears Wed
         outcome.undo()
