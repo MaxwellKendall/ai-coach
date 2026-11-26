@@ -26,6 +26,7 @@ struct GoalCard: View {
     /// FIT-343: record a test toward it. FIT-346: change its target and date, or drop it.
     let update: () -> Void
     let change: () -> Void
+    let delete: () -> Void
 
     /// FIT-342: a card with a date to aim at: the program's, or the goal's own. Without one there's no pace, plan line
     /// or forecast, only now → target and the trend.
@@ -63,6 +64,7 @@ struct GoalCard: View {
         Menu {
             Button("Update", systemImage: "plus.circle", action: update)
             Button("Change Target or Date", systemImage: "pencil", action: change)
+            Button("Delete Goal", systemImage: "trash", role: .destructive, action: delete)
         } label: {
             Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(.secondary)
                 .frame(width: 36, height: 28).contentShape(.rect)

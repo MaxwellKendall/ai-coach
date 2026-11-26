@@ -904,6 +904,24 @@
       ]
     },
     {
+      "id": "ProgramScreen.alert.delete-goal",
+      "title": "Delete goal?",
+      "kind": "alert",
+      "file": "Features/Plan/ProgramScreen.swift",
+      "roles": [
+        "solo",
+        "client"
+      ],
+      "from": [
+        "ProgramScreen"
+      ],
+      "path": [
+        "RootView",
+        "tab.Program",
+        "ProgramScreen.alert.delete-goal"
+      ]
+    },
+    {
       "id": "ProgramScreen.empty.no-goals-yet",
       "title": "No goals yet",
       "kind": "empty",

@@ -107,6 +107,33 @@ final class RoleUITests: XCTestCase {
     }
 
     @MainActor
+    func testSoloLifterCanCancelAndConfirmGoalDeletion() throws {
+        let units = try noProgramUnits(activeGoal: true)
+        let app = launch("solo", ["-noProgram", "YES", "-skipSeedGoals", "YES", "-units", units])
+        openTab(app, "Progress")
+        let goal = app.buttons["Squat more"].firstMatch
+        XCTAssertTrue(goal.waitForExistence(timeout: 10))
+        goal.tap()
+        let more = app.buttons["More for this goal"].firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 5))
+
+        more.tap()
+        let delete = app.buttons["Delete Goal"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        shot(app, "solo-delete-goal-confirmation")
+        cancel.tap()
+        XCTAssertTrue(more.waitForExistence(timeout: 5))
+
+        more.tap()
+        delete.tap()
+        app.buttons["Delete"].tap()
+        XCTAssertTrue(app.staticTexts["No goals yet"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testSoloLifterWithNoProgramIsOfferedOne() {
         let app = launch("solo", ["-noProgram", "YES"])
         XCTAssertEqual(tabs(app), athlete)

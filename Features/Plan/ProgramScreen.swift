@@ -31,6 +31,7 @@ struct ProgramScreen: View {
     /// FIT-343: a goal being updated with a test. FIT-346: a goal being changed.
     @State private var updating: Goal?
     @State private var changing: Goal?
+    @State private var deleting: Goal?
     @State private var nextWeek: [PlannedWorkout] = []
     @State private var regenerating: Regenerate?
     @State private var toast: Toast?
@@ -762,12 +763,21 @@ struct ProgramScreen: View {
                 GoalCard(goal: item.goal, option: option, weeks: program?.weeks ?? [], start: spans[position - 1].start,
                          end: spans[position - 1].end, current: program?.current ?? 0,
                          sets: sets, weighIns: weighIns, next: (option.exercise ?? (option.measure == .time ? Running.outdoor : nil)).flatMap(nextWorkout),
-                         update: { updating = item.goal }, change: { changing = item.goal })
+                         update: { updating = item.goal }, change: { changing = item.goal },
+                         delete: { deleting = item.goal })
                 }
             }
             .padding(.horizontal, 22)
             .padding(.top, 8)
             .padding(.bottom, 20)
+        }
+        .alert("Delete goal?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+               presenting: deleting) { goal in
+            Button("Delete", role: .destructive) { delete(goal) }
+            Button("Cancel", role: .cancel) {}
+        } message: { goal in
+            let name = GoalOption.all.first { $0.metric == goal.metric }?.name ?? Goal.label(goal.metric)
+            Text("\(name) will be permanently removed. Your workout logs will be kept.")
         }
         .overlay {
             if items.isEmpty {
@@ -855,6 +865,16 @@ struct ProgramScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Add a goal")
+    }
+
+    private func delete(_ goal: Goal) {
+        do {
+            try GoalChange.delete(goal, in: context)
+            goalIndex = 0
+            toast = Toast(text: "Goal deleted.")
+        } catch {
+            message = "Couldn’t delete the goal. Try again."
+        }
     }
 
     /// FIT-233: they drop a goal themselves; it stays, abandoned, so the coach sees it went.
