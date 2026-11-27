@@ -13,6 +13,32 @@ enum RestMotion {
     }
 }
 
+/// TKL-1097: what a drag on the workout card means. Left does the card's button (logs a set, skips a rest), right goes
+/// back a card, up skips a set without logging it. Down belongs to the cover (guarded by "Leave this workout?").
+enum WorkoutSwipe: Equatable {
+    case forward, back, skip, stay
+
+    nonisolated static let distance: CGFloat = 120
+    nonisolated static let flick: CGFloat = 600
+
+    nonisolated static func action(translation: CGSize, predicted: CGSize, velocity: CGSize) -> WorkoutSwipe {
+        if abs(translation.width) > abs(translation.height) {
+            if predicted.width < -distance || velocity.width < -flick { return .forward }
+            if predicted.width > distance || velocity.width > flick { return .back }
+            return .stay
+        }
+        if predicted.height < -distance || velocity.height < -flick { return .skip }
+        return .stay
+    }
+
+    /// Where the card sits under the finger: along the drag's main axis, and never down.
+    nonisolated static func offset(_ translation: CGSize) -> CGSize {
+        abs(translation.width) > abs(translation.height)
+            ? CGSize(width: translation.width, height: 0)
+            : CGSize(width: 0, height: min(0, translation.height))
+    }
+}
+
 /// The workout (FIT-301, design A, https://claude.ai/artifact/UV27EdoNaNCytWRRxd38Sa): one card at a time. The
 /// warm-up first, a step each; then each set with its weight and reps big and − and + under them, and one Done that
 /// logs it and starts its rest; the rest as a countdown with +30 s and Skip. A swipe to the left does what the card's
@@ -39,6 +65,12 @@ struct WorkoutModeView: View {
     @State private var warmStep = 0
     /// A card being dragged sideways, and whether the last move was back (the next card comes in from the left).
     @State private var dragX: CGFloat = 0
+    /// TKL-1097: a set card pulled up, to skip it.
+    @State private var dragY: CGFloat = 0
+    /// A card on its way off, so nothing springs it home underneath the throw.
+    @State private var throwing = false
+    /// True while a finger is on the card; resets on its own when the system cancels the drag, which never calls onEnded.
+    @GestureState private var touching = false
     @State private var backward = false
     @State private var rest: Rest?
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -222,13 +254,23 @@ struct WorkoutModeView: View {
                     }
                 }
             }
+            // TKL-1097: the margin moves with the card, so a card leaving by its edge goes all the way off the screen
+            // rather than stopping with a sliver in the margin.
+            .padding(.horizontal, 22)
             .id("\(warming ? warmStep : -1) \(page)")
             .transition(cardTransition)
-            .offset(x: dragX)
+            .offset(x: dragX, y: dragY)
             .rotationEffect(.degrees(Double(dragX) / 40))
             .modifier(Shake(trigger: quitShake, reduceMotion: reduceMotion))
             .gesture(swipe(cards: cards, page: page, warmStep: warmStep))
-            .padding(.horizontal, 22)
+            .accessibilityActions {
+                if onSetCard(cards) {
+                    Button("Skip set") { skipSet(cards: cards, from: page, warmStep: warmStep) }
+                }
+            }
+            .onChange(of: touching) { _, now in if !now { homeIfLeftBehind() } }
+            .onChange(of: page) { _, _ in homeIfLeftBehind() }
+            .onChange(of: warmStep) { _, _ in homeIfLeftBehind() }
             .padding(.top, 16)
             footer(cards: cards, names: names, warming: warming)
                 .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 8)
@@ -275,7 +317,11 @@ struct WorkoutModeView: View {
         backward = false
         withAnimation(reduceMotion ? .out : .release) {
             rest = nil
-            if page == on { page = on + 1 }
+            if page == on, !throwing {
+                dragX = 0
+                dragY = 0
+                page = on + 1
+            }
         }
     }
 
@@ -641,13 +687,66 @@ struct WorkoutModeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func skipRest(from index: Int) {
+    private func skipRest(from index: Int, viaSwipe: Bool = false, velocity: CGFloat = 0) {
         undoTick += 1
         backward = false
         nudgedArrival = false
+        if viaSwipe, !reduceMotion {
+            throwCardOff(velocity: velocity) {
+                rest = nil
+                page = index + 1
+            }
+            return
+        }
         withAnimation(reduceMotion ? .out : .throw) {
+            dragX = 0
+            dragY = 0
             rest = nil
             page = index + 1
+        }
+    }
+
+    /// Swiping up on a set advances past its rest without logging the set.
+    private func skipSet(cards: [WorkoutDraft.Card], from shownPage: Int, warmStep shownWarmStep: Int, velocity: CGFloat = 0) {
+        guard !throwing else { return }
+        guard page == shownPage, warmStep == shownWarmStep, onSetCard(cards), !justMovedOn, !banking else {
+            return springHome()
+        }
+        let to = draft.afterSkipping(shownPage)
+        backward = false
+        nudgedArrival = false
+        movedOnAt = .now
+        if rest.map({ $0.page > shownPage && $0.page < to }) ?? false { rest = nil }
+        if reduceMotion {
+            withAnimation(.out) {
+                dragY = 0
+                page = to
+            }
+        } else {
+            throwCardOff(velocity: velocity, up: true) { page = to }
+        }
+    }
+
+    /// A set's card is on screen (not a warm-up step, a rest or the finish card).
+    private func onSetCard(_ cards: [WorkoutDraft.Card]) -> Bool {
+        guard warmStep >= draft.warmups.count, cards.indices.contains(page), case .set = cards[page] else { return false }
+        return true
+    }
+
+    /// The card back where it rests, after a drag that did nothing.
+    private func springHome() {
+        withAnimation(reduceMotion ? nil : .release) {
+            dragX = 0
+            dragY = 0
+        }
+    }
+
+    /// TKL-1097: a card left part-way through a drag (the drag cancelled, or the card changed under the finger as a
+    /// rest ran out) goes home, unless it's being thrown.
+    private func homeIfLeftBehind() {
+        Task { @MainActor in
+            guard !touching, !throwing, dragX != 0 || dragY != 0 else { return }
+            springHome()
         }
     }
 
@@ -655,7 +754,12 @@ struct WorkoutModeView: View {
     /// rest starts, a rest is skipped. The finish card stays (Save is its own button).
     private func forward(cards: [WorkoutDraft.Card], from shownPage: Int, warmStep shownWarmStep: Int,
                          viaSwipe: Bool, velocity: CGFloat = 0) {
-        guard page == shownPage, warmStep == shownWarmStep, !justMovedOn, !banking else { return }
+        guard !throwing else { return }
+        guard page == shownPage, warmStep == shownWarmStep, !justMovedOn, !banking else {
+            // TKL-1097: a swipe that did nothing must not leave the card where the finger let go.
+            if viaSwipe { springHome() }
+            return
+        }
         backward = false
         nudgedArrival = false
         if warmStep < draft.warmups.count {
@@ -669,10 +773,14 @@ struct WorkoutModeView: View {
             }
             return
         }
-        guard cards.indices.contains(page) else { return }
+        guard cards.indices.contains(page) else {
+            if viaSwipe { springHome() }
+            return
+        }
         if case .rest = cards[page] {
             movedOnAt = .now
-            skipRest(from: page)
+            // TKL-1097: swiped, the rest card is thrown off like a set; it used to stay where the finger let go.
+            skipRest(from: page, viaSwipe: viaSwipe, velocity: velocity)
             return
         }
         guard case .set(let line) = cards[page] else { return }
@@ -680,7 +788,14 @@ struct WorkoutModeView: View {
         if alreadyDone || reduceMotion {
             movedOnAt = .now
             _ = swiped(from: page, .next, cards: cards)
-            withAnimation(reduceMotion ? .out : .settle) { page += 1 }
+            if viaSwipe, !reduceMotion {
+                throwCardOff(velocity: velocity) { page = shownPage + 1 }
+            } else {
+                withAnimation(reduceMotion ? .out : .settle) {
+                    dragX = 0
+                    page += 1
+                }
+            }
             return
         }
 
@@ -724,18 +839,23 @@ struct WorkoutModeView: View {
         }
     }
 
-    private func throwCardOff(velocity: CGFloat, completion: @escaping @MainActor () -> Void) {
+    /// Off the left edge (or the top, for a skip), then on to the next card without a second animation.
+    private func throwCardOff(velocity: CGFloat, up: Bool = false, completion: @escaping @MainActor () -> Void) {
+        let distance: CGFloat = up ? 1000 : 460
         let speed = max(abs(velocity), 600)
-        let duration = max(0.14, min(0.36, Double(460 / speed)))
+        let duration = max(0.14, min(0.36, Double(distance / speed)))
+        throwing = true
         withAnimation(.timingCurve(0.2, 0.6, 0.4, 1.0, duration: duration), completionCriteria: .logicallyComplete) {
-            dragX = -460
+            if up { dragY = -distance } else { dragX = -distance }
         } completion: {
             var quiet = Transaction()
             quiet.disablesAnimations = true
             withTransaction(quiet) {
                 dragX = 0
+                dragY = 0
                 completion()
             }
+            throwing = false
         }
     }
 
@@ -746,34 +866,39 @@ struct WorkoutModeView: View {
         backward = true
         nudgedArrival = false
         withAnimation(reduceMotion ? .out : .settle) {
+            dragX = 0
+            dragY = 0
             if warmStep < draft.warmups.count { warmStep = max(0, warmStep - 1) }
             else if page > 0 { page -= 1 }
             else if !draft.warmups.isEmpty { warmStep = draft.warmups.count - 1 }
         }
     }
 
-    /// The card follows a sideways drag; far enough (or flicked) and it goes forward or back, else it springs home.
+    /// The card follows the drag: sideways, or up on a set. Far enough (or flicked) and it goes forward, back, or skips
+    /// the set (TKL-1097); else it springs home. Every way out of a drag leaves the card home or thrown, never between.
     private func swipe(cards: [WorkoutDraft.Card], page shownPage: Int, warmStep shownWarmStep: Int) -> some Gesture {
         DragGesture(minimumDistance: 20)
+            .updating($touching) { _, touching, _ in touching = true }
             .onChanged { value in
-                guard !banking, abs(value.translation.width) > abs(value.translation.height) else { return }
-                if !reduceMotion { dragX = value.translation.width }
+                guard page == shownPage, warmStep == shownWarmStep, !banking, !throwing, !reduceMotion else { return }
+                let offset = WorkoutSwipe.offset(value.translation)
+                // Only a set card lifts; a warm-up step, rest or the finish card stays put when pulled up.
+                dragX = offset.width
+                dragY = onSetCard(cards) ? offset.height : 0
             }
             .onEnded { value in
-                guard !banking else { return }
-                let distance = value.predictedEndTranslation.width
-                let vx = value.velocity.width
-                guard abs(value.translation.width) > abs(value.translation.height) else {
-                    withAnimation(reduceMotion ? nil : .release) { dragX = 0 }
-                    return
-                }
-                if distance < -120 || vx < -600 {
-                    forward(cards: cards, from: shownPage, warmStep: shownWarmStep, viaSwipe: true, velocity: vx)
-                } else if distance > 120 || vx > 600 {
-                    withAnimation(reduceMotion ? nil : .settle) { dragX = 0 }
+                guard !banking, !throwing else { return }
+                guard page == shownPage, warmStep == shownWarmStep else { return springHome() }
+                switch WorkoutSwipe.action(translation: value.translation, predicted: value.predictedEndTranslation,
+                                           velocity: value.velocity) {
+                case .forward:
+                    forward(cards: cards, from: shownPage, warmStep: shownWarmStep, viaSwipe: true, velocity: value.velocity.width)
+                case .back:
                     back()
-                } else {
-                    withAnimation(reduceMotion ? nil : .release) { dragX = 0 }
+                case .skip:
+                    skipSet(cards: cards, from: shownPage, warmStep: shownWarmStep, velocity: value.velocity.height)
+                case .stay:
+                    springHome()
                 }
             }
     }
