@@ -19,7 +19,8 @@ export function paywallShotSteps(udid) {
     ["xcrun", ["simctl", "uninstall", udid, "com.maxwellkendall.aicoach"], { allowFailure: true }],
     ["xcrun", statusBarOverride(udid), {}],
     ["xcodebuild", [
-      "-scheme", "ReviewDemo", "-configuration", "Debug", "-destination", `platform=iOS Simulator,id=${udid}`, "test",
+      "-scheme", "ReviewDemo", "-configuration", "Debug", "-destination", `platform=iOS Simulator,id=${udid}`,
+      "-parallel-testing-worker-count", "1", "test",
       "-only-testing:AICoachUITests/PaywallScreenshotUITests",
     ], {}],
     ["xcrun", ["simctl", "status_bar", udid, "clear"], { allowFailure: true }],

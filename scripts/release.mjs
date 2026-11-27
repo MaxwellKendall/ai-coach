@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { Asc, loadAscEnv } from "./asc.mjs";
 import { loadSecrets } from "./load-env.mjs";
 import { sendToReview } from "./review-submission.mjs";
+import { xcodeCommand } from "./xcode-run.mjs";
 import {
   EDITABLE_VERSION_STATES,
   archiveArgs,
@@ -94,8 +95,9 @@ function scrub(text) {
 
 function run(command, args, { cwd = root, env = process.env } = {}) {
   console.log(`\n$ ${scrub([command, ...args].join(" "))}`);
+  const resolved = command === "xcodebuild" ? xcodeCommand(args, { env }) : { command, args };
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(resolved.command, resolved.args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     let err = "";
     const take = (pending, chunk, write) => {

@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { paywallShotSteps } from "./paywall-shots-lib.mjs";
+import { xcodeCommand } from "./xcode-run.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const wanted = process.env.PAYWALL_SIMULATOR || "iPhone 17 Pro";
@@ -18,7 +19,8 @@ if (spawnSync("xcodegen", ["generate"], { cwd: root, stdio: "inherit" }).status 
 let failed = 0;
 for (const [command, args, { allowFailure }] of paywallShotSteps(device.udid)) {
   console.log(`$ ${command} ${args.join(" ")}`);
-  const status = spawnSync(command, args, { cwd: root, stdio: "inherit" }).status;
+  const resolved = command === "xcodebuild" ? xcodeCommand(args) : { command, args };
+  const status = spawnSync(resolved.command, resolved.args, { cwd: root, stdio: "inherit" }).status;
   if (status !== 0 && !allowFailure) {
     failed = status ?? 1;
     // Still clear the override below; skip only to the last step.

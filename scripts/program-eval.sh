@@ -20,10 +20,13 @@ log=/tmp/aicoach-program-eval-$model${EVAL_SIMULATOR:+-${EVAL_SIMULATOR// /-}}.l
 # A second simulator builds in its own folder, so two runs don't share Xcode's build lock.
 build=()
 [[ -n $EVAL_SIMULATOR ]] && build=(-derivedDataPath /tmp/aicoach-evals-${EVAL_SIMULATOR// /-})
+XCODE_LOCK="${FACTORY_XCODE_LOCK_BIN:-$HOME/dev/factory/bin/xcode-lock.js}"
+xcode_cmd=(xcodebuild)
+[[ -f "$XCODE_LOCK" && "${XCODE_LOCK_BYPASS:-}" != "1" ]] && xcode_cmd=(node "$XCODE_LOCK")
 TEST_RUNNER_EVAL_MODEL=$model TEST_RUNNER_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-} TEST_RUNNER_EVAL_THINKING=${EVAL_THINKING:-} \
 TEST_RUNNER_OPENAI_API_KEY=${OPENAI_API_KEY:-${OPEN_AI_API_KEY:-}} TEST_RUNNER_GEMINI_API_KEY=${GEMINI_API_KEY:-} \
 TEST_RUNNER_EVAL_WEEKS=${2:-12} TEST_RUNNER_EVAL_FILTER=${3:-} TEST_RUNNER_EVAL_PROBE=${EVAL_PROBE:-} TEST_RUNNER_EVAL_BRIEF_MODEL=${EVAL_BRIEF_MODEL:-} TEST_RUNNER_EVAL_DECIDER=${EVAL_DECIDER:-} \
-  xcodebuild -scheme AICoachEvals -destination "platform=iOS Simulator,name=$sim" -skipPackagePluginValidation $build \
+  "${xcode_cmd[@]}" -scheme AICoachEvals -destination "platform=iOS Simulator,name=$sim" -skipPackagePluginValidation $build \
   test '-only-testing:AICoachEvals/ProgramDesignerEvals/designedWeeks()' 2>&1 \
   | tee $log | grep -a '^PROGRAM§ ' | sed 's/^PROGRAM§ //' > $out
 if [[ ! -s $out ]]; then

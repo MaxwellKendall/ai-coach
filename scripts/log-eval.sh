@@ -4,8 +4,11 @@
 # Writes Tests/Evals/log-results.md.
 cd "${0:A:h}/.."
 xcodegen generate >/dev/null
+XCODE_LOCK="${FACTORY_XCODE_LOCK_BIN:-$HOME/dev/factory/bin/xcode-lock.js}"
+xcode_cmd=(xcodebuild)
+[[ -f "$XCODE_LOCK" && "${XCODE_LOCK_BYPASS:-}" != "1" ]] && xcode_cmd=(node "$XCODE_LOCK")
 TEST_RUNNER_EVAL_RUNS=${1:-3} TEST_RUNNER_EVAL_FILTER=${2:-} \
-  xcodebuild -scheme AICoachEvals -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -skipPackagePluginValidation \
+  "${xcode_cmd[@]}" -scheme AICoachEvals -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -skipPackagePluginValidation \
   test '-only-testing:AICoachEvals/LogParserEvals/spokenLogs()' 2>&1 \
   | tee /tmp/aicoach-log-eval.log | grep -a '^LOG§ ' | sed 's/^LOG§ //' > Tests/Evals/log-results.md
 if [[ ! -s Tests/Evals/log-results.md ]]; then

@@ -26,9 +26,11 @@ Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/pr
 - Bundle id `com.maxwellkendall.aicoach`, team `7GZKY29XJH`, automatic signing.
 
 ## Test
+Every `xcodebuild` on this machine goes through the machine-wide Xcode build lock (`xcode-run`, on `PATH` via `~/dev/factory/bin/xcode-lock.js`; repo alias `npm run xcode -- …`). Never invoke bare `xcodebuild` by hand: parallel builds starve all 4 performance cores. `xcode-run --status` shows who holds the lock and for how long; waiting runs report `"waiting for <holder>"` and pause the factory run timeout while waiting. UI-test suites (`RoleUITests`, `AIWeekScreenshotUITests`, `ReviewDemo`) are capped to `-parallel-testing-worker-count 1` automatically (measured on this Mac: 2 workers cloned simulators and spiked load to 66.3 on 10 cores). `-jobs <N>` is never applied blanket; pass `-jobs <N>` (with `--no-lock` if genuinely overlapping two builds) only as an explicit secondary lever.
+
 | Suite | Command (from repo root) | Runtime |
 |---|---|---|
-| iOS unit | `xcodegen generate && xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` | ~4.5 min cold (tests 43 s) |
+| iOS unit | `xcodegen generate && xcode-run -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` | ~4.5 min cold (tests 43 s) |
 | infra + MCP + Lambdas | `cd infra && npx tsc --noEmit -p . && npx vitest run` | ~45 s |
 | dashboard | `npm --prefix web test` (vitest); type check + build: `npm --prefix web run build` | ~1 s each |
 | demo-clip scripts | `python3 -m unittest discover -s scripts/tests` | <1 s |
@@ -37,12 +39,12 @@ Linear project: **barbrabell** (team TKL): https://linear.app/software-studio/pr
 | program eval | `scripts/program-eval.sh [model=on-device] [weeks=12] [filter]` → `Tests/Evals/program-results-<model>.md` | ~4.5 min with weeks=0; longer with probes |
 | week eval | `scripts/week-eval.sh [designer=claude-haiku-5-5] [judge=gpt-6-astra]` → `Tests/Evals/week-results-<designer>.md` | ~3 min, ~$0.16 of API credit |
 
-Evals run the `AICoachEvals` scheme. On-device runs need Apple Intelligence on the host Mac; cloud models read keys from `.env`.
+Evals run the `AICoachEvals` scheme (all eval scripts, `device-install`, `demo-video`, `paywall-shots`, and `release` take the machine-wide lock automatically). On-device runs need Apple Intelligence on the host Mac; cloud models read keys from `.env`.
 For program/week evals only: `EVAL_RUN=<label>` keeps a repeat run beside the others; `EVAL_SIMULATOR=<name>` runs on another simulator. The spoken-edit/log evals always overwrite their file on iPhone 17 Pro.
 
 ## Run
 - App: `xcodegen generate && open AICoach.xcodeproj`, run `AICoach` on iPhone 17 Pro (Debug uses `amplify_outputs.dev.json` and `AICoach.storekit`).
-  CLI: `xcodebuild -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`, then `xcrun simctl install/launch`. Debug builds accept `-units PATH` (a sync-units JSON) to load data without sign-in, and `-haptics YES` opens a debug list that plays each Core Haptics pattern (`Resources/Haptics/*.ahap`, TKL-393).
+  CLI: `xcode-run -scheme AICoach -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build` (or `npm run xcode -- …`), then `xcrun simctl install/launch`. Debug builds accept `-units PATH` (a sync-units JSON) to load data without sign-in, and `-haptics YES` opens a debug list that plays each Core Haptics pattern (`Resources/Haptics/*.ahap`, TKL-393).
 - Maxwell's iPhone: **only when he asks** (never after every landing; routine builds reach him on TestFlight), and then only `npm run device-install` (`scripts/device-install.mjs`, TKL-796), only after the change is on `origin/main`. It builds Release (prod backend, what he runs) and installs on the paired iPhone (`--device UDID` if several). It refuses a commit not on `origin/main` or a dirty tree unless `--branch-ok`, records sha + configuration per device in `$(git rev-parse --git-common-dir)/device-install.json`, and warns when an install replaces unmerged work or switches Debug/Release. `--dry-run` shows the plan. Never `devicectl install` by hand.
 - Dashboard: `cd infra && AWS_PROFILE=aicoach-dev npm run dashboard-config` (writes `web/public/config.json` from AICoach-dev), then from the repo root `npm --prefix web run dev` → http://localhost:5173 (unverified).
 - Share pages from sample data: `npm --prefix infra run web` → http://localhost:8787 (unverified).

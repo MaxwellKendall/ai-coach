@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { xcodeCommand } from "./xcode-run.mjs";
 
 export const USAGE = `Usage: npm run device-install -- [--device UDID] [--branch-ok] [--configuration Release|Debug] [--dry-run]
 
@@ -76,7 +77,8 @@ function onOriginMain(git, sha) {
 }
 
 function defaultExec(cmd, args, cwd) {
-  return execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 64 * 1024 * 1024 });
+  const resolved = cmd === "xcodebuild" ? xcodeCommand(args) : { command: cmd, args };
+  return execFileSync(resolved.command, resolved.args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 64 * 1024 * 1024 });
 }
 
 // The single paired physical iPhone, when --device isn't given.

@@ -10,6 +10,7 @@ import { loadSecrets } from "./load-env.mjs";
 import { redact } from "./release-lib.mjs";
 import { statusBarOverride } from "./paywall-shots-lib.mjs";
 import { restoreOnStop, startRecorder } from "./demo-video-lib.mjs";
+import { xcodeCommand } from "./xcode-run.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const secretsPath = resolve(root, "Tests/UITests/Secrets.swift");
@@ -70,8 +71,9 @@ function exec(command, args, { allowFailure = false } = {}) {
 
 function run(command, args) {
   console.log(`\n$ ${scrub([command, ...args].join(" "))}`);
+  const resolved = command === "xcodebuild" ? xcodeCommand(args) : { command, args };
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd: root, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(resolved.command, resolved.args, { cwd: root, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     let err = "";
     const take = (pending, chunk, write) => {
@@ -167,6 +169,7 @@ try {
   testCode = await run("xcodebuild", [
     "test-without-building", "-scheme", "ReviewDemo", "-configuration", "Release",
     "-destination", destination, "-derivedDataPath", "build/dd",
+    "-parallel-testing-worker-count", "1",
     "-only-testing:AICoachUITests/ReviewDemoUITests/testReviewPath",
   ]);
   if (testCode !== 0) console.error("The review demo UI test failed.");

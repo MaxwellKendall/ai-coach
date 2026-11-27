@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "release": "python3 scripts/release-lock.py",
+    "xcode": "node scripts/xcode-run.mjs",
     "demo-video": "node scripts/demo-video.mjs",
     "device-install": "node scripts/device-install.mjs",
-    "test:release": "node --test scripts/asc.test.mjs scripts/release.test.mjs scripts/release-lock.test.mjs scripts/subscriptions.test.mjs scripts/review-submission.test.mjs scripts/revenue.test.mjs scripts/screens.test.mjs scripts/packages.test.mjs scripts/paywall-shots.test.mjs scripts/device-install.test.mjs scripts/demo-video.test.mjs scripts/credentials.test.mjs",
+    "test:release": "node --test scripts/asc.test.mjs scripts/release.test.mjs scripts/release-lock.test.mjs scripts/subscriptions.test.mjs scripts/review-submission.test.mjs scripts/revenue.test.mjs scripts/screens.test.mjs scripts/packages.test.mjs scripts/paywall-shots.test.mjs scripts/device-install.test.mjs scripts/demo-video.test.mjs scripts/credentials.test.mjs scripts/xcode-run.test.mjs",
     "revenue": "node scripts/revenue.mjs",
     "screens": "node scripts/screen-inventory.mjs",
     "paywall-shots": "node scripts/paywall-shots.mjs"

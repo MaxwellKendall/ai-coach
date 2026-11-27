@@ -11,9 +11,12 @@ judge=${2:-gpt-6-astra}
 out=Tests/Evals/week-results-$model${EVAL_RUN:+-run-$EVAL_RUN}.md
 log=/tmp/aicoach-week-eval-$model${EVAL_RUN:+-$EVAL_RUN}.log
 xcodegen generate >/dev/null
+XCODE_LOCK="${FACTORY_XCODE_LOCK_BIN:-$HOME/dev/factory/bin/xcode-lock.js}"
+xcode_cmd=(xcodebuild)
+[[ -f "$XCODE_LOCK" && "${XCODE_LOCK_BYPASS:-}" != "1" ]] && xcode_cmd=(node "$XCODE_LOCK")
 TEST_RUNNER_EVAL_MODEL=$model TEST_RUNNER_EVAL_JUDGE=$judge TEST_RUNNER_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-} \
 TEST_RUNNER_OPENAI_API_KEY=${OPENAI_API_KEY:-${OPEN_AI_API_KEY:-}} TEST_RUNNER_GEMINI_API_KEY=${GEMINI_API_KEY:-} \
-  xcodebuild -scheme AICoachEvals -destination "platform=iOS Simulator,name=${EVAL_SIMULATOR:-iPhone 17 Pro}" -skipPackagePluginValidation \
+  "${xcode_cmd[@]}" -scheme AICoachEvals -destination "platform=iOS Simulator,name=${EVAL_SIMULATOR:-iPhone 17 Pro}" -skipPackagePluginValidation \
   test '-only-testing:AICoachEvals/WeekDesignEvals/designedAgainstTheCodeWeek()' 2>&1 \
   | tee $log | grep -a '^WEEK§ ' | sed 's/^WEEK§ //' > $out
 if [[ ! -s $out ]]; then
