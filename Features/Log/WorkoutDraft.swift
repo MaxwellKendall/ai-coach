@@ -171,6 +171,14 @@ struct WorkoutDraft: Equatable {
         }
     }
 
+    /// TKL-1097: the card a skip lands on: the next set, past its rest (the finish card after the last set). Logs nothing.
+    func afterSkipping(_ index: Int) -> Int {
+        let cards = cards
+        var next = index + 1
+        while next < cards.count, case .rest = cards[next] { next += 1 }
+        return min(next, cards.count)
+    }
+
     /// Swiping from one card to a later one logs the sets passed, as shown. Returns whether any was logged.
     /// Swiping back logs nothing.
     @discardableResult

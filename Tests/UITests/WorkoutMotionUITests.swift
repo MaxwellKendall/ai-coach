@@ -108,6 +108,48 @@ final class WorkoutMotionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Save workout"].isHittable)
     }
 
+    // MARK: TKL-1097 Live workout bugs
+
+    /// A swipe up skips the set: on to the next one, nothing logged, no rest.
+    @MainActor func testSwipingUpSkipsASetWithoutLoggingIt() {
+        launch()
+        startWorkout()
+        drag(from: CGVector(dx: 0.5, dy: 0.4), to: CGVector(dx: 0.5, dy: 0.08))
+        XCTAssertTrue(secondSet.waitForExistence(timeout: 5))
+        XCTAssertFalse(skip.exists, "Skipping a set skips its rest too")
+        assertLogged(0)
+    }
+
+    /// A swipe left on a rest card (and on a set already logged) used to leave the next card where the finger let go,
+    /// offset and tilted, with the screen behind it bare.
+    @MainActor func testSwipingPastARestLeavesTheNextCardSettled() {
+        launch()
+        startWorkout()
+        let home = firstSet.frame
+        done.tap()
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        drag(from: CGVector(dx: 0.8, dy: 0.45), to: CGVector(dx: 0.3, dy: 0.45))
+        XCTAssertTrue(secondSet.waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(secondSet.frame.minX, home.minX, accuracy: 2, "The set card settled back where cards sit")
+        XCTAssertEqual(secondSet.frame.minY, home.minY, accuracy: 2)
+        // Back to the logged set, then a swipe left over it: the rest card it lands on sits home too.
+        drag(from: CGVector(dx: 0.2, dy: 0.45), to: CGVector(dx: 0.85, dy: 0.45))
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        drag(from: CGVector(dx: 0.2, dy: 0.45), to: CGVector(dx: 0.85, dy: 0.45))
+        XCTAssertTrue(app.staticTexts["Logged"].waitForExistence(timeout: 5))
+        let logged = firstSet.frame
+        XCTAssertEqual(logged.minX, home.minX, accuracy: 2)
+        drag(from: CGVector(dx: 0.8, dy: 0.45), to: CGVector(dx: 0.3, dy: 0.45))
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        drag(from: CGVector(dx: 0.8, dy: 0.45), to: CGVector(dx: 0.3, dy: 0.45))
+        XCTAssertTrue(secondSet.waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(secondSet.frame.minX, home.minX, accuracy: 2)
+        capture("tkl-1097-settled")
+        assertLogged(1)
+    }
+
     // MARK: TKL-934 Motion Pass 1
 
     @MainActor func testStepperRepeatUndoSupersetFeelAndPeek() {
