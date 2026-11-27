@@ -304,8 +304,8 @@ struct ProgramScreen: View {
                 sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
             }
             // TKL-846: the AI plans this week or next on request, without a program too.
-            if !coached, (0...1).contains(weeks) {
-                redoControl(monday, next: weeks == 1).padding(.top, 14)
+            if !coached, let target = WeekRedo.target(cardWeek: monday) {
+                redoControl(monday, next: target == .nextWeek).padding(.top, 14)
             }
             Color.clear.frame(height: 12)
         }
@@ -428,7 +428,12 @@ struct ProgramScreen: View {
                     .padding(.top, 14)
                 // FIT-437: where a free lifter meets Lifter Pro by asking for AI planning. FIT-426, TKL-846: Lifter Pro
                 // has the AI design this week or next now, or again, up to Planner.redesignsPerWeek times.
-                redoControl(monday, next: index == current + 1).padding(.top, 14)
+                // The card's own week decides, never `current`: that index is clamped to the program's last week, so
+                // once the program is over this card reads "This week" while the week it shows is past (verify,
+                // 2026-11-24). Planning it spent a paid redo on a finished week and left the real one unplanned.
+                if let target = WeekRedo.target(cardWeek: monday) {
+                    redoControl(monday, next: target == .nextWeek).padding(.top, 14)
+                }
                 Color.clear.frame(height: 12)
                 // FIT-215: planning the week again is the in-app AI's.
                 if index == current, Pilot.inAppAI {

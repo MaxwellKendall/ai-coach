@@ -29,6 +29,23 @@ enum WeekRedo: Equatable {
         return Planner.canRedesign(plan) ? .redo(left: 1 + Planner.redesignsPerWeek - designs) : .capped
     }
 
+    /// Which week a card's AI action plans, or nil when the card is neither this week nor next.
+    enum Target: Equatable { case thisWeek, nextWeek }
+
+    /// The card's own week decides this, never the program's week index. The program deck clamps its current index
+    /// to the last week of the program, so once the program is over that card still reads "This week" while the week
+    /// it shows is in the past. Planning it spent one of the three paid redos on a week that was already over and
+    /// left the real current week unplanned (verify, 2026-11-24). A card may only plan the week it shows.
+    static func target(cardWeek: Date, now: Date = .now, calendar: Calendar = .current) -> Target? {
+        let here = Week.start(of: now, calendar: calendar)
+        let card = Week.start(of: cardWeek, calendar: calendar)
+        switch calendar.dateComponents([.day], from: here, to: card).day ?? 0 {
+        case 0: return .thisWeek
+        case 7: return .nextWeek
+        default: return nil
+        }
+    }
+
     private static func week(_ next: Bool) -> String { next ? "next week" : "this week" }
     /// "this week" or "for next week", after a count of redos.
     private static func whose(_ next: Bool) -> String { next ? "for next week" : "this week" }

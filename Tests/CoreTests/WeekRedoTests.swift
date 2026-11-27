@@ -37,6 +37,47 @@ struct WeekRedoTests {
         #expect(WeekRedo.state(plan: plan(designs: 0, coached: true), lifterPro: false, offered: true) == .hidden)
     }
 
+    // MARK: Which week the paid action plans (verify, 2026-11-24)
+
+    private func day(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    /// The card's own week decides, so a card can only plan the week it shows.
+    @Test func aCardPlansOnlyTheWeekItShows() {
+        let today = day(2026, 11, 24)
+        let thisWeek = Week.start(of: today)
+        let nextWeek = Calendar.current.date(byAdding: .day, value: 7, to: thisWeek)!
+        let lastWeek = Calendar.current.date(byAdding: .day, value: -7, to: thisWeek)!
+        let fortnight = Calendar.current.date(byAdding: .day, value: 14, to: thisWeek)!
+
+        #expect(WeekRedo.target(cardWeek: thisWeek, now: today) == .thisWeek)
+        #expect(WeekRedo.target(cardWeek: nextWeek, now: today) == .nextWeek)
+        #expect(WeekRedo.target(cardWeek: lastWeek, now: today) == nil)
+        #expect(WeekRedo.target(cardWeek: fortnight, now: today) == nil)
+    }
+
+    /// The bug this replaces: a four-week program whose last week ran Nov 15-21. On Nov 24 the program deck clamps
+    /// the current index to that final week, so its card is labelled "This week" while its Sunday is in the past.
+    /// Planning it spent one of the three paid redos on a week that was over, and the real week got nothing.
+    @Test func aFinishedProgramsLastCardPlansNothing() {
+        let afterTheProgram = day(2026, 11, 24)
+        let finalProgramWeek = Week.start(of: day(2026, 11, 17))
+
+        #expect(WeekRedo.target(cardWeek: finalProgramWeek, now: afterTheProgram) == nil)
+        // While that week really is the current one, the same card does plan it.
+        #expect(WeekRedo.target(cardWeek: finalProgramWeek, now: day(2026, 11, 17)) == .thisWeek)
+    }
+
+    /// Any day of the week picks the same week, including its first and last day.
+    @Test func everyDayOfTheWeekPicksThatWeek() {
+        let thisWeek = Week.start(of: day(2026, 11, 24))
+        for offset in 0...6 {
+            let within = Calendar.current.date(byAdding: .day, value: offset, to: thisWeek)!
+            #expect(WeekRedo.target(cardWeek: thisWeek, now: within) == .thisWeek)
+        }
+    }
+
     @Test func theCardsWords() {
         #expect(WeekRedo.button(.plan, next: false) == "Plan this week with AI")
         #expect(WeekRedo.button(.plan, next: true) == "Plan next week with AI")
