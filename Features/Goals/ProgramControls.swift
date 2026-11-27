@@ -210,6 +210,10 @@ struct PhaseBars: View {
     var tap: ((Int) -> Void)?
     /// Base, Build and Peak under the bars; a ready-made program has none (FIT-230).
     var phases = true
+    /// TKL-935: how the bars arrive; nil shows them grown.
+    var growth: PhaseBarGrowth? = PhaseBarGrowth()
+    @State private var grown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -218,13 +222,20 @@ struct PhaseBars: View {
                     let week = weeks[index]
                     VStack(spacing: 2) {
                         ZStack {
-                            if index == current { Circle().fill(.secondary).frame(width: 4, height: 4) }
+                            if index == current {
+                                Circle().fill(.secondary).frame(width: 4, height: 4)
+                                    .scaleEffect(isGrown ? 1 : 0.2).opacity(isGrown ? 1 : 0)
+                                    .animation(animation { $0.dot(count: weeks.count) }, value: grown)
+                            }
                             else { Text(week.travel ? "✈︎" : " ").font(.system(size: 9)).foregroundStyle(.secondary) } // ui-score: allow dynamic-type: glyph sized to its fixed frame
                         }
                         .frame(height: 11)
                         RoundedRectangle(cornerRadius: 3) // ui-score: allow radius-scale: a bar in a small bar chart
                             .fill(color(index))
                             .frame(height: Self.height(week))
+                            // Grows up from the baseline, each a beat after the one on its left.
+                            .scaleEffect(x: 1, y: isGrown ? 1 : 0.02, anchor: .bottom)
+                            .animation(animation { $0.bar(index, deload: week.kind == .deload) }, value: grown)
                     }
                     .frame(maxWidth: .infinity)
                     .contentShape(.rect)
@@ -237,6 +248,7 @@ struct PhaseBars: View {
                 }
             }
             .frame(height: 42, alignment: .bottom)
+            .onAppear { grown = true }
             // Sized by its text, so a larger text size pushes what's below down instead of running under it.
             if phases { phaseLabels }
         }
@@ -263,6 +275,14 @@ struct PhaseBars: View {
         return groups
     }
 
+    /// Without a growth, or with Reduce Motion on, the bars are simply there.
+    private var isGrown: Bool { grown || growth == nil || reduceMotion }
+
+    private func animation(_ make: (PhaseBarGrowth) -> Animation) -> Animation? {
+        guard let growth, !reduceMotion else { return nil }
+        return make(growth)
+    }
+
     static func height(_ week: ProgramWeek) -> CGFloat {
         switch week.kind {
         case .deload: 10
@@ -277,6 +297,27 @@ struct PhaseBars: View {
         if index == selected { return .primary }
         return week.kind == .deload ? Color(.quaternaryLabel) : Color(.tertiaryLabel)
     }
+}
+
+/// TKL-935: how a program's bars arrive: up from the baseline, left to right a beat apart, deloads settling softer,
+/// this week's dot landing after the last bar. Kept apart from PhaseBars so other bar charts can arrive the same way.
+struct PhaseBarGrowth {
+    /// Seconds between one bar and the next.
+    var stagger: TimeInterval = 0.025
+    /// Seconds before the first bar starts.
+    var lead: TimeInterval = 0
+
+    func delay(_ index: Int) -> TimeInterval { lead + Double(index) * stagger }
+
+    func response(deload: Bool) -> Double { deload ? 0.55 : 0.4 }
+
+    func bar(_ index: Int, deload: Bool) -> Animation {
+        .spring(response: response(deload: deload), dampingFraction: deload ? 0.95 : 0.78).delay(delay(index))
+    }
+
+    func dotDelay(count: Int) -> TimeInterval { delay(max(0, count - 1)) + 0.18 }
+
+    func dot(count: Int) -> Animation { .spring(duration: 0.3, bounce: 0.4).delay(dotDelay(count: count)) }
 }
 
 /// Each phase's name under the bar its phase starts at.

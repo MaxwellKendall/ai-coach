@@ -678,21 +678,25 @@ struct TodayScreen: View {
     @ViewBuilder private func dayContent(_ card: DayCard, day: Date, isToday: Bool, isPast: Bool) -> some View {
         switch card {
         // FIT-74: the week standing in until the coach's arrives isn't shown as if it were the plan.
+        // TKL-935: the day as a skeleton of what's coming (time, title, blocks), not a spinner; the session resolves
+        // into it line by line.
         case .plan where planning:
-            VStack(spacing: 12) {
-                ProgressView().controlSize(.large)
+            VStack(alignment: .leading, spacing: 6) {
                 // FIT-445: only a Pro lifter's week is designed here (a coach's client gets the coach's), so no "coach".
                 Text("Planning your week").font(.headline)
                 Text("Usually under a minute.").font(.subheadline).foregroundStyle(Color.inkMuted)
+                SkeletonDay().padding(.top, 18)
             }
-            .frame(maxWidth: .infinity).padding(.top, 80)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 16)
+            .accessibilityElement(children: .combine)
+            .transition(.opacity)
         case .plan(let plan) where isPast:
             // A past session with nothing logged against it says so; the footer logs it on its own day.
             VStack(alignment: .leading, spacing: 12) {
                 Label("Not logged", systemImage: "circle.dashed").font(.headline).foregroundStyle(Color.inkMuted).padding(.top, 16)
                 planView(plan, isToday: false)
             }
-        case .plan(let plan): planView(plan, isToday: isToday)
+        case .plan(let plan): planView(plan, isToday: isToday).transition(LineReveal())
         case .done(let done): doneCard(done)
         case .rest where needsProgram:
             VStack(alignment: .leading, spacing: 8) {
@@ -718,6 +722,8 @@ struct TodayScreen: View {
                 Text("\(coach?.title ?? "Your coach") hasn’t written \(planned.contains { $0.kind == .workout } ? "this week" : "your first week") yet")
                     .font(.display(28))
                 Text("It shows up here as soon as it’s ready.").foregroundStyle(Color.inkMuted)
+                // TKL-935: this can last hours, so a ghosted session under a slow, calm shimmer.
+                SkeletonDay(slow: true).opacity(0.5).padding(.vertical, 8)
                 Button { conversing = true } label: { Label("Message \(coach?.name ?? "your coach")", systemImage: "bubble.left") }
                     .buttonStyle(.secondary)
                     .padding(.top, 8)
@@ -842,6 +848,8 @@ struct TodayScreen: View {
                     // A session's rows bring their own 16 pt above and below, so its card adds only 4: the text sits
                     // 20 pt from every edge, as on the other cards.
                     dayContent(card, day: day, isToday: isToday(index), isPast: isPast(day))
+                        // TKL-935: the skeleton resolves into the session when the week's plan arrives.
+                        .animation(.reveal.speed(0.6), value: planning)
                         .padding(.horizontal, 20).padding(.vertical, Self.isList(card) && !planning ? 4 : 20)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .cardBackground()
