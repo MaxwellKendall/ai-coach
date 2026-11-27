@@ -44,6 +44,8 @@ struct ProgramScreen: View {
     /// The day whose session is open (FIT-45).
     @State private var opened: Date?
     @State private var programLink: SharedLink?
+    /// TKL-846: the Mondays whose redo the model couldn't do; the card says so, with Try again.
+    @State private var redoFailed: Set<Date> = []
 
     struct Regenerate: Identifiable {
         let id = UUID()
@@ -295,10 +297,15 @@ struct ProgramScreen: View {
             } else if !coached, dayItems(in: monday).isEmpty {
                 // TKL-845: a week with nothing in it says so.
                 Text("Nothing planned yet").font(.display(24)).padding(.top, 8)
-                Text(activeGoals.isEmpty ? "Set a goal above and the week plans itself." : "Set a date above to build your weeks.")
+                Text(emptyWeekHint(weeks))
                     .foregroundStyle(Color.inkMuted).padding(.top, 4)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 sessions(thisWeek(monday), pinnable: false, monday: monday).padding(.top, 12)
+            }
+            // TKL-846: the AI plans this week or next on request, without a program too.
+            if !coached, let target = WeekRedo.target(cardWeek: monday) {
+                redoControl(monday, next: target == .nextWeek).padding(.top, 14)
             }
             Color.clear.frame(height: 12)
         }
@@ -308,19 +315,93 @@ struct ProgramScreen: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// FIT-426: Lifter Pro's "Plan my next week": next week saved as the code plans it, if it isn't yet, then designed
-    /// by the AI on request. The week stays usable throughout, and stays as it was when the model can't.
+    /// FIT-426: Lifter Pro's AI planning of a week (TKL-846: this week or next), on request (`Planner.designOnRequest`).
+    /// The week stays usable throughout, and stays as it was when the model can't.
     @discardableResult
-    private func planNextWeek(_ monday: Date) async -> Bool {
-        if dayItems(in: monday).isEmpty { try? Planner.generate(weekOf: monday, in: context) }
+    private func planWeek(_ monday: Date) async -> Bool {
         #if DEBUG
         if DebugRole.uiTesting {
             guard DebugRole.aiWeeks else { return false }
-            return await Planner.design(weekOf: monday, in: context, model: StubDesigner.week(of: monday, in: context), force: true)
+            return await Planner.designOnRequest(weekOf: monday, in: context, model: StubDesigner.week(of: monday, in: context))
         }
         #endif
-        return await Planner.design(weekOf: monday, in: context, model: LanguageModel.weeks(signedIn: account.user != nil),
-                                    force: true)
+        return await Planner.designOnRequest(weekOf: monday, in: context,
+                                             model: LanguageModel.weeks(signedIn: account.user != nil))
+    }
+
+    /// What an empty week says under "Nothing planned yet". TKL-845 asks for a goal, or for the target date once
+    /// there is one; TKL-846 offers the AI instead on the two weeks it can plan, which is the stronger invitation.
+    private func emptyWeekHint(_ weeks: Int) -> String {
+        if redoOffered, (0...1).contains(weeks) {
+            return "Set a goal above, or have the AI plan \(weeks == 0 ? "this" : "next") week from your gym and what you\u{2019}ve logged."
+        }
+        return activeGoals.isEmpty ? "Set a goal above and the week plans itself." : "Set a date above to build your weeks."
+    }
+
+    /// TKL-846: the card offers AI planning: Lifter Pro sold, a lifter on their own, and a profile complete enough for the
+    /// AI to plan from (age, weight, days). Without one, nothing the AI could do would land, so nothing is offered.
+    private var redoOffered: Bool {
+        Pilot.sellsPro && mode.offers(.lifter) && !coached && profiles.first?.isComplete == true
+    }
+
+    /// TKL-846: "Plan this week with AI" / "Redo next week with AI", what's left of the week's redos, the cap, the
+    /// redesign in progress inline, and a failure that left the week as it was. A free lifter gets the paywall.
+    @ViewBuilder private func redoControl(_ monday: Date, next: Bool) -> some View {
+        let state = WeekRedo.state(plan: try? Planner.plan(weekOf: monday, in: context), lifterPro: pro.lifterPro,
+                                   offered: redoOffered, designing: Planner.designing.weeks.contains(monday))
+        let id = next ? "program.planNextWeek" : "program.planThisWeek"
+        if state != .hidden {
+            VStack(spacing: 8) {
+                if redoFailed.contains(monday), state != .designing {
+                    HStack(spacing: 10) {
+                        Text(WeekRedo.failed).font(.subheadline).foregroundStyle(Color.warn)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        Button("Try again") { redo(monday) }
+                            .font(.subheadline.weight(.semibold))
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("\(id).retry")
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 4)
+                    .background(Color.fill, in: .rect(cornerRadius: 14))
+                    .accessibilityIdentifier("\(id).failed")
+                }
+                if state == .designing {
+                    RedoProgress().accessibilityHidden(true)
+                } else if let title = WeekRedo.button(state, next: next) {
+                    Button(title, systemImage: "sparkles") { redo(monday) }
+                        .buttonStyle(.secondary)
+                        .accessibilityIdentifier(id)
+                }
+                if let caption = WeekRedo.caption(state, next: next) {
+                    if state == .capped {
+                        Text(caption).font(.subheadline).foregroundStyle(Color.inkMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 16).padding(.vertical, 14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.fill, in: .rect(cornerRadius: 18))
+                            .accessibilityIdentifier("\(id).capped")
+                    } else {
+                        Text(caption).font(.footnote).foregroundStyle(Color.inkMuted).multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("\(id).caption")
+                    }
+                }
+            }
+            .animation(.settle, value: state)
+        }
+    }
+
+    /// TKL-846: a free lifter gets the Lifter Pro paywall; Lifter Pro has the AI plan the week, the screen usable meanwhile.
+    private func redo(_ monday: Date) {
+        // FIT-453: the end of a swipe that started on the button isn't a tap on it.
+        guard !swipes.swiping() else { return }
+        guard pro.lifterPro else { return pro.paywall = true }
+        redoFailed.remove(monday)
+        Task {
+            if !(await planWeek(monday)) { redoFailed.insert(monday) }
+        }
     }
 
     /// "This week · Oct 25 – 31": which week, quietly, in sentence case.
@@ -345,18 +426,15 @@ struct ProgramScreen: View {
                 sessions(saved ? thisWeek(monday) : nextWeek.map { Planner.SketchDay($0, names: names) }.grouped(),
                          pinnable: saved && !coached, monday: monday)
                     .padding(.top, 14)
-                Color.clear.frame(height: 12)
-                // FIT-437: the one place a free lifter meets Lifter Pro by asking for AI planning. FIT-426: Lifter Pro
-                // has the AI design next week now, or again, up to Planner.redesignsPerWeek times.
-                if index == current + 1, Pilot.sellsPro, mode.offers(.lifter),
-                   !pro.lifterPro || Planner.canRedesign(try? Planner.plan(weekOf: monday, in: context)) {
-                    Button("Plan my next week", systemImage: "sparkles") {
-                        if pro.lifterPro { Task { await planNextWeek(monday) } } else { pro.paywall = true }
-                    }
-                    .buttonStyle(.secondary)
-                    .disabled(Planner.designing.weeks.contains(monday))
-                    .accessibilityIdentifier("program.planNextWeek")
+                // FIT-437: where a free lifter meets Lifter Pro by asking for AI planning. FIT-426, TKL-846: Lifter Pro
+                // has the AI design this week or next now, or again, up to Planner.redesignsPerWeek times.
+                // The card's own week decides, never `current`: that index is clamped to the program's last week, so
+                // once the program is over this card reads "This week" while the week it shows is past (verify,
+                // 2026-11-24). Planning it spent a paid redo on a finished week and left the real one unplanned.
+                if let target = WeekRedo.target(cardWeek: monday) {
+                    redoControl(monday, next: target == .nextWeek).padding(.top, 14)
                 }
+                Color.clear.frame(height: 12)
                 // FIT-215: planning the week again is the in-app AI's.
                 if index == current, Pilot.inAppAI {
                     let days = regenerateDays(monday)
@@ -440,8 +518,23 @@ struct ProgramScreen: View {
 
     /// Each day opens its session to edit (FIT-45); a done day opens what was logged.
     private func sessions(_ days: [Planner.SketchDay], pinnable: Bool, monday: Date) -> some View {
-        VStack(spacing: 0) {
+        // TKL-846: while the AI designs the week, days not logged are skeletons; done days stay.
+        let designing = Planner.designing.weeks.contains(monday)
+        return VStack(spacing: 0) {
             ForEach(days) { day in
+                if designing && !done(day.date) {
+                    HStack(alignment: .firstTextBaseline, spacing: 14) {
+                        Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Color.inkMuted)
+                            .lineLimit(1).fixedSize()
+                            .frame(minWidth: 36, alignment: .leading)
+                        SkeletonLine(width: 0.55 + Double(Calendar.current.component(.weekday, from: day.date) * 37 % 35) / 100)
+                    }
+                    .padding(.vertical, 10)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(day.date.formatted(.dateTime.weekday(.wide))), being redesigned")
+                    .accessibilityIdentifier("program.skeletonDay")
+                } else {
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
                     Button { open(day.date, monday: monday) } label: {
                         // Accessibility sizes put the day over its lifts, so the lifts get the width.
@@ -491,6 +584,7 @@ struct ProgramScreen: View {
                     }
                 }
                 .padding(.vertical, 10)
+                }
                 if day.id != days.last?.id { Divider() }
             }
             if days.isEmpty { Text("Nothing planned.").font(.subheadline).foregroundStyle(.secondary) }
