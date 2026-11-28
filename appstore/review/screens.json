@@ -1632,6 +1632,7 @@
         "client"
       ],
       "from": [
+        "HistoryDayView",
         "TodayScreen"
       ],
       "path": [
