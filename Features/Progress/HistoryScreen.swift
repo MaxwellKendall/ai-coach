@@ -41,7 +41,7 @@ struct HistoryScreen: View {
                                             Image(systemName: day.note == nil ? "quote.opening" : "text.quote").foregroundStyle(Plate.current.mark)
                                         }
                                         .font(.subheadline).foregroundStyle(Color.inkMuted).padding(.top, 2)
-                                        .accessibilityLabel(day.note == nil ? "Coach's note: \(note)" : "Your note: \(note)")
+                                        .accessibilityLabel((day.note == nil ? "Coach's note: " : "Your note: ") + ExerciseHistory.firstLine(note))
                                     }
                                 }
                                 Spacer()

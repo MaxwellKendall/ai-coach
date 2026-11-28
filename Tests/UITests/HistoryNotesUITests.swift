@@ -29,12 +29,13 @@ final class HistoryNotesUITests: XCTestCase {
         XCTAssertTrue(history.waitForExistence(timeout: 10), "No History tab on Progress")
         history.tap()
 
-        // The list: a day with a note shows its first line; a day without one doesn't.
-        let line = app.staticTexts[mine]
+        // The list: a day with a note shows its first line; a day without one doesn't. A row is one button.
+        let line = row(app, containing: mine)
         XCTAssertTrue(line.waitForExistence(timeout: 10), "The list doesn't show the day's note")
-        let firstLine = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Squats felt heavy'")).firstMatch
-        line.swipeUp()
-        XCTAssertTrue(firstLine.waitForExistence(timeout: 5), "The list doesn't show the long note's first line")
+        let firstLine = row(app, containing: "Squats felt heavy")
+        XCTAssertTrue(firstLine.exists, "The list doesn't show the long note's first line")
+        XCTAssertFalse(row(app, containing: "probably didn't help").exists, "The list shows more than the note's first line")
+        reveal(line, in: app)
         save("history-list")
 
         // A day with both notes: the coach's, attributed, and the lifter's own, apart.
@@ -42,11 +43,12 @@ final class HistoryNotesUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Your note"].waitForExistence(timeout: 10) || app.staticTexts["YOUR NOTE"].exists, "No Your note section")
         XCTAssertTrue(app.staticTexts[coach].exists, "The day doesn't show the coach's session note")
         XCTAssertTrue(app.staticTexts["Your coach"].exists, "The coach's note isn't attributed")
-        XCTAssertTrue(app.staticTexts["“\(mine)”"].exists, "The day doesn't show the lifter's note")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Your note: \(mine)")).firstMatch.exists, "The day doesn't show the lifter's note")
         save("history-day-notes")
         app.navigationBars.buttons.firstMatch.tap()
 
         // A long note is cut short, with the sets still on screen, and opens in full.
+        reveal(firstLine, in: app)
         firstLine.tap()
         let all = app.buttons["Show all"]
         XCTAssertTrue(all.waitForExistence(timeout: 10), "A long note has no Show all")
@@ -58,11 +60,20 @@ final class HistoryNotesUITests: XCTestCase {
 
         // A day without a note: only Add a note, no empty note.
         let plain = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Oct 9'")).firstMatch
-        if !plain.isHittable { app.swipeUp() }
         XCTAssertTrue(plain.waitForExistence(timeout: 5), "No Oct 9 in the list")
+        XCTAssertFalse(plain.label.contains("note"), "A day without a note shows one in the list")
+        reveal(plain, in: app)
         plain.tap()
         XCTAssertTrue(app.buttons["Add a note"].waitForExistence(timeout: 10), "A day without a note offers no Add a note")
         save("history-day-none")
+    }
+
+    private func row(_ app: XCUIApplication, containing text: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<8 where !element.isHittable { app.swipeUp() }
     }
 
     /// progress-units.json with notes: Oct 14 the lifter's and the coach's, Oct 12 a long one, Oct 9 none.
