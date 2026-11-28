@@ -28,6 +28,8 @@ struct SwipeDeck<Card: View>: View {
     @State private var throwing = false
     /// Where a throw is going, so the card underneath is the one you'll land on.
     @State private var target: Int?
+    /// A swipe that didn't count is springing back; the card underneath stays until it lands.
+    @State private var settling = false
 
     private let gap: CGFloat = 60
 
@@ -64,10 +66,11 @@ struct SwipeDeck<Card: View>: View {
         }
     }
 
-    /// The top card and the one it will uncover: the previous card while dragged right, else the next.
+    /// The top card and, while it moves, the one it will uncover: the previous card while dragged right, else the next.
     private var visible: [Int] {
         let under = target ?? swipe.flatMap { hint(index, $0)?.to } ?? (drag.width > 0 ? index - 1 : index + 1)
-        return [under, index].filter { (0..<count).contains($0) }
+        return SwipeDeckLayout.positions(index: index, count: count, under: under,
+                                         moving: SwipeDeckLayout.moving(drag: drag, throwing: throwing, settling: settling))
     }
 
     /// The swipe the card is being dragged towards.
@@ -128,9 +131,14 @@ struct SwipeDeck<Card: View>: View {
     }
 
     private func settle() {
-        withMotion(.throw) {
+        guard drag != .zero else { travel = .zero; return }
+        settling = true
+        // withMotion's Reduce Motion rule, with a completion: no animation, and the card underneath goes at once.
+        withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .throw) {
             drag = .zero
             travel = .zero
+        } completion: {
+            settling = false
         }
     }
 
@@ -175,6 +183,21 @@ struct SwipeDeck<Card: View>: View {
 }
 
 enum CardSwipe: Equatable { case next, back, up, down }
+
+/// TKL-1086: which cards the deck draws. Cards are as tall as their content (FIT-367) and pinned to the top, so a
+/// card left underneath at rest shows below a shorter top card, dimmed and narrower. It's drawn only while the top
+/// card moves.
+enum SwipeDeckLayout {
+    /// Back to front: the card underneath (while moving), then the top card.
+    static func positions(index: Int, count: Int, under: Int, moving: Bool) -> [Int] {
+        (moving ? [under, index] : [index]).filter { (0..<count).contains($0) }
+    }
+
+    /// Whether the top card is off its resting place or on its way somewhere.
+    static func moving(drag: CGSize, throwing: Bool, settling: Bool) -> Bool {
+        drag != .zero || throwing || settling
+    }
+}
 
 /// FIT-453: the deck's drag runs alongside the card's buttons, and the card moves with the finger, so letting go at the
 /// end of a swipe lands on the same button it started on and taps it. A button on a card checks `swiping` first.
