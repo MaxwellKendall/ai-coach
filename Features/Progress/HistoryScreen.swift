@@ -7,6 +7,7 @@ struct HistoryScreen: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
     @Query private var templates: [Template]
+    @Query private var planned: [PlannedActivity]
     /// Your training as sync units, the coach's view's input; worked out again when the log changes.
     @State private var units: [String: String] = [:]
 
@@ -14,7 +15,7 @@ struct HistoryScreen: View {
 
     var body: some View {
         let sets = Planner.loggedSets(entries, templates: templates)
-        let days = ExerciseHistory.days(sets), names = names
+        let days = Self.days(entries, sets: sets, planned: planned), names = names
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 ProgressCharts(units: units, sets: sets, names: names)
@@ -24,7 +25,7 @@ struct HistoryScreen: View {
                     }
                     ForEach(days) { day in
                         NavigationLink {
-                            HistoryDayView(day: day, names: names)
+                            HistoryDayView(date: day.date, names: names)
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -32,6 +33,16 @@ struct HistoryScreen: View {
                                     Text(TodayScreen.title(lifts: day.lifts.map { names[$0.exercise] ?? $0.exercise })).font(.headline)
                                         .multilineTextAlignment(.leading)
                                     Text("\(day.lifts.reduce(0) { $0 + $1.sets.count }) sets").font(.subheadline).foregroundStyle(.secondary)
+                                    // TKL-1087: a day with a note says so, by its first line; a day without one is as before.
+                                    if let note = day.note ?? day.coachNote {
+                                        Label {
+                                            Text(ExerciseHistory.firstLine(note)).lineLimit(1)
+                                        } icon: {
+                                            Image(systemName: day.note == nil ? "quote.opening" : "text.quote").foregroundStyle(Plate.current.mark)
+                                        }
+                                        .font(.subheadline).foregroundStyle(Color.inkMuted).padding(.top, 2)
+                                        .accessibilityLabel(day.note == nil ? "Coach's note: \(note)" : "Your note: \(note)")
+                                    }
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
@@ -50,6 +61,32 @@ struct HistoryScreen: View {
 }
 
 extension HistoryScreen {
+    /// TKL-1087: the workout days with their notes: the lifter's (each session summary's note, as Today shows it) and
+    /// the coach's note on the day's session.
+    @MainActor
+    static func days(_ entries: [LogEntry], sets: [LoggedSet], planned: [PlannedActivity]) -> [ExerciseHistory.Day] {
+        let calendar = Calendar.current
+        let workouts = entries.filter { $0.kind == .workout }
+        let setNotes = Dictionary(grouping: workouts.filter { $0.templateRef != nil && !$0.note.isEmpty }) { calendar.startOfDay(for: $0.timestamp) }
+            .mapValues { Set($0.map(\.note)) }
+        let slots = Dictionary(grouping: planned.filter { $0.kind == .workout }) { calendar.startOfDay(for: $0.date) }
+        let notes = workouts.filter { $0.templateRef == nil && !$0.note.isEmpty }.compactMap { summary -> ExerciseHistory.Note? in
+            let day = calendar.startOfDay(for: summary.timestamp)
+            // Sessions saved before FIT-28 kept the session's name (or a set's note) in the summary's note, as DayCard skips.
+            let legacy = setNotes[day, default: []].union((slots[day] ?? []).compactMap(\.slot)).union(["Workout"])
+            return legacy.contains(summary.note) ? nil : ExerciseHistory.Note(date: summary.timestamp, text: summary.note)
+        }
+        let coachNotes = slots.compactMap { day, items in PlannedActivity.sessionNote(items).map { ExerciseHistory.Note(date: day, text: $0) } }
+        return ExerciseHistory.days(sets, notes: notes, coachNotes: coachNotes)
+    }
+
+    /// TKL-1087: the day's session summary whose note History edits through Today's sheet: the last one with a note,
+    /// else the last one.
+    static func summary(on day: Date, in entries: [LogEntry]) -> LogEntry? {
+        let summaries = entries.filter { $0.kind == .workout && $0.templateRef == nil && Calendar.current.isDate($0.timestamp, inSameDayAs: day) }
+        return summaries.last { !$0.note.isEmpty } ?? summaries.last
+    }
+
     /// "Friday, Jul 10", with the year when it isn't this one.
     static func date(_ day: Date) -> String {
         let style = Date.FormatStyle.dateTime.weekday(.wide).month(.abbreviated).day()
@@ -57,17 +94,67 @@ extension HistoryScreen {
     }
 }
 
-/// One day's lifts, set by set.
+/// One day's lifts, set by set. TKL-1087: above them, the coach's note on the session and the lifter's own note,
+/// editable here through the same sheet as Today.
 struct HistoryDayView: View {
-    let day: ExerciseHistory.Day
+    let date: Date
     let names: [String: String]
+    @Environment(Pro.self) private var pro
+    @Query(sort: \LogEntry.timestamp) private var entries: [LogEntry]
+    @Query private var templates: [Template]
+    @Query private var planned: [PlannedActivity]
+    @State private var editing: LogEntry?
+    @State private var expanded = false
+
+    /// A note this long is cut to a few lines, with a way to see the rest, so the sets stay on screen.
+    static func isLong(_ note: String) -> Bool { note.count > 180 || note.filter(\.isNewline).count >= 4 }
 
     var body: some View {
-        List(day.lifts, id: \.exercise) { lift in
-            ExerciseHistory.LiftRow(name: names[lift.exercise] ?? lift.exercise, lift: lift)
+        let day = HistoryScreen.days(entries, sets: Planner.loggedSets(entries, templates: templates), planned: planned)
+            .first { $0.date == date } ?? ExerciseHistory.Day(date: date, lifts: [])
+        let summary = HistoryScreen.summary(on: date, in: entries)
+        List {
+            if let coach = day.coachNote {
+                Section {
+                    SessionNote(text: coach, by: pro.coaches.first?.name ?? "Your coach")
+                        .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+                }
+            }
+            if day.note != nil || summary != nil {
+                Section("Your note") { yourNote(day.note, summary: summary) }
+            }
+            Section(day.note != nil || summary != nil || day.coachNote != nil ? "Sets" : "") {
+                ForEach(day.lifts, id: \.exercise) { lift in
+                    ExerciseHistory.LiftRow(name: names[lift.exercise] ?? lift.exercise, lift: lift)
+                }
+            }
         }
-        .navigationTitle(day.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+        .navigationTitle(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $editing) { summary in NavigationStack { WorkoutNoteSheet(summary: summary, note: summary.note) } }
+    }
+
+    @ViewBuilder
+    private func yourNote(_ note: String?, summary: LogEntry?) -> some View {
+        if let note {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("“\(note)”").font(.body).foregroundStyle(Color.ink).lineLimit(expanded || !Self.isLong(note) ? nil : 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .onTapGesture { if let summary { editing = summary } }
+                    .accessibilityLabel("Your note: \(note)")
+                    .accessibilityHint(summary == nil ? "" : "Edits the note")
+                    .accessibilityAddTraits(summary == nil ? [] : .isButton)
+                if Self.isLong(note) {
+                    Button(expanded ? "Show less" : "Show all") { withAnimation(.snappy) { expanded.toggle() } }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark).buttonStyle(.borderless)
+                }
+            }
+        } else if let summary {
+            Button { editing = summary } label: {
+                Label("Add a note", systemImage: "square.and.pencil").font(.subheadline.weight(.semibold)).foregroundStyle(Plate.current.mark)
+            }
+        }
     }
 }
 

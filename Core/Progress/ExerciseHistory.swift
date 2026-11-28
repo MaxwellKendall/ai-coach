@@ -19,7 +19,40 @@ enum ExerciseHistory {
     struct Day: Equatable, Sendable, Identifiable {
         var date: Date
         var lifts: [Lift]
+        /// TKL-1087: how it went, in the lifter's own words (the session summary's note); nil when there's none.
+        var note: String? = nil
+        /// TKL-1087: the coach's note on the day's session (`PlannedActivity.sessionNote`), never merged with `note`.
+        var coachNote: String? = nil
         var id: Date { date }
+    }
+
+    /// TKL-1087: a note written about a workout, and when.
+    struct Note: Equatable, Sendable {
+        var date: Date
+        var text: String
+    }
+
+    /// TKL-1087: every day with lifting, with the lifter's notes and the coach's session notes on the days they fall on.
+    /// A day's own notes join in the order written; notes on days without lifting are left out.
+    static func days(_ sets: [LoggedSet], notes: [Note], coachNotes: [Note], calendar: Calendar = .current) -> [Day] {
+        func byDay(_ notes: [Note]) -> [Date: [String]] {
+            Dictionary(grouping: notes.sorted { $0.date < $1.date }.compactMap { note -> Note? in
+                let text = note.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return text.isEmpty ? nil : Note(date: calendar.startOfDay(for: note.date), text: text)
+            }, by: \.date).mapValues { $0.map(\.text) }
+        }
+        let mine = byDay(notes), coach = byDay(coachNotes)
+        return days(sets, calendar: calendar).map { day in
+            var day = day
+            day.note = mine[day.date].map { $0.joined(separator: "\n\n") }
+            day.coachNote = coach[day.date]?.first
+            return day
+        }
+    }
+
+    /// TKL-1087: a note's first line with words on it, for the History list.
+    static func firstLine(_ note: String) -> String {
+        note.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
     }
 
     /// Every day with lifting, newest first; each day's exercises in the order first logged. With `exercise`, only that

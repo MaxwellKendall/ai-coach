@@ -42,4 +42,48 @@ struct ExerciseHistoryTests {
         #expect(ExerciseHistory.summary([Line(load: 53, meters: 40), Line(load: 53, meters: 40)]) == "2 × 40 m @ 53 lb")
         #expect(ExerciseHistory.summary([]) == "")
     }
+
+    // TKL-1087: the notes written about a workout day, the lifter's own and the coach's, kept apart.
+    private func note(_ text: String, days: Int = 0, hour: Int = 2) -> ExerciseHistory.Note {
+        ExerciseHistory.Note(date: Calendar.current.date(byAdding: .day, value: days, to: monday)!.addingTimeInterval(TimeInterval(hour * 3600)), text: text)
+    }
+
+    @Test func aDayWithoutANoteHasNone() {
+        let days = ExerciseHistory.days([set("back-squat", 5, 170)], notes: [note("easy", days: 3)], coachNotes: [])
+        #expect(days.count == 1)
+        #expect(days[0].note == nil && days[0].coachNote == nil)
+    }
+
+    @Test func aDayCarriesTheLiftersNote() {
+        let days = ExerciseHistory.days([set("back-squat", 5, 170), set("back-squat", 5, 175, days: 3)],
+                                        notes: [note("Felt strong, knee fine", hour: 2)], coachNotes: [])
+        #expect(days[1].note == "Felt strong, knee fine" && days[1].coachNote == nil)
+        #expect(days[0].note == nil)
+    }
+
+    @Test func aDayCanHaveOnlyTheCoachsNote() {
+        let days = ExerciseHistory.days([set("back-squat", 5, 170)], notes: [], coachNotes: [note("Stay at RPE 7 today")])
+        #expect(days[0].note == nil && days[0].coachNote == "Stay at RPE 7 today")
+    }
+
+    @Test func bothNotesStayApart() {
+        let days = ExerciseHistory.days([set("back-squat", 5, 170)], notes: [note("Grip gave out")], coachNotes: [note("Belt on the top set")])
+        #expect(days[0].note == "Grip gave out" && days[0].coachNote == "Belt on the top set")
+    }
+
+    @Test func emptyNotesAndNotesOnDaysWithoutLiftingAreDropped() {
+        let days = ExerciseHistory.days([set("back-squat", 5, 170)], notes: [note("  \n "), note("rest day walk", days: 1)], coachNotes: [note("")])
+        #expect(days.count == 1 && days[0].note == nil && days[0].coachNote == nil)
+    }
+
+    @Test func twoSessionsInADayKeepBothNotesInOrder() {
+        let days = ExerciseHistory.days([set("back-squat", 5, 170)], notes: [note("evening", hour: 10), note("morning", hour: 1)], coachNotes: [])
+        #expect(days[0].note == "morning\n\nevening")
+    }
+
+    @Test func theListShowsTheNotesFirstLine() {
+        #expect(ExerciseHistory.firstLine("Felt strong\nknee fine later") == "Felt strong")
+        #expect(ExerciseHistory.firstLine("\n  Second try  \nmore") == "Second try")
+        #expect(ExerciseHistory.firstLine("one line") == "one line")
+    }
 }
